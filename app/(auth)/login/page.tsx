@@ -146,9 +146,6 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-4 text-xs text-muted">
-          Demo admin: admin@applitaxioz.com / Admin123!
-        </p>
       </div>
     </main>
   );

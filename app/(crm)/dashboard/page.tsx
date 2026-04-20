@@ -1,4 +1,5 @@
 import { B2BPreOrdersPanel } from "@/components/dashboard/B2BPreOrdersPanel";
+import { ReleaseNotesPanel } from "@/components/dashboard/ReleaseNotesPanel";
 import { PageHeading } from "@/components/ui/PageHeading";
 import { getB2BPreOrdersDashboardData } from "@/lib/yango-api";
 
@@ -8,6 +9,7 @@ export default async function DashboardPage() {
   return (
     <section>
       <PageHeading title="Dashboard" subtitle="B2B pre-orders analytics" />
+      <ReleaseNotesPanel />
 
       <B2BPreOrdersPanel rows={b2bRows} />
     </section>

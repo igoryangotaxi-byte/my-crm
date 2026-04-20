@@ -20,6 +20,9 @@ import {
 const USERS_STORAGE_KEY = "appli_auth_users_v1";
 const SESSION_STORAGE_KEY = "appli_auth_session_v1";
 const PERMISSIONS_STORAGE_KEY = "appli_auth_permissions_v1";
+const DEFAULT_ADMIN_EMAIL = "ig-kuznetsov@yandex-team.ru";
+const DEFAULT_ADMIN_PASSWORD = "123";
+const DEFAULT_ADMIN_NAME = "Igor Kuznetsov";
 
 type AuthResult = {
   ok: boolean;
@@ -73,9 +76,42 @@ function seedDefaultUsers() {
   return [
     {
       id: "user-admin-1",
-      name: "Platform Admin",
-      email: "admin@applitaxioz.com",
-      password: "Admin123!",
+      name: DEFAULT_ADMIN_NAME,
+      email: DEFAULT_ADMIN_EMAIL,
+      password: DEFAULT_ADMIN_PASSWORD,
+      role: "Admin" as const,
+      status: "approved" as const,
+      createdAt: new Date().toISOString(),
+    },
+  ];
+}
+
+function ensureDefaultAdmin(users: AuthUser[]) {
+  const existingAdminIndex = users.findIndex(
+    (user) => user.email.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase(),
+  );
+
+  if (existingAdminIndex >= 0) {
+    return users.map((user, index) =>
+      index === existingAdminIndex
+        ? {
+            ...user,
+            name: DEFAULT_ADMIN_NAME,
+            password: DEFAULT_ADMIN_PASSWORD,
+            role: "Admin" as const,
+            status: "approved" as const,
+          }
+        : user,
+    );
+  }
+
+  return [
+    ...users,
+    {
+      id: "user-admin-1",
+      name: DEFAULT_ADMIN_NAME,
+      email: DEFAULT_ADMIN_EMAIL,
+      password: DEFAULT_ADMIN_PASSWORD,
       role: "Admin" as const,
       status: "approved" as const,
       createdAt: new Date().toISOString(),
@@ -97,7 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      return JSON.parse(usersRaw) as AuthUser[];
+      return ensureDefaultAdmin(JSON.parse(usersRaw) as AuthUser[]);
     } catch {
       const seeded = seedDefaultUsers();
       localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(seeded));
