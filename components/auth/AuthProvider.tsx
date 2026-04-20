@@ -9,6 +9,8 @@ import {
   useState,
 } from "react";
 import {
+  type AuthApiActionRequest,
+  type AuthStoreData,
   type AppPageKey,
   type AppRole,
   type AuthUser,
@@ -20,14 +22,9 @@ import {
   type UserStatus,
 } from "@/types/auth";
 
-const USERS_STORAGE_KEY = "appli_auth_users_v1";
 const SESSION_STORAGE_KEY = "appli_auth_session_v1";
-const PERMISSIONS_STORAGE_KEY = "appli_auth_permissions_v1";
-const AREA_ACCESS_STORAGE_KEY = "appli_auth_area_access_v1";
 const CURRENT_AREA_STORAGE_KEY = "appli_auth_current_area_v1";
-const DEFAULT_ADMIN_EMAIL = "ig-kuznetsov@yandex-team.ru";
-const DEFAULT_ADMIN_PASSWORD = "123";
-const DEFAULT_ADMIN_NAME = "Igor Kuznetsov";
+const LAST_LOGIN_EMAIL_STORAGE_KEY = "appli_auth_last_email_v1";
 
 type AuthResult = {
   ok: boolean;
@@ -49,16 +46,17 @@ type AuthContextValue = {
   setCurrentArea: (area: BusinessArea) => void;
   rolePermissions: RolePermissions;
   roleAreaAccess: RoleAreaAccess;
-  login: (email: string, password: string) => AuthResult;
-  register: (input: RegisterInput) => AuthResult;
+  login: (email: string, password: string) => Promise<AuthResult>;
+  register: (input: RegisterInput) => Promise<AuthResult>;
   logout: () => void;
-  updateUserStatus: (userId: string, status: UserStatus) => void;
-  updateUserRole: (userId: string, role: AppRole) => void;
-  toggleRolePageAccess: (role: AppRole, page: AppPageKey) => void;
-  toggleRoleAreaAccess: (role: AppRole, area: BusinessArea) => void;
-  setAllRoleAccess: (role: AppRole, value: boolean) => void;
+  updateUserStatus: (userId: string, status: UserStatus) => Promise<void>;
+  updateUserRole: (userId: string, role: AppRole) => Promise<void>;
+  toggleRolePageAccess: (role: AppRole, page: AppPageKey) => Promise<void>;
+  toggleRoleAreaAccess: (role: AppRole, area: BusinessArea) => Promise<void>;
+  setAllRoleAccess: (role: AppRole, value: boolean) => Promise<void>;
   canAccess: (page: AppPageKey) => boolean;
   canAccessArea: (area: BusinessArea) => boolean;
+  lastLoginEmail: string;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -70,7 +68,7 @@ function mergePermissions(
     return defaultRolePermissions;
   }
 
-  const next: RolePermissions = {
+  return {
     Admin: { ...defaultRolePermissions.Admin, ...(input.Admin ?? {}) },
     User: { ...defaultRolePermissions.User, ...(input.User ?? {}) },
     "Team Lead": {
@@ -78,8 +76,6 @@ function mergePermissions(
       ...(input["Team Lead"] ?? {}),
     },
   };
-
-  return next;
 }
 
 function mergeAreaAccess(
@@ -99,118 +95,18 @@ function mergeAreaAccess(
   };
 }
 
-function seedDefaultUsers() {
-  return [
-    {
-      id: "user-admin-1",
-      name: DEFAULT_ADMIN_NAME,
-      email: DEFAULT_ADMIN_EMAIL,
-      password: DEFAULT_ADMIN_PASSWORD,
-      role: "Admin" as const,
-      status: "approved" as const,
-      createdAt: new Date().toISOString(),
-    },
-  ];
-}
-
-function ensureDefaultAdmin(users: AuthUser[]) {
-  const existingAdminIndex = users.findIndex(
-    (user) => user.email.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase(),
-  );
-
-  if (existingAdminIndex >= 0) {
-    return users.map((user, index) =>
-      index === existingAdminIndex
-        ? {
-            ...user,
-            name: DEFAULT_ADMIN_NAME,
-            password: DEFAULT_ADMIN_PASSWORD,
-            role: "Admin" as const,
-            status: "approved" as const,
-          }
-        : user,
-    );
-  }
-
-  return [
-    ...users,
-    {
-      id: "user-admin-1",
-      name: DEFAULT_ADMIN_NAME,
-      email: DEFAULT_ADMIN_EMAIL,
-      password: DEFAULT_ADMIN_PASSWORD,
-      role: "Admin" as const,
-      status: "approved" as const,
-      createdAt: new Date().toISOString(),
-    },
-  ];
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [users, setUsers] = useState<AuthUser[]>(() => {
-    if (typeof window === "undefined") {
-      return seedDefaultUsers();
-    }
-
-    const usersRaw = localStorage.getItem(USERS_STORAGE_KEY);
-    if (!usersRaw) {
-      const seeded = seedDefaultUsers();
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(seeded));
-      return seeded;
-    }
-
-    try {
-      return ensureDefaultAdmin(JSON.parse(usersRaw) as AuthUser[]);
-    } catch {
-      const seeded = seedDefaultUsers();
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(seeded));
-      return seeded;
-    }
-  });
-
+  const [users, setUsers] = useState<AuthUser[]>([]);
   const [sessionUserId, setSessionUserId] = useState<string | null>(() => {
     if (typeof window === "undefined") {
       return null;
     }
     return localStorage.getItem(SESSION_STORAGE_KEY);
   });
-
-  const [rolePermissions, setRolePermissions] = useState<RolePermissions>(() => {
-    if (typeof window === "undefined") {
-      return defaultRolePermissions;
-    }
-
-    const permissionsRaw = localStorage.getItem(PERMISSIONS_STORAGE_KEY);
-    if (!permissionsRaw) {
-      return defaultRolePermissions;
-    }
-
-    try {
-      return mergePermissions(
-        JSON.parse(permissionsRaw) as Partial<RolePermissions>,
-      );
-    } catch {
-      return defaultRolePermissions;
-    }
-  });
-  const [roleAreaAccess, setRoleAreaAccess] = useState<RoleAreaAccess>(() => {
-    if (typeof window === "undefined") {
-      return defaultRoleAreaAccess;
-    }
-
-    const accessRaw = localStorage.getItem(AREA_ACCESS_STORAGE_KEY);
-    if (!accessRaw) {
-      return defaultRoleAreaAccess;
-    }
-
-    try {
-      return mergeAreaAccess(
-        JSON.parse(accessRaw) as Partial<RoleAreaAccess>,
-      );
-    } catch {
-      return defaultRoleAreaAccess;
-    }
-  });
+  const [rolePermissions, setRolePermissions] =
+    useState<RolePermissions>(defaultRolePermissions);
+  const [roleAreaAccess, setRoleAreaAccess] =
+    useState<RoleAreaAccess>(defaultRoleAreaAccess);
   const [currentAreaState, setCurrentAreaState] = useState<BusinessArea>(() => {
     if (typeof window === "undefined") {
       return "b2b";
@@ -218,11 +114,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const raw = localStorage.getItem(CURRENT_AREA_STORAGE_KEY);
     return raw === "b2c" ? "b2c" : "b2b";
   });
-  const loading = false;
-
-  useEffect(() => {
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
-  }, [users]);
+  const [lastLoginEmail, setLastLoginEmail] = useState<string>(() => {
+    if (typeof window === "undefined") {
+      return "";
+    }
+    return localStorage.getItem(LAST_LOGIN_EMAIL_STORAGE_KEY) ?? "";
+  });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (sessionUserId) {
@@ -232,14 +130,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [sessionUserId]);
 
-  useEffect(() => {
-    const merged = mergePermissions(rolePermissions);
-    localStorage.setItem(PERMISSIONS_STORAGE_KEY, JSON.stringify(merged));
-  }, [rolePermissions]);
-  useEffect(() => {
-    const merged = mergeAreaAccess(roleAreaAccess);
-    localStorage.setItem(AREA_ACCESS_STORAGE_KEY, JSON.stringify(merged));
-  }, [roleAreaAccess]);
   const currentUser = useMemo(
     () => users.find((user) => user.id === sessionUserId) ?? null,
     [users, sessionUserId],
@@ -263,6 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return currentAreaState;
   }, [currentAreaState, currentUser, roleAreaAccess]);
+
   const setCurrentArea = useCallback(
     (area: BusinessArea) => {
       if (!currentUser) {
@@ -281,115 +172,181 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => users.filter((user) => user.status === "pending"),
     [users],
   );
+
   useEffect(() => {
     localStorage.setItem(CURRENT_AREA_STORAGE_KEY, currentArea);
   }, [currentArea]);
 
+  useEffect(() => {
+    localStorage.setItem(LAST_LOGIN_EMAIL_STORAGE_KEY, lastLoginEmail);
+  }, [lastLoginEmail]);
+
+  const applyStoreData = useCallback((data: AuthStoreData) => {
+    setUsers(data.users);
+    setRolePermissions(mergePermissions(data.rolePermissions));
+    setRoleAreaAccess(mergeAreaAccess(data.roleAreaAccess));
+  }, []);
+
+  const fetchState = useCallback(async () => {
+    const response = await fetch("/api/auth", { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`Failed to load auth state: HTTP ${response.status}`);
+    }
+    const data = (await response.json()) as AuthStoreData;
+    applyStoreData(data);
+    setSessionUserId((prev) =>
+      prev && data.users.some((user) => user.id === prev) ? prev : null,
+    );
+  }, [applyStoreData]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        await fetchState();
+      } catch {
+        // Keep defaults in case API is temporarily unavailable.
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchState]);
+
+  useEffect(() => {
+    const pollId = window.setInterval(() => {
+      void fetchState();
+    }, 10000);
+
+    return () => {
+      window.clearInterval(pollId);
+    };
+  }, [fetchState]);
+
+  const runAction = useCallback(
+    async (payload: AuthApiActionRequest) => {
+      const response = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = (await response.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            message?: string;
+            userId?: string;
+            data?: AuthStoreData;
+          }
+        | null;
+
+      if (!response.ok || !result?.ok) {
+        return {
+          ok: false,
+          message: result?.message ?? `HTTP ${response.status}`,
+          userId: result?.userId,
+          data: result?.data,
+        };
+      }
+
+      if (result.data) {
+        applyStoreData(result.data);
+      }
+
+      return {
+        ok: true,
+        message: result.message,
+        userId: result.userId,
+        data: result.data,
+      };
+    },
+    [applyStoreData],
+  );
+
   const login = useCallback(
-    (email: string, password: string): AuthResult => {
-      const user = users.find(
-        (item) => item.email.toLowerCase() === email.toLowerCase(),
-      );
-
-      if (!user || user.password !== password) {
-        return { ok: false, message: "Invalid email or password" };
+    async (email: string, password: string): Promise<AuthResult> => {
+      const normalizedEmail = email.trim().toLowerCase();
+      const result = await runAction({
+        action: "login",
+        email: normalizedEmail,
+        password,
+      });
+      if (!result.ok) {
+        return { ok: false, message: result.message };
       }
 
-      if (user.status === "pending") {
-        return {
-          ok: false,
-          message: "Your account is pending approval by an admin",
-        };
+      if (!result.userId) {
+        return { ok: false, message: "Login failed" };
       }
 
-      if (user.status === "rejected") {
-        return {
-          ok: false,
-          message: "Your account access was rejected by an admin",
-        };
-      }
-
-      setSessionUserId(user.id);
+      setSessionUserId(result.userId);
+      setLastLoginEmail(normalizedEmail);
       return { ok: true };
     },
-    [users],
+    [runAction],
   );
 
   const register = useCallback(
-    ({ name, email, password }: RegisterInput): AuthResult => {
-      const exists = users.some(
-        (item) => item.email.toLowerCase() === email.toLowerCase(),
-      );
-
-      if (exists) {
-        return { ok: false, message: "User with this email already exists" };
-      }
-
-      const nextUser: AuthUser = {
-        id: `user-${crypto.randomUUID()}`,
-        name,
-        email,
+    async ({ name, email, password }: RegisterInput): Promise<AuthResult> => {
+      const result = await runAction({
+        action: "register",
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
         password,
-        role: "User",
-        status: "pending",
-        createdAt: new Date().toISOString(),
+      });
+      return {
+        ok: result.ok,
+        message:
+          result.message ?? (result.ok ? "Registration submitted" : "Registration failed"),
       };
-
-      setUsers((prev) => [...prev, nextUser]);
-      return { ok: true, message: "Registration sent for admin approval" };
     },
-    [users],
+    [runAction],
   );
 
   const logout = useCallback(() => {
     setSessionUserId(null);
   }, []);
 
-  const updateUserStatus = useCallback((userId: string, status: UserStatus) => {
-    setUsers((prev) =>
-      prev.map((user) => (user.id === userId ? { ...user, status } : user)),
-    );
-  }, []);
+  const updateUserStatus = useCallback(
+    async (userId: string, status: UserStatus) => {
+      await runAction({ action: "updateUserStatus", userId, status });
+    },
+    [runAction],
+  );
 
-  const updateUserRole = useCallback((userId: string, role: AppRole) => {
-    setUsers((prev) =>
-      prev.map((user) => (user.id === userId ? { ...user, role } : user)),
-    );
-  }, []);
+  const updateUserRole = useCallback(
+    async (userId: string, role: AppRole) => {
+      await runAction({ action: "updateUserRole", userId, role });
+    },
+    [runAction],
+  );
 
-  const toggleRolePageAccess = useCallback((role: AppRole, page: AppPageKey) => {
-    setRolePermissions((prev) => ({
-      ...prev,
-      [role]: {
-        ...prev[role],
-        [page]: !prev[role][page],
-      },
-    }));
-  }, []);
-  const toggleRoleAreaAccess = useCallback((role: AppRole, area: BusinessArea) => {
-    setRoleAreaAccess((prev) => ({
-      ...prev,
-      [role]: {
-        ...prev[role],
-        [area]: !prev[role][area],
-      },
-    }));
-  }, []);
+  const toggleRolePageAccess = useCallback(
+    async (role: AppRole, page: AppPageKey) => {
+      await runAction({ action: "toggleRolePageAccess", role, page });
+    },
+    [runAction],
+  );
 
-  const setAllRoleAccess = useCallback((role: AppRole, value: boolean) => {
-    setRolePermissions((prev) => ({
-      ...prev,
-      [role]: {
-        dashboard: value,
-        clients: value,
-        orders: value,
-        preOrders: value,
-        priceCalculator: value,
-        accesses: value,
-        notes: value,
-      },
-    }));
-  }, []);
+  const toggleRoleAreaAccess = useCallback(
+    async (role: AppRole, area: BusinessArea) => {
+      await runAction({ action: "toggleRoleAreaAccess", role, area });
+    },
+    [runAction],
+  );
+
+  const setAllRoleAccess = useCallback(
+    async (role: AppRole, value: boolean) => {
+      await runAction({ action: "setAllRoleAccess", role, value });
+    },
+    [runAction],
+  );
+
   const canAccessArea = useCallback(
     (area: BusinessArea) => {
       if (!currentUser || currentUser.status !== "approved") {
@@ -430,6 +387,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAllRoleAccess,
       canAccess,
       canAccessArea,
+      lastLoginEmail,
     }),
     [
       loading,
@@ -450,6 +408,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAllRoleAccess,
       canAccess,
       canAccessArea,
+      lastLoginEmail,
     ],
   );
 

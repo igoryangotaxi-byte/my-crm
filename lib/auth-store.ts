@@ -1,0 +1,167 @@
+import { kv } from "@vercel/kv";
+import {
+  type AppRole,
+  type AuthStoreData,
+  type AuthUser,
+  type UserStatus,
+  defaultRoleAreaAccess,
+  defaultRolePermissions,
+} from "@/types/auth";
+
+const AUTH_STORE_KEY = "appli:auth:store:v1";
+const DEFAULT_ADMIN_EMAIL = "ig-kuznetsov@yandex-team.ru";
+const DEFAULT_ADMIN_PASSWORD = "123";
+const DEFAULT_ADMIN_NAME = "Igor Kuznetsov";
+
+let fallbackMemoryStore: AuthStoreData | null = null;
+
+function seedDefaultUsers(): AuthUser[] {
+  return [
+    {
+      id: "user-admin-1",
+      name: DEFAULT_ADMIN_NAME,
+      email: DEFAULT_ADMIN_EMAIL,
+      password: DEFAULT_ADMIN_PASSWORD,
+      role: "Admin",
+      status: "approved",
+      createdAt: new Date().toISOString(),
+    },
+  ];
+}
+
+function ensureDefaultAdmin(users: AuthUser[]): AuthUser[] {
+  const existingAdminIndex = users.findIndex(
+    (user) => user.email.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase(),
+  );
+
+  if (existingAdminIndex >= 0) {
+    return users.map((user, index) =>
+      index === existingAdminIndex
+        ? {
+            ...user,
+            name: DEFAULT_ADMIN_NAME,
+            password: DEFAULT_ADMIN_PASSWORD,
+            role: "Admin" as const,
+            status: "approved" as const,
+          }
+        : user,
+    );
+  }
+
+  return [
+    ...users,
+    {
+      id: "user-admin-1",
+      name: DEFAULT_ADMIN_NAME,
+      email: DEFAULT_ADMIN_EMAIL,
+      password: DEFAULT_ADMIN_PASSWORD,
+      role: "Admin" as const,
+      status: "approved" as const,
+      createdAt: new Date().toISOString(),
+    },
+  ];
+}
+
+function createDefaultStore(): AuthStoreData {
+  return {
+    users: seedDefaultUsers(),
+    rolePermissions: defaultRolePermissions,
+    roleAreaAccess: defaultRoleAreaAccess,
+  };
+}
+
+function isAppRole(value: unknown): value is AppRole {
+  return value === "Admin" || value === "User" || value === "Team Lead";
+}
+
+function isUserStatus(value: unknown): value is UserStatus {
+  return value === "pending" || value === "approved" || value === "rejected";
+}
+
+function isAuthUser(value: unknown): value is AuthUser {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const item = value as Record<string, unknown>;
+  return (
+    typeof item.id === "string" &&
+    typeof item.name === "string" &&
+    typeof item.email === "string" &&
+    typeof item.password === "string" &&
+    typeof item.createdAt === "string" &&
+    isAppRole(item.role) &&
+    isUserStatus(item.status)
+  );
+}
+
+function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthStoreData {
+  const base = createDefaultStore();
+  if (!data) {
+    return base;
+  }
+
+  const users =
+    Array.isArray(data.users) && data.users.length > 0
+      ? ensureDefaultAdmin(data.users.filter(isAuthUser))
+      : base.users;
+  return {
+    users,
+    rolePermissions: {
+      Admin: { ...base.rolePermissions.Admin, ...(data.rolePermissions?.Admin ?? {}) },
+      User: { ...base.rolePermissions.User, ...(data.rolePermissions?.User ?? {}) },
+      "Team Lead": {
+        ...base.rolePermissions["Team Lead"],
+        ...(data.rolePermissions?.["Team Lead"] ?? {}),
+      },
+    },
+    roleAreaAccess: {
+      Admin: { ...base.roleAreaAccess.Admin, ...(data.roleAreaAccess?.Admin ?? {}) },
+      User: { ...base.roleAreaAccess.User, ...(data.roleAreaAccess?.User ?? {}) },
+      "Team Lead": {
+        ...base.roleAreaAccess["Team Lead"],
+        ...(data.roleAreaAccess?.["Team Lead"] ?? {}),
+      },
+    },
+  };
+}
+
+function canUseKv() {
+  return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+}
+
+export async function loadAuthStore(): Promise<AuthStoreData> {
+  if (canUseKv()) {
+    try {
+      const raw = await kv.get<AuthStoreData>(AUTH_STORE_KEY);
+      const normalized = normalizeStore(raw);
+      if (!raw) {
+        await kv.set(AUTH_STORE_KEY, normalized);
+      }
+      return normalized;
+    } catch {
+      // Fall through to memory store for resilience.
+    }
+  }
+
+  if (!fallbackMemoryStore) {
+    fallbackMemoryStore = createDefaultStore();
+  }
+
+  fallbackMemoryStore = normalizeStore(fallbackMemoryStore);
+  return fallbackMemoryStore;
+}
+
+export async function saveAuthStore(data: AuthStoreData): Promise<void> {
+  const normalized = normalizeStore(data);
+
+  if (canUseKv()) {
+    try {
+      await kv.set(AUTH_STORE_KEY, normalized);
+      return;
+    } catch {
+      // Fall through to memory store for resilience.
+    }
+  }
+
+  fallbackMemoryStore = normalized;
+}

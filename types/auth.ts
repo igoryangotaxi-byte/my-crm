@@ -23,6 +23,11 @@ export type AuthUser = {
 
 export type RolePermissions = Record<AppRole, Record<AppPageKey, boolean>>;
 export type RoleAreaAccess = Record<AppRole, Record<BusinessArea, boolean>>;
+export type AuthStoreData = {
+  users: AuthUser[];
+  rolePermissions: RolePermissions;
+  roleAreaAccess: RoleAreaAccess;
+};
 
 export const defaultRolePermissions: RolePermissions = {
   Admin: {
@@ -68,3 +73,43 @@ export const defaultRoleAreaAccess: RoleAreaAccess = {
     b2c: false,
   },
 };
+
+export type AuthApiStateResponse = AuthStoreData;
+
+export type AuthApiActionRequest =
+  | {
+      action: "register";
+      name: string;
+      email: string;
+      password: string;
+    }
+  | {
+      action: "login";
+      email: string;
+      password: string;
+    }
+  | {
+      action: "updateUserStatus";
+      userId: string;
+      status: UserStatus;
+    }
+  | {
+      action: "updateUserRole";
+      userId: string;
+      role: AppRole;
+    }
+  | {
+      action: "toggleRolePageAccess";
+      role: AppRole;
+      page: AppPageKey;
+    }
+  | {
+      action: "toggleRoleAreaAccess";
+      role: AppRole;
+      area: BusinessArea;
+    }
+  | {
+      action: "setAllRoleAccess";
+      role: AppRole;
+      value: boolean;
+    };

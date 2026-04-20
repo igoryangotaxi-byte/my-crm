@@ -8,12 +8,13 @@ type AuthMode = "login" | "register";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { loading, currentUser, login, register } = useAuth();
+  const { loading, currentUser, login, register, lastLoginEmail } = useAuth();
   const [mode, setMode] = useState<AuthMode>("login");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(lastLoginEmail);
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!loading && currentUser?.status === "approved") {
@@ -21,30 +22,37 @@ export default function LoginPage() {
     }
   }, [loading, currentUser, router]);
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
+    setIsSubmitting(true);
 
-    if (mode === "login") {
-      const result = login(email, password);
-      if (result.ok) {
-        router.replace("/dashboard");
-      } else {
-        setMessage(result.message ?? "Login failed");
+    try {
+      if (mode === "login") {
+        const result = await login(email, password);
+        if (result.ok) {
+          router.replace("/dashboard");
+        } else {
+          setMessage(result.message ?? "Login failed");
+        }
+        return;
       }
-      return;
-    }
 
-    if (!name.trim()) {
-      setMessage("Name is required for registration");
-      return;
-    }
+      if (!name.trim()) {
+        setMessage("Name is required for registration");
+        return;
+      }
 
-    const result = register({ name: name.trim(), email, password });
-    setMessage(result.message ?? (result.ok ? "Registration submitted" : "Registration failed"));
-    if (result.ok) {
-      setMode("login");
-      setPassword("");
+      const result = await register({ name: name.trim(), email, password });
+      setMessage(
+        result.message ?? (result.ok ? "Registration submitted" : "Registration failed"),
+      );
+      if (result.ok) {
+        setMode("login");
+        setPassword("");
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -140,9 +148,14 @@ export default function LoginPage() {
 
           <button
             type="submit"
+            disabled={isSubmitting}
             className="mt-2 h-11 w-full rounded-xl bg-accent text-sm font-semibold text-white transition hover:opacity-95"
           >
-            {mode === "login" ? "Sign in" : "Create account"}
+            {isSubmitting
+              ? "Please wait..."
+              : mode === "login"
+                ? "Sign in"
+                : "Create account"}
           </button>
         </form>
 
