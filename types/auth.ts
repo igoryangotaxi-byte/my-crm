@@ -1,5 +1,6 @@
 export type AppRole = "Admin" | "User" | "Team Lead";
 export type UserStatus = "pending" | "approved" | "rejected";
+export type BusinessArea = "b2b" | "b2c";
 
 export type AppPageKey =
   | "dashboard"
@@ -7,7 +8,8 @@ export type AppPageKey =
   | "orders"
   | "preOrders"
   | "priceCalculator"
-  | "accesses";
+  | "accesses"
+  | "notes";
 
 export type AuthUser = {
   id: string;
@@ -20,6 +22,7 @@ export type AuthUser = {
 };
 
 export type RolePermissions = Record<AppRole, Record<AppPageKey, boolean>>;
+export type RoleAreaAccess = Record<AppRole, Record<BusinessArea, boolean>>;
 
 export const defaultRolePermissions: RolePermissions = {
   Admin: {
@@ -29,6 +32,7 @@ export const defaultRolePermissions: RolePermissions = {
     preOrders: true,
     priceCalculator: true,
     accesses: true,
+    notes: true,
   },
   User: {
     dashboard: true,
@@ -37,6 +41,7 @@ export const defaultRolePermissions: RolePermissions = {
     preOrders: false,
     priceCalculator: true,
     accesses: false,
+    notes: false,
   },
   "Team Lead": {
     dashboard: true,
@@ -45,5 +50,21 @@ export const defaultRolePermissions: RolePermissions = {
     preOrders: true,
     priceCalculator: true,
     accesses: false,
+    notes: true,
+  },
+};
+
+export const defaultRoleAreaAccess: RoleAreaAccess = {
+  Admin: {
+    b2b: true,
+    b2c: true,
+  },
+  User: {
+    b2b: true,
+    b2c: false,
+  },
+  "Team Lead": {
+    b2b: true,
+    b2c: false,
   },
 };

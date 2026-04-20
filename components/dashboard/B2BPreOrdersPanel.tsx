@@ -8,6 +8,7 @@ type StatusFilter = "all" | "completed" | "cancelled" | "pending";
 
 type B2BPreOrdersPanelProps = {
   rows: B2BDashboardOrder[];
+  view?: "dashboard" | "orders";
 };
 
 type DashboardSeriesItem = {
@@ -400,7 +401,7 @@ function resolveDashboardStatus(row: B2BDashboardOrder): Exclude<StatusFilter, "
   return "cancelled";
 }
 
-export function B2BPreOrdersPanel({ rows }: B2BPreOrdersPanelProps) {
+export function B2BPreOrdersPanel({ rows, view = "dashboard" }: B2BPreOrdersPanelProps) {
   const [fromDate, setFromDate] = useState(() => {
     const date = new Date();
     date.setDate(date.getDate() - 30);
@@ -630,9 +631,13 @@ export function B2BPreOrdersPanel({ rows }: B2BPreOrdersPanelProps) {
     <section className="glass-surface mt-6 rounded-3xl p-4">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">B2B Pre-orders</h2>
+          <h2 className="text-xl font-semibold text-slate-900">
+            {view === "dashboard" ? "B2B Dashboard" : "B2B Orders"}
+          </h2>
           <p className="text-sm text-muted">
-            Trips and spending dashboards in unified style
+            {view === "dashboard"
+              ? "Trips and spending dashboards in unified style"
+              : "Detailed B2B orders list with filters"}
           </p>
         </div>
 
@@ -698,25 +703,28 @@ export function B2BPreOrdersPanel({ rows }: B2BPreOrdersPanelProps) {
         </div>
       </div>
 
-      <div className="mb-4 grid gap-4 xl:grid-cols-2">
-        <TripsCard
-          series={dashboardData.series}
-          totalTrips={dashboardData.totalTrips}
-          totalCompleted={dashboardData.totalCompleted}
-          totalCancelled={dashboardData.totalCancelled}
-          maxTrips={dashboardData.maxTrips}
-          axisStep={dashboardData.axisStep}
-        />
-        <ClientSpendCard
-          series={dashboardData.series}
-          totalSpent={dashboardData.totalSpent}
-          clientSeries={dashboardData.clientSeries}
-          maxClientSpend={dashboardData.maxSpent}
-          axisStep={dashboardData.axisStep}
-        />
-      </div>
+      {view === "dashboard" ? (
+        <div className="mb-4 grid gap-4 xl:grid-cols-2">
+          <TripsCard
+            series={dashboardData.series}
+            totalTrips={dashboardData.totalTrips}
+            totalCompleted={dashboardData.totalCompleted}
+            totalCancelled={dashboardData.totalCancelled}
+            maxTrips={dashboardData.maxTrips}
+            axisStep={dashboardData.axisStep}
+          />
+          <ClientSpendCard
+            series={dashboardData.series}
+            totalSpent={dashboardData.totalSpent}
+            clientSeries={dashboardData.clientSeries}
+            maxClientSpend={dashboardData.maxSpent}
+            axisStep={dashboardData.axisStep}
+          />
+        </div>
+      ) : null}
     </section>
 
+    {view === "orders" ? (
     <section className="glass-surface mt-4 rounded-3xl p-4">
       <div className="mb-3">
         <h3 className="text-lg font-semibold text-slate-900">Orders</h3>
@@ -797,6 +805,7 @@ export function B2BPreOrdersPanel({ rows }: B2BPreOrdersPanelProps) {
         </div>
       </div>
     </section>
+    ) : null}
 
     {selectedOrder ? (
         <div

@@ -10,7 +10,8 @@ const pageTitles: Record<string, string> = {
   "/orders": "Orders",
   "/pre-orders": "Pre-Orders",
   "/price-calculator": "Price Calculator",
-  "/accesses": "Accesses",
+  "/accesses": "Access managment",
+  "/notes": "Notes",
 };
 
 type HeaderProps = {
@@ -19,7 +20,7 @@ type HeaderProps = {
 
 export function Header({ onToggleSidebar }: HeaderProps) {
   const pathname = usePathname();
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, currentArea, setCurrentArea, canAccessArea } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const pageTitle =
     Object.keys(pageTitles).find((route) => pathname.startsWith(route)) ??
@@ -51,12 +52,36 @@ export function Header({ onToggleSidebar }: HeaderProps) {
         </div>
       </div>
 
-      <div className="mx-4 hidden w-full max-w-sm lg:block">
+      <div className="mx-4 hidden w-full max-w-2xl items-center gap-3 lg:flex">
         <input
           type="search"
           placeholder="Search..."
           className="h-10 w-full rounded-xl border border-border bg-[#f5f5f7] px-3 text-sm outline-none transition focus:border-accent"
         />
+        <div className="inline-flex rounded-full border border-border bg-white p-1">
+          {([
+            { key: "b2b", label: "B2B" },
+            { key: "b2c", label: "B2C" },
+          ] as const).map((item) => {
+            const allowed = canAccessArea(item.key);
+            const active = currentArea === item.key;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                disabled={!allowed}
+                onClick={() => setCurrentArea(item.key)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                  active
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-100"
+                } disabled:cursor-not-allowed disabled:opacity-40`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="ml-2 flex items-center gap-3">

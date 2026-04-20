@@ -12,7 +12,10 @@ import {
   type AppPageKey,
   type AppRole,
   type AuthUser,
+  type BusinessArea,
+  defaultRoleAreaAccess,
   defaultRolePermissions,
+  type RoleAreaAccess,
   type RolePermissions,
   type UserStatus,
 } from "@/types/auth";
@@ -20,6 +23,8 @@ import {
 const USERS_STORAGE_KEY = "appli_auth_users_v1";
 const SESSION_STORAGE_KEY = "appli_auth_session_v1";
 const PERMISSIONS_STORAGE_KEY = "appli_auth_permissions_v1";
+const AREA_ACCESS_STORAGE_KEY = "appli_auth_area_access_v1";
+const CURRENT_AREA_STORAGE_KEY = "appli_auth_current_area_v1";
 const DEFAULT_ADMIN_EMAIL = "ig-kuznetsov@yandex-team.ru";
 const DEFAULT_ADMIN_PASSWORD = "123";
 const DEFAULT_ADMIN_NAME = "Igor Kuznetsov";
@@ -40,15 +45,20 @@ type AuthContextValue = {
   users: AuthUser[];
   pendingUsers: AuthUser[];
   currentUser: AuthUser | null;
+  currentArea: BusinessArea;
+  setCurrentArea: (area: BusinessArea) => void;
   rolePermissions: RolePermissions;
+  roleAreaAccess: RoleAreaAccess;
   login: (email: string, password: string) => AuthResult;
   register: (input: RegisterInput) => AuthResult;
   logout: () => void;
   updateUserStatus: (userId: string, status: UserStatus) => void;
   updateUserRole: (userId: string, role: AppRole) => void;
   toggleRolePageAccess: (role: AppRole, page: AppPageKey) => void;
+  toggleRoleAreaAccess: (role: AppRole, area: BusinessArea) => void;
   setAllRoleAccess: (role: AppRole, value: boolean) => void;
   canAccess: (page: AppPageKey) => boolean;
+  canAccessArea: (area: BusinessArea) => boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -70,6 +80,23 @@ function mergePermissions(
   };
 
   return next;
+}
+
+function mergeAreaAccess(
+  input: Partial<RoleAreaAccess> | null | undefined,
+): RoleAreaAccess {
+  if (!input) {
+    return defaultRoleAreaAccess;
+  }
+
+  return {
+    Admin: { ...defaultRoleAreaAccess.Admin, ...(input.Admin ?? {}) },
+    User: { ...defaultRoleAreaAccess.User, ...(input.User ?? {}) },
+    "Team Lead": {
+      ...defaultRoleAreaAccess["Team Lead"],
+      ...(input["Team Lead"] ?? {}),
+    },
+  };
 }
 
 function seedDefaultUsers() {
@@ -166,6 +193,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return defaultRolePermissions;
     }
   });
+  const [roleAreaAccess, setRoleAreaAccess] = useState<RoleAreaAccess>(() => {
+    if (typeof window === "undefined") {
+      return defaultRoleAreaAccess;
+    }
+
+    const accessRaw = localStorage.getItem(AREA_ACCESS_STORAGE_KEY);
+    if (!accessRaw) {
+      return defaultRoleAreaAccess;
+    }
+
+    try {
+      return mergeAreaAccess(
+        JSON.parse(accessRaw) as Partial<RoleAreaAccess>,
+      );
+    } catch {
+      return defaultRoleAreaAccess;
+    }
+  });
+  const [currentAreaState, setCurrentAreaState] = useState<BusinessArea>(() => {
+    if (typeof window === "undefined") {
+      return "b2b";
+    }
+    const raw = localStorage.getItem(CURRENT_AREA_STORAGE_KEY);
+    return raw === "b2c" ? "b2c" : "b2b";
+  });
   const loading = false;
 
   useEffect(() => {
@@ -184,16 +236,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const merged = mergePermissions(rolePermissions);
     localStorage.setItem(PERMISSIONS_STORAGE_KEY, JSON.stringify(merged));
   }, [rolePermissions]);
-
+  useEffect(() => {
+    const merged = mergeAreaAccess(roleAreaAccess);
+    localStorage.setItem(AREA_ACCESS_STORAGE_KEY, JSON.stringify(merged));
+  }, [roleAreaAccess]);
   const currentUser = useMemo(
     () => users.find((user) => user.id === sessionUserId) ?? null,
     [users, sessionUserId],
+  );
+  const currentArea = useMemo<BusinessArea>(() => {
+    if (!currentUser) {
+      return currentAreaState;
+    }
+
+    if (roleAreaAccess[currentUser.role][currentAreaState]) {
+      return currentAreaState;
+    }
+
+    if (roleAreaAccess[currentUser.role].b2b) {
+      return "b2b";
+    }
+
+    if (roleAreaAccess[currentUser.role].b2c) {
+      return "b2c";
+    }
+
+    return currentAreaState;
+  }, [currentAreaState, currentUser, roleAreaAccess]);
+  const setCurrentArea = useCallback(
+    (area: BusinessArea) => {
+      if (!currentUser) {
+        setCurrentAreaState(area);
+        return;
+      }
+
+      if (roleAreaAccess[currentUser.role][area]) {
+        setCurrentAreaState(area);
+      }
+    },
+    [currentUser, roleAreaAccess],
   );
 
   const pendingUsers = useMemo(
     () => users.filter((user) => user.status === "pending"),
     [users],
   );
+  useEffect(() => {
+    localStorage.setItem(CURRENT_AREA_STORAGE_KEY, currentArea);
+  }, [currentArea]);
 
   const login = useCallback(
     (email: string, password: string): AuthResult => {
@@ -276,6 +366,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     }));
   }, []);
+  const toggleRoleAreaAccess = useCallback((role: AppRole, area: BusinessArea) => {
+    setRoleAreaAccess((prev) => ({
+      ...prev,
+      [role]: {
+        ...prev[role],
+        [area]: !prev[role][area],
+      },
+    }));
+  }, []);
 
   const setAllRoleAccess = useCallback((role: AppRole, value: boolean) => {
     setRolePermissions((prev) => ({
@@ -287,9 +386,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         preOrders: value,
         priceCalculator: value,
         accesses: value,
+        notes: value,
       },
     }));
   }, []);
+  const canAccessArea = useCallback(
+    (area: BusinessArea) => {
+      if (!currentUser || currentUser.status !== "approved") {
+        return false;
+      }
+      return roleAreaAccess[currentUser.role][area];
+    },
+    [currentUser, roleAreaAccess],
+  );
 
   const canAccess = useCallback(
     (page: AppPageKey) => {
@@ -307,30 +416,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       users,
       pendingUsers,
       currentUser,
+      currentArea,
+      setCurrentArea,
       rolePermissions,
+      roleAreaAccess,
       login,
       register,
       logout,
       updateUserStatus,
       updateUserRole,
       toggleRolePageAccess,
+      toggleRoleAreaAccess,
       setAllRoleAccess,
       canAccess,
+      canAccessArea,
     }),
     [
       loading,
       users,
       pendingUsers,
       currentUser,
+      currentArea,
+      setCurrentArea,
       rolePermissions,
+      roleAreaAccess,
       login,
       register,
       logout,
       updateUserStatus,
       updateUserRole,
       toggleRolePageAccess,
+      toggleRoleAreaAccess,
       setAllRoleAccess,
       canAccess,
+      canAccessArea,
     ],
   );
 

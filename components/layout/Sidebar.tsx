@@ -6,23 +6,38 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import type { AppPageKey } from "@/types/auth";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", page: "dashboard" as AppPageKey },
-  { href: "/pre-orders", label: "Pre-Orders", page: "preOrders" as AppPageKey },
+  {
+    href: "/dashboard",
+    label: "Dashboard",
+    page: "dashboard" as AppPageKey,
+    area: "b2b" as const,
+  },
+  { href: "/orders", label: "Orders", page: "orders" as AppPageKey, area: "b2b" as const },
+  {
+    href: "/pre-orders",
+    label: "Pre-Orders",
+    page: "preOrders" as AppPageKey,
+    area: "b2b" as const,
+  },
   {
     href: "/price-calculator",
     label: "Price Calculator",
     page: "priceCalculator" as AppPageKey,
+    area: "b2b" as const,
   },
 ];
 
 const footerNavItems = [
-  { href: "/accesses", label: "Accesses", page: "accesses" as AppPageKey },
+  { href: "/accesses", label: "Access managment", page: "accesses" as AppPageKey },
+  { href: "/notes", label: "Notes", page: "notes" as AppPageKey },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { canAccess } = useAuth();
-  const filteredNavItems = navItems.filter((item) => canAccess(item.page));
+  const { canAccess, currentArea } = useAuth();
+  const filteredNavItems = navItems.filter(
+    (item) => item.area === currentArea && canAccess(item.page),
+  );
   const filteredFooterNavItems = footerNavItems.filter((item) => canAccess(item.page));
 
   return (

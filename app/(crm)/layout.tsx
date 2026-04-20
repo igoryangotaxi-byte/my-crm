@@ -12,6 +12,7 @@ function resolvePageKey(pathname: string): AppPageKey {
   if (pathname.startsWith("/pre-orders")) return "preOrders";
   if (pathname.startsWith("/price-calculator")) return "priceCalculator";
   if (pathname.startsWith("/accesses")) return "accesses";
+  if (pathname.startsWith("/notes")) return "notes";
   return "dashboard";
 }
 

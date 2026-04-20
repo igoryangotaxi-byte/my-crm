@@ -3,12 +3,11 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { PageHeading } from "@/components/ui/PageHeading";
-import type { PreOrder, TokenDiagnostics } from "@/types/crm";
+import type { PreOrder } from "@/types/crm";
 
 type PreOrdersBoardProps = {
   preOrders: PreOrder[];
   errors: string[];
-  diagnostics: TokenDiagnostics[];
 };
 
 type FilterMode = "all" | "today" | "tomorrow" | "range";
@@ -34,7 +33,7 @@ function endOfDay(date: Date) {
   return copy;
 }
 
-export function PreOrdersBoard({ preOrders, errors, diagnostics }: PreOrdersBoardProps) {
+export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
   const [selectedPreOrder, setSelectedPreOrder] = useState<PreOrder | null>(null);
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [fromDate, setFromDate] = useState("");
@@ -135,43 +134,8 @@ export function PreOrdersBoard({ preOrders, errors, diagnostics }: PreOrdersBoar
         </div>
       ) : null}
 
-      <details className="mb-4 rounded-2xl border border-border bg-panel p-3">
-        <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-wide text-muted">
-          Token diagnostics ({diagnostics.length} clients)
-        </summary>
-
-        <div className="mt-3 grid gap-2 md:grid-cols-3">
-          {diagnostics.map((item) => (
-            <div
-              key={item.label}
-              className="rounded-xl border border-border bg-white px-3 py-2"
-            >
-              <p className="text-sm font-semibold text-slate-900">{item.tokenLabel}</p>
-              <p className="text-xs text-muted">{item.clientName ?? "No client name"}</p>
-              <p className="text-xs text-slate-500">
-                Client ID: {item.clientId ?? "n/a"}
-              </p>
-              <p className="mt-1 text-xs text-slate-600">
-                Orders:{" "}
-                <span
-                  className={
-                    item.ordersStatus === "ok"
-                      ? "font-semibold text-emerald-700"
-                      : item.ordersStatus === "feature_disabled"
-                        ? "font-semibold text-amber-700"
-                        : "font-semibold text-rose-700"
-                  }
-                >
-                  {item.ordersStatus}
-                </span>
-              </p>
-            </div>
-          ))}
-        </div>
-      </details>
-
       <div className="mb-4 rounded-2xl border border-border bg-panel p-3">
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap items-end justify-center gap-3 lg:justify-start">
           <div className="flex flex-wrap gap-2">
             {([
               { mode: "all", label: "All" },
