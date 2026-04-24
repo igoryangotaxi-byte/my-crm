@@ -6,6 +6,60 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-04-24",
+    title: "Request Rides and Orders production release",
+    notes:
+      "Deployed Request Rides tracking persistence with terminal-status cleanup, Yango order cancellation flow, Orders fixes for Test Cabinet visibility, and updated sidebar/access controls.",
+  },
+  {
+    date: "2026-04-20",
+    title: "Greenplum validation mode",
+    notes:
+      "Added monthly Greenplum vs Supabase validation flow in Notes with progress tracking, mismatch report, and a dedicated local validation script/API endpoint.",
+  },
+  {
+    date: "2026-04-21",
+    title: "Dashboard split into API and Yango blocks",
+    notes:
+      "Added separate API Data and Yango Data sections on Dashboard with three new date-filtered Yango dashboards: completion rate, decoupling trend, and top clients.",
+  },
+  {
+    date: "2026-04-21",
+    title: "DataGrip auto-sync scripts",
+    notes:
+      "Added local scripts for DataGrip DSN discovery, Greenplum connection check, incremental fct_order sync, optional agg_executor sync, and Supabase sync state tracking.",
+  },
+  {
+    date: "2026-04-21",
+    title: "DataGrip sync flow",
+    notes:
+      "Updated Notes sync flow to support DataGrip connection check first, then Greenplum to Supabase sync using dedicated env commands.",
+  },
+  {
+    date: "2026-04-21",
+    title: "Supabase integration baseline",
+    notes:
+      "Connected Supabase env/config in project, added connection status in Notes, and secured Greenplum sync endpoint to run only when Supabase is configured.",
+  },
+  {
+    date: "2026-04-21",
+    title: "Greenplum sync button in Notes",
+    notes:
+      "Added a manual Sync Greenplum -> Supabase action in Notes with a secure local-only API endpoint controlled by environment flags.",
+  },
+  {
+    date: "2026-04-21",
+    title: "Expanded Yango token coverage",
+    notes:
+      "Renamed RydeMobility token mapping to SHANA10 and added TelAvivMunicipality, YangoDeli, and SHLAV tokens across pre-orders, dashboard, orders, and diagnostics.",
+  },
+  {
+    date: "2026-04-21",
+    title: "Orders filter and sidebar stability",
+    notes:
+      "Removed Pending from Orders status filter, restored stable hover sidebar behavior, and moved page subtitles into the top header to eliminate duplicate titles.",
+  },
+  {
     date: "2026-04-20",
     title: "Dashboard charts refresh",
     notes:
@@ -33,17 +87,17 @@ export function ReleaseNotesPanel() {
     <section className="glass-surface mb-4 rounded-3xl p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold text-slate-900">Release notes</h3>
-          <p className="text-sm text-muted">What is currently deployed to production</p>
+          <h3 className="crm-section-title">Release notes</h3>
+          <p className="crm-subtitle">What is currently deployed to production</p>
         </div>
-        <span className="rounded-full border border-border bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">
+        <span className="rounded-full border border-white/70 bg-white/80 px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-[0_8px_16px_rgba(15,23,42,0.1)]">
           Build {releaseRef}
         </span>
       </div>
 
       <div className="grid gap-2 md:grid-cols-3">
         {releaseItems.map((item) => (
-          <article key={`${item.date}-${item.title}`} className="rounded-2xl border border-border bg-white p-3">
+          <article key={`${item.date}-${item.title}`} className="crm-hover-lift rounded-2xl border border-white/70 bg-white/75 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted">{item.date}</p>
             <p className="mt-1 text-sm font-semibold text-slate-900">{item.title}</p>
             <p className="mt-1 text-xs text-slate-600">{item.notes}</p>

@@ -56,7 +56,7 @@ export default async function ClientDetailsPage({ params }: ClientDetailsPagePro
   ];
 
   return (
-    <section>
+    <section className="crm-page">
       <div className="mb-3">
         <Link href="/clients" className="text-sm font-medium text-accent hover:underline">
           ← Back to clients
@@ -68,7 +68,7 @@ export default async function ClientDetailsPage({ params }: ClientDetailsPagePro
         subtitle={`Client profile: ${client.company}`}
       />
 
-      <div className="mb-6 grid gap-4 rounded-2xl border border-border bg-panel p-4 md:grid-cols-2">
+      <div className="glass-surface mb-6 grid gap-4 rounded-2xl p-4 md:grid-cols-2">
         <div>
           <p className="text-sm text-muted">Email</p>
           <p className="font-medium text-slate-900">{client.email}</p>
@@ -89,7 +89,7 @@ export default async function ClientDetailsPage({ params }: ClientDetailsPagePro
         </div>
       </div>
 
-      <h2 className="mb-3 text-lg font-semibold text-foreground">Client orders</h2>
+      <h2 className="crm-section-title mb-3">Client orders</h2>
       <Table columns={orderColumns} rows={clientOrders} emptyText="No orders yet" />
     </section>
   );

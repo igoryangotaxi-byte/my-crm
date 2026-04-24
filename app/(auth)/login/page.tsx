@@ -66,7 +66,7 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-panel p-8">
+      <div className="glass-surface w-full max-w-md rounded-2xl p-8">
         <div className="mb-6">
           <p className="text-sm font-medium text-accent">Appli Taxi Oz</p>
           <h1 className="mt-2 text-2xl font-semibold text-foreground">
@@ -79,7 +79,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <div className="mb-4 inline-flex rounded-xl bg-slate-100 p-1">
+        <div className="mb-4 inline-flex rounded-xl bg-white/60 p-1 shadow-[0_8px_18px_rgba(15,23,42,0.12)]">
           <button
             type="button"
             onClick={() => {
@@ -87,7 +87,7 @@ export default function LoginPage() {
               setMessage(null);
             }}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-              mode === "login" ? "bg-white text-slate-900" : "text-slate-600"
+              mode === "login" ? "crm-button-primary text-white" : "text-slate-600"
             }`}
           >
             Login
@@ -99,7 +99,7 @@ export default function LoginPage() {
               setMessage(null);
             }}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-              mode === "register" ? "bg-white text-slate-900" : "text-slate-600"
+              mode === "register" ? "crm-button-primary text-white" : "text-slate-600"
             }`}
           >
             Register
@@ -115,7 +115,7 @@ export default function LoginPage() {
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="Your full name"
-                className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none transition focus:border-accent"
+                className="crm-input h-11 w-full px-3 text-sm"
               />
             </label>
           ) : null}
@@ -127,7 +127,7 @@ export default function LoginPage() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="name@company.com"
-              className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none transition focus:border-accent"
+              className="crm-input h-11 w-full px-3 text-sm"
             />
           </label>
 
@@ -138,7 +138,7 @@ export default function LoginPage() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="••••••••"
-              className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none transition focus:border-accent"
+              className="crm-input h-11 w-full px-3 text-sm"
             />
           </label>
 
@@ -149,7 +149,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="mt-2 h-11 w-full rounded-xl bg-accent text-sm font-semibold text-white transition hover:opacity-95"
+            className="crm-button-primary mt-2 h-11 w-full rounded-xl text-sm font-semibold transition hover:opacity-95"
           >
             {isSubmitting
               ? "Please wait..."

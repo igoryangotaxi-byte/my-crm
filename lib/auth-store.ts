@@ -5,6 +5,7 @@ import {
   type AuthUser,
   type UserStatus,
   defaultRoleAreaAccess,
+  defaultRoleDashboardBlockAccess,
   defaultRolePermissions,
 } from "@/types/auth";
 
@@ -67,6 +68,7 @@ function createDefaultStore(): AuthStoreData {
     users: seedDefaultUsers(),
     rolePermissions: defaultRolePermissions,
     roleAreaAccess: defaultRoleAreaAccess,
+    roleDashboardBlockAccess: defaultRoleDashboardBlockAccess,
   };
 }
 
@@ -120,6 +122,20 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
       "Team Lead": {
         ...base.roleAreaAccess["Team Lead"],
         ...(data.roleAreaAccess?.["Team Lead"] ?? {}),
+      },
+    },
+    roleDashboardBlockAccess: {
+      Admin: {
+        ...base.roleDashboardBlockAccess.Admin,
+        ...(data.roleDashboardBlockAccess?.Admin ?? {}),
+      },
+      User: {
+        ...base.roleDashboardBlockAccess.User,
+        ...(data.roleDashboardBlockAccess?.User ?? {}),
+      },
+      "Team Lead": {
+        ...base.roleDashboardBlockAccess["Team Lead"],
+        ...(data.roleDashboardBlockAccess?.["Team Lead"] ?? {}),
       },
     },
   };

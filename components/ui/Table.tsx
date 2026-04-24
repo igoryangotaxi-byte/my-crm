@@ -18,7 +18,7 @@ export function Table<T>({ columns, rows, emptyText = "No data" }: TableProps<T>
     <div className="glass-surface overflow-hidden rounded-3xl">
       <div className="overflow-x-auto">
         <table className="min-w-full text-left">
-          <thead className="bg-[#f6f6f8]">
+          <thead className="bg-white/65">
             <tr>
               {columns.map((column) => (
                 <th
@@ -31,7 +31,7 @@ export function Table<T>({ columns, rows, emptyText = "No data" }: TableProps<T>
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-border">
+          <tbody className="divide-y divide-white/55">
             {rows.length === 0 ? (
               <tr>
                 <td
@@ -43,7 +43,7 @@ export function Table<T>({ columns, rows, emptyText = "No data" }: TableProps<T>
               </tr>
             ) : (
               rows.map((row, index) => (
-                <tr key={index} className="hover:bg-[#fafafb]">
+                <tr key={index} className="crm-hover-lift hover:bg-white/65">
                   {columns.map((column) => (
                     <td
                       key={column.key}

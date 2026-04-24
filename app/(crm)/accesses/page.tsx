@@ -2,13 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { PageHeading } from "@/components/ui/PageHeading";
-import type { AppPageKey, AppRole, BusinessArea } from "@/types/auth";
+import type { AppPageKey, AppRole, BusinessArea, DashboardBlockKey } from "@/types/auth";
 
 const roleItems: AppRole[] = ["Admin", "User", "Team Lead"];
 type AccessAction =
   | { type: "page"; key: AppPageKey; label: string }
-  | { type: "area"; key: BusinessArea; label: string };
+  | { type: "area"; key: BusinessArea; label: string }
+  | { type: "dashboardBlock"; key: DashboardBlockKey; label: string };
 
 type AccessSection = {
   key: string;
@@ -30,6 +30,7 @@ const accessSections: AccessSection[] = [
     label: "B2B pages",
     actions: [
       { type: "page", key: "dashboard", label: "Dashboard" },
+      { type: "page", key: "requestRides", label: "Request Rides" },
       { type: "page", key: "preOrders", label: "Pre-Orders" },
       { type: "page", key: "orders", label: "Orders" },
       { type: "page", key: "priceCalculator", label: "Price Calculator" },
@@ -37,11 +38,32 @@ const accessSections: AccessSection[] = [
     ],
   },
   {
+    key: "dashboard-blocks",
+    label: "Feature blocks",
+    actions: [
+      { type: "dashboardBlock", key: "apiData", label: "API Data block" },
+      { type: "dashboardBlock", key: "yangoData", label: "Yango Data block" },
+      {
+        type: "dashboardBlock",
+        key: "tariffHealthCheck",
+        label: "Tariff Health Check tab",
+      },
+    ],
+  },
+  {
     key: "admin",
     label: "Administration",
-    actions: [{ type: "page", key: "accesses", label: "Access managment" }],
+    actions: [{ type: "page", key: "accesses", label: "Access management" }],
   },
 ];
+
+function DeleteIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8">
+      <path d="M5 5l10 10M15 5L5 15" />
+    </svg>
+  );
+}
 
 export default function AccessesPage() {
   const {
@@ -50,10 +72,13 @@ export default function AccessesPage() {
     users,
     rolePermissions,
     roleAreaAccess,
+    roleDashboardBlockAccess,
     updateUserStatus,
     updateUserRole,
+    deleteUser,
     toggleRolePageAccess,
     toggleRoleAreaAccess,
+    toggleRoleDashboardBlockAccess,
   } = useAuth();
 
   const isAdmin = currentUser?.role === "Admin";
@@ -72,23 +97,21 @@ export default function AccessesPage() {
         if (action.type === "page") {
           return rolePermissions[role][action.key];
         }
-        return roleAreaAccess[role][action.key];
+        if (action.type === "area") {
+          return roleAreaAccess[role][action.key];
+        }
+        return roleDashboardBlockAccess[role][action.key];
       }).length;
       return { role, allowedCount };
     });
-  }, [rolePermissions, roleAreaAccess]);
+  }, [rolePermissions, roleAreaAccess, roleDashboardBlockAccess]);
 
   return (
-    <section>
-      <PageHeading
-        title="Access managment"
-        subtitle="Manage role permissions and registration approvals"
-      />
-
-      <div className="glass-surface mb-4 overflow-hidden rounded-3xl">
+    <section className="crm-page">
+      <div className="glass-surface mb-4 overflow-hidden rounded-3xl border border-white/70 bg-white/75 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur-md">
         <div className="grid min-h-[380px] grid-cols-1 divide-y divide-border lg:grid-cols-3 lg:divide-x lg:divide-y-0">
           <div className="p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Role</p>
+            <p className="crm-label mb-3">Role</p>
             <div className="space-y-1.5">
               {roleItems.map((role) => {
                 const isSelected = role === selectedRole;
@@ -97,10 +120,10 @@ export default function AccessesPage() {
                     key={role}
                     type="button"
                     onClick={() => setSelectedRole(role)}
-                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium transition ${
+                    className={`crm-hover-lift flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium transition ${
                       isSelected
-                        ? "bg-[#ff4f38] text-white"
-                        : "text-slate-700 hover:bg-slate-100"
+                        ? "crm-button-primary text-white"
+                        : "bg-white/55 text-slate-700 hover:bg-white"
                     }`}
                   >
                     <span>{role}</span>
@@ -112,9 +135,7 @@ export default function AccessesPage() {
           </div>
 
           <div className="p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">
-              Section
-            </p>
+            <p className="crm-label mb-3">Section</p>
             <div className="space-y-1.5">
               {accessSections.map((section) => {
                 const isSelected = section.key === selectedSection.key;
@@ -123,10 +144,10 @@ export default function AccessesPage() {
                     key={section.key}
                     type="button"
                     onClick={() => setSelectedSectionKey(section.key)}
-                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium transition ${
+                    className={`crm-hover-lift flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium transition ${
                       isSelected
-                        ? "bg-[#ff4f38] text-white"
-                        : "text-slate-700 hover:bg-slate-100"
+                        ? "crm-button-primary text-white"
+                        : "bg-white/55 text-slate-700 hover:bg-white"
                     }`}
                   >
                     <span>{section.label}</span>
@@ -138,20 +159,20 @@ export default function AccessesPage() {
           </div>
 
           <div className="p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">
-              Allowed actions
-            </p>
+            <p className="crm-label mb-3">Allowed actions</p>
             <div className="space-y-2">
               {selectedSection.actions.map((action) => {
                 const checked =
                   action.type === "page"
                     ? rolePermissions[selectedRole][action.key]
-                    : roleAreaAccess[selectedRole][action.key];
+                    : action.type === "area"
+                      ? roleAreaAccess[selectedRole][action.key]
+                      : roleDashboardBlockAccess[selectedRole][action.key];
 
                 return (
                   <label
                     key={`${action.type}-${action.key}`}
-                    className="flex items-center gap-3 rounded-xl border border-border bg-white px-3 py-2.5 text-sm text-slate-800"
+                    className="crm-hover-lift flex items-center gap-3 rounded-xl border border-white/70 bg-white/70 px-3 py-2.5 text-sm text-slate-800"
                   >
                     <input
                       type="checkbox"
@@ -162,9 +183,13 @@ export default function AccessesPage() {
                           toggleRolePageAccess(selectedRole, action.key);
                           return;
                         }
-                        toggleRoleAreaAccess(selectedRole, action.key);
+                        if (action.type === "area") {
+                          toggleRoleAreaAccess(selectedRole, action.key);
+                          return;
+                        }
+                        toggleRoleDashboardBlockAccess(selectedRole, action.key);
                       }}
-                      className="h-4 w-4 rounded border-border accent-[#ff4f38] disabled:opacity-50"
+                      className="h-4 w-4 rounded border-border accent-accent disabled:opacity-50"
                     />
                     <span>{action.label}</span>
                   </label>
@@ -182,18 +207,18 @@ export default function AccessesPage() {
 
       <div className="mb-4 grid gap-3 md:grid-cols-3">
         {roleStats.map((item) => (
-          <article key={item.role} className="glass-surface rounded-3xl px-4 py-3">
-            <p className="text-sm text-muted">{item.role}</p>
+          <article key={item.role} className="glass-surface crm-hover-lift rounded-3xl border border-white/70 bg-white/75 px-4 py-3 shadow-[0_12px_28px_rgba(15,23,42,0.08)] backdrop-blur-md">
+            <p className="crm-subtitle">{item.role}</p>
             <p className="mt-1 text-2xl font-semibold text-slate-900">
               {item.allowedCount}/{accessSections.flatMap((section) => section.actions).length}
             </p>
-            <p className="text-xs text-muted">actions allowed</p>
+            <p className="crm-subtitle">actions allowed</p>
           </article>
         ))}
       </div>
 
-      <div className="glass-surface mb-4 rounded-3xl p-4">
-        <h2 className="text-base font-semibold text-slate-900">Pending registrations</h2>
+      <div className="glass-surface mb-4 rounded-3xl border border-white/70 bg-white/75 p-4 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur-md">
+        <h2 className="crm-section-title">Pending registrations</h2>
         {pendingUsers.length === 0 ? (
           <p className="mt-2 text-sm text-muted">No users are waiting for approval.</p>
         ) : (
@@ -213,7 +238,7 @@ export default function AccessesPage() {
                     value={user.role}
                     onChange={(event) => updateUserRole(user.id, event.target.value as AppRole)}
                     disabled={!isAdmin}
-                    className="h-9 rounded-lg border border-border bg-white px-2 text-sm text-slate-700 disabled:opacity-50"
+                    className="crm-input h-9 px-2 text-sm text-slate-700 disabled:opacity-50"
                   >
                     {roleItems.map((role) => (
                       <option key={role} value={role}>
@@ -225,7 +250,7 @@ export default function AccessesPage() {
                     type="button"
                     disabled={!isAdmin}
                     onClick={() => updateUserStatus(user.id, "approved")}
-                    className="rounded-lg bg-emerald-100 px-3 py-1.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-200 disabled:opacity-50"
+                    className="crm-button-primary rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
                   >
                     Approve
                   </button>
@@ -233,9 +258,18 @@ export default function AccessesPage() {
                     type="button"
                     disabled={!isAdmin}
                     onClick={() => updateUserStatus(user.id, "rejected")}
-                    className="rounded-lg bg-rose-100 px-3 py-1.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-200 disabled:opacity-50"
+                    className="crm-hover-lift rounded-lg border border-white/70 bg-white/75 px-3 py-1.5 text-sm font-semibold text-slate-700 transition disabled:opacity-50"
                   >
                     Reject
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${user.email}`}
+                    disabled={!isAdmin || currentUser?.id === user.id}
+                    onClick={() => deleteUser(user.id)}
+                    className="crm-hover-lift inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-300/80 bg-gradient-to-b from-rose-500 to-red-600 text-white shadow-[0_10px_18px_rgba(225,29,72,0.32)] transition disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    <DeleteIcon />
                   </button>
                 </div>
               </div>
@@ -244,13 +278,13 @@ export default function AccessesPage() {
         )}
       </div>
 
-      <details className="glass-surface mt-4 rounded-3xl p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+      <details className="glass-surface mt-4 rounded-3xl border border-white/70 bg-white/75 p-4 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur-md">
+        <summary className="crm-section-title cursor-pointer">
           All users ({users.length})
         </summary>
         <div className="mt-3 overflow-x-auto">
           <table className="min-w-full">
-            <thead className="bg-[#f6f6f8]">
+            <thead className="bg-white/60">
               <tr>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                   Name
@@ -281,7 +315,7 @@ export default function AccessesPage() {
                       onChange={(event) =>
                         updateUserRole(user.id, event.target.value as AppRole)
                       }
-                      className="h-8 rounded-lg border border-border bg-white px-2 text-sm text-slate-700 disabled:opacity-50"
+                      className="crm-input h-8 px-2 text-sm text-slate-700 disabled:opacity-50"
                     >
                       {roleItems.map((role) => (
                         <option key={role} value={role}>
@@ -292,7 +326,18 @@ export default function AccessesPage() {
                   </td>
                   <td className="px-3 py-2 text-sm text-slate-700">{user.status}</td>
                   <td className="px-3 py-2 text-sm text-slate-700">
-                    {isAdmin ? "Role can be updated" : "Admin only"}
+                    <div className="flex items-center gap-2">
+                      <span>{isAdmin ? "Role can be updated" : "Admin only"}</span>
+                      <button
+                        type="button"
+                        aria-label={`Delete ${user.email}`}
+                        disabled={!isAdmin || currentUser?.id === user.id}
+                        onClick={() => deleteUser(user.id)}
+                        className="crm-hover-lift inline-flex h-7 w-7 items-center justify-center rounded-md border border-rose-300/80 bg-gradient-to-b from-rose-500 to-red-600 text-white shadow-[0_8px_16px_rgba(225,29,72,0.3)] transition disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        <DeleteIcon />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

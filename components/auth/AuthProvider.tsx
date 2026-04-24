@@ -15,9 +15,12 @@ import {
   type AppRole,
   type AuthUser,
   type BusinessArea,
+  type DashboardBlockKey,
   defaultRoleAreaAccess,
+  defaultRoleDashboardBlockAccess,
   defaultRolePermissions,
   type RoleAreaAccess,
+  type RoleDashboardBlockAccess,
   type RolePermissions,
   type UserStatus,
 } from "@/types/auth";
@@ -46,16 +49,20 @@ type AuthContextValue = {
   setCurrentArea: (area: BusinessArea) => void;
   rolePermissions: RolePermissions;
   roleAreaAccess: RoleAreaAccess;
+  roleDashboardBlockAccess: RoleDashboardBlockAccess;
   login: (email: string, password: string) => Promise<AuthResult>;
   register: (input: RegisterInput) => Promise<AuthResult>;
   logout: () => void;
   updateUserStatus: (userId: string, status: UserStatus) => Promise<void>;
   updateUserRole: (userId: string, role: AppRole) => Promise<void>;
+  deleteUser: (userId: string) => Promise<void>;
   toggleRolePageAccess: (role: AppRole, page: AppPageKey) => Promise<void>;
   toggleRoleAreaAccess: (role: AppRole, area: BusinessArea) => Promise<void>;
+  toggleRoleDashboardBlockAccess: (role: AppRole, block: DashboardBlockKey) => Promise<void>;
   setAllRoleAccess: (role: AppRole, value: boolean) => Promise<void>;
   canAccess: (page: AppPageKey) => boolean;
   canAccessArea: (area: BusinessArea) => boolean;
+  canAccessDashboardBlock: (block: DashboardBlockKey) => boolean;
   lastLoginEmail: string;
 };
 
@@ -95,6 +102,23 @@ function mergeAreaAccess(
   };
 }
 
+function mergeDashboardBlockAccess(
+  input: Partial<RoleDashboardBlockAccess> | null | undefined,
+): RoleDashboardBlockAccess {
+  if (!input) {
+    return defaultRoleDashboardBlockAccess;
+  }
+
+  return {
+    Admin: { ...defaultRoleDashboardBlockAccess.Admin, ...(input.Admin ?? {}) },
+    User: { ...defaultRoleDashboardBlockAccess.User, ...(input.User ?? {}) },
+    "Team Lead": {
+      ...defaultRoleDashboardBlockAccess["Team Lead"],
+      ...(input["Team Lead"] ?? {}),
+    },
+  };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [sessionUserId, setSessionUserId] = useState<string | null>(() => {
@@ -107,6 +131,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     useState<RolePermissions>(defaultRolePermissions);
   const [roleAreaAccess, setRoleAreaAccess] =
     useState<RoleAreaAccess>(defaultRoleAreaAccess);
+  const [roleDashboardBlockAccess, setRoleDashboardBlockAccess] =
+    useState<RoleDashboardBlockAccess>(defaultRoleDashboardBlockAccess);
   const [currentAreaState, setCurrentAreaState] = useState<BusinessArea>(() => {
     if (typeof window === "undefined") {
       return "b2b";
@@ -185,6 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUsers(data.users);
     setRolePermissions(mergePermissions(data.rolePermissions));
     setRoleAreaAccess(mergeAreaAccess(data.roleAreaAccess));
+    setRoleDashboardBlockAccess(mergeDashboardBlockAccess(data.roleDashboardBlockAccess));
   }, []);
 
   const fetchState = useCallback(async () => {
@@ -309,8 +336,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(() => {
+    void runAction({ action: "logout" });
     setSessionUserId(null);
-  }, []);
+  }, [runAction]);
 
   const updateUserStatus = useCallback(
     async (userId: string, status: UserStatus) => {
@@ -347,6 +375,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [runAction],
   );
 
+  const toggleRoleDashboardBlockAccess = useCallback(
+    async (role: AppRole, block: DashboardBlockKey) => {
+      await runAction({ action: "toggleRoleDashboardBlockAccess", role, block });
+    },
+    [runAction],
+  );
+
+  const deleteUser = useCallback(
+    async (userId: string) => {
+      await runAction({ action: "deleteUser", userId });
+      setSessionUserId((prev) => (prev === userId ? null : prev));
+    },
+    [runAction],
+  );
+
   const canAccessArea = useCallback(
     (area: BusinessArea) => {
       if (!currentUser || currentUser.status !== "approved") {
@@ -367,6 +410,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [currentUser, rolePermissions],
   );
 
+  const canAccessDashboardBlock = useCallback(
+    (block: DashboardBlockKey) => {
+      if (!currentUser || currentUser.status !== "approved") {
+        return false;
+      }
+      return roleDashboardBlockAccess[currentUser.role][block];
+    },
+    [currentUser, roleDashboardBlockAccess],
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       loading,
@@ -377,16 +430,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setCurrentArea,
       rolePermissions,
       roleAreaAccess,
+      roleDashboardBlockAccess,
       login,
       register,
       logout,
       updateUserStatus,
       updateUserRole,
+      deleteUser,
       toggleRolePageAccess,
       toggleRoleAreaAccess,
+      toggleRoleDashboardBlockAccess,
       setAllRoleAccess,
       canAccess,
       canAccessArea,
+      canAccessDashboardBlock,
       lastLoginEmail,
     }),
     [
@@ -398,16 +455,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setCurrentArea,
       rolePermissions,
       roleAreaAccess,
+      roleDashboardBlockAccess,
       login,
       register,
       logout,
       updateUserStatus,
       updateUserRole,
+      deleteUser,
       toggleRolePageAccess,
       toggleRoleAreaAccess,
+      toggleRoleDashboardBlockAccess,
       setAllRoleAccess,
       canAccess,
       canAccessArea,
+      canAccessDashboardBlock,
       lastLoginEmail,
     ],
   );

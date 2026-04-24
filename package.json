@@ -6,11 +6,28 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:price-calculator": "tsx --test tests/price-calculator-formulas.test.ts tests/tariff-health-check.test.ts tests/request-rides.test.ts",
+    "sync:datagrip:check": "node scripts/datagrip-check.js",
+    "sync:datagrip:run": "node scripts/datagrip-sync.js",
+    "sync:datagrip:validate": "node scripts/datagrip-validate.js",
+    "sync:datagrip:worker": "node scripts/greenplum-sync-worker.js",
+    "sync:datagrip:worker:once": "node scripts/greenplum-sync-worker.js --once",
+    "sync:datagrip:backfill:b2b": "node scripts/datagrip-backfill-b2b.js",
+    "sync:datagrip:enrich:b2b:2026": "node scripts/datagrip-enrich-b2b-2026.js",
+    "sync:datagrip:run:b2b:2026": "node scripts/datagrip-sync-b2b-2026-by-created-date.js",
+    "import:b2b:csv": "node scripts/import-b2b-csv-to-supabase.js",
+    "import:corp-client-map:csv": "node scripts/import-corp-client-map-to-supabase.js",
+    "import:request-rides-user-map:csv": "node scripts/import-request-rides-user-map.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.104.0",
     "@vercel/kv": "^3.0.0",
+    "csv-parse": "^6.2.1",
+    "dotenv": "^17.4.2",
+    "fast-xml-parser": "^5.7.1",
     "next": "16.2.4",
+    "pg": "^8.20.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
@@ -22,6 +39,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4",
-    "typescript": "^6.0.3"
+    "tsx": "^4.20.6",
+    "typescript": "^6.0.3",
+    "vercel": "^51.8.0"
   }
 }

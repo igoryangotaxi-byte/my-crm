@@ -1,12 +1,14 @@
 export type AppRole = "Admin" | "User" | "Team Lead";
 export type UserStatus = "pending" | "approved" | "rejected";
 export type BusinessArea = "b2b" | "b2c";
+export type DashboardBlockKey = "apiData" | "yangoData" | "tariffHealthCheck";
 
 export type AppPageKey =
   | "dashboard"
   | "clients"
   | "orders"
   | "preOrders"
+  | "requestRides"
   | "priceCalculator"
   | "accesses"
   | "notes";
@@ -23,10 +25,12 @@ export type AuthUser = {
 
 export type RolePermissions = Record<AppRole, Record<AppPageKey, boolean>>;
 export type RoleAreaAccess = Record<AppRole, Record<BusinessArea, boolean>>;
+export type RoleDashboardBlockAccess = Record<AppRole, Record<DashboardBlockKey, boolean>>;
 export type AuthStoreData = {
   users: AuthUser[];
   rolePermissions: RolePermissions;
   roleAreaAccess: RoleAreaAccess;
+  roleDashboardBlockAccess: RoleDashboardBlockAccess;
 };
 
 export const defaultRolePermissions: RolePermissions = {
@@ -35,6 +39,7 @@ export const defaultRolePermissions: RolePermissions = {
     clients: true,
     orders: true,
     preOrders: true,
+    requestRides: true,
     priceCalculator: true,
     accesses: true,
     notes: true,
@@ -44,6 +49,7 @@ export const defaultRolePermissions: RolePermissions = {
     clients: true,
     orders: false,
     preOrders: false,
+    requestRides: true,
     priceCalculator: true,
     accesses: false,
     notes: false,
@@ -53,6 +59,7 @@ export const defaultRolePermissions: RolePermissions = {
     clients: true,
     orders: true,
     preOrders: true,
+    requestRides: true,
     priceCalculator: true,
     accesses: false,
     notes: true,
@@ -74,6 +81,24 @@ export const defaultRoleAreaAccess: RoleAreaAccess = {
   },
 };
 
+export const defaultRoleDashboardBlockAccess: RoleDashboardBlockAccess = {
+  Admin: {
+    apiData: true,
+    yangoData: true,
+    tariffHealthCheck: true,
+  },
+  User: {
+    apiData: true,
+    yangoData: true,
+    tariffHealthCheck: true,
+  },
+  "Team Lead": {
+    apiData: true,
+    yangoData: true,
+    tariffHealthCheck: true,
+  },
+};
+
 export type AuthApiStateResponse = AuthStoreData;
 
 export type AuthApiActionRequest =
@@ -87,6 +112,9 @@ export type AuthApiActionRequest =
       action: "login";
       email: string;
       password: string;
+    }
+  | {
+      action: "logout";
     }
   | {
       action: "updateUserStatus";
@@ -109,7 +137,16 @@ export type AuthApiActionRequest =
       area: BusinessArea;
     }
   | {
+      action: "toggleRoleDashboardBlockAccess";
+      role: AppRole;
+      block: DashboardBlockKey;
+    }
+  | {
       action: "setAllRoleAccess";
       role: AppRole;
       value: boolean;
+    }
+  | {
+      action: "deleteUser";
+      userId: string;
     };

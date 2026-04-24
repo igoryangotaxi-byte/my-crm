@@ -1,7 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { PageHeading } from "@/components/ui/PageHeading";
+import { useAuth } from "@/components/auth/AuthProvider";
+import {
+  calculateMoneTariff,
+  calculateYangoDriversTariff,
+  parseTimeToMinutes,
+  weekdayOptions,
+  type MoneBreakdown,
+  type WeekdayKey,
+  type YangoDriversBreakdown,
+} from "@/lib/price-calculator-formulas";
+import type { TariffHealthResult, TieredClientTariff } from "@/types/crm";
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -11,50 +21,38 @@ function formatMoney(value: number) {
   }).format(value);
 }
 
-type WeekdayKey =
-  | "monday"
-  | "tuesday"
-  | "wednesday"
-  | "thursday"
-  | "friday"
-  | "saturday"
-  | "sunday";
+function formatSignedMoney(value: number) {
+  const formatted = formatMoney(Math.abs(value));
+  if (value > 0) return `+${formatted}`;
+  if (value < 0) return `−${formatted}`;
+  return formatted;
+}
 
-type PriceBreakdown = {
-  boardingFee: number;
-  distanceCost: number;
-  timeCost: number;
-  total: number;
-};
+function formatSignedPct(value: number | null) {
+  if (value === null) return "n/a";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(2)}%`;
+}
 
-const weekdayOptions: { key: WeekdayKey; label: string }[] = [
-  { key: "monday", label: "Monday" },
-  { key: "tuesday", label: "Tuesday" },
-  { key: "wednesday", label: "Wednesday" },
-  { key: "thursday", label: "Thursday" },
-  { key: "friday", label: "Friday" },
-  { key: "saturday", label: "Saturday" },
-  { key: "sunday", label: "Sunday" },
-];
+function describeTieredTariff(tariff: TieredClientTariff) {
+  const bandParts = tariff.bands.map((band) =>
+    band.km == null
+      ? `${band.ratePerKm.toFixed(2)}/km on remaining distance`
+      : `${band.ratePerKm.toFixed(2)}/km for first ${band.km} km`,
+  );
+  return `Base ${tariff.basePrice.toFixed(2)}; ${bandParts.join("; ")}`;
+}
 
-// Keep this multiplier map for future tariff tuning by weekday.
-const weekdayMultiplier: Record<WeekdayKey, number> = {
-  monday: 1,
-  tuesday: 1,
-  wednesday: 1,
-  thursday: 1.03,
-  friday: 1.06,
-  saturday: 1.08,
-  sunday: 1.04,
-};
+type PriceCalculatorTab = "compare" | "health";
 
-export default function PriceCalculatorPage() {
+function CompareDriverPriceTab() {
   const [tripKm, setTripKm] = useState("");
   const [tripMin, setTripMin] = useState("");
   const [dayOfWeek, setDayOfWeek] = useState<WeekdayKey>("monday");
   const [tripTime, setTripTime] = useState("09:00");
-  const [motBreakdown, setMotBreakdown] = useState<PriceBreakdown | null>(null);
-  const [yangoBreakdown, setYangoBreakdown] = useState<PriceBreakdown | null>(null);
+  const [yangoDriversBreakdown, setYangoDriversBreakdown] =
+    useState<YangoDriversBreakdown | null>(null);
+  const [moneBreakdown, setMoneBreakdown] = useState<MoneBreakdown | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -71,196 +69,484 @@ export default function PriceCalculatorPage() {
       min < 0 ||
       (km === 0 && min === 0)
     ) {
-      setMotBreakdown(null);
-      setYangoBreakdown(null);
+      setYangoDriversBreakdown(null);
+      setMoneBreakdown(null);
       setError("Enter valid positive values for Trip Km and Trip Min");
       return;
     }
 
-    const multiplier = weekdayMultiplier[dayOfWeek];
+    const timeMinutes = parseTimeToMinutes(tripTime);
+    if (timeMinutes === null) {
+      setYangoDriversBreakdown(null);
+      setMoneBreakdown(null);
+      setError("Enter a valid trip time");
+      return;
+    }
 
-    const motBoardingFee = 4.5 * multiplier;
-    const motDistanceCost = km * 2.2 * multiplier;
-    const motTimeCost = min * 0.5 * multiplier;
+    setYangoDriversBreakdown(calculateYangoDriversTariff(km, min, dayOfWeek, timeMinutes));
+    setMoneBreakdown(calculateMoneTariff(km, min, dayOfWeek, timeMinutes));
+  };
 
-    const yangoBoardingFee = 3.8 * multiplier;
-    const yangoDistanceCost = km * 1.9 * multiplier;
-    const yangoTimeCost = min * 0.42 * multiplier;
+  const deltaAmount =
+    moneBreakdown && yangoDriversBreakdown
+      ? moneBreakdown.total - yangoDriversBreakdown.total
+      : null;
+  const deltaPercent =
+    deltaAmount !== null && yangoDriversBreakdown && yangoDriversBreakdown.total > 0
+      ? (deltaAmount / yangoDriversBreakdown.total) * 100
+      : null;
 
-    setMotBreakdown({
-      boardingFee: motBoardingFee,
-      distanceCost: motDistanceCost,
-      timeCost: motTimeCost,
-      total: motBoardingFee + motDistanceCost + motTimeCost,
-    });
+  return (
+    <>
+      <form className="space-y-4" onSubmit={handleSubmit}>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-slate-900">Trip Km</span>
+          <input
+            type="number"
+            min="0"
+            step="0.1"
+            value={tripKm}
+            onChange={(event) => setTripKm(event.target.value)}
+            placeholder="e.g. 12.5"
+            className="crm-input h-11 w-full px-3 text-sm"
+          />
+        </label>
 
-    setYangoBreakdown({
-      boardingFee: yangoBoardingFee,
-      distanceCost: yangoDistanceCost,
-      timeCost: yangoTimeCost,
-      total: yangoBoardingFee + yangoDistanceCost + yangoTimeCost,
-    });
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-slate-900">Trip Min</span>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={tripMin}
+            onChange={(event) => setTripMin(event.target.value)}
+            placeholder="e.g. 24"
+            className="crm-input h-11 w-full px-3 text-sm"
+          />
+        </label>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-slate-900">Day of Week</span>
+            <select
+              value={dayOfWeek}
+              onChange={(event) => setDayOfWeek(event.target.value as WeekdayKey)}
+              className="crm-input h-11 w-full px-3 text-sm"
+            >
+              {weekdayOptions.map((item) => (
+                <option key={item.key} value={item.key}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-slate-900">Trip Time</span>
+            <input
+              type="time"
+              value={tripTime}
+              onChange={(event) => setTripTime(event.target.value)}
+              className="crm-input h-11 w-full px-3 text-sm"
+            />
+          </label>
+        </div>
+
+        {error ? (
+          <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
+        ) : null}
+
+        <button
+          type="submit"
+          className="crm-button-primary h-11 w-full rounded-xl text-sm font-semibold"
+        >
+          Submit
+        </button>
+      </form>
+
+      {yangoDriversBreakdown && moneBreakdown ? (
+        <div className="mt-5 space-y-3">
+          <div className="grid gap-3 md:grid-cols-2">
+            <article className="crm-hover-lift rounded-2xl border border-white/70 bg-white/75 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted">Yango Drivers Tariff</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900">
+                {formatMoney(yangoDriversBreakdown.total)}
+              </p>
+            </article>
+            <article className="crm-hover-lift rounded-2xl border border-white/70 bg-white/75 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted">
+                taxitariff.co.il mone price
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900">
+                {formatMoney(moneBreakdown.total)}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                {weekdayOptions.find((item) => item.key === dayOfWeek)?.label} at {tripTime}
+              </p>
+            </article>
+          </div>
+
+          <div className="rounded-2xl border border-white/70 bg-white/75 px-4 py-3">
+            <p className="text-sm font-semibold text-slate-900">Difference (mone vs Yango Drivers)</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">
+              {deltaAmount !== null ? formatMoney(deltaAmount) : "n/a"}
+            </p>
+            <p className="mt-1 text-xs text-muted">
+              {deltaPercent === null
+                ? "Cannot calculate percentage difference"
+                : deltaPercent > 0
+                  ? `mone price is ${Math.abs(deltaPercent).toFixed(2)}% higher than Yango Drivers Tariff`
+                  : deltaPercent < 0
+                    ? `mone price is ${Math.abs(deltaPercent).toFixed(2)}% lower than Yango Drivers Tariff`
+                    : "mone price equals Yango Drivers Tariff"}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-white/70 bg-white/75">
+            <div className="border-b border-white/70 px-4 py-3 text-sm font-semibold text-slate-800">
+              Yango Drivers Tariff Breakdown
+            </div>
+            <div className="divide-y divide-white/70">
+              <div className="flex items-center justify-between px-4 py-3 text-slate-800">
+                <span className="font-semibold">{yangoDriversBreakdown.baseFee.toFixed(2)}</span>
+                <span className="text-muted">Base fee</span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-3 text-slate-800">
+                <span className="font-semibold">
+                  {yangoDriversBreakdown.distanceFirst10Cost.toFixed(2)}
+                </span>
+                <span className="text-muted">
+                  First 10 km ({yangoDriversBreakdown.kmFirst10.toFixed(2)} x{" "}
+                  {yangoDriversBreakdown.rate1.toFixed(2)})
+                </span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-3 text-slate-800">
+                <span className="font-semibold">
+                  {yangoDriversBreakdown.distanceAfter10Cost.toFixed(2)}
+                </span>
+                <span className="text-muted">
+                  After 10 km ({yangoDriversBreakdown.kmAfter10.toFixed(2)} x{" "}
+                  {yangoDriversBreakdown.rate2.toFixed(2)})
+                </span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-3 text-slate-800">
+                <span className="font-semibold">{yangoDriversBreakdown.timeCost.toFixed(2)}</span>
+                <span className="text-muted">
+                  Time ({yangoDriversBreakdown.mins.toFixed(2)} min x{" "}
+                  {yangoDriversBreakdown.rate3.toFixed(2)})
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/70 bg-white/75">
+            <div className="border-b border-white/70 px-4 py-3 text-sm font-semibold text-slate-800">
+              taxitariff.co.il mone price Breakdown
+            </div>
+            <div className="divide-y divide-white/70">
+              <div className="flex items-center justify-between px-4 py-3 text-slate-800">
+                <span className="font-semibold">{moneBreakdown.baseFee.toFixed(2)}</span>
+                <span className="text-muted">Base fee</span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-3 text-slate-800">
+                <span className="font-semibold">{moneBreakdown.firstBlockCost.toFixed(2)}</span>
+                <span className="text-muted">
+                  (min(km,10)+min) block ({moneBreakdown.firstBlockUnits.toFixed(2)} x{" "}
+                  {moneBreakdown.rateA.toFixed(2)})
+                </span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-3 text-slate-800">
+                <span className="font-semibold">{moneBreakdown.secondBlockCost.toFixed(2)}</span>
+                <span className="text-muted">
+                  After 10 km ({moneBreakdown.kmAfter10.toFixed(2)} x{" "}
+                  {moneBreakdown.rateB.toFixed(2)})
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function TariffHealthCheckTab() {
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<TariffHealthResult | null>(null);
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const payload = query.trim();
+    if (!payload) {
+      setError("Введите запрос для расчета.");
+      setResult(null);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const response = await fetch("/api/tariff-health-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: payload }),
+      });
+      const data = (await response.json()) as TariffHealthResult & { error?: string };
+      if (!response.ok || !data.ok) {
+        setResult(null);
+        setError(data.error ?? "Не удалось выполнить Tariff Health Check.");
+        return;
+      }
+      setResult(data);
+    } catch (requestError) {
+      setResult(null);
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Ошибка сети при выполнении Tariff Health Check.",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <section>
-      <PageHeading
-        title="Price Calculator"
-        subtitle="Estimate Taximeter by MOT and Yango Tariff"
-      />
+    <div className="space-y-4">
+      <form className="space-y-3" onSubmit={submit} aria-busy={loading}>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-slate-900">Tariff Health Query</span>
+          <textarea
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Example: What is the Decoupling Rate for March 2026 for client {corp_client_id}, and suggest a client tariff that helps increase decoupling to X%"
+            className="crm-input min-h-24 w-full resize-y px-3 py-2 text-sm"
+          />
+        </label>
+        {error ? (
+          <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
+        ) : null}
+        <button
+          type="submit"
+          disabled={loading}
+          className="crm-button-primary h-11 w-full rounded-xl text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          {loading ? "Running health check..." : "Run Tariff Health Check"}
+        </button>
+      </form>
 
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="glass-surface w-full max-w-xl rounded-3xl p-6">
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-slate-900">
-                Trip Km
-              </span>
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                value={tripKm}
-                onChange={(event) => setTripKm(event.target.value)}
-                placeholder="e.g. 12.5"
-                className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none transition focus:border-accent"
-              />
-            </label>
+      {loading ? (
+        <div className="space-y-1" aria-live="polite">
+          <div
+            className="h-1 w-full overflow-hidden rounded-full bg-slate-200/80"
+            role="progressbar"
+            aria-label="Tariff health check in progress"
+          >
+            <div className="tariff-health-progress-strip h-full" />
+          </div>
+        </div>
+      ) : null}
 
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-slate-900">
-                Trip Min
-              </span>
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={tripMin}
-                onChange={(event) => setTripMin(event.target.value)}
-                placeholder="e.g. 24"
-                className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none transition focus:border-accent"
-              />
-            </label>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-slate-900">
-                  Day of Week
-                </span>
-                <select
-                  value={dayOfWeek}
-                  onChange={(event) => setDayOfWeek(event.target.value as WeekdayKey)}
-                  className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none transition focus:border-accent"
-                >
-                  {weekdayOptions.map((item) => (
-                    <option key={item.key} value={item.key}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-slate-900">
-                  Trip Time
-                </span>
-                <input
-                  type="time"
-                  value={tripTime}
-                  onChange={(event) => setTripTime(event.target.value)}
-                  className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none transition focus:border-accent"
-                />
-              </label>
-            </div>
-
-            {error ? (
-              <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                {error}
+      {result ? (
+        <div className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-2">
+            <article className="rounded-2xl border border-white/70 bg-white/75 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted">Decoupling Rate</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900">
+                {result.summary.decouplingRatePct === null
+                  ? "n/a"
+                  : `${result.summary.decouplingRatePct.toFixed(2)}%`}
               </p>
-            ) : null}
+              <p className="mt-1 text-xs text-muted">{result.parsedIntent.period.label}</p>
+            </article>
+            <article className="rounded-2xl border border-white/70 bg-white/75 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted">Trips</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900">
+                {result.summary.trips.toLocaleString("en-US")}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                Client: {result.resolvedClient.clientName ?? result.resolvedClient.corpClientIds[0]}
+              </p>
+              <p className="mt-2 text-xs text-muted">
+                Distance: {result.summary.ordersWithKm.toLocaleString("en-US")} trips with km · avg{" "}
+                {result.summary.avgKmPerTrip === null ? "n/a" : `${result.summary.avgKmPerTrip.toFixed(1)} km`}{" "}
+                · p50/p75/p90{" "}
+                {result.summary.kmP50 === null
+                  ? "n/a"
+                  : `${result.summary.kmP50.toFixed(1)} / ${result.summary.kmP75?.toFixed(1) ?? "n/a"} / ${result.summary.kmP90?.toFixed(1) ?? "n/a"} km`}
+              </p>
+            </article>
+          </div>
 
-            <button
-              type="submit"
-              className="h-11 w-full rounded-xl bg-accent text-sm font-semibold text-white transition hover:opacity-95"
-            >
-              Submit
-            </button>
-          </form>
+          <div className="grid gap-3 md:grid-cols-3">
+            <article className="rounded-2xl border border-white/70 bg-white/75 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted">Client Spend</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">
+                {formatMoney(result.summary.clientSpend)}
+              </p>
+            </article>
+            <article className="rounded-2xl border border-white/70 bg-white/75 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted">Driver Cost</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">
+                {formatMoney(result.summary.driverCost)}
+              </p>
+            </article>
+            <article className="rounded-2xl border border-white/70 bg-white/75 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted">ABS Decoupling</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">
+                {formatMoney(result.summary.decouplingAbs)}
+              </p>
+            </article>
+          </div>
 
-          {motBreakdown && yangoBreakdown ? (
-            <div className="mt-5 space-y-3">
-              <div className="grid gap-3 md:grid-cols-2">
-                <article className="rounded-2xl border border-border bg-white p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted">
-                    Taximeter by MOT
-                  </p>
-                  <p className="mt-1 text-2xl font-semibold text-slate-900">
-                    {formatMoney(motBreakdown.total)}
-                  </p>
-                </article>
-                <article className="rounded-2xl border border-border bg-white p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted">
-                    Yango Tariff
-                  </p>
-                  <p className="mt-1 text-2xl font-semibold text-slate-900">
-                    {formatMoney(yangoBreakdown.total)}
-                  </p>
-                  <p className="mt-1 text-xs text-muted">
-                    {weekdayOptions.find((item) => item.key === dayOfWeek)?.label} at {tripTime}
-                  </p>
-                </article>
+          {result.referenceFlatTariff ? (
+            <div className="rounded-2xl border border-white/70 bg-white/75">
+              <div className="border-b border-white/70 px-4 py-3 text-sm font-semibold text-slate-800">
+                Reference flat tariff (comparison only)
               </div>
-
-              <div className="rounded-2xl border border-border bg-white">
-                <div className="border-b border-border px-4 py-3 text-sm font-semibold text-slate-800">
-                  Yango Tariff Breakdown
-                </div>
-                <div className="divide-y divide-border">
-                  <div className="flex items-center justify-between px-4 py-3 text-slate-800">
-                    <span className="font-semibold">
-                      {yangoBreakdown.boardingFee.toFixed(2)}
-                    </span>
-                    <span className="text-muted">Boarding fee</span>
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3 text-slate-800">
-                    <span className="font-semibold">
-                      {yangoBreakdown.distanceCost.toFixed(2)}
-                    </span>
-                    <span className="text-muted">Distance cost</span>
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3 text-slate-800">
-                    <span className="font-semibold">
-                      {yangoBreakdown.timeCost.toFixed(2)}
-                    </span>
-                    <span className="text-muted">Time cost</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-border bg-white">
-                <div className="border-b border-border px-4 py-3 text-sm font-semibold text-slate-800">
-                  Taximeter by MOT Breakdown
-                </div>
-                <div className="divide-y divide-border">
-                  <div className="flex items-center justify-between px-4 py-3 text-slate-800">
-                    <span className="font-semibold">
-                      {motBreakdown.boardingFee.toFixed(2)}
-                    </span>
-                    <span className="text-muted">Boarding fee</span>
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3 text-slate-800">
-                    <span className="font-semibold">
-                      {motBreakdown.distanceCost.toFixed(2)}
-                    </span>
-                    <span className="text-muted">Distance cost</span>
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3 text-slate-800">
-                    <span className="font-semibold">{motBreakdown.timeCost.toFixed(2)}</span>
-                    <span className="text-muted">Time cost</span>
-                  </div>
-                </div>
+              <div className="space-y-2 p-4 text-sm text-slate-800">
+                <p className="text-xs text-muted">{result.referenceFlatTariff.label}</p>
+                <p>
+                  Formula: base {result.referenceFlatTariff.basePrice.toFixed(2)} + km ×{" "}
+                  {result.referenceFlatTariff.kmRate.toFixed(2)}
+                </p>
+                <p>
+                  Simulated total / avg per trip: {formatMoney(result.referenceFlatTariff.simulatedTotal)} /{" "}
+                  {formatMoney(result.referenceFlatTariff.simulatedAvgPerTrip)}
+                </p>
+                <p>
+                  Delta vs actual (total): {formatSignedMoney(result.referenceFlatTariff.deltaVsActualTotal)} · avg
+                  price vs actual: {formatSignedPct(result.referenceFlatTariff.deltaPctAvgVsActual)}
+                </p>
               </div>
             </div>
+          ) : null}
+
+          <div className="rounded-2xl border border-white/70 bg-white/75">
+            <div className="border-b border-white/70 px-4 py-3 text-sm font-semibold text-slate-800">
+              Tiered tariff suggestions
+            </div>
+            <div className="space-y-2 p-4">
+              {result.suggestions.length === 0 ? (
+                <p className="text-sm text-muted">Для текущего запроса нет доступных рекомендаций.</p>
+              ) : null}
+              {result.suggestions.map((suggestion) => (
+                <article
+                  key={suggestion.name}
+                  className="rounded-xl border border-white/70 bg-white/70 p-3 text-sm text-slate-800"
+                >
+                  <p className="font-semibold">{suggestion.name}</p>
+                  <p className="mt-1 text-xs text-muted">{suggestion.assumption}</p>
+                  <p className="mt-2 font-medium text-slate-900">Tariff</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-slate-700">
+                    {describeTieredTariff(suggestion.tariff)}
+                  </p>
+                  <p className="mt-2 text-xs text-muted">
+                    Target DR: {suggestion.targetDecouplingRatePct.toFixed(2)}%
+                  </p>
+                  <div className="mt-2 grid gap-1 text-xs text-slate-700 sm:grid-cols-2">
+                    <p>Simulated total: {formatMoney(suggestion.metrics.simulatedTotal)}</p>
+                    <p>Avg / trip (sim): {formatMoney(suggestion.metrics.simulatedAvgPerTrip)}</p>
+                    <p>Δ total vs actual: {formatSignedMoney(suggestion.metrics.deltaVsActualTotal)}</p>
+                    <p>Δ avg / trip: {formatSignedMoney(suggestion.metrics.deltaVsActualAvgPerTrip)}</p>
+                    <p>Avg price vs actual: {formatSignedPct(suggestion.metrics.deltaPctAvgVsActual)}</p>
+                    <p>
+                      Portfolio DR (sim):{" "}
+                      {suggestion.metrics.portfolioDecouplingRatePct === null
+                        ? "n/a"
+                        : `${suggestion.metrics.portfolioDecouplingRatePct.toFixed(2)}%`}
+                    </p>
+                    <p className="sm:col-span-2">
+                      Incremental decoupling (sum):{" "}
+                      {formatSignedMoney(suggestion.metrics.incrementalDecouplingAbsTotal)}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          {result.analystMarkdown ? (
+            <div className="rounded-2xl border border-white/70 bg-white/75">
+              <div className="border-b border-white/70 px-4 py-3 text-sm font-semibold text-slate-800">
+                Analyst narrative
+              </div>
+              <div className="max-h-[480px] overflow-y-auto p-4 text-sm leading-relaxed text-slate-800">
+                <pre className="whitespace-pre-wrap font-sans text-[13px]">{result.analystMarkdown}</pre>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="rounded-2xl border border-white/70 bg-white/75 px-4 py-3 text-xs text-muted">
+            <p>Parsed metric: {result.parsedIntent.metric}</p>
+            <p>
+              Period: {result.parsedIntent.period.fromIso} - {result.parsedIntent.period.toIsoExclusive}
+            </p>
+            {result.warning ? <p className="mt-1 text-amber-700">{result.warning}</p> : null}
+            {result.assumptions.length > 0 ? (
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {result.assumptions.map((assumption) => (
+                  <li key={assumption}>{assumption}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export default function PriceCalculatorPage() {
+  const [activeTab, setActiveTab] = useState<PriceCalculatorTab>("compare");
+  const { canAccessDashboardBlock } = useAuth();
+  const canAccessTariffHealthCheck = canAccessDashboardBlock("tariffHealthCheck");
+  const effectiveActiveTab =
+    canAccessTariffHealthCheck && activeTab === "health" ? "health" : "compare";
+
+  return (
+    <section className="crm-page">
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="glass-surface w-full max-w-3xl rounded-3xl p-6">
+          <div className="mb-4 inline-flex rounded-xl border border-white/70 bg-white/70 p-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab("compare")}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                activeTab === "compare"
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-700 hover:bg-white/80"
+              }`}
+            >
+              Compare Driver Price
+            </button>
+            <button
+              type="button"
+              disabled={!canAccessTariffHealthCheck}
+              onClick={() => setActiveTab("health")}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                effectiveActiveTab === "health"
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-700 hover:bg-white/80"
+              } ${!canAccessTariffHealthCheck ? "cursor-not-allowed opacity-45 hover:bg-transparent" : ""}`}
+            >
+              Tariff Health Check
+            </button>
+          </div>
+
+          {effectiveActiveTab === "compare" ? (
+            <CompareDriverPriceTab />
+          ) : (
+            <TariffHealthCheckTab />
+          )}
+
+          {!canAccessTariffHealthCheck ? (
+            <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              Tariff Health Check is disabled for your role. Ask an Admin to enable this action
+              in Access management.
+            </p>
           ) : null}
         </div>
       </div>

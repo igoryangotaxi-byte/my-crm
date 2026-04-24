@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { FiltersBar } from "@/components/ui/FiltersBar";
-import { PageHeading } from "@/components/ui/PageHeading";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Table, type TableColumn } from "@/components/ui/Table";
 import { clients, formatCurrency } from "@/lib/mock-data";
@@ -62,14 +61,12 @@ const clientColumns: TableColumn<Client>[] = [
 
 export default function ClientsPage() {
   return (
-    <section>
-      <PageHeading title="Clients" subtitle="Manage your client base" />
-
+    <section className="crm-page">
       <div className="mb-4 rounded-2xl border border-border bg-panel p-3">
         <input
           type="search"
           placeholder="Search by name, company or email..."
-          className="h-10 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none transition focus:border-accent"
+          className="crm-input h-10 w-full px-3 text-sm"
         />
       </div>
 

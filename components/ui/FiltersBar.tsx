@@ -9,10 +9,10 @@ export function FiltersBar({ filters }: FiltersBarProps) {
         <button
           key={filter}
           type="button"
-          className={`rounded-xl px-3 py-1.5 text-sm font-medium transition ${
+          className={`crm-hover-lift rounded-xl px-3 py-1.5 text-sm font-medium transition ${
             index === 0
-              ? "bg-accent text-white"
-              : "bg-[#f3f3f5] text-slate-700 hover:bg-slate-200"
+              ? "crm-button-primary text-white"
+              : "bg-white/70 text-slate-700 hover:bg-white"
           }`}
         >
           {filter}

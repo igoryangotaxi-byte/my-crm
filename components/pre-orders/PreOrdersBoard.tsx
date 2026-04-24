@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { PageHeading } from "@/components/ui/PageHeading";
 import type { PreOrder } from "@/types/crm";
 
 type PreOrdersBoardProps = {
@@ -33,30 +33,66 @@ function endOfDay(date: Date) {
   return copy;
 }
 
+function isDriverAssigned(preOrder: PreOrder) {
+  const status = preOrder.orderStatus?.toLowerCase() ?? "";
+  const assignedStatuses = new Set([
+    "driving",
+    "transporting",
+    "waiting",
+    "pickup",
+    "assigned",
+  ]);
+
+  return preOrder.driverAssigned || assignedStatuses.has(status);
+}
+
 export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
+  const router = useRouter();
   const [selectedPreOrder, setSelectedPreOrder] = useState<PreOrder | null>(null);
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
+  const cancelPreOrder = async (preOrder: PreOrder) => {
+    if (
+      !window.confirm(
+        "Cancel this scheduled order in Yango? It will disappear from the corporate cabinet after a successful cancellation.",
+      )
+    ) {
+      return;
+    }
+    setCancelError(null);
+    setCancellingOrderId(preOrder.orderId);
+    try {
+      const response = await fetch("/api/yango-order-cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tokenLabel: preOrder.tokenLabel,
+          clientId: preOrder.clientId,
+          orderId: preOrder.orderId,
+        }),
+      });
+      const data = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error ?? "Failed to cancel order.");
+      }
+      setSelectedPreOrder(null);
+      router.refresh();
+    } catch (error) {
+      setCancelError(error instanceof Error ? error.message : "Failed to cancel order.");
+    } finally {
+      setCancellingOrderId(null);
+    }
+  };
 
   const getDriverFallbackText = (preOrder: PreOrder) =>
     preOrder.orderStatus === "scheduling"
       ? "Not provided by API yet"
       : "Not assigned";
-
-  const isDriverAssigned = (preOrder: PreOrder) => {
-    const status = preOrder.orderStatus?.toLowerCase() ?? "";
-    const assignedStatuses = new Set([
-      "driving",
-      "transporting",
-      "waiting",
-      "pickup",
-      "assigned",
-    ]);
-
-    return preOrder.driverAssigned || assignedStatuses.has(status);
-  };
 
   const copyToClipboard = async (fieldKey: string, value?: string | null) => {
     if (!value) {
@@ -119,14 +155,16 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
       return true;
     });
   }, [preOrders, filterMode, fromDate, toDate]);
+  const preOrdersCounts = useMemo(() => {
+    const assigned = filteredPreOrders.filter((item) => isDriverAssigned(item)).length;
+    return {
+      assigned,
+      unassigned: filteredPreOrders.length - assigned,
+    };
+  }, [filteredPreOrders]);
 
   return (
-    <section>
-      <PageHeading
-        title="Pre-Orders"
-        subtitle="Upcoming scheduled rides from Yango API"
-      />
-
+    <section className="crm-page">
       {errors.length > 0 ? (
         <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <p className="font-semibold">Some clients are unavailable</p>
@@ -134,8 +172,15 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
         </div>
       ) : null}
 
+      {cancelError ? (
+        <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <p className="font-semibold">Could not cancel order</p>
+          <p className="mt-1">{cancelError}</p>
+        </div>
+      ) : null}
+
       <div className="mb-4 rounded-2xl border border-border bg-panel p-3">
-        <div className="flex flex-wrap items-end justify-center gap-3 lg:justify-start">
+        <div className="flex flex-wrap items-end justify-center gap-3 lg:justify-between">
           <div className="flex flex-wrap gap-2">
             {([
               { mode: "all", label: "All" },
@@ -147,10 +192,10 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                 key={item.mode}
                 type="button"
                 onClick={() => setFilterMode(item.mode)}
-                className={`rounded-xl px-3 py-1.5 text-sm font-medium transition ${
+                className={`crm-hover-lift rounded-xl px-3 py-1.5 text-sm font-medium transition ${
                   filterMode === item.mode
-                    ? "bg-accent text-white"
-                    : "bg-[#f3f3f5] text-slate-700 hover:bg-slate-200"
+                    ? "crm-button-primary text-white"
+                    : "bg-white/70 text-slate-700 hover:bg-white"
                 }`}
               >
                 {item.label}
@@ -168,7 +213,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                   setFilterMode("range");
                   setFromDate(event.target.value);
                 }}
-                className="mt-1 block h-9 rounded-lg border border-border bg-white px-2.5 text-sm text-slate-700 outline-none focus:border-accent"
+                className="crm-input mt-1 block h-9 px-2.5 text-sm text-slate-700"
               />
             </label>
             <label className="text-xs text-muted">
@@ -180,9 +225,18 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                   setFilterMode("range");
                   setToDate(event.target.value);
                 }}
-                className="mt-1 block h-9 rounded-lg border border-border bg-white px-2.5 text-sm text-slate-700 outline-none focus:border-accent"
+                className="crm-input mt-1 block h-9 px-2.5 text-sm text-slate-700"
               />
             </label>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f1f5f9_100%)] px-3 py-1 text-xs font-semibold text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_6px_14px_rgba(15,23,42,0.12)]">
+              Assigned: {preOrdersCounts.assigned}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f1f5f9_100%)] px-3 py-1 text-xs font-semibold text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_6px_14px_rgba(15,23,42,0.12)]">
+              Unassigned: {preOrdersCounts.unassigned}
+            </span>
           </div>
         </div>
       </div>
@@ -192,11 +246,11 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
           No pre-orders found for selected filter.
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
           {filteredPreOrders.map((preOrder) => (
             <article
               key={preOrder.id}
-              className={`group glass-surface rounded-3xl p-4 transition duration-300 ease-out hover:-translate-y-1.5 hover:scale-[1.015] hover:shadow-2xl ${
+              className={`group glass-surface crm-hover-lift rounded-3xl p-3 ${
                 isDriverAssigned(preOrder)
                   ? "bg-emerald-100/45"
                   : "bg-rose-100/45"
@@ -207,12 +261,12 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                 onClick={() => setSelectedPreOrder(preOrder)}
                 className="w-full text-left"
               >
-                <div className="mb-4 flex items-start justify-between gap-3">
+                <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted">
                       Pre-order
                     </p>
-                    <h2 className="mt-1 text-lg font-semibold text-foreground">
+                    <h2 className="mt-1 text-base font-semibold text-foreground">
                       {preOrder.clientName}
                     </h2>
                   </div>
@@ -221,23 +275,25 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                   </span>
                 </div>
 
-                <dl className="space-y-3 text-sm">
+                <dl className="space-y-2.5 text-sm">
                   <div>
                     <dt className="text-muted">Scheduled for</dt>
                     <dd className="font-medium text-slate-900">{preOrder.scheduledFor}</dd>
                   </div>
-                  <div>
-                    <dt className="text-muted">Point A</dt>
-                    <dd className="font-medium text-slate-900">{preOrder.pointA}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted">Point B</dt>
-                    <dd className="font-medium text-slate-900">{preOrder.pointB}</dd>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <div>
+                      <dt className="text-muted">Point A</dt>
+                      <dd className="font-medium text-slate-900">{preOrder.pointA}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted">Point B</dt>
+                      <dd className="font-medium text-slate-900">{preOrder.pointB}</dd>
+                    </div>
                   </div>
                 </dl>
               </button>
 
-              <div className="mt-4 border-t border-white/60 pt-3">
+              <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-white/60 pt-3">
                 <Link
                   href={`https://go-admin-frontend.taxi.yandex-team.ru/orders/${preOrder.orderId}`}
                   className="font-medium text-accent hover:underline"
@@ -247,6 +303,17 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                 >
                   Order: {preOrder.orderId}
                 </Link>
+                <button
+                  type="button"
+                  disabled={cancellingOrderId === preOrder.orderId}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void cancelPreOrder(preOrder);
+                  }}
+                  className="text-xs font-semibold text-rose-700 underline decoration-rose-300 underline-offset-2 hover:text-rose-900 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {cancellingOrderId === preOrder.orderId ? "Cancelling…" : "Cancel in Yango"}
+                </button>
               </div>
             </article>
           ))}
@@ -255,11 +322,11 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
 
       {selectedPreOrder ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 px-4 py-8 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-8 backdrop-blur-sm"
           onClick={() => setSelectedPreOrder(null)}
         >
           <div
-            className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white/96 p-3 shadow-2xl backdrop-blur-xl lg:p-4"
+            className="crm-modal-surface w-full max-w-3xl rounded-3xl p-3 lg:p-4"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-3 px-1">
@@ -269,7 +336,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
               <button
                 type="button"
                 onClick={() => setSelectedPreOrder(null)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-lg font-semibold leading-none text-slate-700 transition hover:bg-slate-200"
+                className="crm-hover-lift inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-lg font-semibold leading-none text-slate-700"
                 aria-label="Close modal"
               >
                 ×
@@ -438,6 +505,17 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                     </dd>
                   </div>
                 </dl>
+
+                <button
+                  type="button"
+                  disabled={cancellingOrderId === selectedPreOrder.orderId}
+                  onClick={() => void cancelPreOrder(selectedPreOrder)}
+                  className="mt-5 w-full rounded-xl border border-rose-200 bg-rose-50 py-2.5 text-sm font-semibold text-rose-800 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {cancellingOrderId === selectedPreOrder.orderId
+                    ? "Cancelling in Yango…"
+                    : "Cancel order in Yango"}
+                </button>
               </aside>
             </div>
           </div>

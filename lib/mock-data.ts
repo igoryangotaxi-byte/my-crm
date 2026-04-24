@@ -106,6 +106,8 @@ export const dashboardKpis: Kpi[] = [
 export const preOrders: PreOrder[] = [
   {
     id: "po-9001",
+    tokenLabel: "MOCK",
+    clientId: "mock-client-1",
     orderId: "ord-5001",
     clientPrice: "$42.00",
     clientName: "Anna Petrova",
@@ -121,6 +123,8 @@ export const preOrders: PreOrder[] = [
   },
   {
     id: "po-9002",
+    tokenLabel: "MOCK",
+    clientId: "mock-client-1",
     orderId: "ord-5002",
     clientPrice: "$35.00",
     clientName: "Sofia Ivanova",
@@ -136,6 +140,8 @@ export const preOrders: PreOrder[] = [
   },
   {
     id: "po-9003",
+    tokenLabel: "MOCK",
+    clientId: "mock-client-1",
     orderId: "ord-5004",
     clientPrice: "$29.00",
     clientName: "Michael Brown",
@@ -151,6 +157,8 @@ export const preOrders: PreOrder[] = [
   },
   {
     id: "po-9004",
+    tokenLabel: "MOCK",
+    clientId: "mock-client-1",
     orderId: "ord-5003",
     clientPrice: "$51.00",
     clientName: "Elena Smirnova",

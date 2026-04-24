@@ -2,14 +2,36 @@ import type {
   B2BDashboardOrder,
   B2BOrderDetailsResponse,
   PreOrder,
+  RequestRideLifecycleStatus,
+  RequestRidePayload,
+  RequestRideResult,
+  RequestRideStatus,
+  RequestRideUserSuggestion,
   TokenDiagnostics,
+  YangoApiClientRef,
 } from "@/types/crm";
+import {
+  resolveMappedUserId,
+  searchMappedUsers,
+  upsertMappedUserId,
+} from "@/lib/request-rides-user-map";
 import { unstable_cache } from "next/cache";
 
 const YANGO_BASE_URL = "https://b2b-api.yango.com/integration";
 const ORDERS_PAGE_LIMIT = 100;
 const PREORDERS_CACHE_REVALIDATE_SECONDS = 30;
 const B2B_DASHBOARD_CACHE_REVALIDATE_SECONDS = 60;
+const DASHBOARD_REPORT_CHUNK_CONCURRENCY = Number(
+  process.env.YANGO_DASHBOARD_REPORT_CONCURRENCY ?? "3",
+);
+const DASHBOARD_LOCAL_CACHE_TTL_MS = B2B_DASHBOARD_CACHE_REVALIDATE_SECONDS * 1000;
+
+function readPositiveIntEnv(name: string, defaultValue: number): number {
+  const raw = process.env[name];
+  if (!raw) return defaultValue;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : defaultValue;
+}
 
 type TokenConfig = {
   label: string;
@@ -58,6 +80,10 @@ type YangoOrderInfoResponse = {
   created_time?: string;
   created_datetime?: string;
   local_created_datetime?: string;
+  status?: string;
+  estimated_waiting?: number;
+  estimated_waiting_time?: number;
+  waiting_time?: number;
 };
 
 type YangoRideStatus = {
@@ -78,30 +104,79 @@ type YangoTaxiReportOrder = {
   ride_status?: YangoRideStatus;
 };
 
+type YangoOrderProgressResponse = {
+  status?: string;
+  status_text?: string;
+  eta_minutes?: number;
+  expected_waiting_time?: number;
+  performer?: YangoPerformer;
+};
+
 type YangoTaxiReportResponse = {
   orders?: YangoTaxiReportOrder[];
 };
 
 const tokenConfigs: TokenConfig[] = [
   {
-    label: "SAMELET",
-    token: process.env.YANGO_TOKEN_SAMELET ?? "",
+    label: "COFIX",
+    token: process.env.YANGO_TOKEN_COFIX ?? process.env.YANGO_TOKEN_SAMELET ?? "",
   },
   {
     label: "SHUFERSAL",
     token: process.env.YANGO_TOKEN_SHUFERSAL ?? "",
   },
   {
-    label: "APPLI TAXI",
-    crmClientName: "APPLI TAXI",
-    token: process.env.YANGO_TOKEN_APLI_TAXI_OZ ?? "",
+    label: "TEST CABINET",
+    crmClientName: "TEST CABINET",
+    token:
+      process.env.YANGO_TOKEN_TEST_CABINET?.trim() ||
+      process.env.YANGO_TOKEN_APLI_TAXI_OZ ||
+      "",
   },
   {
-    label: "RYDEMOBILITY",
-    crmClientName: "RydeMobility",
-    token: process.env.YANGO_TOKEN_RYDEMOBILITY ?? "",
+    label: "SHANA10",
+    crmClientName: "SHANA10",
+    token: process.env.YANGO_TOKEN_SHANA10 ?? process.env.YANGO_TOKEN_RYDEMOBILITY ?? "",
+  },
+  {
+    label: "TELAVIVMUNICIPALITY",
+    crmClientName: "TelAvivMunicipality",
+    token: process.env.YANGO_TOKEN_TEL_AVIV_MUNICIPALITY ?? "",
+  },
+  {
+    label: "YANGODELI",
+    crmClientName: "YangoDeli",
+    token: process.env.YANGO_TOKEN_YANGO_DELI ?? "",
+  },
+  {
+    label: "SHLAV",
+    crmClientName: "SHLAV",
+    token: process.env.YANGO_TOKEN_SHLAV ?? "",
+  },
+  {
+    label: "SAMLET_MOTORS",
+    crmClientName: "סמלת מוטורס",
+    token: process.env.YANGO_TOKEN_SAMLET_MOTORS ?? "",
+  },
+  {
+    label: "HAMOSHAVA_20",
+    crmClientName: "המושבה 20 בע\"מ",
+    token: process.env.YANGO_TOKEN_HAMOSHAVA_20 ?? "",
+  },
+  {
+    label: "Star Taxi Point",
+    crmClientName: "Star Taxi Point",
+    token: process.env.YANGO_TOKEN_STAR_TAXI_POINT ?? "",
   },
 ];
+
+let dashboardInMemoryCache:
+  | {
+      updatedAt: number;
+      payload: { rows: B2BDashboardOrder[]; errors: string[] };
+    }
+  | null = null;
+let dashboardInFlight: Promise<{ rows: B2BDashboardOrder[]; errors: string[] }> | null = null;
 
 async function fetchJson<T>(
   url: string,
@@ -109,12 +184,30 @@ async function fetchJson<T>(
   clientId?: string,
   init?: RequestInit,
 ) {
+  const buildTraceSuffix = (response: Response): string => {
+    const traceId =
+      response.headers.get("x-trace-id") ??
+      response.headers.get("x-traceid") ??
+      response.headers.get("trace-id");
+    const requestId =
+      response.headers.get("x-request-id") ??
+      response.headers.get("request-id") ??
+      response.headers.get("x-correlation-id");
+    const parts = [
+      traceId ? `trace_id=${traceId}` : null,
+      requestId ? `request_id=${requestId}` : null,
+    ].filter(Boolean);
+    return parts.length ? ` [${parts.join(", ")}]` : "";
+  };
+
+  const extraHeaders = (init?.headers ?? {}) as HeadersInit;
   const response = await fetch(url, {
     method: init?.method ?? "GET",
     headers: {
       Authorization: `Bearer ${token}`,
       ...(clientId ? { "X-YaTaxi-Selected-Corp-Client-Id": clientId } : {}),
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...extraHeaders,
     },
     body: init?.body,
     next: { revalidate: PREORDERS_CACHE_REVALIDATE_SECONDS },
@@ -122,7 +215,7 @@ async function fetchJson<T>(
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(`HTTP ${response.status}: ${message}`);
+    throw new Error(`HTTP ${response.status}: ${message}${buildTraceSuffix(response)}`);
   }
 
   return (await response.json()) as T;
@@ -133,40 +226,102 @@ async function fetchJsonNoCache<T>(
   token: string,
   clientId?: string,
   init?: RequestInit,
+  options?: { allowEmptyBody?: boolean },
 ) {
+  const buildTraceSuffix = (response: Response): string => {
+    const traceId =
+      response.headers.get("x-trace-id") ??
+      response.headers.get("x-traceid") ??
+      response.headers.get("trace-id");
+    const requestId =
+      response.headers.get("x-request-id") ??
+      response.headers.get("request-id") ??
+      response.headers.get("x-correlation-id");
+    const parts = [
+      traceId ? `trace_id=${traceId}` : null,
+      requestId ? `request_id=${requestId}` : null,
+    ].filter(Boolean);
+    return parts.length ? ` [${parts.join(", ")}]` : "";
+  };
+
+  const extraHeaders = (init?.headers ?? {}) as HeadersInit;
   const response = await fetch(url, {
     method: init?.method ?? "GET",
     headers: {
       Authorization: `Bearer ${token}`,
       ...(clientId ? { "X-YaTaxi-Selected-Corp-Client-Id": clientId } : {}),
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...extraHeaders,
     },
     body: init?.body,
     cache: "no-store",
   });
 
+  const raw = await response.text();
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(`HTTP ${response.status}: ${message}`);
+    throw new Error(`HTTP ${response.status}: ${raw}${buildTraceSuffix(response)}`);
   }
 
-  return (await response.json()) as T;
+  if (options?.allowEmptyBody && !raw.trim()) {
+    return {} as T;
+  }
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    if (options?.allowEmptyBody) {
+      return {} as T;
+    }
+    throw new Error(`Invalid JSON in Yango response: ${raw.slice(0, 200)}`);
+  }
 }
 
-function normalizeDashboardStatus(rawStatus?: string): "completed" | "cancelled" | "pending" {
+function isCompletedStatus(rawStatus?: string) {
   const status = (rawStatus ?? "").toLowerCase();
-
-  if (
+  return (
     status === "complete" ||
     status === "completed" ||
     status === "finished" ||
     status === "transporting_finished"
-  ) {
+  );
+}
+
+function isCancelledStatus(rawStatus?: string) {
+  const status = (rawStatus ?? "").toLowerCase();
+  return status.includes("cancel");
+}
+
+function isInProgressStatus(rawStatus?: string) {
+  const status = (rawStatus ?? "").toLowerCase();
+  return (
+    status.includes("search") ||
+    status.includes("driving") ||
+    status.includes("transporting") ||
+    status.includes("arrived") ||
+    status.includes("accepted") ||
+    status.includes("in_progress")
+  );
+}
+
+function normalizeDashboardStatus(
+  rawStatus?: string,
+  scheduledAt?: string,
+): "completed" | "cancelled" | "pending" | "in_progress" {
+  if (isCompletedStatus(rawStatus)) {
     return "completed";
   }
 
-  if (status.includes("cancel")) {
+  if (isCancelledStatus(rawStatus)) {
     return "cancelled";
+  }
+
+  if (isInProgressStatus(rawStatus)) {
+    return "in_progress";
+  }
+
+  const scheduledTs = scheduledAt ? new Date(scheduledAt).getTime() : Number.NaN;
+  if (!Number.isNaN(scheduledTs) && scheduledTs > Date.now()) {
+    return "pending";
   }
 
   return "pending";
@@ -209,6 +364,7 @@ function formatDateTime(input?: string) {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: "Asia/Jerusalem",
   }).format(date);
 }
 
@@ -284,10 +440,9 @@ async function getClientPreOrders(tokenConfig: TokenConfig, client: YangoClient)
   const preOrders: PreOrder[] = [];
   let offset = 0;
   const limit = ORDERS_PAGE_LIMIT;
-  let totalAmount = Infinity;
   const sinceDateTime = getSinceDateTime();
 
-  while (offset < totalAmount) {
+  while (true) {
     const params = new URLSearchParams({
       limit: String(limit),
       offset: String(offset),
@@ -303,9 +458,25 @@ async function getClientPreOrders(tokenConfig: TokenConfig, client: YangoClient)
     );
 
     const items = response.items ?? [];
-    totalAmount = response.total_amount ?? items.length;
+    if (items.length === 0) {
+      break;
+    }
 
-    const futureOrders = items.filter((order) => isFutureDate(order.due_date));
+    const futureOrders = items.filter((order) => {
+      if (!isFutureDate(order.due_date)) {
+        return false;
+      }
+      // Hide already active/completed/cancelled rides from Pre-Orders
+      // so they appear in Orders with the correct lifecycle status.
+      if (
+        isInProgressStatus(order.status) ||
+        isCompletedStatus(order.status) ||
+        isCancelledStatus(order.status)
+      ) {
+        return false;
+      }
+      return true;
+    });
 
     const orderDetailsList = await Promise.all(
       futureOrders.map((order) =>
@@ -316,11 +487,17 @@ async function getClientPreOrders(tokenConfig: TokenConfig, client: YangoClient)
     for (const [index, order] of futureOrders.entries()) {
       const orderDetails: YangoOrderInfoResponse | undefined =
         orderDetailsList[index];
+      persistUserMapFromApiPayload(
+        { tokenLabel: tokenConfig.label, clientId: client.client_id },
+        orderDetails ?? null,
+      );
       const performer: YangoPerformer | undefined = orderDetails?.performer;
       const names = splitDriverFullName(performer?.fullname);
 
       preOrders.push({
         id: `${tokenConfig.label}-${order.id}`,
+        tokenLabel: tokenConfig.label,
+        clientId: client.client_id,
         orderId: order.id,
         orderStatus: order.status,
         clientPrice: formatClientPrice(orderDetails),
@@ -338,11 +515,17 @@ async function getClientPreOrders(tokenConfig: TokenConfig, client: YangoClient)
       });
     }
 
-    if (items.length === 0) {
+    offset += items.length;
+    const reportedTotal =
+      typeof response.total_amount === "number" && response.total_amount > 0
+        ? response.total_amount
+        : null;
+    if (reportedTotal != null && offset >= reportedTotal) {
       break;
     }
-
-    offset += items.length;
+    if (items.length < limit) {
+      break;
+    }
   }
 
   return preOrders;
@@ -445,14 +628,17 @@ async function loadAllYangoPreOrders() {
 
 export const getAllYangoPreOrders = unstable_cache(
   loadAllYangoPreOrders,
-  ["yango-preorders-v2"],
-  { revalidate: PREORDERS_CACHE_REVALIDATE_SECONDS },
+  ["yango-preorders-v3"],
+  { revalidate: PREORDERS_CACHE_REVALIDATE_SECONDS, tags: ["yango-preorders"] },
 );
 
 function getDashboardDefaultRange() {
+  const sinceDays = readPositiveIntEnv("YANGO_B2B_ORDERS_LIST_SINCE_DAYS", 90);
+  const tillDaysAhead = readPositiveIntEnv("YANGO_B2B_ORDERS_LIST_TILL_DAYS_AHEAD", 90);
   const till = new Date();
+  till.setDate(till.getDate() + tillDaysAhead);
   const since = new Date();
-  since.setDate(since.getDate() - 30);
+  since.setDate(since.getDate() - sinceDays);
   return { since: since.toISOString(), till: till.toISOString() };
 }
 
@@ -464,6 +650,22 @@ function chunkArray<T>(items: T[], chunkSize: number) {
   return chunks;
 }
 
+async function runChunkedWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<R>,
+) {
+  if (items.length === 0) return [] as R[];
+  const safeLimit = Math.max(1, Number.isFinite(limit) ? limit : 1);
+  const results: R[] = [];
+  for (let index = 0; index < items.length; index += safeLimit) {
+    const batch = items.slice(index, index + safeLimit);
+    const batchResults = await Promise.all(batch.map((item) => worker(item)));
+    results.push(...batchResults);
+  }
+  return results;
+}
+
 async function getClientDashboardOrders(
   tokenConfig: TokenConfig,
   client: YangoClient,
@@ -472,9 +674,8 @@ async function getClientDashboardOrders(
 ) {
   const uniqueById = new Map<string, YangoOrder>();
   let offset = 0;
-  let totalAmount = Infinity;
 
-  while (offset < totalAmount) {
+  while (true) {
     const params = new URLSearchParams({
       limit: String(ORDERS_PAGE_LIMIT),
       offset: String(offset),
@@ -491,39 +692,54 @@ async function getClientDashboardOrders(
     );
 
     const items = response.items ?? [];
-    totalAmount = response.total_amount ?? items.length;
+    if (items.length === 0) {
+      break;
+    }
 
     for (const item of items) {
       uniqueById.set(item.id, item);
     }
 
-    if (items.length === 0) {
+    offset += items.length;
+    const reportedTotal =
+      typeof response.total_amount === "number" && response.total_amount > 0
+        ? response.total_amount
+        : null;
+    if (reportedTotal != null && offset >= reportedTotal) {
       break;
     }
-    offset += items.length;
+    if (items.length < ORDERS_PAGE_LIMIT) {
+      break;
+    }
   }
 
   const orderIds = [...uniqueById.keys()];
   const reportChunks = chunkArray(orderIds, 100);
   const reportOrdersById = new Map<string, YangoTaxiReportOrder>();
 
-  for (const idsChunk of reportChunks) {
-    try {
-      const report = await fetchJson<YangoTaxiReportResponse>(
-        `${YANGO_BASE_URL}/2.0/orders/taxi/report`,
-        tokenConfig.token,
-        client.client_id,
-        {
-          method: "POST",
-          body: JSON.stringify({ ids: idsChunk }),
-        },
-      );
-
-      for (const order of report.orders ?? []) {
-        reportOrdersById.set(order.id, order);
+  const reports = await runChunkedWithConcurrency(
+    reportChunks,
+    DASHBOARD_REPORT_CHUNK_CONCURRENCY,
+    async (idsChunk) => {
+      try {
+        return await fetchJson<YangoTaxiReportResponse>(
+          `${YANGO_BASE_URL}/2.0/orders/taxi/report`,
+          tokenConfig.token,
+          client.client_id,
+          {
+            method: "POST",
+            body: JSON.stringify({ ids: idsChunk }),
+          },
+        );
+      } catch {
+        return { orders: [] } as YangoTaxiReportResponse;
       }
-    } catch {
-      // Keep partial data if report endpoint is unavailable.
+    },
+  );
+
+  for (const report of reports) {
+    for (const order of report.orders ?? []) {
+      reportOrdersById.set(order.id, order);
     }
   }
 
@@ -546,7 +762,7 @@ async function getClientDashboardOrders(
       tokenLabel: tokenConfig.label,
       clientId: client.client_id,
       clientName: tokenConfig.crmClientName ?? client.name,
-      status: normalizeDashboardStatus(statusRaw),
+      status: normalizeDashboardStatus(statusRaw, scheduledAt),
       statusRaw,
       scheduledAt,
       pointA: order.source?.fullname ?? reportOrder?.source_fullname ?? "Not available",
@@ -611,11 +827,28 @@ async function loadB2BPreOrdersDashboardData() {
   return { rows: resultRows, errors };
 }
 
-export const getB2BPreOrdersDashboardData = unstable_cache(
-  loadB2BPreOrdersDashboardData,
-  ["yango-b2b-preorders-dashboard-v1"],
-  { revalidate: B2B_DASHBOARD_CACHE_REVALIDATE_SECONDS },
-);
+export async function getB2BPreOrdersDashboardData() {
+  const now = Date.now();
+  if (dashboardInMemoryCache && now - dashboardInMemoryCache.updatedAt < DASHBOARD_LOCAL_CACHE_TTL_MS) {
+    return dashboardInMemoryCache.payload;
+  }
+
+  if (!dashboardInFlight) {
+    dashboardInFlight = loadB2BPreOrdersDashboardData()
+      .then((payload) => {
+        dashboardInMemoryCache = {
+          updatedAt: Date.now(),
+          payload,
+        };
+        return payload;
+      })
+      .finally(() => {
+        dashboardInFlight = null;
+      });
+  }
+
+  return dashboardInFlight;
+}
 
 type B2BOrderDetailsInput = {
   tokenLabel: string;
@@ -657,6 +890,9 @@ export async function getB2BOrderDetails({
       .then((payload) => (payload.orders?.[0] as Record<string, unknown>) ?? null)
       .catch(() => null),
   ]);
+  persistUserMapFromApiPayload({ tokenLabel, clientId }, info);
+  persistUserMapFromApiPayload({ tokenLabel, clientId }, progress);
+  persistUserMapFromApiPayload({ tokenLabel, clientId }, report);
 
   return {
     orderId,
@@ -665,6 +901,536 @@ export async function getB2BOrderDetails({
     fetchedAt: new Date().toISOString(),
     info,
     progress,
+    report,
+  };
+}
+
+function resolveTokenConfig(tokenLabel: string) {
+  const tokenConfig = tokenConfigs.find((item) => item.label === tokenLabel);
+  if (!tokenConfig) {
+    throw new Error(`Unknown token label: ${tokenLabel}`);
+  }
+  if (!tokenConfig.token) {
+    throw new Error(`Token ${tokenLabel} is not configured.`);
+  }
+  return tokenConfig;
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function asNumberOrNull(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+export function normalizeRideLifecycleStatus(rawStatus: string): RequestRideLifecycleStatus {
+  const status = rawStatus.toLowerCase();
+  if (!status) return "unknown";
+  if (status.includes("cancel")) return "cancelled";
+  if (
+    status.includes("complete") ||
+    status.includes("finished") ||
+    status.includes("transporting_finished")
+  ) {
+    return "completed";
+  }
+  if (status.includes("search")) return "searching";
+  if (status.includes("transporting") || status.includes("in_progress")) return "in_progress";
+  if (status.includes("arriv")) return "pickup";
+  if (status.includes("performer") || status.includes("accepted") || status.includes("driving")) {
+    return "driver_assigned";
+  }
+  return "unknown";
+}
+
+export function buildRequestRideBody(payload: RequestRidePayload): Record<string, unknown> {
+  const sourceFullname = payload.sourceAddress.trim();
+  const destinationFullname = payload.destinationAddress.trim();
+  if (
+    payload.sourceLat == null ||
+    payload.sourceLon == null ||
+    payload.destinationLat == null ||
+    payload.destinationLon == null
+  ) {
+    throw new Error("source/destination geopoints are required to build ride request body.");
+  }
+  const resolvedUserId = payload.userId?.trim();
+  if (!resolvedUserId) {
+    throw new Error("Could not resolve user_id for the provided rider phone.");
+  }
+  // Yango API expects geopoint as [lon, lat].
+  const sourceGeopoint: [number, number] = [payload.sourceLon, payload.sourceLat];
+  const destinationGeopoint: [number, number] = [payload.destinationLon, payload.destinationLat];
+  const body: Record<string, unknown> = {
+    user_id: resolvedUserId,
+    class: payload.rideClass.trim() || "comfortplus_b2b",
+    source: { fullname: sourceFullname, geopoint: sourceGeopoint },
+    destination: { fullname: destinationFullname, geopoint: destinationGeopoint },
+    route: [
+      { fullname: sourceFullname, geopoint: sourceGeopoint },
+      { fullname: destinationFullname, geopoint: destinationGeopoint },
+    ],
+    phone: payload.phoneNumber.trim(),
+    comment: payload.comment?.trim() || undefined,
+  };
+  const scheduleAt = payload.scheduleAtIso?.trim();
+  if (scheduleAt) {
+    body.due_date = scheduleAt;
+  }
+  return body;
+}
+
+function phoneVariants(rawPhone: string): string[] {
+  const raw = rawPhone.trim();
+  const digits = raw.replace(/\D/g, "");
+  const set = new Set<string>();
+  if (raw) set.add(raw);
+  if (digits) {
+    set.add(digits);
+    if (!digits.startsWith("+")) set.add(`+${digits}`);
+    if (digits.startsWith("972")) set.add(`+${digits}`);
+    if (digits.startsWith("0")) {
+      const il = `972${digits.slice(1)}`;
+      set.add(il);
+      set.add(`+${il}`);
+    }
+  }
+  return [...set];
+}
+
+function extractUserId(payload: Record<string, unknown>): string | null {
+  const direct =
+    asString(payload.user_id) ||
+    asString(payload.userId) ||
+    asString(payload.id);
+  if (direct) return direct;
+  const users = payload.users;
+  if (Array.isArray(users)) {
+    for (const item of users) {
+      if (!item || typeof item !== "object") continue;
+      const candidate = extractUserId(item as Record<string, unknown>);
+      if (candidate) return candidate;
+    }
+  }
+  return null;
+}
+
+function collectPhones(payload: unknown, set: Set<string>) {
+  if (!payload || typeof payload !== "object") return;
+  if (Array.isArray(payload)) {
+    for (const item of payload) collectPhones(item, set);
+    return;
+  }
+  for (const [key, value] of Object.entries(payload)) {
+    if (typeof value === "string" && key.toLowerCase().includes("phone")) {
+      set.add(value);
+    } else if (value && typeof value === "object") {
+      collectPhones(value, set);
+    }
+  }
+}
+
+function persistUserMapFromApiPayload(
+  context: { tokenLabel: string; clientId: string },
+  payload: unknown,
+  fallbackPhone?: string,
+) {
+  if (!payload || typeof payload !== "object") return;
+  const userId = extractUserId(payload as Record<string, unknown>);
+  if (!userId) return;
+
+  const phones = new Set<string>();
+  collectPhones(payload, phones);
+  if (fallbackPhone) phones.add(fallbackPhone);
+
+  for (const phone of phones) {
+    upsertMappedUserId({
+      tokenLabel: context.tokenLabel,
+      clientId: context.clientId,
+      phoneNumber: phone,
+      userId,
+    });
+  }
+}
+
+function rowToSuggestion(record: Record<string, unknown>): RequestRideUserSuggestion | null {
+  const userId =
+    asString(record.user_id) || asString(record.userId) || asString(record.id);
+  if (!userId) return null;
+  const fullName =
+    asString(record.fullname) || asString(record.full_name) || asString(record.name) || null;
+  const phone =
+    asString(record.phone) || asString(record.phone_number) || asString(record.msisdn) || null;
+  return {
+    userId,
+    phone,
+    fullName,
+    source: "api",
+  };
+}
+
+/**
+ * Only reads explicit user rows from list/info shapes — avoids deep-walking unrelated nested ids.
+ */
+function extractUserSuggestionsFromPayload(payload: unknown): RequestRideUserSuggestion[] {
+  if (!payload || typeof payload !== "object") return [];
+  const root = payload as Record<string, unknown>;
+  const seen = new Set<string>();
+  const out: RequestRideUserSuggestion[] = [];
+
+  const push = (row: Record<string, unknown>) => {
+    const suggestion = rowToSuggestion(row);
+    if (!suggestion) return;
+    const key = `${suggestion.userId}:${suggestion.phone ?? ""}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(suggestion);
+  };
+
+  const listKeys = ["users", "items", "employees", "passengers"];
+  for (const key of listKeys) {
+    const value = root[key];
+    if (!Array.isArray(value)) continue;
+    for (const item of value) {
+      if (item && typeof item === "object") push(item as Record<string, unknown>);
+    }
+    if (out.length > 0) return out;
+  }
+
+  if (asString(root.user_id) || asString(root.userId) || asString(root.id)) {
+    push(root);
+  }
+
+  return out;
+}
+
+function suggestionMatchesQuery(suggestion: RequestRideUserSuggestion, rawQuery: string): boolean {
+  const q = rawQuery.trim().toLowerCase();
+  if (!q) return false;
+  const digitsQ = q.replace(/\D/g, "");
+  const phoneDigits = (suggestion.phone ?? "").replace(/\D/g, "");
+  const name = (suggestion.fullName ?? "").toLowerCase();
+  if (digitsQ && phoneDigits.includes(digitsQ)) return true;
+  if (q && name.includes(q)) return true;
+  if (digitsQ && suggestion.userId.toLowerCase().includes(digitsQ)) return true;
+  return false;
+}
+
+export async function resolveRequestRideUserIdByPhone(input: {
+  tokenLabel: string;
+  clientId: string;
+  phoneNumber: string;
+}): Promise<string | null> {
+  const mapped = resolveMappedUserId(input);
+  if (mapped) return mapped;
+
+  const tokenConfig = resolveTokenConfig(input.tokenLabel);
+  const variants = phoneVariants(input.phoneNumber);
+  let permissionDenied = false;
+  for (const phone of variants) {
+    const attempts = [
+      `${YANGO_BASE_URL}/2.0/users/info?phone=${encodeURIComponent(phone)}`,
+      `${YANGO_BASE_URL}/2.0/users/info?phone_number=${encodeURIComponent(phone)}`,
+      `${YANGO_BASE_URL}/2.0/users/list?phone=${encodeURIComponent(phone)}`,
+      `${YANGO_BASE_URL}/2.0/users/list?phone_number=${encodeURIComponent(phone)}`,
+    ];
+    for (const url of attempts) {
+      try {
+        const response = await fetchJsonNoCache<Record<string, unknown>>(
+          url,
+          tokenConfig.token,
+          input.clientId,
+        );
+        persistUserMapFromApiPayload(
+          { tokenLabel: input.tokenLabel, clientId: input.clientId },
+          response,
+          phone,
+        );
+        const userId = extractUserId(response);
+        if (userId) return userId;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes("permission_check_failed")) {
+          permissionDenied = true;
+          continue;
+        }
+        // continue probing with other query shapes
+      }
+    }
+  }
+  const mappedAfterProbe = resolveMappedUserId(input);
+  if (mappedAfterProbe) return mappedAfterProbe;
+  if (permissionDenied) {
+    throw new Error(
+      "Selected API token has no permission to query users and no local phone->user_id mapping matched.",
+    );
+  }
+  return null;
+}
+
+export async function searchRequestRideUsers(input: {
+  tokenLabel: string;
+  clientId: string;
+  query: string;
+  limit?: number;
+}): Promise<RequestRideUserSuggestion[]> {
+  const query = input.query.trim();
+  const limit = Math.max(1, Math.min(input.limit ?? 8, 20));
+  if (!query) return [];
+
+  const tokenConfig = resolveTokenConfig(input.tokenLabel);
+  const byId = new Map<string, RequestRideUserSuggestion>();
+
+  const push = (item: RequestRideUserSuggestion) => {
+    if (!item.userId || byId.has(item.userId)) return;
+    byId.set(item.userId, item);
+  };
+
+  const mapped = searchMappedUsers({
+    tokenLabel: input.tokenLabel,
+    clientId: input.clientId,
+    query,
+    limit,
+    strictClientScope: true,
+  });
+  for (const item of mapped) {
+    push({
+      userId: item.userId,
+      phone: item.phone,
+      fullName: null,
+      source: "map",
+    });
+  }
+
+  const attempts = [
+    `${YANGO_BASE_URL}/2.0/users/list?query=${encodeURIComponent(query)}`,
+    `${YANGO_BASE_URL}/2.0/users/list?search=${encodeURIComponent(query)}`,
+    `${YANGO_BASE_URL}/2.0/users/list?q=${encodeURIComponent(query)}`,
+    `${YANGO_BASE_URL}/2.0/users/list?phone=${encodeURIComponent(query)}`,
+    `${YANGO_BASE_URL}/2.0/users/list?phone_number=${encodeURIComponent(query)}`,
+    `${YANGO_BASE_URL}/2.0/users/info?phone=${encodeURIComponent(query)}`,
+    `${YANGO_BASE_URL}/2.0/users/info?phone_number=${encodeURIComponent(query)}`,
+  ];
+
+  for (const url of attempts) {
+    if (byId.size >= limit) break;
+    try {
+      const response = await fetchJsonNoCache<Record<string, unknown>>(
+        url,
+        tokenConfig.token,
+        input.clientId,
+      );
+      const suggestions = extractUserSuggestionsFromPayload(response).filter((s) =>
+        suggestionMatchesQuery(s, query),
+      );
+      for (const suggestion of suggestions) {
+        if (suggestion.phone) {
+          upsertMappedUserId({
+            tokenLabel: input.tokenLabel,
+            clientId: input.clientId,
+            phoneNumber: suggestion.phone,
+            userId: suggestion.userId,
+          });
+        }
+        push(suggestion);
+        if (byId.size >= limit) break;
+      }
+    } catch {
+      // Ignore unsupported query shapes and continue.
+    }
+  }
+
+  return [...byId.values()].slice(0, limit);
+}
+
+export async function getRequestRideApiClients(): Promise<YangoApiClientRef[]> {
+  const rows: YangoApiClientRef[] = [];
+  await Promise.all(
+    tokenConfigs.map(async (tokenConfig) => {
+      if (!tokenConfig.token) return;
+      try {
+        const authResponse = await fetchJsonNoCache<YangoAuthListResponse>(
+          `${YANGO_BASE_URL}/2.0/auth/list`,
+          tokenConfig.token,
+        );
+        for (const client of authResponse.clients ?? []) {
+          rows.push({
+            tokenLabel: tokenConfig.label,
+            clientId: client.client_id,
+            clientName: tokenConfig.crmClientName ?? client.name ?? client.client_id,
+          });
+        }
+      } catch {
+        // Skip broken token/client mappings for request form options.
+      }
+    }),
+  );
+
+  const unique = new Map<string, YangoApiClientRef>();
+  for (const row of rows) {
+    unique.set(`${row.tokenLabel}:${row.clientId}`, row);
+  }
+  return [...unique.values()].sort((a, b) => a.clientName.localeCompare(b.clientName));
+}
+
+export async function createRequestRide(payload: RequestRidePayload): Promise<RequestRideResult> {
+  const tokenConfig = resolveTokenConfig(payload.tokenLabel);
+  if (payload.userId?.trim() && payload.phoneNumber.trim()) {
+    upsertMappedUserId({
+      tokenLabel: payload.tokenLabel,
+      clientId: payload.clientId,
+      phoneNumber: payload.phoneNumber,
+      userId: payload.userId,
+    });
+  }
+  const endpoint = process.env.YANGO_CREATE_ORDER_ENDPOINT ?? "/2.0/orders/create";
+  const createResponse = await fetchJsonNoCache<Record<string, unknown>>(
+    `${YANGO_BASE_URL}${endpoint}`,
+    tokenConfig.token,
+    payload.clientId,
+    {
+      method: "POST",
+      headers: {
+        "X-Idempotency-Token": globalThis.crypto.randomUUID(),
+      },
+      body: JSON.stringify(buildRequestRideBody(payload)),
+    },
+  );
+
+  const orderId =
+    asString(createResponse.order_id) ||
+    asString(createResponse.id) ||
+    asString(createResponse.orderId);
+  if (!orderId) {
+    throw new Error("Yango API did not return order id for created ride.");
+  }
+  const status =
+    asString(createResponse.status) ||
+    asString(createResponse.state) ||
+    "created";
+
+  return {
+    orderId,
+    status,
+    etaMinutes:
+      asNumberOrNull(createResponse.eta_minutes) ??
+      asNumberOrNull(createResponse.estimated_waiting) ??
+      null,
+    warning:
+      endpoint === "/2.0/orders/create"
+        ? undefined
+        : `Create endpoint overridden via YANGO_CREATE_ORDER_ENDPOINT=${endpoint}`,
+  };
+}
+
+/**
+ * Cancels a scheduled/active order in the selected corp client context.
+ * Override path with YANGO_CANCEL_ORDER_ENDPOINT if your tenant uses a different route.
+ */
+export async function cancelYangoOrder(input: {
+  tokenLabel: string;
+  clientId: string;
+  orderId: string;
+}): Promise<void> {
+  const tokenConfig = resolveTokenConfig(input.tokenLabel);
+  const endpoint = process.env.YANGO_CANCEL_ORDER_ENDPOINT ?? "/2.0/orders/cancel";
+  const bodies = [
+    JSON.stringify({ order_id: input.orderId }),
+    JSON.stringify({ orderId: input.orderId }),
+  ];
+  let lastError: Error | null = null;
+  for (const body of bodies) {
+    try {
+      await fetchJsonNoCache<Record<string, unknown>>(
+        `${YANGO_BASE_URL}${endpoint}`,
+        tokenConfig.token,
+        input.clientId,
+        {
+          method: "POST",
+          headers: {
+            "X-Idempotency-Token": globalThis.crypto.randomUUID(),
+          },
+          body,
+        },
+        { allowEmptyBody: true },
+      );
+      return;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+  throw lastError ?? new Error("Failed to cancel order.");
+}
+
+export async function getRequestRideStatus(input: {
+  tokenLabel: string;
+  clientId: string;
+  orderId: string;
+}): Promise<RequestRideStatus> {
+  const tokenConfig = resolveTokenConfig(input.tokenLabel);
+
+  const [info, progress, report] = await Promise.all([
+    fetchJsonNoCache<YangoOrderInfoResponse>(
+      `${YANGO_BASE_URL}/2.0/orders/info?order_id=${input.orderId}`,
+      tokenConfig.token,
+      input.clientId,
+    ).catch(() => null),
+    fetchJsonNoCache<YangoOrderProgressResponse>(
+      `${YANGO_BASE_URL}/2.0/orders/progress?order_id=${input.orderId}`,
+      tokenConfig.token,
+      input.clientId,
+    ).catch(() => null),
+    fetchJsonNoCache<YangoTaxiReportResponse>(
+      `${YANGO_BASE_URL}/2.0/orders/taxi/report`,
+      tokenConfig.token,
+      input.clientId,
+      {
+        method: "POST",
+        body: JSON.stringify({ ids: [input.orderId] }),
+      },
+    )
+      .then((payload) => (payload.orders?.[0] as Record<string, unknown>) ?? null)
+      .catch(() => null),
+  ]);
+  persistUserMapFromApiPayload({ tokenLabel: input.tokenLabel, clientId: input.clientId }, info);
+  persistUserMapFromApiPayload(
+    { tokenLabel: input.tokenLabel, clientId: input.clientId },
+    progress,
+  );
+  persistUserMapFromApiPayload({ tokenLabel: input.tokenLabel, clientId: input.clientId }, report);
+
+  const reportRideStatus = (report?.ride_status ?? null) as
+    | { value?: string; text?: string }
+    | null;
+  const statusRaw =
+    progress?.status ?? info?.status ?? reportRideStatus?.value ?? "unknown";
+  const lifecycleStatus = normalizeRideLifecycleStatus(statusRaw);
+  const performer = progress?.performer ?? info?.performer;
+  return {
+    orderId: input.orderId,
+    tokenLabel: input.tokenLabel,
+    clientId: input.clientId,
+    lifecycleStatus,
+    statusRaw,
+    statusText: progress?.status_text ?? reportRideStatus?.text ?? statusRaw,
+    fetchedAt: new Date().toISOString(),
+    driverName: performer?.fullname ?? null,
+    driverPhone: performer?.phone ?? null,
+    etaMinutes:
+      progress?.eta_minutes ??
+      progress?.expected_waiting_time ??
+      info?.estimated_waiting ??
+      info?.estimated_waiting_time ??
+      info?.waiting_time ??
+      null,
+    info: (info as Record<string, unknown> | null) ?? null,
+    progress: (progress as Record<string, unknown> | null) ?? null,
     report,
   };
 }
