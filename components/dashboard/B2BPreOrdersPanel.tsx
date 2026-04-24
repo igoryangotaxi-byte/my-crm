@@ -1297,6 +1297,7 @@ export function B2BPreOrdersPanel({
   view = "dashboard",
   corpClientNameMap = {},
 }: B2BPreOrdersPanelProps) {
+  const ORDERS_PAGE_SIZE = 50;
   const { canAccessDashboardBlock } = useAuth();
   const { startRouteLoading } = useRouteLoading();
   const searchParams = useSearchParams();
@@ -1344,6 +1345,7 @@ export function B2BPreOrdersPanel({
   const [clientFilter, setClientFilter] = useState("all");
   const [sortMode, setSortMode] = useState<SortMode>("date_desc");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [ordersVisibleCount, setOrdersVisibleCount] = useState(ORDERS_PAGE_SIZE);
   const canSeeApiData = view !== "dashboard" || canAccessDashboardBlock("apiData");
   const canSeeYangoData = view !== "dashboard" || canAccessDashboardBlock("yangoData");
   const dashboardSectionParam = searchParams.get("section");
@@ -1416,6 +1418,10 @@ export function B2BPreOrdersPanel({
 
     return result;
   }, [scopedRows, fromDate, toDate, sortMode]);
+  const visibleOrderRows = useMemo(() => {
+    if (view !== "orders") return filteredRows;
+    return filteredRows.slice(0, ordersVisibleCount);
+  }, [filteredRows, ordersVisibleCount, view]);
 
   const ordersSummary = useMemo(() => {
     const completed = filteredRows.filter((row) => resolveDashboardStatus(row) === "completed").length;
@@ -2572,7 +2578,7 @@ export function B2BPreOrdersPanel({
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filteredRows.map((row) => {
+              {visibleOrderRows.map((row) => {
                 const displayStatus = getOrderStatusDisplay(row);
                 return (
                   <tr
@@ -2602,7 +2608,7 @@ export function B2BPreOrdersPanel({
                   </tr>
                 );
               })}
-              {filteredRows.length === 0 ? (
+              {visibleOrderRows.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-3 py-8 text-center text-sm text-muted">
                     No orders for selected filters.
@@ -2612,6 +2618,19 @@ export function B2BPreOrdersPanel({
             </tbody>
           </table>
         </div>
+        {filteredRows.length > visibleOrderRows.length ? (
+          <div className="border-t border-border/70 bg-white/40 px-3 py-2">
+            <button
+              type="button"
+              onClick={() =>
+                setOrdersVisibleCount((prev) => Math.min(filteredRows.length, prev + ORDERS_PAGE_SIZE))
+              }
+              className="crm-hover-lift rounded-lg border border-border/80 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              Load more rows ({filteredRows.length - visibleOrderRows.length} remaining)
+            </button>
+          </div>
+        ) : null}
       </div>
     </section>
     ) : null}
