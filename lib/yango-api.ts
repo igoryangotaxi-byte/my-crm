@@ -539,6 +539,15 @@ async function loadAllYangoPreOrders() {
   await Promise.all(
     tokenConfigs.map(async (tokenConfig) => {
       if (!tokenConfig.token) {
+        diagnostics.push({
+          label: `${tokenConfig.label} / token`,
+          tokenLabel: tokenConfig.label,
+          clientId: null,
+          clientName: tokenConfig.crmClientName ?? null,
+          authStatus: "error",
+          ordersStatus: "error",
+          message: "Token is not configured.",
+        });
         return;
       }
 
