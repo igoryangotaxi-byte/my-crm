@@ -51,6 +51,11 @@ type YangoOrderPoint = {
 type YangoOrder = {
   id: string;
   status?: string;
+  created_at?: string;
+  created_time?: string;
+  created_datetime?: string;
+  local_created_datetime?: string;
+  creation_date?: string;
   due_date?: string;
   source?: YangoOrderPoint;
   destination?: YangoOrderPoint;
@@ -765,6 +770,13 @@ async function getClientDashboardOrders(
       reportOrder?.local_due_datetime ??
       reportOrder?.due_datetime ??
       new Date().toISOString();
+    const createdAt =
+      order.created_at ??
+      order.created_time ??
+      order.created_datetime ??
+      order.local_created_datetime ??
+      order.creation_date ??
+      "Not provided by API";
 
     rows.push({
       orderId,
@@ -773,6 +785,7 @@ async function getClientDashboardOrders(
       clientName: tokenConfig.crmClientName ?? client.name,
       status: normalizeDashboardStatus(statusRaw, scheduledAt),
       statusRaw,
+      createdAt,
       scheduledAt,
       pointA: order.source?.fullname ?? reportOrder?.source_fullname ?? "Not available",
       pointB:
@@ -788,8 +801,8 @@ async function getClientDashboardOrders(
   return rows;
 }
 
-async function loadB2BPreOrdersDashboardData() {
-  const { since, till } = getDashboardDefaultRange();
+async function loadB2BPreOrdersDashboardData(range?: { since: string; till: string }) {
+  const { since, till } = range ?? getDashboardDefaultRange();
   const rows: B2BDashboardOrder[] = [];
   const errors: string[] = [];
 
@@ -857,6 +870,16 @@ export async function getB2BPreOrdersDashboardData() {
   }
 
   return dashboardInFlight;
+}
+
+export async function getB2BPreOrdersDashboardDataForRange(input: {
+  since: string;
+  till: string;
+}) {
+  return loadB2BPreOrdersDashboardData({
+    since: input.since,
+    till: input.till,
+  });
 }
 
 type B2BOrderDetailsInput = {

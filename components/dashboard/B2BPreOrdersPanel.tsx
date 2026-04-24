@@ -1300,15 +1300,27 @@ export function B2BPreOrdersPanel({
   const { canAccessDashboardBlock } = useAuth();
   const { startRouteLoading } = useRouteLoading();
   const searchParams = useSearchParams();
-  const [fromDate, setFromDate] = useState(() => {
+  const defaultFromDate = (() => {
     const date = new Date();
+    if (view === "dashboard") {
+      return toDateInputValue(new Date(date.getFullYear(), date.getMonth(), 1));
+    }
     date.setDate(date.getDate() - 90);
     return toDateInputValue(date);
-  });
-  const [toDate, setToDate] = useState(() => {
+  })();
+  const defaultToDate = (() => {
     const date = new Date();
+    if (view === "dashboard") {
+      return toDateInputValue(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+    }
     date.setDate(date.getDate() + 90);
     return toDateInputValue(date);
+  })();
+  const [fromDate, setFromDate] = useState(() => {
+    return defaultFromDate;
+  });
+  const [toDate, setToDate] = useState(() => {
+    return defaultToDate;
   });
   const [yangoFromDate, setYangoFromDate] = useState(() => {
     const date = new Date();
@@ -1338,7 +1350,7 @@ export function B2BPreOrdersPanel({
   const dashboardSection =
     dashboardSectionParam === "api" || dashboardSectionParam === "yango"
       ? dashboardSectionParam
-      : "all";
+      : "api";
   const showApiDashboardSection = canSeeApiData && dashboardSection !== "yango";
   const showYangoDashboardSection = canSeeYangoData && dashboardSection !== "api";
   const normalizedCorpClientNameMap = useMemo(
@@ -1965,6 +1977,7 @@ export function B2BPreOrdersPanel({
       "status",
       "status_raw",
       "scheduled_at",
+      "scheduled_for",
       "client_paid",
       "token_label",
       "client_id",
@@ -1976,6 +1989,7 @@ export function B2BPreOrdersPanel({
         row.clientName,
         displayStatus.label,
         row.statusRaw ?? "",
+        row.createdAt,
         row.scheduledAt,
         row.clientPaid,
         row.tokenLabel,
@@ -2063,6 +2077,47 @@ export function B2BPreOrdersPanel({
   return (
     <>
     <section className="glass-surface mt-6 rounded-3xl p-4">
+      {view === "dashboard" && canSeeApiData && canSeeYangoData ? (
+        <section className="mb-4 rounded-3xl border border-white/70 bg-white/70 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/dashboard?section=api"
+              onClick={() => startRouteLoading()}
+              className={`crm-hover-lift rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
+                dashboardSection === "api"
+                  ? "border-red-200 bg-red-50 text-red-700 shadow-[0_8px_16px_rgba(239,68,68,0.15)]"
+                  : "border-white/80 bg-white/85 text-slate-700 hover:bg-white"
+              }`}
+            >
+              <span
+                className={`inline-block border-b-2 pb-0.5 ${
+                  dashboardSection === "api" ? "border-red-500" : "border-transparent"
+                }`}
+              >
+                API Data
+              </span>
+            </Link>
+            <Link
+              href="/dashboard?section=yango"
+              onClick={() => startRouteLoading()}
+              className={`crm-hover-lift rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
+                dashboardSection === "yango"
+                  ? "border-red-200 bg-red-50 text-red-700 shadow-[0_8px_16px_rgba(239,68,68,0.15)]"
+                  : "border-white/80 bg-white/85 text-slate-700 hover:bg-white"
+              }`}
+            >
+              <span
+                className={`inline-block border-b-2 pb-0.5 ${
+                  dashboardSection === "yango" ? "border-red-500" : "border-transparent"
+                }`}
+              >
+                Yango Data
+              </span>
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       {view !== "dashboard" || dashboardSection !== "yango" ? (
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div className="grid w-full gap-2 sm:w-auto sm:grid-flow-col sm:auto-cols-max sm:items-end">
@@ -2148,46 +2203,6 @@ export function B2BPreOrdersPanel({
 
       {view === "dashboard" ? (
         <>
-          {canSeeApiData && canSeeYangoData ? (
-            <section className="mb-4 rounded-3xl border border-white/70 bg-white/70 p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Link
-                  href="/dashboard"
-                  onClick={() => startRouteLoading()}
-                  className={`crm-hover-lift rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
-                    dashboardSection === "all"
-                      ? "crm-button-primary text-white"
-                      : "bg-white/80 text-slate-700 hover:bg-white"
-                  }`}
-                >
-                  All Blocks
-                </Link>
-                <Link
-                  href="/dashboard?section=api"
-                  onClick={() => startRouteLoading()}
-                  className={`crm-hover-lift rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
-                    dashboardSection === "api"
-                      ? "crm-button-primary text-white"
-                      : "bg-white/80 text-slate-700 hover:bg-white"
-                  }`}
-                >
-                  API Data
-                </Link>
-                <Link
-                  href="/dashboard?section=yango"
-                  onClick={() => startRouteLoading()}
-                  className={`crm-hover-lift rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
-                    dashboardSection === "yango"
-                      ? "crm-button-primary text-white"
-                      : "bg-white/80 text-slate-700 hover:bg-white"
-                  }`}
-                >
-                  Yango Data
-                </Link>
-              </div>
-            </section>
-          ) : null}
-
           {showApiDashboardSection ? (
           <section className="mb-4 rounded-3xl border border-white/70 bg-white/70 p-4">
             <div className="mb-3">
@@ -2546,7 +2561,10 @@ export function B2BPreOrdersPanel({
                   Status
                 </th>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                  Scheduled at
+                  Scheduled for
+                  <span className="ml-1 normal-case text-[11px] font-normal text-slate-500">
+                    (ride time)
+                  </span>
                 </th>
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                   Client paid
@@ -2642,7 +2660,7 @@ export function B2BPreOrdersPanel({
                         <dd className="font-medium text-slate-900">{selectedOrder.pointB}</dd>
                       </div>
                       <div className="rounded-xl bg-white px-3 py-2.5">
-                        <dt className="text-muted">Scheduled at</dt>
+                        <dt className="text-muted">Scheduled for</dt>
                         <dd className="font-medium text-slate-900">{selectedOrder.scheduledAt}</dd>
                       </div>
                       <div className="rounded-xl bg-white px-3 py-2.5">
@@ -2694,6 +2712,14 @@ export function B2BPreOrdersPanel({
                           ) : null}
                         </button>
                       </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted">Scheduled at</dt>
+                      <dd className="font-medium text-slate-900">{selectedOrder.createdAt}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted">Scheduled for</dt>
+                      <dd className="font-medium text-slate-900">{selectedOrder.scheduledAt}</dd>
                     </div>
                     <div>
                       <dt className="text-muted">Client</dt>

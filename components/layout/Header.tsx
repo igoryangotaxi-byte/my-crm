@@ -86,13 +86,19 @@ export function Header() {
                 type="button"
                 disabled={!allowed}
                 onClick={() => setCurrentArea(item.key)}
-                className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                className={`rounded-full border px-4 py-1 text-xs font-semibold transition ${
                   active
-                    ? "crm-button-primary text-white"
-                    : "text-slate-700 hover:bg-white"
+                    ? "border-red-200 bg-red-50 text-red-700 shadow-[0_8px_16px_rgba(239,68,68,0.15)]"
+                    : "border-transparent text-slate-700 hover:bg-white"
                 } disabled:cursor-not-allowed disabled:opacity-40`}
               >
-                {item.label}
+                <span
+                  className={`inline-block border-b-2 pb-0.5 ${
+                    active ? "border-red-500" : "border-transparent"
+                  }`}
+                >
+                  {item.label}
+                </span>
               </button>
             );
           })}

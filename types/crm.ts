@@ -68,6 +68,7 @@ export type B2BDashboardOrder = {
   clientName: string;
   status: DashboardOrderStatus;
   statusRaw: string;
+  createdAt: string;
   scheduledAt: string;
   pointA: string;
   pointB: string;
