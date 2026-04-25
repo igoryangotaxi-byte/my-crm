@@ -1,4 +1,5 @@
 import { createRequestRide, resolveRequestRideUserIdByPhone } from "@/lib/yango-api";
+import { searchAddressSuggestions } from "@/lib/geocoding";
 import { requireApprovedUser } from "@/lib/server-auth";
 import type { RequestRidePayload } from "@/types/crm";
 
@@ -19,29 +20,13 @@ function toFiniteNumber(input: unknown): number | null {
   return null;
 }
 
-type GeocodeResult = { lat: number; lon: number };
+type WaypointPayload = { address: string; lat?: number; lon?: number };
 
-async function geocodeAddress(address: string): Promise<GeocodeResult | null> {
-  const query = encodeURIComponent(address);
-  const response = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${query}`,
-    {
-      headers: {
-        Accept: "application/json",
-        "User-Agent": "my-crm-request-rides/1.0",
-      },
-      cache: "no-store",
-    },
-  );
-  if (!response.ok) return null;
-  const payload = (await response.json().catch(() => null)) as
-    | Array<{ lat?: string; lon?: string }>
-    | null;
-  const first = payload?.[0];
-  const lat = toFiniteNumber(first?.lat);
-  const lon = toFiniteNumber(first?.lon);
-  if (lat == null || lon == null) return null;
-  return { lat, lon };
+async function geocodeAddress(address: string): Promise<{ lat: number; lon: number } | null> {
+  const rows = await searchAddressSuggestions({ query: address, language: "en", limit: 1 });
+  const first = rows[0];
+  if (!first) return null;
+  return { lat: first.lat, lon: first.lon };
 }
 
 export async function POST(request: Request) {
@@ -62,6 +47,20 @@ export async function POST(request: Request) {
     phoneNumber: normalizeString(body?.phoneNumber),
     comment: normalizeString(body?.comment) || null,
     scheduleAtIso: normalizeString(body?.scheduleAtIso) || null,
+    waypoints: Array.isArray(body?.waypoints)
+      ? body.waypoints.reduce<WaypointPayload[]>((acc, item) => {
+          if (!item || typeof item !== "object") return acc;
+          const row = item as { address?: unknown; lat?: unknown; lon?: unknown };
+          const address = normalizeString(row.address);
+          if (!address) return acc;
+          acc.push({
+            address,
+            lat: toFiniteNumber(row.lat) ?? undefined,
+            lon: toFiniteNumber(row.lon) ?? undefined,
+          });
+          return acc;
+        }, [])
+      : [],
   };
 
   if (!payload.tokenLabel || !payload.clientId) {
@@ -122,6 +121,23 @@ export async function POST(request: Request) {
       { ok: false, error: "Could not resolve route geopoints from addresses." },
       { status: 400 },
     );
+  }
+  if (payload.waypoints?.length) {
+    for (const waypoint of payload.waypoints) {
+      if (waypoint.lat == null || waypoint.lon == null) {
+        const geo = await geocodeAddress(waypoint.address);
+        if (geo) {
+          waypoint.lat = geo.lat;
+          waypoint.lon = geo.lon;
+        }
+      }
+      if (waypoint.lat == null || waypoint.lon == null) {
+        return Response.json(
+          { ok: false, error: `Could not resolve geopoint for stop: ${waypoint.address}` },
+          { status: 400 },
+        );
+      }
+    }
   }
 
   try {

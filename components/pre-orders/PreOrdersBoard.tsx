@@ -246,77 +246,77 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
           No pre-orders found for selected filter.
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-          {filteredPreOrders.map((preOrder) => (
-            <article
-              key={preOrder.id}
-              className={`group glass-surface crm-hover-lift rounded-3xl p-3 ${
-                isDriverAssigned(preOrder)
-                  ? "bg-emerald-100/45"
-                  : "bg-rose-100/45"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => setSelectedPreOrder(preOrder)}
-                className="w-full text-left"
+        <div className="space-y-3">
+          {filteredPreOrders.map((preOrder) => {
+            const assigned = isDriverAssigned(preOrder);
+            return (
+              <article
+                key={preOrder.id}
+                className={`group glass-surface rounded-3xl border p-3 shadow-[0_16px_34px_rgba(15,23,42,0.16)] ${
+                  assigned
+                    ? "border-emerald-200/70 bg-[linear-gradient(180deg,rgba(236,253,245,0.88),rgba(209,250,229,0.72))]"
+                    : "border-rose-200/70 bg-[linear-gradient(180deg,rgba(255,241,242,0.88),rgba(255,228,230,0.72))]"
+                }`}
               >
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                      Pre-order
-                    </p>
-                    <h2 className="mt-1 text-base font-semibold text-foreground">
-                      {preOrder.clientName}
-                    </h2>
-                  </div>
-                  <span className="rounded-full bg-white/75 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                    {preOrder.clientPrice}
-                  </span>
-                </div>
-
-                <dl className="space-y-2.5 text-sm">
-                  <div>
-                    <dt className="text-muted">Scheduled for</dt>
-                    <dd className="font-medium text-slate-900">{preOrder.scheduledFor}</dd>
-                  </div>
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <div>
-                      <dt className="text-muted">Point A</dt>
-                      <dd className="font-medium text-slate-900">{preOrder.pointA}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-muted">Point B</dt>
-                      <dd className="font-medium text-slate-900">{preOrder.pointB}</dd>
-                    </div>
-                  </div>
-                </dl>
-              </button>
-
-              <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-white/60 pt-3">
-                <Link
-                  href={`https://go-admin-frontend.taxi.yandex-team.ru/orders/${preOrder.orderId}`}
-                  className="font-medium text-accent hover:underline"
-                  onClick={(event) => event.stopPropagation()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Order: {preOrder.orderId}
-                </Link>
                 <button
                   type="button"
-                  disabled={cancellingOrderId === preOrder.orderId}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void cancelPreOrder(preOrder);
-                  }}
-                  className="text-xs font-semibold text-rose-700 underline decoration-rose-300 underline-offset-2 hover:text-rose-900 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => setSelectedPreOrder(preOrder)}
+                  className="w-full text-left"
                 >
-                  {cancellingOrderId === preOrder.orderId ? "Cancelling…" : "Cancel in Yango"}
+                  <div className="grid gap-3 md:grid-cols-[1.25fr_0.9fr_1fr_auto] md:items-center">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                        {assigned ? "Assigned pre-order" : "Unassigned pre-order"}
+                      </p>
+                      <h2 className="truncate text-base font-semibold text-foreground">
+                        {preOrder.clientName}
+                      </h2>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-muted">Scheduled for</p>
+                      <p className="truncate text-sm font-semibold text-slate-900">{preOrder.scheduledFor}</p>
+                    </div>
+                    <div className="min-w-0 text-sm">
+                      <p className="truncate text-slate-900">
+                        <span className="font-semibold text-muted">A:</span> {preOrder.pointA}
+                      </p>
+                      <p className="truncate text-slate-900">
+                        <span className="font-semibold text-muted">B:</span> {preOrder.pointB}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 md:justify-end">
+                      <span className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                        {preOrder.clientPrice}
+                      </span>
+                    </div>
+                  </div>
                 </button>
-              </div>
-            </article>
-          ))}
+
+                <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-white/60 pt-3">
+                  <Link
+                    href={`https://go-admin-frontend.taxi.yandex-team.ru/orders/${preOrder.orderId}`}
+                    className="inline-flex items-center rounded-lg border border-slate-200 bg-white/80 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-white"
+                    onClick={(event) => event.stopPropagation()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Order in Adminka
+                  </Link>
+                  <button
+                    type="button"
+                    disabled={cancellingOrderId === preOrder.orderId}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void cancelPreOrder(preOrder);
+                    }}
+                    className="text-xs font-semibold text-rose-700 underline decoration-rose-300 underline-offset-2 hover:text-rose-900 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {cancellingOrderId === preOrder.orderId ? "Cancelling…" : "Cancel in Yango"}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
 

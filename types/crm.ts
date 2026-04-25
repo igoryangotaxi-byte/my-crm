@@ -100,6 +100,11 @@ export type RequestRidePayload = {
   userId?: string;
   sourceAddress: string;
   destinationAddress: string;
+  waypoints?: Array<{
+    address: string;
+    lat?: number;
+    lon?: number;
+  }>;
   sourceLat?: number;
   sourceLon?: number;
   destinationLat?: number;

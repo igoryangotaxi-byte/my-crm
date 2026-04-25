@@ -38,6 +38,35 @@ test("buildRequestRideBody maps fields and includes due_date when scheduled", ()
   });
 });
 
+test("buildRequestRideBody includes stops between pickup and destination", () => {
+  const body = buildRequestRideBody({
+    tokenLabel: "TEST CABINET",
+    clientId: "client-1",
+    rideClass: "comfortplus_b2b",
+    userId: "known-user-id",
+    sourceAddress: "Pickup",
+    destinationAddress: "Destination",
+    sourceLat: 32.1,
+    sourceLon: 34.8,
+    destinationLat: 32.2,
+    destinationLon: 34.9,
+    waypoints: [
+      { address: "Stop 1", lat: 32.15, lon: 34.85 },
+      { address: "Stop 2", lat: 32.17, lon: 34.87 },
+    ],
+    phoneNumber: "+972500000001",
+    comment: null,
+    scheduleAtIso: null,
+  });
+
+  assert.deepEqual(body.route, [
+    { fullname: "Pickup", geopoint: [34.8, 32.1] },
+    { fullname: "Stop 1", geopoint: [34.85, 32.15] },
+    { fullname: "Stop 2", geopoint: [34.87, 32.17] },
+    { fullname: "Destination", geopoint: [34.9, 32.2] },
+  ]);
+});
+
 test("normalizeRideLifecycleStatus maps statuses to UI lifecycle values", () => {
   assert.equal(normalizeRideLifecycleStatus("searching_performer"), "searching");
   assert.equal(normalizeRideLifecycleStatus("performer_assigned"), "driver_assigned");

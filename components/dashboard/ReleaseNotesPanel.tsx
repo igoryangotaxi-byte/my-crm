@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-04-25",
+    title: "Request Rides map redesign and Pre-orders rows",
+    notes:
+      "Shipped map-first Request Rides layout with overlay panels, unified dropdown behavior, improved route controls placement, and redesigned Pre-orders into compact 3D rows with direct Order in Adminka action.",
+  },
+  {
     date: "2026-04-24",
     title: "Orders table lazy-loading",
     notes:

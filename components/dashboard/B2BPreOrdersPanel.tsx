@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { b2bDashboardOrderKey, type B2BOrdersListCursors } from "@/lib/b2b-orders-keys";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useRouteLoading } from "@/components/layout/RouteLoadingContext";
 import type {
@@ -14,11 +15,20 @@ import type {
 type SortMode = "date_desc" | "date_asc" | "client_asc" | "client_desc";
 type StatusFilter = "all" | "completed" | "cancelled" | "pending" | "in_progress";
 
+export type B2BOrdersRemoteConfig = {
+  range: { since: string; till: string; fromDateStr: string; toDateStr: string };
+  initialCursors: B2BOrdersListCursors;
+  initialHasMore: boolean;
+  bootstrapErrors?: string[];
+};
+
 type B2BPreOrdersPanelProps = {
   rows: B2BDashboardOrder[];
   yangoRows?: YangoSupabaseOrderMetric[];
   view?: "dashboard" | "orders";
   corpClientNameMap?: Record<string, string>;
+  /** Progressive Yango list+report loading for the Orders page */
+  ordersRemote?: B2BOrdersRemoteConfig;
 };
 
 type DashboardSeriesItem = {
@@ -1296,12 +1306,15 @@ export function B2BPreOrdersPanel({
   yangoRows = [],
   view = "dashboard",
   corpClientNameMap = {},
+  ordersRemote,
 }: B2BPreOrdersPanelProps) {
-  const ORDERS_PAGE_SIZE = 50;
   const { canAccessDashboardBlock } = useAuth();
   const { startRouteLoading } = useRouteLoading();
   const searchParams = useSearchParams();
   const defaultFromDate = (() => {
+    if (view === "orders" && ordersRemote) {
+      return ordersRemote.range.fromDateStr;
+    }
     const date = new Date();
     if (view === "dashboard") {
       return toDateInputValue(new Date(date.getFullYear(), date.getMonth(), 1));
@@ -1310,6 +1323,9 @@ export function B2BPreOrdersPanel({
     return toDateInputValue(date);
   })();
   const defaultToDate = (() => {
+    if (view === "orders" && ordersRemote) {
+      return ordersRemote.range.toDateStr;
+    }
     const date = new Date();
     if (view === "dashboard") {
       return toDateInputValue(new Date(date.getFullYear(), date.getMonth() + 1, 0));
@@ -1345,7 +1361,14 @@ export function B2BPreOrdersPanel({
   const [clientFilter, setClientFilter] = useState("all");
   const [sortMode, setSortMode] = useState<SortMode>("date_desc");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [ordersVisibleCount, setOrdersVisibleCount] = useState(ORDERS_PAGE_SIZE);
+  const [loadedOrders, setLoadedOrders] = useState<B2BDashboardOrder[]>(() => rows);
+  const [listCursors, setListCursors] = useState<B2BOrdersListCursors>(
+    () => ordersRemote?.initialCursors ?? {},
+  );
+  const [hasMoreRemote, setHasMoreRemote] = useState(() => ordersRemote?.initialHasMore ?? false);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  const [remoteError, setRemoteError] = useState<string | null>(null);
+  const skipDateEffectRef = useRef(true);
   const canSeeApiData = view !== "dashboard" || canAccessDashboardBlock("apiData");
   const canSeeYangoData = view !== "dashboard" || canAccessDashboardBlock("yangoData");
   const dashboardSectionParam = searchParams.get("section");
@@ -1375,10 +1398,12 @@ export function B2BPreOrdersPanel({
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
+  const orderSourceRows = view === "orders" && ordersRemote ? loadedOrders : rows;
+
   const apiRowsForView = useMemo(() => {
-    if (view !== "orders") return rows;
-    return rows.filter((row) => !isSchedulingOrderRow(row));
-  }, [rows, view]);
+    if (view !== "orders") return orderSourceRows;
+    return orderSourceRows.filter((row) => !isSchedulingOrderRow(row));
+  }, [orderSourceRows, view]);
 
   const clientOptions = useMemo(
     () => ["all", ...new Set(apiRowsForView.map((row) => row.clientName))],
@@ -1418,10 +1443,129 @@ export function B2BPreOrdersPanel({
 
     return result;
   }, [scopedRows, fromDate, toDate, sortMode]);
-  const visibleOrderRows = useMemo(() => {
-    if (view !== "orders") return filteredRows;
-    return filteredRows.slice(0, ordersVisibleCount);
-  }, [filteredRows, ordersVisibleCount, view]);
+  const uiDatesToApiIso = useCallback((from: string, to: string) => {
+    return {
+      since: new Date(`${from}T00:00:00`).toISOString(),
+      till: new Date(`${to}T23:59:59`).toISOString(),
+    };
+  }, []);
+
+  const fetchOrdersRemoteBatch = useCallback(
+    async (input: {
+      since: string;
+      till: string;
+      cursors: B2BOrdersListCursors;
+      excludeKeys: Set<string>;
+      targetCount: number;
+    }) => {
+      const response = await fetch("/api/b2b-orders-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          since: input.since,
+          till: input.till,
+          cursors: input.cursors,
+          excludeOrderKeys: [...input.excludeKeys],
+          targetCount: input.targetCount,
+        }),
+      });
+      const data = (await response.json()) as {
+        ok?: boolean;
+        rows?: B2BDashboardOrder[];
+        nextCursors?: B2BOrdersListCursors;
+        hasMore?: boolean;
+        error?: string;
+      };
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error ?? "Failed to load orders.");
+      }
+      return {
+        rows: data.rows ?? [],
+        nextCursors: data.nextCursors ?? {},
+        hasMore: Boolean(data.hasMore),
+      };
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!ordersRemote || view !== "orders") return;
+    if (skipDateEffectRef.current) {
+      skipDateEffectRef.current = false;
+      return;
+    }
+    const { since, till } = uiDatesToApiIso(fromDate, toDate);
+    let cancelled = false;
+    (async () => {
+      setRemoteLoading(true);
+      setRemoteError(null);
+      try {
+        const result = await fetchOrdersRemoteBatch({
+          since,
+          till,
+          cursors: {},
+          excludeKeys: new Set(),
+          targetCount: 20,
+        });
+        if (cancelled) return;
+        setLoadedOrders(result.rows);
+        setListCursors(result.nextCursors);
+        setHasMoreRemote(result.hasMore);
+      } catch (error) {
+        if (!cancelled) {
+          setRemoteError(error instanceof Error ? error.message : "Failed to reload orders.");
+        }
+      } finally {
+        if (!cancelled) setRemoteLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchOrdersRemoteBatch, fromDate, ordersRemote, toDate, uiDatesToApiIso, view]);
+
+  const handleLoadMoreOrders = useCallback(async () => {
+    if (!ordersRemote || view !== "orders") return;
+    const { since, till } = uiDatesToApiIso(fromDate, toDate);
+    const excludeKeys = new Set(loadedOrders.map((row) => b2bDashboardOrderKey(row)));
+    setRemoteLoading(true);
+    setRemoteError(null);
+    try {
+      const result = await fetchOrdersRemoteBatch({
+        since,
+        till,
+        cursors: listCursors,
+        excludeKeys,
+        targetCount: 20,
+      });
+      const merged = new Map<string, B2BDashboardOrder>();
+      for (const row of loadedOrders) {
+        merged.set(b2bDashboardOrderKey(row), row);
+      }
+      for (const row of result.rows) {
+        merged.set(b2bDashboardOrderKey(row), row);
+      }
+      const next = [...merged.values()].sort(
+        (a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime(),
+      );
+      setLoadedOrders(next);
+      setListCursors(result.nextCursors);
+      setHasMoreRemote(result.hasMore);
+    } catch (error) {
+      setRemoteError(error instanceof Error ? error.message : "Failed to load more orders.");
+    } finally {
+      setRemoteLoading(false);
+    }
+  }, [
+    fetchOrdersRemoteBatch,
+    fromDate,
+    loadedOrders,
+    listCursors,
+    ordersRemote,
+    toDate,
+    uiDatesToApiIso,
+    view,
+  ]);
 
   const ordersSummary = useMemo(() => {
     const completed = filteredRows.filter((row) => resolveDashboardStatus(row) === "completed").length;
@@ -2190,6 +2334,17 @@ export function B2BPreOrdersPanel({
       </div>
       ) : null}
 
+      {view === "orders" && ordersRemote?.bootstrapErrors && ordersRemote.bootstrapErrors.length > 0 ? (
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <p className="font-semibold">Some cabinets failed to load on the server</p>
+          <ul className="mt-1 list-inside list-disc">
+            {ordersRemote.bootstrapErrors.slice(0, 6).map((line, index) => (
+              <li key={`${index}-${line.slice(0, 40)}`}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {view === "orders" ? (
         <div className="mb-4 grid gap-3 md:grid-cols-3">
           <article className="rounded-2xl border border-emerald-200/70 bg-white/85 p-3">
@@ -2541,9 +2696,14 @@ export function B2BPreOrdersPanel({
     </section>
 
     {view === "orders" ? (
-    <section className="glass-surface mt-4 rounded-3xl p-4">
-      <div className="glass-surface overflow-hidden rounded-3xl">
-        <div className="flex items-center justify-end border-b border-border/70 bg-white/60 px-3 py-2">
+    <section className="glass-surface mt-4 overflow-hidden rounded-3xl">
+        {remoteError ? (
+          <div className="border-b border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{remoteError}</div>
+        ) : null}
+        <div className="flex items-center justify-end gap-2 border-b border-border/70 bg-white/60 px-3 py-2">
+          {ordersRemote && remoteLoading ? (
+            <span className="text-xs text-muted">Loading orders…</span>
+          ) : null}
           <button
             type="button"
             onClick={exportOrdersCsv}
@@ -2578,7 +2738,7 @@ export function B2BPreOrdersPanel({
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {visibleOrderRows.map((row) => {
+              {filteredRows.map((row) => {
                 const displayStatus = getOrderStatusDisplay(row);
                 return (
                   <tr
@@ -2608,7 +2768,7 @@ export function B2BPreOrdersPanel({
                   </tr>
                 );
               })}
-              {visibleOrderRows.length === 0 ? (
+              {filteredRows.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-3 py-8 text-center text-sm text-muted">
                     No orders for selected filters.
@@ -2618,20 +2778,18 @@ export function B2BPreOrdersPanel({
             </tbody>
           </table>
         </div>
-        {filteredRows.length > visibleOrderRows.length ? (
+        {ordersRemote && hasMoreRemote ? (
           <div className="border-t border-border/70 bg-white/40 px-3 py-2">
             <button
               type="button"
-              onClick={() =>
-                setOrdersVisibleCount((prev) => Math.min(filteredRows.length, prev + ORDERS_PAGE_SIZE))
-              }
-              className="crm-hover-lift rounded-lg border border-border/80 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+              onClick={() => void handleLoadMoreOrders()}
+              disabled={remoteLoading}
+              className="crm-hover-lift rounded-lg border border-border/80 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Load more rows ({filteredRows.length - visibleOrderRows.length} remaining)
+              Load more orders
             </button>
           </div>
         ) : null}
-      </div>
     </section>
     ) : null}
 

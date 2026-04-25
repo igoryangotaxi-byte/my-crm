@@ -10,7 +10,9 @@ import type {
   TokenDiagnostics,
   YangoApiClientRef,
 } from "@/types/crm";
+import { b2bDashboardOrderKey, type B2BOrdersListCursors } from "@/lib/b2b-orders-keys";
 import {
+  normalizePhoneKey,
   resolveMappedUserId,
   searchMappedUsers,
   upsertMappedUserId,
@@ -656,6 +658,34 @@ function getDashboardDefaultRange() {
   return { since: since.toISOString(), till: till.toISOString() };
 }
 
+function toDateInputValueUtc(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** Same calendar window as Orders UI (Orders page + panel defaults). */
+export function getB2BOrdersViewDefaultRange(): {
+  since: string;
+  till: string;
+  fromDateStr: string;
+  toDateStr: string;
+} {
+  const from = new Date();
+  from.setDate(from.getDate() - 90);
+  const to = new Date();
+  to.setDate(to.getDate() + 90);
+  const fromDateStr = toDateInputValueUtc(from);
+  const toDateStr = toDateInputValueUtc(to);
+  return {
+    fromDateStr,
+    toDateStr,
+    since: new Date(`${fromDateStr}T00:00:00`).toISOString(),
+    till: new Date(`${toDateStr}T23:59:59`).toISOString(),
+  };
+}
+
 function chunkArray<T>(items: T[], chunkSize: number) {
   const chunks: T[][] = [];
   for (let index = 0; index < items.length; index += chunkSize) {
@@ -680,54 +710,44 @@ async function runChunkedWithConcurrency<T, R>(
   return results;
 }
 
-async function getClientDashboardOrders(
+export type { B2BOrdersListCursors } from "@/lib/b2b-orders-keys";
+export { b2bDashboardOrderKey } from "@/lib/b2b-orders-keys";
+
+function b2bOrdersCursorKey(tokenLabel: string, clientId: string): string {
+  return `${tokenLabel}::${clientId}`;
+}
+
+async function fetchOrdersListSinglePage(
   tokenConfig: TokenConfig,
-  client: YangoClient,
+  clientId: string,
   sinceDateTime: string,
   tillDateTime: string,
-) {
-  const uniqueById = new Map<string, YangoOrder>();
-  let offset = 0;
+  offset: number,
+  limit: number,
+): Promise<YangoOrderListResponse> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+    sorting_field: "due_date",
+    sorting_direction: "1",
+    since_datetime: sinceDateTime,
+    till_datetime: tillDateTime,
+  });
+  return fetchJson<YangoOrderListResponse>(
+    `${YANGO_BASE_URL}/2.0/orders/list?${params.toString()}`,
+    tokenConfig.token,
+    clientId,
+  );
+}
 
-  while (true) {
-    const params = new URLSearchParams({
-      limit: String(ORDERS_PAGE_LIMIT),
-      offset: String(offset),
-      sorting_field: "due_date",
-      sorting_direction: "1",
-      since_datetime: sinceDateTime,
-      till_datetime: tillDateTime,
-    });
-
-    const response = await fetchJson<YangoOrderListResponse>(
-      `${YANGO_BASE_URL}/2.0/orders/list?${params.toString()}`,
-      tokenConfig.token,
-      client.client_id,
-    );
-
-    const items = response.items ?? [];
-    if (items.length === 0) {
-      break;
-    }
-
-    for (const item of items) {
-      uniqueById.set(item.id, item);
-    }
-
-    offset += items.length;
-    const reportedTotal =
-      typeof response.total_amount === "number" && response.total_amount > 0
-        ? response.total_amount
-        : null;
-    if (reportedTotal != null && offset >= reportedTotal) {
-      break;
-    }
-    if (items.length < ORDERS_PAGE_LIMIT) {
-      break;
-    }
-  }
-
+async function yangoOrderMapToB2BRows(
+  tokenConfig: TokenConfig,
+  client: YangoClient,
+  uniqueById: Map<string, YangoOrder>,
+): Promise<B2BDashboardOrder[]> {
   const orderIds = [...uniqueById.keys()];
+  if (orderIds.length === 0) return [];
+
   const reportChunks = chunkArray(orderIds, 100);
   const reportOrdersById = new Map<string, YangoTaxiReportOrder>();
 
@@ -799,6 +819,212 @@ async function getClientDashboardOrders(
   }
 
   return rows;
+}
+
+async function getClientDashboardOrders(
+  tokenConfig: TokenConfig,
+  client: YangoClient,
+  sinceDateTime: string,
+  tillDateTime: string,
+) {
+  const uniqueById = new Map<string, YangoOrder>();
+  let offset = 0;
+
+  while (true) {
+    const response = await fetchOrdersListSinglePage(
+      tokenConfig,
+      client.client_id,
+      sinceDateTime,
+      tillDateTime,
+      offset,
+      ORDERS_PAGE_LIMIT,
+    );
+
+    const items = response.items ?? [];
+    if (items.length === 0) {
+      break;
+    }
+
+    for (const item of items) {
+      uniqueById.set(item.id, item);
+    }
+
+    offset += items.length;
+    const reportedTotal =
+      typeof response.total_amount === "number" && response.total_amount > 0
+        ? response.total_amount
+        : null;
+    if (reportedTotal != null && offset >= reportedTotal) {
+      break;
+    }
+    if (items.length < ORDERS_PAGE_LIMIT) {
+      break;
+    }
+  }
+
+  return yangoOrderMapToB2BRows(tokenConfig, client, uniqueById);
+}
+
+type B2BTokenClientPair = { tokenConfig: TokenConfig; client: YangoClient };
+
+async function listB2BTokenClientPairs(): Promise<{ pairs: B2BTokenClientPair[]; errors: string[] }> {
+  const pairs: B2BTokenClientPair[] = [];
+  const errors: string[] = [];
+
+  await Promise.all(
+    tokenConfigs.map(async (tokenConfig) => {
+      if (!tokenConfig.token) return;
+      try {
+        const authResponse = await fetchJson<YangoAuthListResponse>(
+          `${YANGO_BASE_URL}/2.0/auth/list`,
+          tokenConfig.token,
+        );
+        for (const client of authResponse.clients ?? []) {
+          pairs.push({ tokenConfig, client });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unexpected error";
+        if (!message.includes("features_check_failed")) {
+          errors.push(`${tokenConfig.label}: ${message}`);
+        }
+      }
+    }),
+  );
+
+  return { pairs, errors };
+}
+
+/**
+ * One list+report wave across all corp clients (offset per client from cursors).
+ */
+export async function fetchB2BOrdersListChunk(input: {
+  since: string;
+  till: string;
+  cursors: B2BOrdersListCursors;
+  listPageSize?: number;
+}): Promise<{
+  rows: B2BDashboardOrder[];
+  nextCursors: B2BOrdersListCursors;
+  anyClientMayHaveMore: boolean;
+  errors: string[];
+}> {
+  const listPageSize = readPositiveIntEnv("YANGO_B2B_ORDERS_CHUNK_LIST_LIMIT", 80);
+  const size = input.listPageSize ?? listPageSize;
+  const { pairs, errors } = await listB2BTokenClientPairs();
+  const nextCursors: B2BOrdersListCursors = { ...input.cursors };
+  let anyClientMayHaveMore = false;
+  const rowLists = await Promise.all(
+    pairs.map(async ({ tokenConfig, client }) => {
+      const key = b2bOrdersCursorKey(tokenConfig.label, client.client_id);
+      const offset = nextCursors[key] ?? 0;
+      try {
+        const response = await fetchOrdersListSinglePage(
+          tokenConfig,
+          client.client_id,
+          input.since,
+          input.till,
+          offset,
+          size,
+        );
+        const items = response.items ?? [];
+        nextCursors[key] = offset + items.length;
+        if (items.length >= size) {
+          anyClientMayHaveMore = true;
+        }
+        const reportedTotal =
+          typeof response.total_amount === "number" && response.total_amount > 0
+            ? response.total_amount
+            : null;
+        if (reportedTotal != null && offset + items.length < reportedTotal) {
+          anyClientMayHaveMore = true;
+        }
+        const map = new Map<string, YangoOrder>();
+        for (const item of items) {
+          map.set(item.id, item);
+        }
+        return await yangoOrderMapToB2BRows(tokenConfig, client, map);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push(`${tokenConfig.label} / ${client.client_id}: ${message}`);
+        nextCursors[key] = offset;
+        return [] as B2BDashboardOrder[];
+      }
+    }),
+  );
+
+  const merged = new Map<string, B2BDashboardOrder>();
+  for (const list of rowLists) {
+    for (const row of list) {
+      merged.set(b2bDashboardOrderKey(row), row);
+    }
+  }
+
+  const rows = [...merged.values()].sort(
+    (a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime(),
+  );
+
+  return { rows, nextCursors, anyClientMayHaveMore, errors };
+}
+
+/**
+ * Pulls successive list chunks until `targetNewCount` new rows (not in excludeKeys) or sources exhaust.
+ */
+export async function pullB2BOrdersRows(input: {
+  since: string;
+  till: string;
+  startCursors: B2BOrdersListCursors;
+  targetNewCount: number;
+  excludeKeys: Set<string>;
+  maxChunks?: number;
+}): Promise<{
+  newRows: B2BDashboardOrder[];
+  nextCursors: B2BOrdersListCursors;
+  hasMoreRemote: boolean;
+  errors: string[];
+}> {
+  const maxChunks = Math.max(1, Math.min(input.maxChunks ?? 40, 80));
+  const collected: B2BDashboardOrder[] = [];
+  const seen = new Set<string>();
+  let cursors = { ...input.startCursors };
+  const aggErrors: string[] = [];
+  let hasMoreRemote = false;
+
+  outer: for (let i = 0; i < maxChunks && collected.length < input.targetNewCount; i += 1) {
+    const chunk = await fetchB2BOrdersListChunk({
+      since: input.since,
+      till: input.till,
+      cursors,
+    });
+    cursors = chunk.nextCursors;
+    aggErrors.push(...chunk.errors);
+    hasMoreRemote = chunk.anyClientMayHaveMore;
+
+    for (const row of chunk.rows) {
+      const key = b2bDashboardOrderKey(row);
+      if (input.excludeKeys.has(key) || seen.has(key)) continue;
+      seen.add(key);
+      collected.push(row);
+      if (collected.length >= input.targetNewCount) {
+        break outer;
+      }
+    }
+
+    if (!chunk.anyClientMayHaveMore) {
+      hasMoreRemote = false;
+      break outer;
+    }
+  }
+
+  collected.sort(
+    (a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime(),
+  );
+
+  return {
+    newRows: collected.slice(0, input.targetNewCount),
+    nextCursors: cursors,
+    hasMoreRemote,
+    errors: aggErrors,
+  };
 }
 
 async function loadB2BPreOrdersDashboardData(range?: { since: string; till: string }) {
@@ -999,6 +1225,19 @@ export function buildRequestRideBody(payload: RequestRidePayload): Record<string
   // Yango API expects geopoint as [lon, lat].
   const sourceGeopoint: [number, number] = [payload.sourceLon, payload.sourceLat];
   const destinationGeopoint: [number, number] = [payload.destinationLon, payload.destinationLat];
+  const waypointRoutePoints = (payload.waypoints ?? []).map((waypoint, index) => {
+    const fullname = waypoint.address.trim();
+    if (!fullname) {
+      throw new Error(`Waypoint #${index + 1} address is required.`);
+    }
+    if (waypoint.lat == null || waypoint.lon == null) {
+      throw new Error(`Waypoint #${index + 1} geopoint is required.`);
+    }
+    return {
+      fullname,
+      geopoint: [waypoint.lon, waypoint.lat] as [number, number],
+    };
+  });
   const body: Record<string, unknown> = {
     user_id: resolvedUserId,
     class: payload.rideClass.trim() || "comfortplus_b2b",
@@ -1006,6 +1245,7 @@ export function buildRequestRideBody(payload: RequestRidePayload): Record<string
     destination: { fullname: destinationFullname, geopoint: destinationGeopoint },
     route: [
       { fullname: sourceFullname, geopoint: sourceGeopoint },
+      ...waypointRoutePoints,
       { fullname: destinationFullname, geopoint: destinationGeopoint },
     ],
     phone: payload.phoneNumber.trim(),
@@ -1091,12 +1331,20 @@ function persistUserMapFromApiPayload(
   }
 }
 
+function isYangoUserListRowDeleted(record: Record<string, unknown>): boolean {
+  return record.is_deleted === true;
+}
+
 function rowToSuggestion(record: Record<string, unknown>): RequestRideUserSuggestion | null {
   const userId =
     asString(record.user_id) || asString(record.userId) || asString(record.id);
   if (!userId) return null;
   const fullName =
-    asString(record.fullname) || asString(record.full_name) || asString(record.name) || null;
+    asString(record.fullname) ||
+    asString(record.full_name) ||
+    asString(record.name) ||
+    asString(record.nickname) ||
+    null;
   const phone =
     asString(record.phone) || asString(record.phone_number) || asString(record.msisdn) || null;
   return {
@@ -1105,6 +1353,104 @@ function rowToSuggestion(record: Record<string, unknown>): RequestRideUserSugges
     fullName,
     source: "api",
   };
+}
+
+type YangoUserListResponse = {
+  items?: Array<Record<string, unknown>>;
+  next_cursor?: string;
+  cursor?: string;
+  limit?: number;
+  total_amount?: number;
+};
+
+/** Official employee list: GET /2.0/users (see Yandex B2B «Список сотрудников клиента»). */
+async function fetchYangoUserListPage(
+  token: string,
+  clientId: string,
+  options: { limit: number; cursor?: string },
+): Promise<YangoUserListResponse> {
+  const params = new URLSearchParams();
+  params.set("limit", String(options.limit));
+  if (options.cursor) params.set("cursor", options.cursor);
+  return fetchJsonNoCache<YangoUserListResponse>(
+    `${YANGO_BASE_URL}/2.0/users?${params.toString()}`,
+    token,
+    clientId,
+  );
+}
+
+function phoneKeysMatchYango(a: string | null | undefined, b: string): boolean {
+  const ka = a ? normalizePhoneKey(a) : "";
+  const kb = normalizePhoneKey(b);
+  if (!ka || !kb) return false;
+  return ka === kb;
+}
+
+type YangoUserListPageHandler = (page: YangoUserListResponse, pageIndex: number) => boolean | Promise<boolean>;
+
+/**
+ * Walks paginated /2.0/users until a page fails, max pages reached, or callback returns false.
+ */
+async function forEachYangoUserListPage(
+  token: string,
+  clientId: string,
+  maxPages: number,
+  pageSize: number,
+  onPage: YangoUserListPageHandler,
+): Promise<void> {
+  let cursor: string | undefined;
+  for (let i = 0; i < maxPages; i += 1) {
+    let page: YangoUserListResponse;
+    try {
+      page = await fetchYangoUserListPage(token, clientId, { limit: pageSize, cursor });
+    } catch {
+      return;
+    }
+    const goOn = await onPage(page, i);
+    if (!goOn) return;
+    const next = asString(page.next_cursor);
+    if (!next) return;
+    cursor = next;
+  }
+}
+
+async function findUserIdViaYangoUserList(params: {
+  token: string;
+  clientId: string;
+  phoneNumber: string;
+}): Promise<string | null> {
+  const maxPages = readPositiveIntEnv("YANGO_USER_LIST_MAX_PAGES_RESOLVE", 50);
+  const pageSize = readPositiveIntEnv("YANGO_USER_LIST_PAGE_SIZE", 100);
+  const variants = phoneVariants(params.phoneNumber);
+  let found: string | null = null;
+
+  await forEachYangoUserListPage(
+    params.token,
+    params.clientId,
+    maxPages,
+    pageSize,
+    (page) => {
+      for (const raw of page.items ?? []) {
+        if (!raw || typeof raw !== "object") continue;
+        const row = raw as Record<string, unknown>;
+        if (isYangoUserListRowDeleted(row)) continue;
+        const phone = asString(row.phone) || asString(row.phone_number) || asString(row.msisdn);
+        if (!phone) continue;
+        const match = variants.some((v) => phoneKeysMatchYango(phone, v));
+        if (match) {
+          const id =
+            asString(row.user_id) || asString(row.userId) || asString(row.id) || null;
+          if (id) {
+            found = id;
+            return false;
+          }
+        }
+      }
+      return true;
+    },
+  );
+
+  return found;
 }
 
 /**
@@ -1196,6 +1542,22 @@ export async function resolveRequestRideUserIdByPhone(input: {
       }
     }
   }
+
+  const fromOfficialList = await findUserIdViaYangoUserList({
+    token: tokenConfig.token,
+    clientId: input.clientId,
+    phoneNumber: input.phoneNumber,
+  });
+  if (fromOfficialList) {
+    upsertMappedUserId({
+      tokenLabel: input.tokenLabel,
+      clientId: input.clientId,
+      phoneNumber: input.phoneNumber,
+      userId: fromOfficialList,
+    });
+    return fromOfficialList;
+  }
+
   const mappedAfterProbe = resolveMappedUserId(input);
   if (mappedAfterProbe) return mappedAfterProbe;
   if (permissionDenied) {
@@ -1238,6 +1600,38 @@ export async function searchRequestRideUsers(input: {
       fullName: null,
       source: "map",
     });
+  }
+
+  if (byId.size < limit) {
+    const maxPages = readPositiveIntEnv("YANGO_USER_LIST_MAX_PAGES_SEARCH", 25);
+    const pageSize = readPositiveIntEnv("YANGO_USER_LIST_PAGE_SIZE", 100);
+    await forEachYangoUserListPage(
+      tokenConfig.token,
+      input.clientId,
+      maxPages,
+      pageSize,
+      (page) => {
+        for (const raw of page.items ?? []) {
+          if (byId.size >= limit) return false;
+          if (!raw || typeof raw !== "object") continue;
+          const row = raw as Record<string, unknown>;
+          if (isYangoUserListRowDeleted(row)) continue;
+          const suggestion = rowToSuggestion(row);
+          if (!suggestion) continue;
+          if (!suggestionMatchesQuery(suggestion, query)) continue;
+          if (suggestion.phone) {
+            upsertMappedUserId({
+              tokenLabel: input.tokenLabel,
+              clientId: input.clientId,
+              phoneNumber: suggestion.phone,
+              userId: suggestion.userId,
+            });
+          }
+          push(suggestion);
+        }
+        return byId.size < limit;
+      },
+    );
   }
 
   const attempts = [
