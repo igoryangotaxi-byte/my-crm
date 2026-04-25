@@ -133,8 +133,19 @@ export default function DriversMapPage() {
         }
         const merged = incoming.map((item) => {
           const identity = driverGeoIdentity(item);
+          const parsedLat = parseCoordinate(item.lat);
+          const parsedLon = parseCoordinate(item.lon);
+          /** Свежие координаты из ответа API всегда в приоритете для карты и статуса строки. */
+          if (parsedLat != null && parsedLon != null) {
+            return {
+              ...item,
+              lat: parsedLat,
+              lon: parsedLon,
+              lastTrackedAt: item.lastTrackedAt ?? null,
+            };
+          }
           const geo = geoByDriverRef.current.get(item.id) ?? geoByIdentityRef.current.get(identity);
-          if (!geo) return item;
+          if (!geo || geo.lat == null || geo.lon == null) return item;
           return {
             ...item,
             lat: geo.lat,

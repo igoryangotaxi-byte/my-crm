@@ -50,16 +50,28 @@ function spreadOverlappingPoint(lon: number, lat: number, index: number, total: 
   };
 }
 
-function createMarkerElement(driver: DriverMapItem, selected: boolean, gpsLost: boolean): HTMLDivElement {
-  const root = document.createElement("div");
+function applyMarkerElementStyle(
+  el: HTMLDivElement,
+  driver: DriverMapItem,
+  selected: boolean,
+  gpsLost: boolean,
+): void {
   const color = markerColor(driver.status);
   const size = selected ? 22 : 18;
   const shadow = gpsLost ? "0 8px 20px rgba(2,6,23,0.50)" : "0 8px 18px rgba(2,6,23,0.42)";
-  root.style.cssText = `width:${size}px;height:${size}px;border-radius:999px;background:${color};border:2px solid #ffffff;box-shadow:${shadow};cursor:pointer;`;
+  el.style.cssText = `width:${size}px;height:${size}px;border-radius:999px;background:${color};border:2px solid #ffffff;box-shadow:${shadow};cursor:pointer;`;
   if (gpsLost) {
-    root.title = "GPS lost: showing last known location";
-    root.style.opacity = "0.88";
+    el.title = "GPS lost: showing last known location";
+    el.style.opacity = "0.88";
+  } else {
+    el.removeAttribute("title");
+    el.style.opacity = "1";
   }
+}
+
+function createMarkerElement(driver: DriverMapItem, selected: boolean, gpsLost: boolean): HTMLDivElement {
+  const root = document.createElement("div");
+  applyMarkerElementStyle(root, driver, selected, gpsLost);
   return root;
 }
 
@@ -96,13 +108,16 @@ function createPopupHtml(driver: DriverMapItem): string {
 export function DriversMap({ drivers, selectedDriverId, gpsLostDriverIds = [], onSelectDriver }: DriversMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const markersRef = useRef<Array<{ id: string; marker: maplibregl.Marker }>>([]);
+  const markersByIdRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const markerIdsOnMapSigRef = useRef<string>("");
+  const driversLatestRef = useRef<DriverMapItem[]>(drivers);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const [styleReadyTick, setStyleReadyTick] = useState(0);
   const styleUrl = useMemo(() => DEFAULT_STYLE, []);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+    const markersStoreRef = markersByIdRef;
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: styleUrl,
@@ -122,6 +137,10 @@ export function DriversMap({ drivers, selectedDriverId, gpsLostDriverIds = [], o
     });
     mapRef.current = map;
     return () => {
+      const markersSnapshot = markersStoreRef.current;
+      for (const m of markersSnapshot.values()) m.remove();
+      markersSnapshot.clear();
+      markerIdsOnMapSigRef.current = "";
       popupRef.current?.remove();
       popupRef.current = null;
       map.remove();
@@ -145,11 +164,11 @@ export function DriversMap({ drivers, selectedDriverId, gpsLostDriverIds = [], o
   }, [styleReadyTick]);
 
   useEffect(() => {
+    driversLatestRef.current = drivers;
     const map = mapRef.current;
     if (!map) return;
     const gpsLostSet = new Set(gpsLostDriverIds);
-    for (const { marker } of markersRef.current) marker.remove();
-    markersRef.current = [];
+    const popup = popupRef.current;
 
     const gpsDrivers = drivers
       .map((driver) => {
@@ -157,7 +176,18 @@ export function DriversMap({ drivers, selectedDriverId, gpsLostDriverIds = [], o
         const lon = parseCoordinate(driver.lon);
         return lat != null && lon != null ? { driver, lat, lon } : null;
       })
-      .filter((item): item is { driver: DriverMapItem; lat: number; lon: number } => item != null);
+      .filter((item): item is { driver: DriverMapItem; lat: number; lon: number } => item != null)
+      /** Стабильный порядок: иначе при перерисовке (клик, выбор) меняется порядок в bucket → другой индекс в spread → «прыжки». */
+      .sort((a, b) => a.driver.id.localeCompare(b.driver.id));
+
+    const nextIds = new Set(gpsDrivers.map((g) => g.driver.id));
+    for (const [id, marker] of markersByIdRef.current) {
+      if (!nextIds.has(id)) {
+        marker.remove();
+        markersByIdRef.current.delete(id);
+      }
+    }
+
     const coordBuckets = new Map<string, Array<{ driver: DriverMapItem; lat: number; lon: number }>>();
     for (const item of gpsDrivers) {
       const key = `${item.lat.toFixed(6)}:${item.lon.toFixed(6)}`;
@@ -165,6 +195,10 @@ export function DriversMap({ drivers, selectedDriverId, gpsLostDriverIds = [], o
       bucket.push(item);
       coordBuckets.set(key, bucket);
     }
+    for (const bucket of coordBuckets.values()) {
+      bucket.sort((a, b) => a.driver.id.localeCompare(b.driver.id));
+    }
+
     const bounds = new LngLatBounds();
     for (const item of gpsDrivers) {
       const { driver, lat, lon } = item;
@@ -174,38 +208,49 @@ export function DriversMap({ drivers, selectedDriverId, gpsLostDriverIds = [], o
       const spread = spreadOverlappingPoint(lon, lat, Math.max(indexInBucket, 0), bucket.length);
       const drawLon = spread.lon;
       const drawLat = spread.lat;
-      const popup = popupRef.current;
-      const marker = new maplibregl.Marker({
-        element: createMarkerElement(driver, selectedDriverId === driver.id, gpsLostSet.has(driver.id)),
-        anchor: "center",
-      })
-        .setLngLat([drawLon, drawLat])
-        .addTo(map);
-      marker.getElement().addEventListener("mouseenter", () => {
-        if (!popup) return;
-        popup
-          .setLngLat([drawLon, drawLat])
-          .setHTML(createPopupHtml(driver))
-          .addTo(map);
-      });
-      marker.getElement().addEventListener("mouseleave", () => {
-        popup?.remove();
-      });
-      marker.getElement().addEventListener("click", () => {
-        popup?.remove();
-        onSelectDriver(driver.id);
-      });
-      markersRef.current.push({ id: driver.id, marker });
+      const selected = selectedDriverId === driver.id;
+      const gpsLost = gpsLostSet.has(driver.id);
+
+      let marker = markersByIdRef.current.get(driver.id);
+      if (!marker) {
+        const el = createMarkerElement(driver, selected, gpsLost);
+        marker = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([drawLon, drawLat]).addTo(map);
+        el.addEventListener("mouseenter", () => {
+          if (!popup) return;
+          const d = driversLatestRef.current.find((x) => x.id === driver.id);
+          if (!d) return;
+          const ll = marker!.getLngLat();
+          popup.setLngLat(ll).setHTML(createPopupHtml(d)).addTo(map);
+        });
+        el.addEventListener("mouseleave", () => {
+          popup?.remove();
+        });
+        el.addEventListener("click", () => {
+          popup?.remove();
+          onSelectDriver(driver.id);
+        });
+        markersByIdRef.current.set(driver.id, marker);
+      } else {
+        marker.setLngLat([drawLon, drawLat]);
+        applyMarkerElementStyle(marker.getElement() as HTMLDivElement, driver, selected, gpsLost);
+      }
       bounds.extend([drawLon, drawLat]);
     }
 
+    const idSig = [...nextIds].sort().join(",");
+    const membershipChanged = idSig !== markerIdsOnMapSigRef.current;
+    markerIdsOnMapSigRef.current = idSig;
+
     if (!bounds.isEmpty()) {
-      map.fitBounds(bounds, {
-        padding: { top: 72, bottom: 72, left: mapLeftPadding(), right: 72 },
-        duration: 350,
-        maxZoom: 14.8,
-      });
+      if (membershipChanged) {
+        map.fitBounds(bounds, {
+          padding: { top: 72, bottom: 72, left: mapLeftPadding(), right: 72 },
+          duration: 350,
+          maxZoom: 14.8,
+        });
+      }
     } else {
+      markerIdsOnMapSigRef.current = "";
       map.easeTo({ center: [34.95, 29.56], zoom: 11, duration: 250 });
     }
   }, [drivers, selectedDriverId, gpsLostDriverIds, onSelectDriver, styleReadyTick]);
