@@ -7,6 +7,20 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-04-25",
+    title: "Drivers map: stable markers, Fleet cache, Vercel Fleet env",
+    notes:
+      "ad2f1c6 — Stable overlap jitter (sort gpsDrivers and buckets by driver id), in-place marker setLngLat/style updates, API lat/lon preferred in merged state. " +
+      "96e58c2 — npm run vercel:sync-fleet-env pushes FLEET_* from .env.local to Vercel (production, preview develop, development). " +
+      "bbcdb2a — Re-hydrate last-known GPS from observations on cached Fleet paths (24h window, no 10m stale cut-off; hydrate on all snapshot returns).",
+  },
+  {
+    date: "2026-04-25",
+    title: "Fleet drivers map and CRM production",
+    notes:
+      "234c41a — /drivers-map with Yango Fleet + MapLibre, /api/drivers-map and /api/fleet-partners, lib/fleet-api (tracks, geo cache, counters), carry coords after trips, richer profile/track geo parsing, sidebar access; ships with orders, pre-orders, request rides, layout, and type updates.",
+  },
+  {
+    date: "2026-04-25",
     title: "Request Rides map redesign and Pre-orders rows",
     notes:
       "Shipped map-first Request Rides layout with overlay panels, unified dropdown behavior, improved route controls placement, and redesigned Pre-orders into compact 3D rows with direct Order in Adminka action.",
