@@ -309,6 +309,16 @@ function appendDriverObservations(
   }
 }
 
+/** Каждый ответ /api/drivers-map: дописать наблюдения (и console.info при изменении) + обновить lastGeo-кэш. */
+function appendObservationsAndRecordFleetGeo(
+  drivers: DriverMapItem[],
+  includeGeo: boolean,
+  geoSourceByDriver: Map<string, DriverGeoDebugEvent["source"]>,
+): void {
+  appendDriverObservations(drivers, includeGeo, geoSourceByDriver);
+  recordLastKnownGeo(drivers);
+}
+
 function buildDriverGeoDebug(drivers: DriverMapItem[]): Record<string, DriverGeoDebugEvent[]> {
   const nowMs = Date.now();
   const cutoffMs = nowMs - STATUS_HISTORY_WINDOW_MS;
@@ -1407,7 +1417,7 @@ export async function getDriversOnMapDataOptimized(input: {
     now - lastGoodSnapshotAtMs < FLEET_MAP_CACHE_TTL_MS
   ) {
     const drivers = hydrateSnapshotDriversForResponse();
-    recordLastKnownGeo(drivers);
+    appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
     return {
       ok: true,
       source: lastGoodDriversSnapshot.source,
@@ -1426,7 +1436,7 @@ export async function getDriversOnMapDataOptimized(input: {
     now - lastGoodSnapshotAtMs < FLEET_STATUS_CACHE_TTL_MS
   ) {
     const drivers = hydrateSnapshotDriversForResponse();
-    recordLastKnownGeo(drivers);
+    appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
     return {
       ok: true,
       source: lastGoodDriversSnapshot.source,
@@ -1440,7 +1450,7 @@ export async function getDriversOnMapDataOptimized(input: {
 
   if (!input.force && lastGoodDriversSnapshot && now - lastFleetFetchAtMs < minFetchIntervalMs) {
     const drivers = hydrateSnapshotDriversForResponse();
-    recordLastKnownGeo(drivers);
+    appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
     return {
       ok: true,
       source: lastGoodDriversSnapshot.source,
@@ -1454,7 +1464,7 @@ export async function getDriversOnMapDataOptimized(input: {
 
   if (!input.force && input.includeGeo && now < fleetRateLimitedUntilMs && lastGoodDriversSnapshot) {
     const drivers = hydrateSnapshotDriversForResponse();
-    recordLastKnownGeo(drivers);
+    appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
     return {
       ok: true,
       source: lastGoodDriversSnapshot.source,
@@ -1473,10 +1483,9 @@ export async function getDriversOnMapDataOptimized(input: {
       force: input.force,
     });
     const geoMerged = mergeGeoForDisplay(fetchedDrivers, lastGoodDriversSnapshot?.drivers);
-    appendDriverObservations(geoMerged, input.includeGeo, geoSourceByDriver);
     const hydratedDrivers = hydrateDriversWithObservations(geoMerged);
+    appendObservationsAndRecordFleetGeo(hydratedDrivers, input.includeGeo, geoSourceByDriver);
     const drivers = hydratedDrivers;
-    recordLastKnownGeo(drivers);
     const source: DriversMapResponse["source"] = "fleet";
     const counters = buildCounters(drivers);
     if (drivers.length > 0) {
@@ -1490,7 +1499,7 @@ export async function getDriversOnMapDataOptimized(input: {
       await persistSnapshotToDisk(lastGoodDriversSnapshot);
     } else if (lastGoodDriversSnapshot) {
       const drivers = hydrateSnapshotDriversForResponse();
-      recordLastKnownGeo(drivers);
+      appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
       return {
         ok: true,
         source: lastGoodDriversSnapshot.source,
@@ -1517,7 +1526,7 @@ export async function getDriversOnMapDataOptimized(input: {
       fleetRateLimitedUntilMs = Date.now() + FLEET_RATE_LIMIT_COOLDOWN_MS;
       if (lastGoodDriversSnapshot) {
         const drivers = hydrateSnapshotDriversForResponse();
-        recordLastKnownGeo(drivers);
+        appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
         return {
           ok: true,
           source: lastGoodDriversSnapshot.source,
