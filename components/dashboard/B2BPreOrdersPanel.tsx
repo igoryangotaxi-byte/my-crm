@@ -1328,7 +1328,7 @@ export function B2BPreOrdersPanel({
     }
     const date = new Date();
     if (view === "dashboard") {
-      return toDateInputValue(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+      return toDateInputValue(date);
     }
     date.setDate(date.getDate() + 90);
     return toDateInputValue(date);
@@ -1341,8 +1341,7 @@ export function B2BPreOrdersPanel({
   });
   const [yangoFromDate, setYangoFromDate] = useState(() => {
     const date = new Date();
-    date.setDate(date.getDate() - 30);
-    return toDateInputValue(date);
+    return toDateInputValue(new Date(date.getFullYear(), date.getMonth(), 1));
   });
   const [yangoToDate, setYangoToDate] = useState(() => {
     const date = new Date();
@@ -2080,8 +2079,7 @@ export function B2BPreOrdersPanel({
 
   const resetYangoFilters = () => {
     const to = new Date();
-    const from = new Date();
-    from.setDate(from.getDate() - 30);
+    const from = new Date(to.getFullYear(), to.getMonth(), 1);
     setYangoFromDate(toDateInputValue(from));
     setYangoToDate(toDateInputValue(to));
     setYangoGranularity("week");
@@ -2226,7 +2224,7 @@ export function B2BPreOrdersPanel({
 
   return (
     <>
-    <section className="glass-surface mt-6 rounded-3xl p-4">
+    <section className={view === "orders" ? "" : "glass-surface mt-6 rounded-3xl p-4"}>
       {view === "dashboard" && canSeeApiData && canSeeYangoData ? (
         <section className="mb-4 rounded-3xl border border-white/70 bg-white/70 p-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -2268,9 +2266,21 @@ export function B2BPreOrdersPanel({
         </section>
       ) : null}
 
+      {view === "orders" && ordersRemote?.bootstrapErrors && ordersRemote.bootstrapErrors.length > 0 ? (
+        <div className="mb-0.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-semibold">Some clients are unavailable</p>
+          <p className="mt-1">
+            {ordersRemote.bootstrapErrors
+              .slice(0, 4)
+              .join(" | ")}
+          </p>
+        </div>
+      ) : null}
+
       {view !== "dashboard" || dashboardSection !== "yango" ? (
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div className="grid w-full gap-2 sm:w-auto sm:grid-flow-col sm:auto-cols-max sm:items-end">
+      <div className="mb-0.5 rounded-2xl border border-border bg-panel p-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="grid w-full gap-2 sm:w-auto sm:grid-flow-col sm:auto-cols-max sm:items-end">
           <label className="text-xs text-muted">
             From
             <input
@@ -2330,35 +2340,49 @@ export function B2BPreOrdersPanel({
               <option value="client_desc">Client Z-A</option>
             </select>
           </label>
+          </div>
         </div>
       </div>
       ) : null}
 
-      {view === "orders" && ordersRemote?.bootstrapErrors && ordersRemote.bootstrapErrors.length > 0 ? (
-        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          <p className="font-semibold">Some cabinets failed to load on the server</p>
-          <ul className="mt-1 list-inside list-disc">
-            {ordersRemote.bootstrapErrors.slice(0, 6).map((line, index) => (
-              <li key={`${index}-${line.slice(0, 40)}`}>{line}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
       {view === "orders" ? (
-        <div className="mb-4 grid gap-3 md:grid-cols-3">
-          <article className="rounded-2xl border border-emerald-200/70 bg-white/85 p-3">
+        <div className="mb-0.5 grid gap-2 md:grid-cols-3">
+          <button
+            type="button"
+            onClick={() =>
+              setStatusFilter((prev) => (prev === "completed" ? "all" : "completed"))
+            }
+            className={`rounded-2xl border border-emerald-200/70 bg-[linear-gradient(180deg,#ffffff_0%,#ecfdf5_100%)] p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_10px_22px_rgba(16,185,129,0.12)] transition hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_14px_28px_rgba(16,185,129,0.18)] ${
+              statusFilter === "completed" ? "ring-2 ring-emerald-300" : ""
+            }`}
+          >
             <p className="text-xs text-muted">Completed orders</p>
             <p className="mt-1 text-2xl font-semibold text-slate-900">{ordersSummary.completed}</p>
-          </article>
-          <article className="rounded-2xl border border-rose-200/70 bg-white/85 p-3">
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setStatusFilter((prev) => (prev === "cancelled" ? "all" : "cancelled"))
+            }
+            className={`rounded-2xl border border-rose-200/70 bg-[linear-gradient(180deg,#ffffff_0%,#fff1f2_100%)] p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_10px_22px_rgba(244,63,94,0.12)] transition hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_14px_28px_rgba(244,63,94,0.18)] ${
+              statusFilter === "cancelled" ? "ring-2 ring-rose-300" : ""
+            }`}
+          >
             <p className="text-xs text-muted">Canceled</p>
             <p className="mt-1 text-2xl font-semibold text-slate-900">{ordersSummary.cancelled}</p>
-          </article>
-          <article className="rounded-2xl border border-amber-200/70 bg-white/85 p-3">
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setStatusFilter((prev) => (prev === "in_progress" ? "all" : "in_progress"))
+            }
+            className={`rounded-2xl border border-amber-200/70 bg-[linear-gradient(180deg,#ffffff_0%,#fffbeb_100%)] p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_10px_22px_rgba(245,158,11,0.12)] transition hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_14px_28px_rgba(245,158,11,0.18)] ${
+              statusFilter === "in_progress" ? "ring-2 ring-amber-300" : ""
+            }`}
+          >
             <p className="text-xs text-muted">In Progress</p>
             <p className="mt-1 text-2xl font-semibold text-slate-900">{ordersSummary.inProgress}</p>
-          </article>
+          </button>
         </div>
       ) : null}
 
@@ -2696,7 +2720,7 @@ export function B2BPreOrdersPanel({
     </section>
 
     {view === "orders" ? (
-    <section className="glass-surface mt-4 overflow-hidden rounded-3xl">
+    <section className="glass-surface mt-0.5 overflow-hidden rounded-3xl">
         {remoteError ? (
           <div className="border-b border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{remoteError}</div>
         ) : null}
@@ -2735,6 +2759,9 @@ export function B2BPreOrdersPanel({
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                   Client paid
                 </th>
+                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                  Adminka
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -2743,7 +2770,15 @@ export function B2BPreOrdersPanel({
                 return (
                   <tr
                     key={`${row.tokenLabel}:${row.orderId}`}
-                    className="crm-hover-lift cursor-pointer hover:bg-white/70"
+                    className={`crm-hover-lift cursor-pointer hover:bg-white/80 ${
+                      displayStatus.tone === "completed"
+                        ? "bg-emerald-50/45"
+                        : displayStatus.tone === "cancelled"
+                          ? "bg-rose-50/45"
+                          : displayStatus.tone === "in_progress"
+                            ? "bg-sky-50/45"
+                            : "bg-slate-50/45"
+                    }`}
                     onClick={() => openOrderModal(row)}
                   >
                     <td className="px-3 py-2 text-sm font-medium text-slate-900">{row.orderId}</td>
@@ -2765,12 +2800,23 @@ export function B2BPreOrdersPanel({
                     </td>
                     <td className="px-3 py-2 text-sm text-slate-700">{row.scheduledAt}</td>
                     <td className="px-3 py-2 text-sm text-slate-700">{formatMoney(row.clientPaid)}</td>
+                    <td className="px-3 py-2 text-sm">
+                      <Link
+                        href={`https://go-admin-frontend.taxi.yandex-team.ru/orders/${row.orderId}`}
+                        className="inline-flex items-center rounded-lg border border-slate-200 bg-white/85 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-white"
+                        onClick={(event) => event.stopPropagation()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Order in Adminka
+                      </Link>
+                    </td>
                   </tr>
                 );
               })}
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-sm text-muted">
+                  <td colSpan={6} className="px-3 py-8 text-center text-sm text-muted">
                     No orders for selected filters.
                   </td>
                 </tr>

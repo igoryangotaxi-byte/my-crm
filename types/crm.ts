@@ -153,6 +153,67 @@ export type RequestRideUserSuggestion = {
   source: "api" | "map";
 };
 
+export type DriverMapStatus = "available" | "active_trip" | "busy" | "no_gps";
+
+export type DriverStatusHistoryEvent = {
+  status: DriverMapStatus;
+  at: string;
+};
+
+export type DriverGeoDebugEvent = {
+  historyKey?: string;
+  at: string;
+  status: DriverMapStatus;
+  includeGeo: boolean;
+  source: "profile" | "track" | "carry" | "missing";
+  lat: number | null;
+  lon: number | null;
+};
+
+export type DriverMapItem = {
+  id: string;
+  name: string;
+  partnerId: string | null;
+  partnerName: string | null;
+  phone: string | null;
+  carNumber: string | null;
+  callsign: string | null;
+  status: DriverMapStatus;
+  busyMinutes: number | null;
+  busyLabel: string;
+  lat: number | null;
+  lon: number | null;
+  lastTrackedAt: string | null;
+  orderId: string | null;
+  source: "fleet" | "fallback";
+  statusHistory24h: DriverStatusHistoryEvent[];
+  /** Optional: /v2/parks/contractors/supply-hours → supply_duration_seconds in the requested period */
+  supplyDurationSeconds?: number | null;
+};
+
+export type FleetPartnerRef = {
+  id: string;
+  name: string;
+};
+
+export type DriversMapCounters = {
+  available: number;
+  activeTrip: number;
+  busy: number;
+  noGps: number;
+  total: number;
+};
+
+export type DriversMapResponse = {
+  ok: boolean;
+  source: "fleet" | "fallback" | "hybrid";
+  updatedAt: string;
+  drivers: DriverMapItem[];
+  counters: DriversMapCounters;
+  message?: string;
+  driverGeoDebug?: Record<string, DriverGeoDebugEvent[]>;
+};
+
 export type YangoSupabaseOrderMetric = {
   orderId: string;
   scheduledAt: string;

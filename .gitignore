@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# server runtime cache (Fleet drivers snapshot — не коммитить)
+/.cache/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

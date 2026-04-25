@@ -41,6 +41,14 @@ type TokenConfig = {
   crmClientName?: string;
 };
 
+function readToken(...candidates: Array<string | undefined>): string {
+  for (const candidate of candidates) {
+    const normalized = candidate?.trim();
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
 type YangoClient = {
   client_id: string;
   name: string;
@@ -126,54 +134,51 @@ type YangoTaxiReportResponse = {
 const tokenConfigs: TokenConfig[] = [
   {
     label: "COFIX",
-    token: process.env.YANGO_TOKEN_COFIX ?? process.env.YANGO_TOKEN_SAMELET ?? "",
+    token: readToken(process.env.YANGO_TOKEN_COFIX, process.env.YANGO_TOKEN_SAMELET),
   },
   {
     label: "SHUFERSAL",
-    token: process.env.YANGO_TOKEN_SHUFERSAL ?? "",
+    token: readToken(process.env.YANGO_TOKEN_SHUFERSAL),
   },
   {
     label: "TEST CABINET",
     crmClientName: "TEST CABINET",
-    token:
-      process.env.YANGO_TOKEN_TEST_CABINET?.trim() ||
-      process.env.YANGO_TOKEN_APLI_TAXI_OZ ||
-      "",
+    token: readToken(process.env.YANGO_TOKEN_TEST_CABINET, process.env.YANGO_TOKEN_APLI_TAXI_OZ),
   },
   {
     label: "SHANA10",
     crmClientName: "SHANA10",
-    token: process.env.YANGO_TOKEN_SHANA10 ?? process.env.YANGO_TOKEN_RYDEMOBILITY ?? "",
+    token: readToken(process.env.YANGO_TOKEN_SHANA10),
   },
   {
     label: "TELAVIVMUNICIPALITY",
     crmClientName: "TelAvivMunicipality",
-    token: process.env.YANGO_TOKEN_TEL_AVIV_MUNICIPALITY ?? "",
+    token: readToken(process.env.YANGO_TOKEN_TEL_AVIV_MUNICIPALITY),
   },
   {
     label: "YANGODELI",
     crmClientName: "YangoDeli",
-    token: process.env.YANGO_TOKEN_YANGO_DELI ?? "",
+    token: readToken(process.env.YANGO_TOKEN_YANGO_DELI),
   },
   {
     label: "SHLAV",
     crmClientName: "SHLAV",
-    token: process.env.YANGO_TOKEN_SHLAV ?? "",
+    token: readToken(process.env.YANGO_TOKEN_SHLAV),
   },
   {
     label: "SAMLET_MOTORS",
     crmClientName: "סמלת מוטורס",
-    token: process.env.YANGO_TOKEN_SAMLET_MOTORS ?? "",
+    token: readToken(process.env.YANGO_TOKEN_SAMLET_MOTORS),
   },
   {
     label: "HAMOSHAVA_20",
     crmClientName: "המושבה 20 בע\"מ",
-    token: process.env.YANGO_TOKEN_HAMOSHAVA_20 ?? "",
+    token: readToken(process.env.YANGO_TOKEN_HAMOSHAVA_20),
   },
   {
     label: "Star Taxi Point",
     crmClientName: "Star Taxi Point",
-    token: process.env.YANGO_TOKEN_STAR_TAXI_POINT ?? "",
+    token: readToken(process.env.YANGO_TOKEN_STAR_TAXI_POINT),
   },
 ];
 
@@ -665,7 +670,7 @@ function toDateInputValueUtc(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-/** Same calendar window as Orders UI (Orders page + panel defaults). */
+/** Default Orders window: month start -> today. */
 export function getB2BOrdersViewDefaultRange(): {
   since: string;
   till: string;
@@ -673,9 +678,8 @@ export function getB2BOrdersViewDefaultRange(): {
   toDateStr: string;
 } {
   const from = new Date();
-  from.setDate(from.getDate() - 90);
+  from.setDate(1);
   const to = new Date();
-  to.setDate(to.getDate() + 90);
   const fromDateStr = toDateInputValueUtc(from);
   const toDateStr = toDateInputValueUtc(to);
   return {

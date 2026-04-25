@@ -164,22 +164,22 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
   }, [filteredPreOrders]);
 
   return (
-    <section className="crm-page">
+    <section className="crm-page mx-3">
       {errors.length > 0 ? (
-        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="mb-0.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <p className="font-semibold">Some clients are unavailable</p>
           <p className="mt-1">{errors.join(" | ")}</p>
         </div>
       ) : null}
 
       {cancelError ? (
-        <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+        <div className="mb-0.5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
           <p className="font-semibold">Could not cancel order</p>
           <p className="mt-1">{cancelError}</p>
         </div>
       ) : null}
 
-      <div className="mb-4 rounded-2xl border border-border bg-panel p-3">
+      <div className="mb-0.5 rounded-2xl border border-border bg-panel p-3">
         <div className="flex flex-wrap items-end justify-center gap-3 lg:justify-between">
           <div className="flex flex-wrap gap-2">
             {([
@@ -246,78 +246,98 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
           No pre-orders found for selected filter.
         </div>
       ) : (
-        <div className="space-y-3">
-          {filteredPreOrders.map((preOrder) => {
-            const assigned = isDriverAssigned(preOrder);
-            return (
-              <article
-                key={preOrder.id}
-                className={`group glass-surface rounded-3xl border p-3 shadow-[0_16px_34px_rgba(15,23,42,0.16)] ${
-                  assigned
-                    ? "border-emerald-200/70 bg-[linear-gradient(180deg,rgba(236,253,245,0.88),rgba(209,250,229,0.72))]"
-                    : "border-rose-200/70 bg-[linear-gradient(180deg,rgba(255,241,242,0.88),rgba(255,228,230,0.72))]"
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => setSelectedPreOrder(preOrder)}
-                  className="w-full text-left"
-                >
-                  <div className="grid gap-3 md:grid-cols-[1.25fr_0.9fr_1fr_auto] md:items-center">
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                        {assigned ? "Assigned pre-order" : "Unassigned pre-order"}
-                      </p>
-                      <h2 className="truncate text-base font-semibold text-foreground">
-                        {preOrder.clientName}
-                      </h2>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[11px] text-muted">Scheduled for</p>
-                      <p className="truncate text-sm font-semibold text-slate-900">{preOrder.scheduledFor}</p>
-                    </div>
-                    <div className="min-w-0 text-sm">
-                      <p className="truncate text-slate-900">
-                        <span className="font-semibold text-muted">A:</span> {preOrder.pointA}
-                      </p>
-                      <p className="truncate text-slate-900">
-                        <span className="font-semibold text-muted">B:</span> {preOrder.pointB}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 md:justify-end">
-                      <span className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                        {preOrder.clientPrice}
-                      </span>
-                    </div>
-                  </div>
-                </button>
-
-                <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-white/60 pt-3">
-                  <Link
-                    href={`https://go-admin-frontend.taxi.yandex-team.ru/orders/${preOrder.orderId}`}
-                    className="inline-flex items-center rounded-lg border border-slate-200 bg-white/80 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-white"
-                    onClick={(event) => event.stopPropagation()}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Order in Adminka
-                  </Link>
-                  <button
-                    type="button"
-                    disabled={cancellingOrderId === preOrder.orderId}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void cancelPreOrder(preOrder);
-                    }}
-                    className="text-xs font-semibold text-rose-700 underline decoration-rose-300 underline-offset-2 hover:text-rose-900 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {cancellingOrderId === preOrder.orderId ? "Cancelling…" : "Cancel in Yango"}
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+        <section className="glass-surface mt-0.5 overflow-hidden rounded-3xl">
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead className="bg-[#f6f6f8]">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                    Pre-order
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                    Client
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                    Status
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                    Scheduled for
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                    Route
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                    Adminka
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                    Action
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredPreOrders.map((preOrder) => {
+                  const assigned = isDriverAssigned(preOrder);
+                  return (
+                    <tr
+                      key={preOrder.id}
+                      className={`crm-hover-lift cursor-pointer hover:bg-white/70 ${assigned ? "bg-emerald-50/45" : "bg-rose-50/45"}`}
+                      onClick={() => setSelectedPreOrder(preOrder)}
+                    >
+                      <td className="px-3 py-2 text-sm font-medium text-slate-900">{preOrder.orderId}</td>
+                      <td className="px-3 py-2 text-sm text-slate-700">{preOrder.clientName}</td>
+                      <td className="px-3 py-2 text-sm">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            assigned ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                          }`}
+                        >
+                          {assigned ? "Assigned" : "Unassigned"}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-sm text-slate-700">{preOrder.scheduledFor}</td>
+                      <td className="px-3 py-2 text-sm text-slate-700">
+                        <span className="block max-w-[22rem] truncate">
+                          {preOrder.pointA} {"->"} {preOrder.pointB}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-sm">
+                        <Link
+                          href={`https://go-admin-frontend.taxi.yandex-team.ru/orders/${preOrder.orderId}`}
+                          className="inline-flex items-center rounded-lg border border-slate-200 bg-white/85 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-white"
+                          onClick={(event) => event.stopPropagation()}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Order in Adminka
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2 text-sm">
+                        <button
+                          type="button"
+                          disabled={cancellingOrderId === preOrder.orderId}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void cancelPreOrder(preOrder);
+                          }}
+                          className="inline-flex items-center rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {cancellingOrderId === preOrder.orderId ? "Cancelling…" : "Cancel in Yango"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredPreOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-3 py-8 text-center text-sm text-muted">
+                      No pre-orders for selected filters.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
 
       {selectedPreOrder ? (

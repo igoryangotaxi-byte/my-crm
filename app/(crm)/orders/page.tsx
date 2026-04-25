@@ -14,7 +14,7 @@ export default async function OrdersPage() {
   });
 
   return (
-    <section className="crm-page relative">
+    <section className="crm-page relative mx-3">
       <B2BPreOrdersPanel
         rows={newRows}
         view="orders"

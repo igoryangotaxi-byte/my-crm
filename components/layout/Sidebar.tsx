@@ -57,6 +57,16 @@ function RideRequestIcon({ className = "h-4 w-4" }: IconProps) {
   );
 }
 
+function DriversMapIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth="1.8">
+      <path d="M12 21s7-5.7 7-11a7 7 0 10-14 0c0 5.3 7 11 7 11z" />
+      <circle cx="12" cy="10" r="2.4" />
+      <path d="M4 17l3-1.2L11 18l4-1.2 5 1.7" />
+    </svg>
+  );
+}
+
 function ShieldIcon({ className = "h-4 w-4" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth="1.8">
@@ -119,6 +129,13 @@ const navItems = [
     area: "b2b" as const,
     icon: DashboardIcon,
   },
+  {
+    href: "/drivers-map",
+    label: "Drivers on the Map",
+    page: "driversMap" as AppPageKey,
+    area: "b2c" as const,
+    icon: DriversMapIcon,
+  },
 ];
 
 const footerNavItems = [
@@ -136,7 +153,7 @@ export function Sidebar() {
   const filteredFooterNavItems = footerNavItems.filter((item) => canAccess(item.page));
 
   return (
-    <div className="relative z-20 m-3 h-[calc(100vh-1.5rem)] w-20 shrink-0">
+    <div className="relative z-20 ml-3 mr-0.5 my-3 h-[calc(100vh-1.5rem)] w-20 shrink-0">
       <aside className="group crm-surface absolute left-0 top-0 h-full w-20 overflow-hidden rounded-3xl p-4 transition-[width] duration-200 ease-out hover:w-64">
         <div className="mb-6 border-b border-white/60 pb-4">
           <div className="flex justify-center group-hover:hidden">

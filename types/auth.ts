@@ -9,6 +9,7 @@ export type AppPageKey =
   | "orders"
   | "preOrders"
   | "requestRides"
+  | "driversMap"
   | "priceCalculator"
   | "accesses"
   | "notes";
@@ -40,6 +41,7 @@ export const defaultRolePermissions: RolePermissions = {
     orders: true,
     preOrders: true,
     requestRides: true,
+    driversMap: true,
     priceCalculator: true,
     accesses: true,
     notes: true,
@@ -50,6 +52,7 @@ export const defaultRolePermissions: RolePermissions = {
     orders: false,
     preOrders: false,
     requestRides: true,
+    driversMap: false,
     priceCalculator: true,
     accesses: false,
     notes: false,
@@ -60,6 +63,7 @@ export const defaultRolePermissions: RolePermissions = {
     orders: true,
     preOrders: true,
     requestRides: true,
+    driversMap: false,
     priceCalculator: true,
     accesses: false,
     notes: true,

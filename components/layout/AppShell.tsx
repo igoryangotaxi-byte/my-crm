@@ -17,7 +17,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="relative z-[1] flex min-h-screen flex-1 flex-col">
           <Header />
-          <main className="flex-1 p-5 lg:p-6">{children}</main>
+          <main className="flex-1 px-0.5 py-5 lg:px-0.5 lg:py-6">{children}</main>
         </div>
       </div>
     </RouteLoadingProvider>

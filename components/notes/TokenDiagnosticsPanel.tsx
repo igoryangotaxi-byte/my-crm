@@ -43,6 +43,11 @@ export function TokenDiagnosticsPanel({ diagnostics }: TokenDiagnosticsPanelProp
                 {item.ordersStatus}
               </span>
             </p>
+            {item.message ? (
+              <p className="mt-1 break-words rounded-md bg-slate-100 px-2 py-1 text-[11px] leading-relaxed text-slate-700">
+                {item.message}
+              </p>
+            ) : null}
           </div>
         ))}
       </div>

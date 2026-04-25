@@ -240,6 +240,7 @@ export async function POST(request: Request) {
             orders: payload.value,
             preOrders: payload.value,
             requestRides: payload.value,
+            driversMap: payload.value,
             priceCalculator: payload.value,
             accesses: payload.value,
             notes: payload.value,
