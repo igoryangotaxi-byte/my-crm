@@ -33,7 +33,6 @@ const FLEET_SUPPLY_HOURS_CONCURRENCY = 6;
 const FLEET_PROFILES_CACHE_TTL_MS = 60_000;
 const FLEET_SUPPLY_CACHE_TTL_MS = 10 * 60_000;
 const DRIVER_OBSERVATION_MAX_PER_DRIVER = 2880;
-const DRIVER_GEO_STALE_TTL_MS = 10 * 60 * 1000;
 
 /*
 FLEET_MAP_STATUS_SPEC — Yango Fleet → DriverMapStatus; менять синхронно с deriveIdleDriverMapStatus, mapOrderStatusToDriverMapStatus.
@@ -353,15 +352,11 @@ function hydrateDriversWithObservations(drivers: DriverMapItem[]): DriverMapItem
       return !Number.isNaN(ts) && ts >= cutoffMs;
     });
     if (!timeline.length) return driver;
+    /** Последняя точка с lat/lon в окне 24h — без отсечки «10 мин», иначе активная поездка без свежего трека теряет маркер. */
     const latestGeo =
       [...timeline]
         .reverse()
-        .find((entry) => {
-          if (entry.lat == null || entry.lon == null) return false;
-          const ts = new Date(entry.at).getTime();
-          if (Number.isNaN(ts)) return false;
-          return nowMs - ts <= DRIVER_GEO_STALE_TTL_MS;
-        }) ?? null;
+        .find((entry) => entry.lat != null && entry.lon != null) ?? null;
     const mergedHistoryRaw: DriverStatusHistoryEvent[] = [
       ...timeline.map((entry) => ({ status: entry.status, at: entry.at })),
       ...driver.statusHistory24h,
@@ -1373,6 +1368,15 @@ export async function getDriversOnMapData(): Promise<DriversMapResponse> {
   return getDriversOnMapDataOptimized({ includeGeo: true });
 }
 
+function hydrateSnapshotDriversForResponse(): DriverMapItem[] {
+  if (!lastGoodDriversSnapshot) return [];
+  const merged = mergeGeoForDisplay(
+    lastGoodDriversSnapshot.drivers,
+    lastGoodDriversSnapshot.drivers,
+  );
+  return hydrateDriversWithObservations(merged);
+}
+
 export async function getDriversOnMapDataOptimized(input: {
   includeGeo: boolean;
   force?: boolean;
@@ -1402,7 +1406,7 @@ export async function getDriversOnMapDataOptimized(input: {
     lastGoodDriversSnapshot &&
     now - lastGoodSnapshotAtMs < FLEET_MAP_CACHE_TTL_MS
   ) {
-    const drivers = mergeGeoForDisplay(lastGoodDriversSnapshot.drivers, lastGoodDriversSnapshot.drivers);
+    const drivers = hydrateSnapshotDriversForResponse();
     recordLastKnownGeo(drivers);
     return {
       ok: true,
@@ -1421,7 +1425,7 @@ export async function getDriversOnMapDataOptimized(input: {
     lastGoodDriversSnapshot &&
     now - lastGoodSnapshotAtMs < FLEET_STATUS_CACHE_TTL_MS
   ) {
-    const drivers = mergeGeoForDisplay(lastGoodDriversSnapshot.drivers, lastGoodDriversSnapshot.drivers);
+    const drivers = hydrateSnapshotDriversForResponse();
     recordLastKnownGeo(drivers);
     return {
       ok: true,
@@ -1435,7 +1439,7 @@ export async function getDriversOnMapDataOptimized(input: {
   }
 
   if (!input.force && lastGoodDriversSnapshot && now - lastFleetFetchAtMs < minFetchIntervalMs) {
-    const drivers = mergeGeoForDisplay(lastGoodDriversSnapshot.drivers, lastGoodDriversSnapshot.drivers);
+    const drivers = hydrateSnapshotDriversForResponse();
     recordLastKnownGeo(drivers);
     return {
       ok: true,
@@ -1449,7 +1453,7 @@ export async function getDriversOnMapDataOptimized(input: {
   }
 
   if (!input.force && input.includeGeo && now < fleetRateLimitedUntilMs && lastGoodDriversSnapshot) {
-    const drivers = mergeGeoForDisplay(lastGoodDriversSnapshot.drivers, lastGoodDriversSnapshot.drivers);
+    const drivers = hydrateSnapshotDriversForResponse();
     recordLastKnownGeo(drivers);
     return {
       ok: true,
@@ -1485,7 +1489,7 @@ export async function getDriversOnMapDataOptimized(input: {
       lastGoodSnapshotAtMs = now;
       await persistSnapshotToDisk(lastGoodDriversSnapshot);
     } else if (lastGoodDriversSnapshot) {
-      const drivers = mergeGeoForDisplay(lastGoodDriversSnapshot.drivers, lastGoodDriversSnapshot.drivers);
+      const drivers = hydrateSnapshotDriversForResponse();
       recordLastKnownGeo(drivers);
       return {
         ok: true,
@@ -1512,7 +1516,7 @@ export async function getDriversOnMapDataOptimized(input: {
     if (errorMessage.includes("HTTP 429")) {
       fleetRateLimitedUntilMs = Date.now() + FLEET_RATE_LIMIT_COOLDOWN_MS;
       if (lastGoodDriversSnapshot) {
-        const drivers = mergeGeoForDisplay(lastGoodDriversSnapshot.drivers, lastGoodDriversSnapshot.drivers);
+        const drivers = hydrateSnapshotDriversForResponse();
         recordLastKnownGeo(drivers);
         return {
           ok: true,
