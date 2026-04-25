@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:price-calculator": "tsx --test tests/price-calculator-formulas.test.ts tests/tariff-health-check.test.ts tests/request-rides.test.ts",
+    "vercel:sync-fleet-env": "node scripts/vercel-sync-fleet-env.mjs",
     "sync:datagrip:check": "node scripts/datagrip-check.js",
     "sync:datagrip:run": "node scripts/datagrip-sync.js",
     "sync:datagrip:validate": "node scripts/datagrip-validate.js",
