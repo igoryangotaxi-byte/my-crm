@@ -7,6 +7,7 @@ import type {
   DriversMapCounters,
   DriversMapResponse,
 } from "@/types/crm";
+import { kv } from "@vercel/kv";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
@@ -118,6 +119,14 @@ let fleetRateLimitedUntilMs = 0;
 let lastFleetFetchAtMs = 0;
 let diskSnapshotLoaded = false;
 const FLEET_SNAPSHOT_FILE = path.join(process.cwd(), ".cache", "fleet-drivers-snapshot.json");
+const FLEET_SNAPSHOT_KV_KEY = "appli:fleet:drivers-snapshot:v1";
+const FLEET_KV_PERSIST_THROTTLE_MS = 4000;
+let lastFleetKvPersistAtMs = 0;
+
+function canUseFleetKv(): boolean {
+  return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+}
+
 type DriverObservation = {
   at: string;
   status: DriverMapStatus;
@@ -125,6 +134,14 @@ type DriverObservation = {
   source: DriverGeoDebugEvent["source"];
   lat: number | null;
   lon: number | null;
+};
+
+type PersistedFleetPayload = {
+  updatedAt: string;
+  source: DriversMapResponse["source"];
+  drivers: DriverMapItem[];
+  counters: DriversMapCounters;
+  observations?: Record<string, DriverObservation[]>;
 };
 const driverObservationsById = new Map<string, DriverObservation[]>();
 const driverObservationKeyByIdentity = new Map<string, string>();
@@ -185,6 +202,27 @@ function recordLastKnownGeo(drivers: DriverMapItem[]): void {
     if (driver.lat == null || driver.lon == null) continue;
     const entry = { lat: driver.lat, lon: driver.lon, lastTrackedAt: driver.lastTrackedAt ?? null };
     lastGeoByDriverId.set(driver.id, entry);
+    const identity = buildDriverObservationIdentity(driver);
+    if (hasMeaningfulIdentityKey(identity)) {
+      lastGeoByIdentity.set(identity, entry);
+    }
+  }
+}
+
+/** После загрузки наблюдений с KV/диска — восстановить lastGeo-кэш (новый serverless-инстанс). */
+function rebuildLastKnownGeoAfterObservationLoad(): void {
+  for (const [driverId, list] of driverObservationsById) {
+    const last = [...list].reverse().find((e) => e.lat != null && e.lon != null);
+    if (!last || last.lat == null || last.lon == null) continue;
+    lastGeoByDriverId.set(driverId, {
+      lat: last.lat,
+      lon: last.lon,
+      lastTrackedAt: last.at,
+    });
+  }
+  for (const driver of lastGoodDriversSnapshot?.drivers ?? []) {
+    const entry = lastGeoByDriverId.get(driver.id);
+    if (!entry) continue;
     const identity = buildDriverObservationIdentity(driver);
     if (hasMeaningfulIdentityKey(identity)) {
       lastGeoByIdentity.set(identity, entry);
@@ -309,14 +347,18 @@ function appendDriverObservations(
   }
 }
 
-/** Каждый ответ /api/drivers-map: дописать наблюдения (и console.info при изменении) + обновить lastGeo-кэш. */
-function appendObservationsAndRecordFleetGeo(
+/** Каждый ответ /api/drivers-map: дописать наблюдения (и console.info при изменении) + обновить lastGeo-кэш; KV — чтобы прод переживал refresh. */
+async function appendObservationsAndRecordFleetGeo(
   drivers: DriverMapItem[],
   includeGeo: boolean,
   geoSourceByDriver: Map<string, DriverGeoDebugEvent["source"]>,
-): void {
+  options?: { skipThrottledKvPersist?: boolean },
+): Promise<void> {
   appendDriverObservations(drivers, includeGeo, geoSourceByDriver);
   recordLastKnownGeo(drivers);
+  if (!options?.skipThrottledKvPersist) {
+    await maybePersistFleetStateAfterObservations();
+  }
 }
 
 function buildDriverGeoDebug(drivers: DriverMapItem[]): Record<string, DriverGeoDebugEvent[]> {
@@ -388,67 +430,150 @@ function hydrateDriversWithObservations(drivers: DriverMapItem[]): DriverMapItem
   });
 }
 
-async function ensureSnapshotLoadedFromDisk(): Promise<void> {
-  if (diskSnapshotLoaded) return;
-  diskSnapshotLoaded = true;
-  try {
-    const raw = await fs.readFile(FLEET_SNAPSHOT_FILE, "utf8");
-    const parsed = JSON.parse(raw) as {
-      updatedAt: string;
-      source: DriversMapResponse["source"];
-      drivers: DriverMapItem[];
-      counters: DriversMapCounters;
-      observations?: Record<string, DriverObservation[]>;
-    };
-    if (!Array.isArray(parsed.drivers) || !parsed.counters) return;
-    lastGoodDriversSnapshot = parsed;
-    lastGoodSnapshotAtMs = Date.now();
-    if (parsed.observations && typeof parsed.observations === "object") {
-      for (const [key, events] of Object.entries(parsed.observations)) {
-        if (!Array.isArray(events)) continue;
-        driverObservationsById.set(
-          key,
-          events.filter((e) => typeof e?.at === "string" && typeof e?.status === "string").map((e) => ({
-            at: e.at,
-            status: e.status,
-            includeGeo: Boolean(e.includeGeo),
-            source: e.source,
-            lat: e.lat ?? null,
-            lon: e.lon ?? null,
-          })),
-        );
-      }
-    } else {
-      for (const driver of parsed.drivers) {
-        const seeded = backfillObservationsFromDriverHistory(driver.statusHistory24h, false, driver.lat, driver.lon);
-        if (seeded.length) {
-          driverObservationsById.set(driver.id, seeded);
+function observationCoord(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const n = Number(value.trim());
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+const GEO_DEBUG_SOURCES = new Set<DriverGeoDebugEvent["source"]>(["profile", "track", "carry", "missing"]);
+
+function normalizeObservationEvents(events: unknown[]): DriverObservation[] {
+  return events
+    .filter((e): e is Record<string, unknown> => e != null && typeof e === "object")
+    .filter((e) => typeof e.at === "string" && typeof e.status === "string")
+    .map((e) => {
+      const rawSource = typeof e.source === "string" ? e.source : "carry";
+      const source: DriverGeoDebugEvent["source"] = GEO_DEBUG_SOURCES.has(rawSource as DriverGeoDebugEvent["source"])
+        ? (rawSource as DriverGeoDebugEvent["source"])
+        : "carry";
+      return {
+        at: e.at as string,
+        status: e.status as DriverMapStatus,
+        includeGeo: Boolean(e.includeGeo),
+        source,
+        lat: observationCoord(e.lat),
+        lon: observationCoord(e.lon),
+      };
+    });
+}
+
+function applyPersistedFleetPayload(parsed: PersistedFleetPayload): void {
+  if (!Array.isArray(parsed.drivers) || !parsed.counters) return;
+  lastGoodDriversSnapshot = {
+    updatedAt: parsed.updatedAt,
+    source: parsed.source,
+    drivers: parsed.drivers,
+    counters: parsed.counters,
+  };
+  lastGoodSnapshotAtMs = Date.now();
+
+  for (const driver of parsed.drivers) {
+    registerDriverIdentity(buildDriverObservationIdentity(driver), driver.id);
+  }
+
+  if (parsed.observations && typeof parsed.observations === "object") {
+    for (const [key, events] of Object.entries(parsed.observations)) {
+      if (!Array.isArray(events)) continue;
+      driverObservationsById.set(key, normalizeObservationEvents(events));
+      const owner = parsed.drivers.find((d) => d.id === key);
+      if (owner) {
+        const identity = buildDriverObservationIdentity(owner);
+        if (!driverObservationKeyByIdentity.has(identity)) {
+          driverObservationKeyByIdentity.set(identity, key);
         }
       }
     }
-  } catch {
-    // no persisted snapshot yet
+    for (const driver of parsed.drivers) {
+      const identity = buildDriverObservationIdentity(driver);
+      const canonical = driverObservationKeyByIdentity.get(identity) ?? driver.id;
+      const list = driverObservationsById.get(canonical) ?? driverObservationsById.get(driver.id) ?? [];
+      if (list.length) {
+        driverObservationsById.set(driver.id, list);
+      }
+    }
+  } else {
+    for (const driver of parsed.drivers) {
+      const seeded = backfillObservationsFromDriverHistory(driver.statusHistory24h, false, driver.lat, driver.lon);
+      if (seeded.length) {
+        driverObservationsById.set(driver.id, seeded);
+      }
+    }
   }
+
+  rebuildLastKnownGeoAfterObservationLoad();
 }
 
-async function persistSnapshotToDisk(snapshot: {
+async function ensureSnapshotLoadedFromDisk(): Promise<void> {
+  if (diskSnapshotLoaded) return;
+  diskSnapshotLoaded = true;
+
+  let parsed: PersistedFleetPayload | null = null;
+
+  if (canUseFleetKv()) {
+    try {
+      const fromKv = await kv.get<PersistedFleetPayload>(FLEET_SNAPSHOT_KV_KEY);
+      if (fromKv && Array.isArray(fromKv.drivers) && fromKv.counters) {
+        parsed = fromKv;
+      }
+    } catch {
+      // KV optional
+    }
+  }
+
+  if (!parsed) {
+    try {
+      const raw = await fs.readFile(FLEET_SNAPSHOT_FILE, "utf8");
+      parsed = JSON.parse(raw) as PersistedFleetPayload;
+    } catch {
+      // no local snapshot
+    }
+  }
+
+  if (!parsed || !Array.isArray(parsed.drivers) || !parsed.counters) return;
+  applyPersistedFleetPayload(parsed);
+}
+
+async function persistFleetSnapshot(snapshot: {
   updatedAt: string;
   source: DriversMapResponse["source"];
   drivers: DriverMapItem[];
   counters: DriversMapCounters;
 }): Promise<void> {
-  try {
-    const observations: Record<string, DriverObservation[]> = {};
-    for (const driver of snapshot.drivers) {
-      const identity = buildDriverObservationIdentity(driver);
-      const { historyKey, list } = collectObservationsForIdentity(identity, driver.id);
-      observations[historyKey] = list.slice(-240);
+  const observations: Record<string, DriverObservation[]> = {};
+  for (const driver of snapshot.drivers) {
+    const identity = buildDriverObservationIdentity(driver);
+    const { historyKey, list } = collectObservationsForIdentity(identity, driver.id);
+    observations[historyKey] = list.slice(-240);
+  }
+  const payload: PersistedFleetPayload = { ...snapshot, observations };
+
+  if (canUseFleetKv()) {
+    try {
+      await kv.set(FLEET_SNAPSHOT_KV_KEY, payload);
+    } catch {
+      // best-effort
     }
+  }
+
+  try {
     await fs.mkdir(path.dirname(FLEET_SNAPSHOT_FILE), { recursive: true });
-    await fs.writeFile(FLEET_SNAPSHOT_FILE, JSON.stringify({ ...snapshot, observations }), "utf8");
+    await fs.writeFile(FLEET_SNAPSHOT_FILE, JSON.stringify(payload), "utf8");
   } catch {
     // best-effort persistence only
   }
+  lastFleetKvPersistAtMs = Date.now();
+}
+
+async function maybePersistFleetStateAfterObservations(): Promise<void> {
+  if (!lastGoodDriversSnapshot?.drivers.length) return;
+  const now = Date.now();
+  if (now - lastFleetKvPersistAtMs < FLEET_KV_PERSIST_THROTTLE_MS) return;
+  lastFleetKvPersistAtMs = now;
+  await persistFleetSnapshot(lastGoodDriversSnapshot);
 }
 
 function buildCounters(drivers: DriverMapItem[]): DriversMapCounters {
@@ -1417,7 +1542,7 @@ export async function getDriversOnMapDataOptimized(input: {
     now - lastGoodSnapshotAtMs < FLEET_MAP_CACHE_TTL_MS
   ) {
     const drivers = hydrateSnapshotDriversForResponse();
-    appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
+    await appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
     return {
       ok: true,
       source: lastGoodDriversSnapshot.source,
@@ -1436,7 +1561,7 @@ export async function getDriversOnMapDataOptimized(input: {
     now - lastGoodSnapshotAtMs < FLEET_STATUS_CACHE_TTL_MS
   ) {
     const drivers = hydrateSnapshotDriversForResponse();
-    appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
+    await appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
     return {
       ok: true,
       source: lastGoodDriversSnapshot.source,
@@ -1450,7 +1575,7 @@ export async function getDriversOnMapDataOptimized(input: {
 
   if (!input.force && lastGoodDriversSnapshot && now - lastFleetFetchAtMs < minFetchIntervalMs) {
     const drivers = hydrateSnapshotDriversForResponse();
-    appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
+    await appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
     return {
       ok: true,
       source: lastGoodDriversSnapshot.source,
@@ -1464,7 +1589,7 @@ export async function getDriversOnMapDataOptimized(input: {
 
   if (!input.force && input.includeGeo && now < fleetRateLimitedUntilMs && lastGoodDriversSnapshot) {
     const drivers = hydrateSnapshotDriversForResponse();
-    appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
+    await appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
     return {
       ok: true,
       source: lastGoodDriversSnapshot.source,
@@ -1484,7 +1609,9 @@ export async function getDriversOnMapDataOptimized(input: {
     });
     const geoMerged = mergeGeoForDisplay(fetchedDrivers, lastGoodDriversSnapshot?.drivers);
     const hydratedDrivers = hydrateDriversWithObservations(geoMerged);
-    appendObservationsAndRecordFleetGeo(hydratedDrivers, input.includeGeo, geoSourceByDriver);
+    await appendObservationsAndRecordFleetGeo(hydratedDrivers, input.includeGeo, geoSourceByDriver, {
+      skipThrottledKvPersist: true,
+    });
     const drivers = hydratedDrivers;
     const source: DriversMapResponse["source"] = "fleet";
     const counters = buildCounters(drivers);
@@ -1496,10 +1623,10 @@ export async function getDriversOnMapDataOptimized(input: {
         counters,
       };
       lastGoodSnapshotAtMs = now;
-      await persistSnapshotToDisk(lastGoodDriversSnapshot);
+      await persistFleetSnapshot(lastGoodDriversSnapshot);
     } else if (lastGoodDriversSnapshot) {
       const drivers = hydrateSnapshotDriversForResponse();
-      appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
+      await appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
       return {
         ok: true,
         source: lastGoodDriversSnapshot.source,
@@ -1526,7 +1653,7 @@ export async function getDriversOnMapDataOptimized(input: {
       fleetRateLimitedUntilMs = Date.now() + FLEET_RATE_LIMIT_COOLDOWN_MS;
       if (lastGoodDriversSnapshot) {
         const drivers = hydrateSnapshotDriversForResponse();
-        appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
+        await appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
         return {
           ok: true,
           source: lastGoodDriversSnapshot.source,
