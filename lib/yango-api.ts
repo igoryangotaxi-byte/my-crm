@@ -131,61 +131,64 @@ type YangoTaxiReportResponse = {
   orders?: YangoTaxiReportOrder[];
 };
 
-const tokenConfigs: TokenConfig[] = [
-  {
-    label: "COFIX",
-    token: readToken(process.env.YANGO_TOKEN_COFIX, process.env.YANGO_TOKEN_SAMELET),
-  },
-  {
-    label: "SHUFERSAL",
-    token: readToken(process.env.YANGO_TOKEN_SHUFERSAL),
-  },
-  {
-    label: "TEST CABINET",
-    crmClientName: "TEST CABINET",
-    token: readToken(process.env.YANGO_TOKEN_TEST_CABINET, process.env.YANGO_TOKEN_APLI_TAXI_OZ),
-  },
-  {
-    label: "SHANA10",
-    crmClientName: "SHANA10",
-    token: readToken(process.env.YANGO_TOKEN_SHANA10),
-  },
-  {
-    label: "TELAVIVMUNICIPALITY",
-    crmClientName: "TelAvivMunicipality",
-    token: readToken(process.env.YANGO_TOKEN_TEL_AVIV_MUNICIPALITY),
-  },
-  {
-    label: "YANGODELI",
-    crmClientName: "YangoDeli",
-    token: readToken(process.env.YANGO_TOKEN_YANGO_DELI),
-  },
-  {
-    label: "SHLAV",
-    crmClientName: "SHLAV",
-    token: readToken(process.env.YANGO_TOKEN_SHLAV),
-  },
-  {
-    label: "SAMLET_MOTORS",
-    crmClientName: "סמלת מוטורס",
-    token: readToken(process.env.YANGO_TOKEN_SAMLET_MOTORS),
-  },
-  {
-    label: "HAMOSHAVA_20",
-    crmClientName: "המושבה 20 בע\"מ",
-    token: readToken(process.env.YANGO_TOKEN_HAMOSHAVA_20),
-  },
-  {
-    label: "Star Taxi Point",
-    crmClientName: "Star Taxi Point",
-    token: readToken(process.env.YANGO_TOKEN_STAR_TAXI_POINT),
-  },
-  {
-    label: "OPTICITY",
-    crmClientName: "Opticity",
-    token: readToken(process.env.YANGO_TOKEN_OPTICITY),
-  },
-];
+/** Read tokens per call so new Vercel env + cache bust work; avoid module-init snapshot on warm serverless. */
+function getTokenConfigs(): TokenConfig[] {
+  return [
+    {
+      label: "COFIX",
+      token: readToken(process.env.YANGO_TOKEN_COFIX, process.env.YANGO_TOKEN_SAMELET),
+    },
+    {
+      label: "SHUFERSAL",
+      token: readToken(process.env.YANGO_TOKEN_SHUFERSAL),
+    },
+    {
+      label: "TEST CABINET",
+      crmClientName: "TEST CABINET",
+      token: readToken(process.env.YANGO_TOKEN_TEST_CABINET, process.env.YANGO_TOKEN_APLI_TAXI_OZ),
+    },
+    {
+      label: "SHANA10",
+      crmClientName: "SHANA10",
+      token: readToken(process.env.YANGO_TOKEN_SHANA10),
+    },
+    {
+      label: "TELAVIVMUNICIPALITY",
+      crmClientName: "TelAvivMunicipality",
+      token: readToken(process.env.YANGO_TOKEN_TEL_AVIV_MUNICIPALITY),
+    },
+    {
+      label: "YANGODELI",
+      crmClientName: "YangoDeli",
+      token: readToken(process.env.YANGO_TOKEN_YANGO_DELI),
+    },
+    {
+      label: "SHLAV",
+      crmClientName: "SHLAV",
+      token: readToken(process.env.YANGO_TOKEN_SHLAV),
+    },
+    {
+      label: "SAMLET_MOTORS",
+      crmClientName: "סמלת מוטורס",
+      token: readToken(process.env.YANGO_TOKEN_SAMLET_MOTORS),
+    },
+    {
+      label: "HAMOSHAVA_20",
+      crmClientName: "המושבה 20 בע\"מ",
+      token: readToken(process.env.YANGO_TOKEN_HAMOSHAVA_20),
+    },
+    {
+      label: "Star Taxi Point",
+      crmClientName: "Star Taxi Point",
+      token: readToken(process.env.YANGO_TOKEN_STAR_TAXI_POINT),
+    },
+    {
+      label: "OPTICITY",
+      crmClientName: "Opticity",
+      token: readToken(process.env.YANGO_TOKEN_OPTICITY),
+    },
+  ];
+}
 
 let dashboardInMemoryCache:
   | {
@@ -554,7 +557,7 @@ async function loadAllYangoPreOrders() {
   const diagnostics: TokenDiagnostics[] = [];
 
   await Promise.all(
-    tokenConfigs.map(async (tokenConfig) => {
+    getTokenConfigs().map(async (tokenConfig) => {
       if (!tokenConfig.token) {
         diagnostics.push({
           label: `${tokenConfig.label} / token`,
@@ -654,7 +657,7 @@ async function loadAllYangoPreOrders() {
 
 export const getAllYangoPreOrders = unstable_cache(
   loadAllYangoPreOrders,
-  ["yango-preorders-v3"],
+  ["yango-preorders-v4"],
   { revalidate: PREORDERS_CACHE_REVALIDATE_SECONDS, tags: ["yango-preorders"] },
 );
 
@@ -881,7 +884,7 @@ async function listB2BTokenClientPairs(): Promise<{ pairs: B2BTokenClientPair[];
   const errors: string[] = [];
 
   await Promise.all(
-    tokenConfigs.map(async (tokenConfig) => {
+    getTokenConfigs().map(async (tokenConfig) => {
       if (!tokenConfig.token) return;
       try {
         const authResponse = await fetchJson<YangoAuthListResponse>(
@@ -1042,7 +1045,7 @@ async function loadB2BPreOrdersDashboardData(range?: { since: string; till: stri
   const errors: string[] = [];
 
   await Promise.all(
-    tokenConfigs.map(async (tokenConfig) => {
+    getTokenConfigs().map(async (tokenConfig) => {
       if (!tokenConfig.token) {
         return;
       }
@@ -1128,7 +1131,7 @@ export async function getB2BOrderDetails({
   clientId,
   orderId,
 }: B2BOrderDetailsInput): Promise<B2BOrderDetailsResponse> {
-  const tokenConfig = tokenConfigs.find((item) => item.label === tokenLabel);
+  const tokenConfig = getTokenConfigs().find((item) => item.label === tokenLabel);
 
   if (!tokenConfig) {
     throw new Error(`Unknown token label: ${tokenLabel}`);
@@ -1173,7 +1176,7 @@ export async function getB2BOrderDetails({
 }
 
 function resolveTokenConfig(tokenLabel: string) {
-  const tokenConfig = tokenConfigs.find((item) => item.label === tokenLabel);
+  const tokenConfig = getTokenConfigs().find((item) => item.label === tokenLabel);
   if (!tokenConfig) {
     throw new Error(`Unknown token label: ${tokenLabel}`);
   }
@@ -1687,7 +1690,7 @@ export async function searchRequestRideUsers(input: {
 export async function getRequestRideApiClients(): Promise<YangoApiClientRef[]> {
   const rows: YangoApiClientRef[] = [];
   await Promise.all(
-    tokenConfigs.map(async (tokenConfig) => {
+    getTokenConfigs().map(async (tokenConfig) => {
       if (!tokenConfig.token) return;
       try {
         const authResponse = await fetchJsonNoCache<YangoAuthListResponse>(
