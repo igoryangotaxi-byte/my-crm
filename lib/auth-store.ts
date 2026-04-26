@@ -63,7 +63,8 @@ function ensureDefaultAdmin(users: AuthUser[]): AuthUser[] {
   ];
 }
 
-const CURRENT_PERMISSIONS_VERSION = 2;
+/** v2 first migration; v3 fixes stores that already had meta v2 but User.orders/preOrders stayed false. */
+const CURRENT_PERMISSIONS_VERSION = 3;
 
 function createDefaultStore(): AuthStoreData {
   return {
@@ -115,7 +116,7 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
     ...base.rolePermissions.User,
     ...(data.rolePermissions?.User ?? {}),
   };
-  /** One-time: older KV snapshots had User.orders/preOrders false for everyone. */
+  /** Older KV had User.orders/preOrders false; v3 re-applies after some stores hit meta v2 without fixing User. */
   const userPerms =
     storedVersion < CURRENT_PERMISSIONS_VERSION
       ? { ...mergedUserPerms, orders: true, preOrders: true }
@@ -169,8 +170,7 @@ export async function loadAuthStore(): Promise<AuthStoreData> {
       const raw = await kv.get<AuthStoreData>(AUTH_STORE_KEY);
       const normalized = normalizeStore(raw);
       const prevVersion = raw?.storeMeta?.permissionsVersion ?? 0;
-      const nextVersion = normalized.storeMeta?.permissionsVersion ?? CURRENT_PERMISSIONS_VERSION;
-      if (!raw || prevVersion < nextVersion) {
+      if (!raw || prevVersion < CURRENT_PERMISSIONS_VERSION) {
         await kv.set(AUTH_STORE_KEY, normalized);
       }
       return normalized;
