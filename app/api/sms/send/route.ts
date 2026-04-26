@@ -27,6 +27,12 @@ function isAllowedKind(value: unknown): value is SmsKind {
   return value === "request_created" || value === "driver_on_way";
 }
 
+/** SMS is opt-in until Inforu enables outbound for the API user (KYC). */
+function isInforuSmsSendEnabled(): boolean {
+  const v = process.env.INFORU_SMS_ENABLED?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
 export async function POST(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
@@ -55,6 +61,18 @@ export async function POST(request: Request) {
     return Response.json(
       { ok: false, error: "kind must be 'request_created' or 'driver_on_way'." },
       { status: 400 },
+    );
+  }
+
+  if (!isInforuSmsSendEnabled()) {
+    return Response.json(
+      {
+        ok: true,
+        skipped: true,
+        reason:
+          "SMS outbound is disabled until INFORU_SMS_ENABLED=true (Inforu KYC / API send must be cleared first).",
+      },
+      { headers: { "Cache-Control": "no-store" } },
     );
   }
 

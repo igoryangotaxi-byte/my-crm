@@ -45,14 +45,11 @@ SUPABASE_SERVICE_ROLE_KEY=
 AUTH_SESSION_SECRET=
 # Optional: enables traffic-aware route optimization on Request Rides (Routes API v2)
 GOOGLE_MAPS_API_KEY=
-# SMS + optional WhatsApp for stop / destination passengers (Inforu)
+# SMS for rider + stop / destination passengers (Inforu)
 INFORU_USERNAME=
 INFORU_API_TOKEN=
 INFORU_SENDER=AppliTaxi
-# WhatsApp: approved template in Inforu; without template ID only SMS is sent
-INFORU_WHATSAPP_TEMPLATE_ID=
-# Optional: first Text slot placeholder in that template (default [#1#])
-INFORU_WHATSAPP_BODY_PLACEHOLDER=
+# SMS is opt-in (omit or false until Inforu clears KYC): INFORU_SMS_ENABLED=true
 ```
 
 4. Start the development server:
@@ -167,24 +164,25 @@ The **Route preview** panel and map polyline use the same key when set: `/api/ro
 3. **Key restrictions** — Credentials → your key → **API restrictions** → either “Don’t restrict” for testing, or **Restrict key** and tick **Routes API** only (not only “Maps JavaScript API”).
 4. **Application restrictions** — for server calls from Next.js use **None** or **IP addresses**, not **Websites** (referrers do not apply to `/api/*` server `fetch`).
 
-## SMS and WhatsApp (Inforu)
+## SMS (Inforu)
 
-Stops and the destination on `Request Rides` accept a passenger phone number that receives notifications at two moments:
+The **rider (Yango passenger) phone** plus optional phones on stops and the destination receive SMS at two moments (all valid numbers are deduped):
 
-1. **Ride created** — on submit, every stop / destination phone gets `Hey, someone requested a pre-order on … with Yango. Be ready on time and have a nice trip.` (or the non-scheduled variant for immediate rides).
-2. **Driver assigned (status: Driving)** — when status polling sees the order transition into `driver_assigned`, recipients get `Hey, your driver is on the way <car model>, <plate>, <first name> <last name>.` Falls back gracefully when some fields are missing in the Yango payload.
+1. **Ride created** — on submit, recipients get `Hey, someone requested a pre-order on … with Yango. Be ready on time and have a nice trip.` (or the non-scheduled variant for immediate rides).
+2. **Driver assigned** — when status polling sees the order transition into `driver_assigned`, recipients get `Hey, your driver is on the way <car model>, <plate>, <first name> <last name>.` Falls back gracefully when some fields are missing in the Yango payload.
 
-SMS is sent server-side via the Inforu gateway (`POST https://api.inforu.co.il/SendMessageXml.ashx`). WhatsApp uses Inforu’s JSON API on `capi.inforu.co.il` ([API InforUMobile](https://apidoc.inforu.co.il/)) with the **same** `INFORU_USERNAME` / `INFORU_API_TOKEN` (HTTP Basic). WhatsApp is **template-based**: create an approved template in Inforu whose first **Text** slot receives the full message string, set `INFORU_WHATSAPP_TEMPLATE_ID` to that template’s numeric id, and optionally `INFORU_WHATSAPP_BODY_PLACEHOLDER` if the slot is not the default `[#1#]`. If the template id is unset, the app only sends SMS (no error).
+SMS is sent server-side via the Inforu gateway (`POST https://api.inforu.co.il/SendMessageXml.ashx`). **Outbound SMS is gated by `INFORU_SMS_ENABLED`**: the app does **not** call Inforu unless this is set to `true` / `1` / `yes`, so you can avoid repeated API errors while **Unverified Account / KYC** still applies.
 
 Configure:
 
 - `INFORU_USERNAME` — Inforu account username.
 - `INFORU_API_TOKEN` — API token from `Account Details → API Token`.
+- `INFORU_SMS_ENABLED` — Must be `true` before any SMS is sent. Leave unset or `false` until Inforu clears API send for your account.
 - `INFORU_SENDER` — Sender ID shown on the recipient’s phone: Inforu usually expects **Latin letters/digits** (≤11 letters or 14 digits), **pre-approved** in your Inforu account. Hebrew or arbitrary strings often return **InvalidSenderIdentification** (`-90`) until Inforu registers a matching sender for you. Defaults to `AppliTaxi` in code if unset.
 
-If Inforu returns **Unverified Account / KYC**, the account must complete **business verification** in the Inforu portal before any SMS can leave their gateway; changing env vars or sender in this app does not replace that step.
+**Unverified Account / KYC:** Inforu can still block SMS at the API even if the web portal looks normal. Ask Inforu support to enable **outbound SMS** for this API user; send them the exact error text, endpoint `https://api.inforu.co.il/SendMessageXml.ashx`, and **Customer ID + Username** from Account Details. Changing the sender name in this app does not clear an API-side KYC flag. After they confirm send is allowed, set `INFORU_SMS_ENABLED=true`.
 
-When the credentials are not set, ride creation still works — the SMS step is skipped and a soft warning is shown beneath the form. Per-recipient send-once dedupe is persisted in `localStorage` so a hard reload + re-poll never resends.
+When Inforu credentials are not set, or SMS is disabled, ride creation still works — SMS is skipped; a soft warning may appear under the form when send was expected but did not occur. Per-recipient send-once dedupe is persisted in `localStorage` so a hard reload + re-poll never resends.
 
 The bulk XLSX layout is extended with optional phone columns I–M aligned to address columns D–H. See [docs/request-rides-bulk-upload-template.md](docs/request-rides-bulk-upload-template.md).
 

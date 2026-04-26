@@ -620,9 +620,12 @@ export default function RequestRidesPage() {
   }, [mapPoints]);
 
   useEffect(() => {
-    setOptimization(null);
-    setOptimizationError(null);
-    setOptimizationInfo(null);
+    const t = window.setTimeout(() => {
+      setOptimization(null);
+      setOptimizationError(null);
+      setOptimizationInfo(null);
+    }, 0);
+    return () => window.clearTimeout(t);
   }, [pickup, destination, stops]);
 
   const optimizeCurrentRoute = async () => {
@@ -772,47 +775,13 @@ export default function RequestRidesPage() {
     text: string;
     orderId: string;
     kind: "request_created" | "driver_on_way";
-  }): Promise<{ ok: boolean; error?: string }> => {
-    const phones = dedupePhones(input.phones);
-    if (phones.length === 0 || !input.text.trim()) {
-      return { ok: false, error: "no_recipients" };
-    }
-    try {
-      const response = await fetch("/api/sms/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phones,
-          text: input.text,
-          orderId: input.orderId,
-          kind: input.kind,
-        }),
-      });
-      const data = (await response.json().catch(() => ({}))) as {
-        ok?: boolean;
-        error?: string;
-      };
-      if (!response.ok || !data.ok) {
-        return { ok: false, error: data.error ?? `HTTP ${response.status}` };
-      }
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
-    }
-  };
-
-  const sendWhatsApp = async (input: {
-    phones: string[];
-    text: string;
-    orderId: string;
-    kind: "request_created" | "driver_on_way";
   }): Promise<{ ok: boolean; skipped?: boolean; error?: string }> => {
     const phones = dedupePhones(input.phones);
     if (phones.length === 0 || !input.text.trim()) {
       return { ok: false, error: "no_recipients" };
     }
     try {
-      const response = await fetch("/api/whatsapp/send", {
+      const response = await fetch("/api/sms/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -837,45 +806,6 @@ export default function RequestRidesPage() {
     }
   };
 
-  /** Inforu SMS + WhatsApp (WA uses an approved template; see INFORU_WHATSAPP_* env). */
-  const sendRideNotifications = async (input: {
-    phones: string[];
-    text: string;
-    orderId: string;
-    kind: "request_created" | "driver_on_way";
-  }): Promise<{ delivered: boolean; warning: string | null }> => {
-    if (input.phones.length === 0 || !input.text.trim()) {
-      return { delivered: false, warning: null };
-    }
-    const [smsSettled, waSettled] = await Promise.allSettled([
-      sendSms(input),
-      sendWhatsApp(input),
-    ]);
-    const smsOk = smsSettled.status === "fulfilled" && smsSettled.value.ok;
-    const waVal = waSettled.status === "fulfilled" ? waSettled.value : null;
-    const waSent = Boolean(waVal?.ok && !waVal?.skipped);
-    const delivered = smsOk || waSent;
-
-    const parts: string[] = [];
-    if (smsSettled.status === "fulfilled") {
-      const e = smsSettled.value.error;
-      if (!smsSettled.value.ok && e && e !== "no_recipients") parts.push(`SMS: ${e}`);
-    } else {
-      parts.push(`SMS: ${String(smsSettled.reason)}`);
-    }
-    if (waSettled.status === "fulfilled") {
-      const w = waSettled.value;
-      if (!w.ok && !w.skipped && w.error) parts.push(`WhatsApp: ${w.error}`);
-    } else {
-      parts.push(`WhatsApp: ${String(waSettled.reason)}`);
-    }
-
-    return {
-      delivered,
-      warning: parts.length ? parts.join(" · ") : null,
-    };
-  };
-
   const dispatchDriverOnWaySms = async (
     ride: RequestedRideItem,
     nextStatus: RequestRideStatus,
@@ -888,23 +818,21 @@ export default function RequestRidesPage() {
     if (driverOnWayDispatchRef.current.has(ride.orderId)) return;
     driverOnWayDispatchRef.current.add(ride.orderId);
     const text = buildDriverOnWaySmsText(nextStatus);
-    const { delivered, warning } = await sendRideNotifications({
+    const smsResult = await sendSms({
       phones: ride.addressPhones,
       text,
       orderId: ride.orderId,
       kind: "driver_on_way",
     });
-    if (!delivered) {
+    const smsDelivered = Boolean(smsResult.ok && !smsResult.skipped);
+    if (!smsDelivered) {
       driverOnWayDispatchRef.current.delete(ride.orderId);
       if (process.env.NODE_ENV !== "test") {
-        console.warn("[request-rides] driver-on-way notify failed", ride.orderId, warning);
+        const detail =
+          smsResult.skipped || !smsResult.error ? "SMS disabled or not sent" : smsResult.error;
+        console.warn("[request-rides] driver-on-way SMS not sent", ride.orderId, detail);
       }
       return;
-    }
-    if (warning) {
-      setSmsWarning(
-        publicErrorMessage(warning, "Part of the passenger notifications could not be delivered."),
-      );
     }
     const sentAt = new Date().toISOString();
     setRequestedRides((prev) =>
@@ -1020,6 +948,8 @@ export default function RequestRidesPage() {
       cancelled = true;
       window.clearInterval(interval);
     };
+    // Polling is keyed on the ride list only; driver SMS helper is stable enough for this side-effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid resetting interval every render
   }, [requestedRides]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -1080,6 +1010,7 @@ export default function RequestRidesPage() {
       const created = data.result;
       const createdAtIso = new Date().toISOString();
       const addressPhones = dedupePhones([
+        phoneNumber,
         ...stops.map((stop) => stop.phone),
         destinationPhone,
       ]);
@@ -1101,13 +1032,13 @@ export default function RequestRidesPage() {
       setCreateResult(created);
       if (addressPhones.length > 0) {
         const text = buildRequestedRideSmsText(scheduleAtIso, createdAtIso);
-        const { delivered, warning } = await sendRideNotifications({
+        const smsResult = await sendSms({
           phones: addressPhones,
           text,
           orderId: created.orderId,
           kind: "request_created",
         });
-        if (delivered) {
+        if (smsResult.ok && !smsResult.skipped) {
           const sentAt = new Date().toISOString();
           setRequestedRides((prev) =>
             prev.map((item) =>
@@ -1116,22 +1047,22 @@ export default function RequestRidesPage() {
                 : item,
             ),
           );
-          if (warning) {
-            setSmsWarning(
-              publicErrorMessage(
-                warning,
-                "Some passenger notifications could not be delivered on every channel, but the ride was requested.",
-              ),
-            );
-          }
-        } else if (warning) {
+        } else if (smsResult.skipped) {
+          setSmsWarning(
+            "SMS was not sent: outbound SMS is disabled until INFORU_SMS_ENABLED=true after your provider enables API send. The ride was still requested.",
+          );
+        } else if (smsResult.error && smsResult.error !== "no_recipients") {
           setSmsWarning(
             publicErrorMessage(
-              warning,
-              "We couldn’t send passenger notifications, but the ride was requested.",
+              smsResult.error,
+              "We couldn’t send the SMS notifications, but the ride was requested.",
             ),
           );
         }
+      } else if (phoneNumber.trim()) {
+        setSmsWarning(
+          "Passenger notifications were skipped: the rider phone doesn’t look like a valid mobile number, and no stop/destination phones were entered. Check the format (e.g. +972… or 05…).",
+        );
       }
       await requestStatus(createdRide, { withRetry: true });
     } catch (error) {
@@ -1455,9 +1386,10 @@ export default function RequestRidesPage() {
         }
         const created = data.result;
         const createdAtIso = new Date().toISOString();
-        const bulkAddressPhones = dedupePhones(
-          snapshot.addresses.slice(1).map((entry) => entry.phone ?? ""),
-        );
+        const bulkAddressPhones = dedupePhones([
+          snapshot.phone,
+          ...snapshot.addresses.slice(1).map((entry) => entry.phone ?? ""),
+        ]);
         const createdRide: RequestedRideItem = {
           orderId: created.orderId,
           createdAtIso,
@@ -1485,13 +1417,13 @@ export default function RequestRidesPage() {
         );
         if (bulkAddressPhones.length > 0) {
           const text = buildRequestedRideSmsText(snapshot.scheduleAtIso, createdAtIso);
-          const { delivered, warning } = await sendRideNotifications({
+          const smsResult = await sendSms({
             phones: bulkAddressPhones,
             text,
             orderId: created.orderId,
             kind: "request_created",
           });
-          if (delivered) {
+          if (smsResult.ok && !smsResult.skipped) {
             const sentAt = new Date().toISOString();
             setRequestedRides((prev) =>
               prev.map((item) =>
@@ -1500,11 +1432,15 @@ export default function RequestRidesPage() {
                   : item,
               ),
             );
-            if (warning && process.env.NODE_ENV !== "test") {
-              console.warn("[request-rides] bulk notify partial failure", created.orderId, warning);
-            }
-          } else if (warning && process.env.NODE_ENV !== "test") {
-            console.warn("[request-rides] bulk notify failed", created.orderId, warning);
+          } else if (smsResult.skipped && process.env.NODE_ENV !== "test") {
+            console.warn("[request-rides] bulk SMS skipped (INFORU_SMS_ENABLED)", created.orderId);
+          } else if (
+            !smsResult.skipped &&
+            smsResult.error &&
+            smsResult.error !== "no_recipients" &&
+            process.env.NODE_ENV !== "test"
+          ) {
+            console.warn("[request-rides] bulk SMS failed", created.orderId, smsResult.error);
           }
         }
         void requestStatus(createdRide);
