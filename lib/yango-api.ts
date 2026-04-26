@@ -697,13 +697,10 @@ function toDateInputValueUtc(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-/** Lower bound for Orders default range (Yango `since_datetime` + date inputs). */
-const B2B_ORDERS_VIEW_RANGE_START = new Date(2000, 0, 1, 0, 0, 0, 0);
-
 /**
- * Orders page: **all history → end of today**, list is **newest `due_date` first** (`sorting_direction: -1`),
- * and `pullB2BOrdersRows` stops at `targetNewCount` (20 on the page). `fromDateStr`/`toDateStr` mirror
- * `since`/`till` so the client date filter does not hide SSR rows.
+ * Orders page default: **1st of this month → end of today** (local). `since`/`till` match
+ * `fromDateStr`/`toDateStr` so SSR rows pass the client date filter. List is newest-first;
+ * `pullB2BOrdersRows` still caps at `targetNewCount` (20 on the page).
  */
 export function getB2BOrdersViewDefaultRange(): {
   since: string;
@@ -711,14 +708,18 @@ export function getB2BOrdersViewDefaultRange(): {
   fromDateStr: string;
   toDateStr: string;
 } {
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+
   const today = new Date();
   const todayEnd = new Date(today);
   todayEnd.setHours(23, 59, 59, 999);
 
   return {
-    fromDateStr: toDateInputValueUtc(B2B_ORDERS_VIEW_RANGE_START),
+    fromDateStr: toDateInputValueUtc(monthStart),
     toDateStr: toDateInputValueUtc(todayEnd),
-    since: B2B_ORDERS_VIEW_RANGE_START.toISOString(),
+    since: monthStart.toISOString(),
     till: todayEnd.toISOString(),
   };
 }
