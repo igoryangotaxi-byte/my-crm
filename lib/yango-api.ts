@@ -180,6 +180,11 @@ const tokenConfigs: TokenConfig[] = [
     crmClientName: "Star Taxi Point",
     token: readToken(process.env.YANGO_TOKEN_STAR_TAXI_POINT),
   },
+  {
+    label: "OPTICITY",
+    crmClientName: "Opticity",
+    token: readToken(process.env.YANGO_TOKEN_OPTICITY),
+  },
 ];
 
 let dashboardInMemoryCache:
