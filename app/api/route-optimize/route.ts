@@ -171,8 +171,12 @@ export async function POST(request: Request) {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
   if (!apiKey) {
     return Response.json(
-      { ok: false, error: "Route optimization isn’t available on this server." },
-      { status: 500 },
+      {
+        ok: false,
+        error:
+          "Route optimization needs GOOGLE_MAPS_API_KEY in the deployment environment (Vercel → Project → Settings → Environment Variables). Use the same server key as for route preview; enable Routes API on the Google Cloud project.",
+      },
+      { status: 503 },
     );
   }
 

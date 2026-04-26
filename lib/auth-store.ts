@@ -63,12 +63,15 @@ function ensureDefaultAdmin(users: AuthUser[]): AuthUser[] {
   ];
 }
 
+const CURRENT_PERMISSIONS_VERSION = 2;
+
 function createDefaultStore(): AuthStoreData {
   return {
     users: seedDefaultUsers(),
     rolePermissions: defaultRolePermissions,
     roleAreaAccess: defaultRoleAreaAccess,
     roleDashboardBlockAccess: defaultRoleDashboardBlockAccess,
+    storeMeta: { permissionsVersion: CURRENT_PERMISSIONS_VERSION },
   };
 }
 
@@ -106,11 +109,23 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
     Array.isArray(data.users) && data.users.length > 0
       ? ensureDefaultAdmin(data.users.filter(isAuthUser))
       : base.users;
+
+  const storedVersion = data.storeMeta?.permissionsVersion ?? 0;
+  const mergedUserPerms = {
+    ...base.rolePermissions.User,
+    ...(data.rolePermissions?.User ?? {}),
+  };
+  /** One-time: older KV snapshots had User.orders/preOrders false for everyone. */
+  const userPerms =
+    storedVersion < CURRENT_PERMISSIONS_VERSION
+      ? { ...mergedUserPerms, orders: true, preOrders: true }
+      : mergedUserPerms;
+
   return {
     users,
     rolePermissions: {
       Admin: { ...base.rolePermissions.Admin, ...(data.rolePermissions?.Admin ?? {}) },
-      User: { ...base.rolePermissions.User, ...(data.rolePermissions?.User ?? {}) },
+      User: userPerms,
       "Team Lead": {
         ...base.rolePermissions["Team Lead"],
         ...(data.rolePermissions?.["Team Lead"] ?? {}),
@@ -138,6 +153,9 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
         ...(data.roleDashboardBlockAccess?.["Team Lead"] ?? {}),
       },
     },
+    storeMeta: {
+      permissionsVersion: Math.max(storedVersion, CURRENT_PERMISSIONS_VERSION),
+    },
   };
 }
 
@@ -150,7 +168,9 @@ export async function loadAuthStore(): Promise<AuthStoreData> {
     try {
       const raw = await kv.get<AuthStoreData>(AUTH_STORE_KEY);
       const normalized = normalizeStore(raw);
-      if (!raw) {
+      const prevVersion = raw?.storeMeta?.permissionsVersion ?? 0;
+      const nextVersion = normalized.storeMeta?.permissionsVersion ?? CURRENT_PERMISSIONS_VERSION;
+      if (!raw || prevVersion < nextVersion) {
         await kv.set(AUTH_STORE_KEY, normalized);
       }
       return normalized;

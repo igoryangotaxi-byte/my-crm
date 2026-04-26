@@ -32,6 +32,8 @@ export type AuthStoreData = {
   rolePermissions: RolePermissions;
   roleAreaAccess: RoleAreaAccess;
   roleDashboardBlockAccess: RoleDashboardBlockAccess;
+  /** Bumped when role defaults are migrated in `normalizeStore` (e.g. KV from older builds). */
+  storeMeta?: { permissionsVersion?: number };
 };
 
 export const defaultRolePermissions: RolePermissions = {
@@ -49,8 +51,8 @@ export const defaultRolePermissions: RolePermissions = {
   User: {
     dashboard: true,
     clients: true,
-    orders: false,
-    preOrders: false,
+    orders: true,
+    preOrders: true,
     requestRides: true,
     driversMap: false,
     priceCalculator: true,

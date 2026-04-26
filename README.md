@@ -195,3 +195,8 @@ The bulk XLSX layout is extended with optional phone columns I–M aligned to ad
 ## Deploy
 
 Deploy with Vercel: [https://vercel.com/new](https://vercel.com/new)
+
+**Production checklist (common gaps):**
+
+- **`GOOGLE_MAPS_API_KEY`** — required for Request Rides **route preview** (traffic-aware) and **`/api/route-optimize`**. Without it, optimization returns an error and preview may fall back or fail depending on route. Add to **Production** (and Preview if needed) in Vercel env; enable **Routes API** + billing on the GCP project.
+- **Orders / Pre-Orders for `User` role** — access is stored in Vercel KV (`KV_REST_*`). After deploy, the auth store auto-migrates to **permissions version 2** so B2B **Orders** and **Pre-Orders** stay on for operators with the `User` role; Admins can still change this under **Access management**.
