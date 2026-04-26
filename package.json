@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test:price-calculator": "tsx --test tests/price-calculator-formulas.test.ts tests/tariff-health-check.test.ts tests/request-rides.test.ts",
     "vercel:sync-fleet-env": "node scripts/vercel-sync-fleet-env.mjs",
+    "vercel:sync-google-maps-env": "node scripts/vercel-sync-google-maps-env.mjs",
     "vercel:sync-yango-opticity-env": "node scripts/vercel-sync-yango-opticity-env.mjs",
     "vercel:sync-yango-star-taxi-env": "node scripts/vercel-sync-yango-star-taxi-env.mjs",
     "sync:datagrip:check": "node scripts/datagrip-check.js",
