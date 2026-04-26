@@ -697,12 +697,13 @@ function toDateInputValueUtc(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Lower bound for Orders default range (Yango `since_datetime` + date inputs). */
+const B2B_ORDERS_VIEW_RANGE_START = new Date(2000, 0, 1, 0, 0, 0, 0);
+
 /**
- * Orders page default window for Yango `orders/list` and for **UI date pickers + client filter**.
- * `since`/`till` are intentionally wider than a single calendar month because the API keys off
- * **due_date** — rides finished recently can still carry an older due, and the first page is
- * **newest-first** (`sorting_direction: -1`). `fromDateStr`/`toDateStr` must cover the same
- * calendar span as `since`/`till`, otherwise SSR rows are filtered out until the user changes dates.
+ * Orders page: **all history → end of today**, list is **newest `due_date` first** (`sorting_direction: -1`),
+ * and `pullB2BOrdersRows` stops at `targetNewCount` (20 on the page). `fromDateStr`/`toDateStr` mirror
+ * `since`/`till` so the client date filter does not hide SSR rows.
  */
 export function getB2BOrdersViewDefaultRange(): {
   since: string;
@@ -714,19 +715,11 @@ export function getB2BOrdersViewDefaultRange(): {
   const todayEnd = new Date(today);
   todayEnd.setHours(23, 59, 59, 999);
 
-  const apiSince = new Date(todayEnd);
-  apiSince.setDate(apiSince.getDate() - 90);
-  apiSince.setHours(0, 0, 0, 0);
-
-  const apiTill = new Date(todayEnd);
-  apiTill.setDate(apiTill.getDate() + 2);
-  apiTill.setHours(23, 59, 59, 999);
-
   return {
-    fromDateStr: toDateInputValueUtc(apiSince),
-    toDateStr: toDateInputValueUtc(apiTill),
-    since: apiSince.toISOString(),
-    till: apiTill.toISOString(),
+    fromDateStr: toDateInputValueUtc(B2B_ORDERS_VIEW_RANGE_START),
+    toDateStr: toDateInputValueUtc(todayEnd),
+    since: B2B_ORDERS_VIEW_RANGE_START.toISOString(),
+    till: todayEnd.toISOString(),
   };
 }
 
