@@ -657,7 +657,7 @@ async function loadAllYangoPreOrders() {
 
 export const getAllYangoPreOrders = unstable_cache(
   loadAllYangoPreOrders,
-  ["yango-preorders-v4"],
+  ["yango-preorders-v5"],
   { revalidate: PREORDERS_CACHE_REVALIDATE_SECONDS, tags: ["yango-preorders"] },
 );
 
