@@ -1537,6 +1537,42 @@ export async function getDriversOnMapDataOptimized(input: {
   const minFetchIntervalMs = input.includeGeo
     ? FLEET_MIN_GEO_FETCH_INTERVAL_MS
     : FLEET_MIN_STATUS_FETCH_INTERVAL_MS;
+  const tryRateLimitedStatusOnlyFallback = async (): Promise<DriversMapResponse | null> => {
+    try {
+      const { drivers: statusOnlyDrivers } = await loadFleetDrivers({
+        includeGeo: false,
+        force: input.force,
+      });
+      const merged = mergeGeoForDisplay(statusOnlyDrivers, lastGoodDriversSnapshot?.drivers);
+      const hydrated = hydrateDriversWithObservations(merged);
+      await appendObservationsAndRecordFleetGeo(hydrated, false, new Map(), {
+        skipThrottledKvPersist: true,
+      });
+      if (hydrated.length > 0) {
+        const source: DriversMapResponse["source"] = "fleet";
+        const counters = buildCounters(hydrated);
+        lastGoodDriversSnapshot = {
+          updatedAt,
+          source,
+          drivers: hydrated,
+          counters,
+        };
+        lastGoodSnapshotAtMs = Date.now();
+        await persistFleetSnapshot(lastGoodDriversSnapshot);
+      }
+      return {
+        ok: true,
+        source: lastGoodDriversSnapshot?.source ?? "fleet",
+        updatedAt,
+        drivers: hydrated.length ? hydrated : hydrateSnapshotDriversForResponse(),
+        counters: buildCounters(hydrated.length ? hydrated : hydrateSnapshotDriversForResponse()),
+        message: "Fleet geo is rate-limited. Showing status-only live snapshot.",
+        ...maybeDebugGeoPayload(hydrated.length ? hydrated : hydrateSnapshotDriversForResponse(), input.debug),
+      };
+    } catch {
+      return null;
+    }
+  };
 
   if (
     !input.force &&
@@ -1597,6 +1633,10 @@ export async function getDriversOnMapDataOptimized(input: {
   }
 
   if (!input.force && input.includeGeo && now < fleetRateLimitedUntilMs && lastGoodDriversSnapshot) {
+    if (!snapshotHasGeo) {
+      const fallback = await tryRateLimitedStatusOnlyFallback();
+      if (fallback) return fallback;
+    }
     const drivers = hydrateSnapshotDriversForResponse();
     await appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
     return {
@@ -1660,6 +1700,10 @@ export async function getDriversOnMapDataOptimized(input: {
       error instanceof Error ? error.message : "Fleet API unavailable.";
     if (errorMessage.includes("HTTP 429")) {
       fleetRateLimitedUntilMs = Date.now() + FLEET_RATE_LIMIT_COOLDOWN_MS;
+      if (input.includeGeo) {
+        const fallback = await tryRateLimitedStatusOnlyFallback();
+        if (fallback) return fallback;
+      }
       if (lastGoodDriversSnapshot) {
         const drivers = hydrateSnapshotDriversForResponse();
         await appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
