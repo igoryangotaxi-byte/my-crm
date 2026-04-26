@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 
 import {
   buildRequestRideBody,
+  extractDriverDetailsFromYangoShapes,
   normalizeRideLifecycleStatus,
 } from "../lib/yango-api";
+import { dedupePhones, isLikelyPhone, normalizePhone } from "../lib/phone-utils";
 
 test("buildRequestRideBody maps fields and includes due_date when scheduled", () => {
   const body = buildRequestRideBody({
@@ -75,4 +77,78 @@ test("normalizeRideLifecycleStatus maps statuses to UI lifecycle values", () => 
   assert.equal(normalizeRideLifecycleStatus("transporting_finished"), "completed");
   assert.equal(normalizeRideLifecycleStatus("cancelled_by_client"), "cancelled");
   assert.equal(normalizeRideLifecycleStatus("mystery_status"), "unknown");
+});
+
+test("extractDriverDetailsFromYangoShapes reads first/last name + vehicle from performer.vehicle", () => {
+  const details = extractDriverDetailsFromYangoShapes(
+    {
+      first_name: "Yossi",
+      last_name: "Cohen",
+      vehicle: { brand: "Toyota", model: "Corolla", licence_plate: "12-345-67" },
+    },
+    null,
+  );
+  assert.equal(details.driverFirstName, "Yossi");
+  assert.equal(details.driverLastName, "Cohen");
+  assert.equal(details.carModel, "Toyota Corolla");
+  assert.equal(details.carPlate, "12-345-67");
+});
+
+test("extractDriverDetailsFromYangoShapes splits fullname when first/last missing", () => {
+  const details = extractDriverDetailsFromYangoShapes(
+    { fullname: "John Michael Doe" },
+    null,
+  );
+  assert.equal(details.driverFirstName, "John");
+  assert.equal(details.driverLastName, "Michael Doe");
+  assert.equal(details.driverName, "John Michael Doe");
+});
+
+test("extractDriverDetailsFromYangoShapes falls back to report fields and plates alias", () => {
+  const details = extractDriverDetailsFromYangoShapes(
+    { car: { plates: "AB-123-CD" } },
+    {
+      driver_first_name: "Ivan",
+      driver_last_name: "Petrov",
+      car_model: "Skoda Octavia",
+    },
+  );
+  assert.equal(details.driverFirstName, "Ivan");
+  assert.equal(details.driverLastName, "Petrov");
+  assert.equal(details.carModel, "Skoda Octavia");
+  assert.equal(details.carPlate, "AB-123-CD");
+});
+
+test("extractDriverDetailsFromYangoShapes returns nulls when payload empty", () => {
+  const details = extractDriverDetailsFromYangoShapes(undefined, null);
+  assert.equal(details.driverFirstName, null);
+  assert.equal(details.driverLastName, null);
+  assert.equal(details.carModel, null);
+  assert.equal(details.carPlate, null);
+});
+
+test("normalizePhone strips Excel apostrophe and whitespace", () => {
+  assert.equal(normalizePhone("'+972 50 123 4567"), "+972501234567");
+  assert.equal(normalizePhone("  0501234567  "), "0501234567");
+  assert.equal(normalizePhone(""), "");
+  assert.equal(normalizePhone(null), "");
+});
+
+test("isLikelyPhone validates IL + international shapes", () => {
+  assert.equal(isLikelyPhone("+972501234567"), true);
+  assert.equal(isLikelyPhone("0501234567"), true);
+  assert.equal(isLikelyPhone("12345"), false);
+  assert.equal(isLikelyPhone(""), false);
+});
+
+test("dedupePhones normalizes, drops invalid, and keeps order", () => {
+  const result = dedupePhones([
+    "+972 50-123-4567",
+    "+972501234567",
+    " ",
+    "0501112222",
+    "0501112222",
+    "abc",
+  ]);
+  assert.deepEqual(result, ["+972501234567", "0501112222"]);
 });

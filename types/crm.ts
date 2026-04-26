@@ -140,6 +140,10 @@ export type RequestRideStatus = {
   fetchedAt: string;
   driverName: string | null;
   driverPhone: string | null;
+  driverFirstName: string | null;
+  driverLastName: string | null;
+  carModel: string | null;
+  carPlate: string | null;
   etaMinutes: number | null;
   info: Record<string, unknown> | null;
   progress: Record<string, unknown> | null;

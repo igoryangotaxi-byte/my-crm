@@ -7,6 +7,15 @@ import {
   type RequestRidesMapPoint,
   type RouteTrafficFeatureCollection,
 } from "@/components/request-rides/RequestRidesMap";
+import {
+  PendingUploadsPanel,
+  type PendingUpload,
+  type PendingUploadAddress,
+} from "@/components/request-rides/PendingUploadsPanel";
+import { dedupePhones, normalizePhone } from "@/lib/phone-utils";
+import { publicErrorMessage } from "@/lib/public-error-message";
+import { downloadBulkUploadSampleXlsx } from "@/lib/xlsx-bulk-upload-sample";
+import { parseXlsxRidesFile } from "@/lib/xlsx-rides-parser";
 import type {
   RequestRideResult,
   RequestRideStatus,
@@ -71,8 +80,38 @@ type RoutePreviewResponse = {
     trafficGeojson?: RouteTrafficFeatureCollection | null;
     distanceMeters?: number | null;
     durationSeconds?: number | null;
+    provider?: "google" | "osrm";
   };
   error?: string;
+};
+
+type RouteOptimizeResponse = {
+  ok: boolean;
+  result?: {
+    orderedIndices: number[];
+    optimized: {
+      durationSeconds: number;
+      distanceMeters: number;
+      encodedPolyline: string;
+      coordinates: Array<[number, number]>;
+      legs: Array<{ durationSeconds: number; distanceMeters: number }>;
+    };
+    original: { durationSeconds: number; distanceMeters: number | null };
+    savingsSeconds: number;
+    savingsMeters: number | null;
+  };
+  error?: string;
+};
+
+type Optimization = {
+  orderedIndices: number[];
+  originalDurationSeconds: number;
+  optimizedDurationSeconds: number;
+  savingsSeconds: number;
+  originalDistanceMeters: number | null;
+  optimizedDistanceMeters: number;
+  savingsMeters: number | null;
+  coordinates: Array<[number, number]>;
 };
 
 type AddressField = {
@@ -81,7 +120,14 @@ type AddressField = {
   lon: number | null;
 };
 
-type StopField = AddressField & { id: string };
+type StopField = AddressField & { id: string; phone: string };
+
+type RideSmsState = {
+  /** ISO timestamp when the per-stop "request_created" SMS finished sending. */
+  requestedAtIso?: string;
+  /** ISO timestamp when the "driver_on_way" SMS finished sending. */
+  driverOnWaySentAt?: string;
+};
 
 type RequestedRideItem = {
   orderId: string;
@@ -92,8 +138,11 @@ type RequestedRideItem = {
   sourceAddress: string;
   destinationAddress: string;
   riderPhone: string;
+  /** Phone numbers tied to stops + destination (no pickup). Used for SMS dispatch + replays. */
+  addressPhones: string[];
   rideClass: string;
   status: RequestRideStatus | null;
+  smsState: RideSmsState;
 };
 
 const STORAGE_KEY = "crm.requested-rides.v1";
@@ -103,6 +152,57 @@ const POLL_MAX_ATTEMPTS = 30;
 
 function createEmptyAddressField(): AddressField {
   return { text: "", lat: null, lon: null };
+}
+
+function createEmptyStopField(): StopField {
+  return { id: globalThis.crypto.randomUUID(), text: "", lat: null, lon: null, phone: "" };
+}
+
+const SMS_REQUEST_TZ = "Asia/Jerusalem";
+
+function formatRideTimeForSms(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  try {
+    const formatter = new Intl.DateTimeFormat("en-GB", {
+      timeZone: SMS_REQUEST_TZ,
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    return formatter.format(date).replace(",", "");
+  } catch {
+    return date.toISOString();
+  }
+}
+
+function buildRequestedRideSmsText(scheduledAtIso: string | null, createdAtIso: string): string {
+  if (scheduledAtIso) {
+    return `Hey, someone requested a pre-order on ${formatRideTimeForSms(scheduledAtIso)} with Yango. Be ready on time and have a nice trip.`;
+  }
+  return `Hey, someone requested a ride for you ${formatRideTimeForSms(createdAtIso)}. Be ready on time and have a nice trip.`;
+}
+
+function buildDriverOnWaySmsText(status: RequestRideStatus): string {
+  const fullName =
+    [status.driverFirstName ?? null, status.driverLastName ?? null].filter(Boolean).join(" ").trim() ||
+    (status.driverName ?? "").trim();
+  const carParts = [status.carModel?.trim(), status.carPlate?.trim()].filter(
+    (entry): entry is string => Boolean(entry && entry.length > 0),
+  );
+  if (carParts.length > 0 && fullName) {
+    return `Hey, your driver is on the way ${carParts.join(", ")}, ${fullName}.`;
+  }
+  if (carParts.length > 0) {
+    return `Hey, your driver is on the way ${carParts.join(", ")}.`;
+  }
+  if (fullName) {
+    return `Hey, your driver ${fullName} is on the way.`;
+  }
+  return "Hey, your driver is on the way.";
 }
 
 function detectInputLanguage(value: string): "he" | "ru" | "en" {
@@ -181,7 +281,10 @@ export default function RequestRidesPage() {
   const [selectedClientKey, setSelectedClientKey] = useState("");
   const [pickup, setPickup] = useState<AddressField>(() => createEmptyAddressField());
   const [destination, setDestination] = useState<AddressField>(() => createEmptyAddressField());
+  const [destinationPhone, setDestinationPhone] = useState("");
   const [stops, setStops] = useState<StopField[]>([]);
+  const [smsWarning, setSmsWarning] = useState<string | null>(null);
+  const driverOnWayDispatchRef = useRef<Set<string>>(new Set());
   const [addressSuggestions, setAddressSuggestions] = useState<Record<string, AddressSuggestion[]>>({});
   const [addressSuggestLoading, setAddressSuggestLoading] = useState<Record<string, boolean>>({});
   const [activeAddressFieldId, setActiveAddressFieldId] = useState<string | null>(null);
@@ -189,6 +292,13 @@ export default function RequestRidesPage() {
   const [mapTrafficGeojson, setMapTrafficGeojson] = useState<RouteTrafficFeatureCollection | null>(null);
   const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
   const [routeDurationMin, setRouteDurationMin] = useState<number | null>(null);
+  const [routePreviewError, setRoutePreviewError] = useState<string | null>(null);
+  const [optimizing, setOptimizing] = useState(false);
+  const [optimizationError, setOptimizationError] = useState<string | null>(null);
+  const [optimization, setOptimization] = useState<Optimization | null>(null);
+  const [optimizationInfo, setOptimizationInfo] = useState<string | null>(null);
+  /** When true, only intermediate stops are reordered; the form destination stays the final drop-off (round trips). */
+  const [fixDestinationForOptimization, setFixDestinationForOptimization] = useState(false);
   const [mapClickPoint, setMapClickPoint] = useState<{ lat: number; lon: number } | null>(null);
   const [mapClickLabel, setMapClickLabel] = useState<string>("");
   const [mapClickLoading, setMapClickLoading] = useState(false);
@@ -216,9 +326,17 @@ export default function RequestRidesPage() {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (!raw) return [];
-      const parsed = JSON.parse(raw) as RequestedRideItem[];
+      const parsed = JSON.parse(raw) as Partial<RequestedRideItem>[];
       if (!Array.isArray(parsed)) return [];
-      return parsed.filter((item) => Boolean(item?.orderId && item?.tokenLabel && item?.clientId));
+      return parsed
+        .filter((item) => Boolean(item?.orderId && item?.tokenLabel && item?.clientId))
+        .map((item) => ({
+          ...(item as RequestedRideItem),
+          addressPhones: Array.isArray(item.addressPhones) ? item.addressPhones : [],
+          smsState: (item.smsState && typeof item.smsState === "object"
+            ? item.smsState
+            : {}) as RideSmsState,
+        }));
     } catch {
       return [];
     }
@@ -227,6 +345,11 @@ export default function RequestRidesPage() {
   const [rideListError, setRideListError] = useState<string | null>(null);
   const [overlayWideLayout, setOverlayWideLayout] = useState(false);
   const [rightOverlayVisible, setRightOverlayVisible] = useState(false);
+  const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadParsing, setUploadParsing] = useState(false);
+  const [uploadSubmitting, setUploadSubmitting] = useState(false);
+  const xlsxInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const mqLg = window.matchMedia("(min-width: 1024px)");
@@ -319,13 +442,13 @@ export default function RequestRidesPage() {
         const response = await fetch("/api/request-rides-clients", { cache: "no-store" });
         const data = (await response.json()) as ClientsResponse;
         if (!response.ok || !data.ok) {
-          throw new Error(data.error ?? "Failed to load API clients.");
+          throw new Error(data.error ?? "Couldn’t load clients.");
         }
         if (cancelled) return;
         setClients(data.clients ?? []);
       } catch (error) {
         if (!cancelled) {
-          setClientsError(error instanceof Error ? error.message : "Failed to load API clients.");
+          setClientsError(publicErrorMessage(error, "Couldn’t load clients. Try again later."));
         }
       } finally {
         if (!cancelled) setClientsLoading(false);
@@ -439,12 +562,14 @@ export default function RequestRidesPage() {
         setMapTrafficGeojson(null);
         setRouteDistanceKm(null);
         setRouteDurationMin(null);
+        setRoutePreviewError(null);
       }, 0);
       return () => window.clearTimeout(clearId);
     }
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       try {
+        setRoutePreviewError(null);
         const response = await fetch("/api/route-preview", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -454,7 +579,7 @@ export default function RequestRidesPage() {
         });
         const data = (await response.json()) as RoutePreviewResponse;
         if (!response.ok || !data.ok) {
-          throw new Error(data.error ?? "Failed to load route preview.");
+          throw new Error(data.error ?? "Couldn’t load the route preview.");
         }
         if (!cancelled) {
           setMapRouteCoordinates(data.route?.geojson?.coordinates ?? []);
@@ -473,13 +598,17 @@ export default function RequestRidesPage() {
               ? Math.max(1, Math.round(data.route.durationSeconds / 60))
               : null,
           );
+          setRoutePreviewError(null);
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
           setMapRouteCoordinates([]);
           setMapTrafficGeojson(null);
           setRouteDistanceKm(null);
           setRouteDurationMin(null);
+          setRoutePreviewError(
+            publicErrorMessage(error, "Couldn’t load the route preview. Try again later."),
+          );
         }
       }
     }, 220);
@@ -489,6 +618,113 @@ export default function RequestRidesPage() {
       window.clearTimeout(timer);
     };
   }, [mapPoints]);
+
+  useEffect(() => {
+    setOptimization(null);
+    setOptimizationError(null);
+    setOptimizationInfo(null);
+  }, [pickup, destination, stops]);
+
+  const optimizeCurrentRoute = async () => {
+    if (optimizing) return;
+    if (pickup.lat == null || pickup.lon == null) {
+      setOptimizationError("Pickup must be a geocoded address.");
+      return;
+    }
+    const tail: AddressField[] = [...stops, destination];
+    const others = tail.filter(
+      (entry): entry is AddressField & { lat: number; lon: number } =>
+        entry.lat != null && entry.lon != null && entry.text.trim().length > 0,
+    );
+    if (others.length !== tail.length) {
+      setOptimizationError("All stops and destination must be geocoded before optimization.");
+      return;
+    }
+    if (others.length < 2) {
+      setOptimizationError("Add at least 2 stops to optimize the order.");
+      return;
+    }
+    setOptimizing(true);
+    setOptimizationError(null);
+    setOptimizationInfo(null);
+    try {
+      const response = await fetch("/api/route-optimize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pickup: { lat: pickup.lat, lon: pickup.lon },
+          others: others.map((entry) => ({ lat: entry.lat, lon: entry.lon })),
+          fixDestination: fixDestinationForOptimization,
+        }),
+      });
+      const data = (await response.json()) as RouteOptimizeResponse;
+      if (!response.ok || !data.ok || !data.result) {
+        throw new Error(data.error ?? "Failed to optimize route.");
+      }
+      const result = data.result;
+      const isIdentity = result.orderedIndices.every((idx, position) => idx === position);
+      if (result.savingsSeconds <= 0 || isIdentity) {
+        setOptimization(null);
+        setOptimizationInfo("Current order is already the fastest in traffic.");
+        return;
+      }
+      setOptimization({
+        orderedIndices: result.orderedIndices,
+        originalDurationSeconds: result.original.durationSeconds,
+        optimizedDurationSeconds: result.optimized.durationSeconds,
+        savingsSeconds: result.savingsSeconds,
+        originalDistanceMeters: result.original.distanceMeters ?? null,
+        optimizedDistanceMeters: result.optimized.distanceMeters,
+        savingsMeters: result.savingsMeters ?? null,
+        coordinates: result.optimized.coordinates,
+      });
+    } catch (error) {
+      setOptimization(null);
+      setOptimizationError(
+        publicErrorMessage(error, "Couldn’t optimize the route. Try again later."),
+      );
+    } finally {
+      setOptimizing(false);
+    }
+  };
+
+  const applyOptimization = () => {
+    if (!optimization) return;
+    type TailEntry = AddressField & { phone: string };
+    const tail: TailEntry[] = [
+      ...stops.map((s) => ({ text: s.text, lat: s.lat, lon: s.lon, phone: s.phone })),
+      { text: destination.text, lat: destination.lat, lon: destination.lon, phone: destinationPhone },
+    ];
+    const reordered = optimization.orderedIndices.map((idx) => tail[idx]).filter(Boolean);
+    if (reordered.length !== tail.length) return;
+    const newDestination = reordered[reordered.length - 1];
+    const newStopsSource = reordered.slice(0, -1);
+    setStops((prev) => {
+      const reused = newStopsSource.map((entry, idx) => ({
+        id: prev[idx]?.id ?? globalThis.crypto.randomUUID(),
+        text: entry.text,
+        lat: entry.lat,
+        lon: entry.lon,
+        phone: entry.phone,
+      }));
+      return reused;
+    });
+    setDestination({
+      text: newDestination.text,
+      lat: newDestination.lat,
+      lon: newDestination.lon,
+    });
+    setDestinationPhone(newDestination.phone);
+    if (optimization.coordinates.length >= 2) {
+      setMapRouteCoordinates(optimization.coordinates);
+      setMapTrafficGeojson(null);
+    }
+  };
+
+  const dismissOptimization = () => {
+    setOptimization(null);
+    setOptimizationInfo(null);
+  };
 
   const handleMapClick = async (point: { lat: number; lon: number }) => {
     setMapClickPoint(point);
@@ -509,7 +745,7 @@ export default function RequestRidesPage() {
       }
       setMapClickLabel(data.suggestion.label || data.suggestion.displayName);
     } catch {
-      setMapClickLabel(`${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}`);
+      setMapClickLabel("Couldn’t look up this spot.");
     } finally {
       setMapClickLoading(false);
     }
@@ -518,6 +754,7 @@ export default function RequestRidesPage() {
   const clearRouteSelection = () => {
     setPickup(createEmptyAddressField());
     setDestination(createEmptyAddressField());
+    setDestinationPhone("");
     setStops([]);
     setMapClickPoint(null);
     setMapClickLabel("");
@@ -525,8 +762,158 @@ export default function RequestRidesPage() {
     setMapTrafficGeojson(null);
     setRouteDistanceKm(null);
     setRouteDurationMin(null);
+    setRoutePreviewError(null);
     setAddressSuggestions({});
     setActiveAddressFieldId(null);
+  };
+
+  const sendSms = async (input: {
+    phones: string[];
+    text: string;
+    orderId: string;
+    kind: "request_created" | "driver_on_way";
+  }): Promise<{ ok: boolean; error?: string }> => {
+    const phones = dedupePhones(input.phones);
+    if (phones.length === 0 || !input.text.trim()) {
+      return { ok: false, error: "no_recipients" };
+    }
+    try {
+      const response = await fetch("/api/sms/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phones,
+          text: input.text,
+          orderId: input.orderId,
+          kind: input.kind,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!response.ok || !data.ok) {
+        return { ok: false, error: data.error ?? `HTTP ${response.status}` };
+      }
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  };
+
+  const sendWhatsApp = async (input: {
+    phones: string[];
+    text: string;
+    orderId: string;
+    kind: "request_created" | "driver_on_way";
+  }): Promise<{ ok: boolean; skipped?: boolean; error?: string }> => {
+    const phones = dedupePhones(input.phones);
+    if (phones.length === 0 || !input.text.trim()) {
+      return { ok: false, error: "no_recipients" };
+    }
+    try {
+      const response = await fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phones,
+          text: input.text,
+          orderId: input.orderId,
+          kind: input.kind,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        skipped?: boolean;
+        error?: string;
+      };
+      if (data.skipped) return { ok: true, skipped: true };
+      if (!response.ok || !data.ok) {
+        return { ok: false, error: data.error ?? `HTTP ${response.status}` };
+      }
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  };
+
+  /** Inforu SMS + WhatsApp (WA uses an approved template; see INFORU_WHATSAPP_* env). */
+  const sendRideNotifications = async (input: {
+    phones: string[];
+    text: string;
+    orderId: string;
+    kind: "request_created" | "driver_on_way";
+  }): Promise<{ delivered: boolean; warning: string | null }> => {
+    if (input.phones.length === 0 || !input.text.trim()) {
+      return { delivered: false, warning: null };
+    }
+    const [smsSettled, waSettled] = await Promise.allSettled([
+      sendSms(input),
+      sendWhatsApp(input),
+    ]);
+    const smsOk = smsSettled.status === "fulfilled" && smsSettled.value.ok;
+    const waVal = waSettled.status === "fulfilled" ? waSettled.value : null;
+    const waSent = Boolean(waVal?.ok && !waVal?.skipped);
+    const delivered = smsOk || waSent;
+
+    const parts: string[] = [];
+    if (smsSettled.status === "fulfilled") {
+      const e = smsSettled.value.error;
+      if (!smsSettled.value.ok && e && e !== "no_recipients") parts.push(`SMS: ${e}`);
+    } else {
+      parts.push(`SMS: ${String(smsSettled.reason)}`);
+    }
+    if (waSettled.status === "fulfilled") {
+      const w = waSettled.value;
+      if (!w.ok && !w.skipped && w.error) parts.push(`WhatsApp: ${w.error}`);
+    } else {
+      parts.push(`WhatsApp: ${String(waSettled.reason)}`);
+    }
+
+    return {
+      delivered,
+      warning: parts.length ? parts.join(" · ") : null,
+    };
+  };
+
+  const dispatchDriverOnWaySms = async (
+    ride: RequestedRideItem,
+    nextStatus: RequestRideStatus,
+  ): Promise<void> => {
+    if (ride.smsState?.driverOnWaySentAt) return;
+    if (!ride.addressPhones || ride.addressPhones.length === 0) return;
+    if (nextStatus.lifecycleStatus !== "driver_assigned") return;
+    const previousLifecycle = ride.status?.lifecycleStatus;
+    if (previousLifecycle === "driver_assigned") return;
+    if (driverOnWayDispatchRef.current.has(ride.orderId)) return;
+    driverOnWayDispatchRef.current.add(ride.orderId);
+    const text = buildDriverOnWaySmsText(nextStatus);
+    const { delivered, warning } = await sendRideNotifications({
+      phones: ride.addressPhones,
+      text,
+      orderId: ride.orderId,
+      kind: "driver_on_way",
+    });
+    if (!delivered) {
+      driverOnWayDispatchRef.current.delete(ride.orderId);
+      if (process.env.NODE_ENV !== "test") {
+        console.warn("[request-rides] driver-on-way notify failed", ride.orderId, warning);
+      }
+      return;
+    }
+    if (warning) {
+      setSmsWarning(
+        publicErrorMessage(warning, "Part of the passenger notifications could not be delivered."),
+      );
+    }
+    const sentAt = new Date().toISOString();
+    setRequestedRides((prev) =>
+      prev.map((item) =>
+        item.orderId === ride.orderId
+          ? { ...item, smsState: { ...item.smsState, driverOnWaySentAt: sentAt } }
+          : item,
+      ),
+    );
   };
 
   const requestStatus = async (
@@ -548,11 +935,15 @@ export default function RequestRidesPage() {
         throw new Error(data.error ?? "Failed to load status.");
       }
       setStatus(data.result);
-      setRequestedRides((prev) =>
-        prev.map((item) =>
-          item.orderId === data.result?.orderId ? { ...item, status: data.result } : item,
-        ),
-      );
+      const updatedResult = data.result;
+      setRequestedRides((prev) => {
+        const next = prev.map((item) => {
+          if (item.orderId !== updatedResult.orderId) return item;
+          void dispatchDriverOnWaySms(item, updatedResult);
+          return { ...item, status: updatedResult };
+        });
+        return next;
+      });
       setStatusError(null);
       if (isTerminalStatus(data.result)) {
         setPolling(false);
@@ -568,7 +959,7 @@ export default function RequestRidesPage() {
         setPolling(false);
       }
     } catch (error) {
-      setStatusError(error instanceof Error ? error.message : "Failed to load status.");
+      setStatusError(publicErrorMessage(error, "Couldn’t load ride status. Try again later."));
       setPolling(false);
     }
   };
@@ -612,7 +1003,9 @@ export default function RequestRidesPage() {
         prev
           .map((ride) => {
             const nextStatus = byOrderId.get(ride.orderId);
-            return nextStatus ? { ...ride, status: nextStatus } : ride;
+            if (!nextStatus) return ride;
+            void dispatchDriverOnWaySms(ride, nextStatus);
+            return { ...ride, status: nextStatus };
           })
           .filter((ride) => !isTerminalStatus(ride.status)),
       );
@@ -632,7 +1025,7 @@ export default function RequestRidesPage() {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedClient) {
-      setFormError("Select API client first.");
+      setFormError("Select a client first.");
       return;
     }
     if (!pickup.text.trim() || !destination.text.trim()) {
@@ -642,6 +1035,7 @@ export default function RequestRidesPage() {
     setSubmitting(true);
     setFormError(null);
     setStatusError(null);
+    setSmsWarning(null);
     setCreateResult(null);
     setStatus(null);
     pollAttemptRef.current = 0;
@@ -684,23 +1078,64 @@ export default function RequestRidesPage() {
         throw new Error(data.error ?? "Failed to create ride.");
       }
       const created = data.result;
+      const createdAtIso = new Date().toISOString();
+      const addressPhones = dedupePhones([
+        ...stops.map((stop) => stop.phone),
+        destinationPhone,
+      ]);
       const createdRide: RequestedRideItem = {
         orderId: created.orderId,
-        createdAtIso: new Date().toISOString(),
+        createdAtIso,
         scheduledAtIso: scheduleAtIso,
         tokenLabel: selectedClient.tokenLabel,
         clientId: selectedClient.clientId,
         sourceAddress: pickup.text.trim(),
         destinationAddress: destination.text.trim(),
         riderPhone: phoneNumber.trim(),
+        addressPhones,
         rideClass: rideClass.trim() || "comfortplus_b2b",
         status: null,
+        smsState: {},
       };
       setRequestedRides((prev) => [createdRide, ...prev.filter((item) => item.orderId !== created.orderId)]);
       setCreateResult(created);
+      if (addressPhones.length > 0) {
+        const text = buildRequestedRideSmsText(scheduleAtIso, createdAtIso);
+        const { delivered, warning } = await sendRideNotifications({
+          phones: addressPhones,
+          text,
+          orderId: created.orderId,
+          kind: "request_created",
+        });
+        if (delivered) {
+          const sentAt = new Date().toISOString();
+          setRequestedRides((prev) =>
+            prev.map((item) =>
+              item.orderId === created.orderId
+                ? { ...item, smsState: { ...item.smsState, requestedAtIso: sentAt } }
+                : item,
+            ),
+          );
+          if (warning) {
+            setSmsWarning(
+              publicErrorMessage(
+                warning,
+                "Some passenger notifications could not be delivered on every channel, but the ride was requested.",
+              ),
+            );
+          }
+        } else if (warning) {
+          setSmsWarning(
+            publicErrorMessage(
+              warning,
+              "We couldn’t send passenger notifications, but the ride was requested.",
+            ),
+          );
+        }
+      }
       await requestStatus(createdRide, { withRetry: true });
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to create ride.");
+      setFormError(publicErrorMessage(error, "Couldn’t create the ride. Try again later."));
     } finally {
       setSubmitting(false);
     }
@@ -709,7 +1144,7 @@ export default function RequestRidesPage() {
   const checkPhoneRegistration = async () => {
     if (!selectedClient) {
       setPhoneLookupOk(false);
-      setPhoneLookupMessage("Select API client first.");
+      setPhoneLookupMessage("Select a client first.");
       return;
     }
     if (!phoneNumber.trim()) {
@@ -732,21 +1167,368 @@ export default function RequestRidesPage() {
       });
       const data = (await response.json()) as UserLookupResponse;
       if (!response.ok || !data.ok) {
-        throw new Error(data.error ?? "Failed to lookup phone.");
+        throw new Error(data.error ?? "Couldn’t look up this phone.");
       }
       if (data.found && data.userId) {
         setPhoneLookupOk(true);
-        setPhoneLookupMessage(`Registered user found (user_id: ${data.userId}).`);
+        setPhoneLookupMessage("Registered user found.");
       } else {
         setPhoneLookupOk(false);
-        setPhoneLookupMessage("Phone is not registered in selected client context.");
+        setPhoneLookupMessage("This phone isn’t registered for the selected client.");
       }
     } catch (error) {
       setPhoneLookupOk(false);
-      setPhoneLookupMessage(error instanceof Error ? error.message : "Failed to lookup phone.");
+      setPhoneLookupMessage(publicErrorMessage(error, "Couldn’t look up this phone. Try again later."));
     } finally {
       setPhoneChecking(false);
     }
+  };
+
+  const handleUploadButtonClick = () => {
+    if (!selectedClient) {
+      setUploadError("Select a client first.");
+      return;
+    }
+    setUploadError(null);
+    xlsxInputRef.current?.click();
+  };
+
+  const geocodeAddressText = async (text: string): Promise<PendingUploadAddress> => {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return { text: "", lat: null, lon: null };
+    }
+    try {
+      const language = detectInputLanguage(trimmed);
+      const response = await fetch("/api/address-suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: trimmed, language }),
+      });
+      const data = (await response.json()) as AddressSuggestResponse;
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error ?? "Failed to geocode address.");
+      }
+      const first = data.suggestions?.[0];
+      if (!first) {
+        return { text: trimmed, lat: null, lon: null, geocodeError: "No matching address found." };
+      }
+      return {
+        text: first.label || first.displayName || trimmed,
+        lat: first.lat,
+        lon: first.lon,
+      };
+    } catch (error) {
+      return {
+        text: trimmed,
+        lat: null,
+        lon: null,
+        geocodeError: publicErrorMessage(error, "Couldn’t resolve this address."),
+      };
+    }
+  };
+
+  const handleXlsxFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setUploadError(null);
+    setUploadParsing(true);
+    try {
+      const rows = await parseXlsxRidesFile(file);
+      if (rows.length === 0) {
+        setUploadError("No ride rows found in the file.");
+        return;
+      }
+      const parsed: PendingUpload[] = rows.map((row) => ({
+        id: globalThis.crypto.randomUUID(),
+        rowIndex: row.rowIndex,
+        scheduleAtIso: row.scheduleAtIso,
+        phone: row.phone,
+        comment: row.comment,
+        addresses: row.addresses.map((text, idx) => ({
+          text,
+          lat: null,
+          lon: null,
+          phone: row.addressPhones[idx] ?? "",
+        })),
+        state: row.errors.length > 0 ? "blocked" : "geocoding",
+        errors: row.errors,
+      }));
+      setPendingUploads((prev) => [...prev, ...parsed]);
+
+      const concurrency = 4;
+      const tasks = parsed.flatMap((row) =>
+        row.state === "blocked"
+          ? []
+          : row.addresses.map((address, addressIndex) => ({
+              rowId: row.id,
+              addressIndex,
+              text: address.text,
+            })),
+      );
+
+      let cursor = 0;
+      const worker = async () => {
+        while (true) {
+          const taskIndex = cursor;
+          cursor += 1;
+          if (taskIndex >= tasks.length) return;
+          const task = tasks[taskIndex];
+          const resolved = await geocodeAddressText(task.text);
+          setPendingUploads((prev) =>
+            prev.map((row) => {
+              if (row.id !== task.rowId) return row;
+              const nextAddresses = row.addresses.map((address, idx) =>
+                idx === task.addressIndex ? { ...resolved, phone: address.phone } : address,
+              );
+              return { ...row, addresses: nextAddresses };
+            }),
+          );
+        }
+      };
+      const workerCount = Math.min(concurrency, Math.max(1, tasks.length));
+      await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+      const optimizationCandidates: Array<{
+        rowId: string;
+        pickup: { lat: number; lon: number };
+        others: Array<{ lat: number; lon: number }>;
+      }> = [];
+      setPendingUploads((prev) =>
+        prev.map((row) => {
+          if (row.state !== "geocoding") return row;
+          const filled = row.addresses.filter((entry) => entry.text);
+          const hasGeocodeError = row.addresses.some((entry) => entry.geocodeError);
+          const missingCoords = filled.some((entry) => entry.lat == null || entry.lon == null);
+          if (filled.length < 2) {
+            return {
+              ...row,
+              state: "blocked",
+              errors: [...row.errors, "Need at least pickup and destination."],
+            };
+          }
+          if (hasGeocodeError || missingCoords) {
+            return {
+              ...row,
+              state: "blocked",
+              message: "Some addresses could not be geocoded.",
+            };
+          }
+          if (filled.length >= 3) {
+            const pickupAddr = filled[0];
+            const otherAddrs = filled.slice(1);
+            if (
+              pickupAddr.lat != null &&
+              pickupAddr.lon != null &&
+              otherAddrs.every((entry) => entry.lat != null && entry.lon != null)
+            ) {
+              optimizationCandidates.push({
+                rowId: row.id,
+                pickup: { lat: pickupAddr.lat, lon: pickupAddr.lon },
+                others: otherAddrs.map((entry) => ({ lat: entry.lat as number, lon: entry.lon as number })),
+              });
+            }
+          }
+          return { ...row, state: "ready" };
+        }),
+      );
+      void runBulkOptimization(optimizationCandidates);
+    } catch (error) {
+      setUploadError(publicErrorMessage(error, "Couldn’t read this file. Check the format and try again."));
+    } finally {
+      setUploadParsing(false);
+    }
+  };
+
+  const runBulkOptimization = async (
+    candidates: Array<{
+      rowId: string;
+      pickup: { lat: number; lon: number };
+      others: Array<{ lat: number; lon: number }>;
+    }>,
+  ) => {
+    if (candidates.length === 0) return;
+    const concurrency = 2;
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < candidates.length) {
+        const taskIndex = cursor;
+        cursor += 1;
+        const task = candidates[taskIndex];
+        try {
+          const response = await fetch("/api/route-optimize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pickup: task.pickup, others: task.others }),
+          });
+          if (!response.ok) continue;
+          const data = (await response.json()) as RouteOptimizeResponse;
+          if (!data.ok || !data.result) continue;
+          const result = data.result;
+          const isIdentity = result.orderedIndices.every((idx, position) => idx === position);
+          if (result.savingsSeconds <= 0 || isIdentity) continue;
+          setPendingUploads((prev) =>
+            prev.map((row) => {
+              if (row.id !== task.rowId) return row;
+              if (row.state !== "ready") return row;
+              const filled = row.addresses.filter((entry) => entry.text);
+              if (filled.length < 3) return row;
+              const pickupAddress = filled[0];
+              const tail = filled.slice(1);
+              const reorderedTail = result.orderedIndices.map((idx) => tail[idx]).filter(Boolean);
+              if (reorderedTail.length !== tail.length) return row;
+              const nextAddresses: PendingUploadAddress[] = [pickupAddress, ...reorderedTail];
+              return {
+                ...row,
+                addresses: nextAddresses,
+                optimization: {
+                  savingsSeconds: result.savingsSeconds,
+                  originalDurationSeconds: result.original.durationSeconds,
+                  optimizedDurationSeconds: result.optimized.durationSeconds,
+                  savingsMeters: result.savingsMeters ?? undefined,
+                },
+              };
+            }),
+          );
+        } catch {
+          /* ignore individual row optimization errors */
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, candidates.length) }, () => worker()));
+  };
+
+  const handleConfirmPendingUploads = async () => {
+    if (uploadSubmitting) return;
+    if (!selectedClient) {
+      setUploadError("Select a client first.");
+      return;
+    }
+    const readyRows = pendingUploads.filter((row) => row.state === "ready");
+    if (readyRows.length === 0) return;
+    setUploadError(null);
+    setUploadSubmitting(true);
+    const tariff = rideClass.trim() || "comfortplus_b2b";
+
+    for (const snapshot of readyRows) {
+      const rowId = snapshot.id;
+      setPendingUploads((prev) =>
+        prev.map((row) =>
+          row.id === rowId ? { ...row, state: "creating", message: undefined } : row,
+        ),
+      );
+      const filled = snapshot.addresses.filter((entry) => entry.text);
+      const pickupAddress = filled[0];
+      const destinationAddress = filled[filled.length - 1];
+      const stopsAddresses = filled.slice(1, -1);
+
+      try {
+        const response = await fetch("/api/request-rides-create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tokenLabel: selectedClient.tokenLabel,
+            clientId: selectedClient.clientId,
+            rideClass: tariff,
+            sourceAddress: pickupAddress.text,
+            destinationAddress: destinationAddress.text,
+            sourceLat: pickupAddress.lat ?? undefined,
+            sourceLon: pickupAddress.lon ?? undefined,
+            destinationLat: destinationAddress.lat ?? undefined,
+            destinationLon: destinationAddress.lon ?? undefined,
+            waypoints: stopsAddresses
+              .map((stop) => ({
+                address: stop.text,
+                lat: stop.lat ?? undefined,
+                lon: stop.lon ?? undefined,
+              }))
+              .filter((stop) => stop.address.length > 0),
+            phoneNumber: snapshot.phone,
+            comment: snapshot.comment,
+            scheduleAtIso: snapshot.scheduleAtIso,
+          }),
+        });
+        const data = (await response.json()) as CreateResponse;
+        if (!response.ok || !data.ok || !data.result) {
+          throw new Error(data.error ?? "Failed to create ride.");
+        }
+        const created = data.result;
+        const createdAtIso = new Date().toISOString();
+        const bulkAddressPhones = dedupePhones(
+          snapshot.addresses.slice(1).map((entry) => entry.phone ?? ""),
+        );
+        const createdRide: RequestedRideItem = {
+          orderId: created.orderId,
+          createdAtIso,
+          scheduledAtIso: snapshot.scheduleAtIso,
+          tokenLabel: selectedClient.tokenLabel,
+          clientId: selectedClient.clientId,
+          sourceAddress: pickupAddress.text,
+          destinationAddress: destinationAddress.text,
+          riderPhone: snapshot.phone,
+          addressPhones: bulkAddressPhones,
+          rideClass: tariff,
+          status: null,
+          smsState: {},
+        };
+        setRequestedRides((prev) => [
+          createdRide,
+          ...prev.filter((item) => item.orderId !== created.orderId),
+        ]);
+        setPendingUploads((prev) =>
+          prev.map((row) =>
+            row.id === rowId
+              ? { ...row, state: "created", createdOrderId: created.orderId, message: undefined }
+              : row,
+          ),
+        );
+        if (bulkAddressPhones.length > 0) {
+          const text = buildRequestedRideSmsText(snapshot.scheduleAtIso, createdAtIso);
+          const { delivered, warning } = await sendRideNotifications({
+            phones: bulkAddressPhones,
+            text,
+            orderId: created.orderId,
+            kind: "request_created",
+          });
+          if (delivered) {
+            const sentAt = new Date().toISOString();
+            setRequestedRides((prev) =>
+              prev.map((item) =>
+                item.orderId === created.orderId
+                  ? { ...item, smsState: { ...item.smsState, requestedAtIso: sentAt } }
+                  : item,
+              ),
+            );
+            if (warning && process.env.NODE_ENV !== "test") {
+              console.warn("[request-rides] bulk notify partial failure", created.orderId, warning);
+            }
+          } else if (warning && process.env.NODE_ENV !== "test") {
+            console.warn("[request-rides] bulk notify failed", created.orderId, warning);
+          }
+        }
+        void requestStatus(createdRide);
+      } catch (error) {
+        const message = publicErrorMessage(error, "Couldn’t create this ride. Try again later.");
+        setPendingUploads((prev) =>
+          prev.map((row) =>
+            row.id === rowId ? { ...row, state: "failed", message } : row,
+          ),
+        );
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+    }
+    setUploadSubmitting(false);
+  };
+
+  const removePendingUpload = (id: string) => {
+    setPendingUploads((prev) => prev.filter((row) => row.id !== id));
+  };
+
+  const clearPendingUploads = () => {
+    if (uploadSubmitting) return;
+    setPendingUploads([]);
+    setUploadError(null);
   };
 
   const removeRequestedRide = async (orderId: string) => {
@@ -754,7 +1536,7 @@ export default function RequestRidesPage() {
     if (!ride) return;
     if (
       !window.confirm(
-        "Cancel this order in Yango? It will be removed from the corporate cabinet when the API accepts cancellation.",
+        "Cancel this trip? It will be removed from the list when cancellation succeeds.",
       )
     ) {
       return;
@@ -771,9 +1553,13 @@ export default function RequestRidesPage() {
           orderId: ride.orderId,
         }),
       });
-      const data = (await response.json()) as { ok?: boolean; error?: string };
+      const data = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!response.ok || !data.ok) {
-        throw new Error(data.error ?? "Failed to cancel order in Yango.");
+        const detail =
+          typeof data.error === "string" && data.error.trim()
+            ? data.error.trim()
+            : `HTTP ${response.status}`;
+        throw new Error(detail);
       }
       setRequestedRides((prev) => prev.filter((item) => item.orderId !== orderId));
       if (createResult?.orderId === orderId) {
@@ -787,7 +1573,7 @@ export default function RequestRidesPage() {
         }
       }
     } catch (error) {
-      setRideListError(error instanceof Error ? error.message : "Failed to cancel order.");
+      setRideListError(publicErrorMessage(error, "Couldn’t cancel this order. Try again later."));
     } finally {
       setDeletingOrderId(null);
     }
@@ -985,6 +1771,43 @@ export default function RequestRidesPage() {
                   </div>
                 </label>
 
+                {selectedClient ? (
+                  <div className="space-y-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+                    <p className="text-xs text-slate-600">
+                      Bulk orders use this client:{" "}
+                      <span className="font-semibold text-slate-800">
+                        {selectedClient.clientName} ({selectedClient.tokenLabel})
+                      </span>
+                    </p>
+                    <div className="flex items-stretch gap-2">
+                      <button
+                        type="button"
+                        onClick={handleUploadButtonClick}
+                        disabled={uploadParsing}
+                        className="crm-hover-lift min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {uploadParsing ? "Parsing XLSX…" : "Upload XLSX (bulk)"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadBulkUploadSampleXlsx()}
+                        className="crm-hover-lift shrink-0 self-stretch rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-white hover:text-slate-900"
+                        title="Download example .xlsx"
+                      >
+                        Sample
+                      </button>
+                    </div>
+                    <input
+                      ref={xlsxInputRef}
+                      type="file"
+                      accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                      className="hidden"
+                      onChange={(event) => void handleXlsxFileChange(event)}
+                    />
+                    {uploadError ? <p className="text-xs text-rose-700">{uploadError}</p> : null}
+                  </div>
+                ) : null}
+
                 <label className="block">
                   <span className="crm-label mb-1 block">Rider phone</span>
                   <div className="relative">
@@ -1059,8 +1882,27 @@ export default function RequestRidesPage() {
                       label: "Stop along the way",
                       value: stop,
                       onChange: (next) =>
-                        setStops((prev) => prev.map((item) => (item.id === stop.id ? { ...item, ...next } : item))),
+                        setStops((prev) =>
+                          prev.map((item) => (item.id === stop.id ? { ...item, ...next } : item)),
+                        ),
                     })}
+                    <label className="mt-2 block">
+                      <span className="crm-label mb-1 block">Passenger phone (SMS)</span>
+                      <input
+                        type="tel"
+                        inputMode="tel"
+                        value={stop.phone}
+                        onChange={(event) =>
+                          setStops((prev) =>
+                            prev.map((item) =>
+                              item.id === stop.id ? { ...item, phone: event.target.value } : item,
+                            ),
+                          )
+                        }
+                        className="crm-input h-10 w-full px-3 text-sm"
+                        placeholder="+972..."
+                      />
+                    </label>
                     <div className="mt-1 flex justify-end">
                       <button
                         type="button"
@@ -1079,12 +1921,21 @@ export default function RequestRidesPage() {
                   required: true,
                   onChange: setDestination,
                 })}
+                <label className="block">
+                  <span className="crm-label mb-1 block">Passenger phone at destination (SMS)</span>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    value={destinationPhone}
+                    onChange={(event) => setDestinationPhone(event.target.value)}
+                    className="crm-input h-10 w-full px-3 text-sm"
+                    placeholder="+972..."
+                  />
+                </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() =>
-                      setStops((prev) => [...prev, { id: globalThis.crypto.randomUUID(), ...createEmptyAddressField() }])
-                    }
+                    onClick={() => setStops((prev) => [...prev, createEmptyStopField()])}
                     className="crm-hover-lift rounded-lg border border-border/80 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                   >
                     Add Stop
@@ -1114,15 +1965,139 @@ export default function RequestRidesPage() {
                         {routeDurationMin != null ? `${routeDurationMin} min` : "n/a"}
                       </span>
                     </p>
-                    <p>
-                      Source: <span className="font-semibold text-slate-900">OSRM</span>
-                    </p>
-                    <p className="text-[11px] text-slate-600">
-                      Traffic:{" "}
-                      {mapTrafficGeojson?.features?.length ? "Speed estimate (by segment)" : "n/a"}
-                    </p>
+                    {routePreviewError ? (
+                      <p className="text-[11px] text-rose-700">{routePreviewError}</p>
+                    ) : null}
                   </div>
                 </details>
+              ) : null}
+
+              {mapPoints.length >= 3 ? (
+                <div className={`${rideCard} space-y-2 text-sm text-slate-800`}>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="crm-label">Optimize order (traffic-aware)</p>
+                    <button
+                      type="button"
+                      onClick={() => void optimizeCurrentRoute()}
+                      disabled={optimizing}
+                      className="crm-hover-lift shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {optimizing ? "Calculating…" : "Find fastest order"}
+                    </button>
+                  </div>
+                  <label className="flex cursor-pointer items-start gap-2 text-xs text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={fixDestinationForOptimization}
+                      onChange={(event) => setFixDestinationForOptimization(event.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="font-semibold text-slate-900">Keep final drop-off as in the form</span>{" "}
+                      (round trip / return home). We only reorder intermediate stops; the address in{" "}
+                      <span className="font-medium">Destination</span> stays last.
+                    </span>
+                  </label>
+                  {optimization ? (
+                    (() => {
+                      const tail: AddressField[] = [...stops, destination];
+                      const reordered = optimization.orderedIndices
+                        .map((idx) => tail[idx])
+                        .filter(Boolean);
+                      const savedMin = optimization.savingsSeconds / 60;
+                      const savedLabel =
+                        savedMin >= 1 ? `${Math.round(savedMin)} min` : "< 1 min";
+                      const formatPoint = (entry: AddressField | undefined) =>
+                        entry?.text?.trim() ? entry.text.trim() : "Untitled";
+                      const beforeChain = [
+                        formatPoint(pickup),
+                        ...stops.map((s) => formatPoint(s)),
+                        formatPoint(destination),
+                      ];
+                      const afterChain = [formatPoint(pickup), ...reordered.map(formatPoint)];
+                      const kmSaved =
+                        optimization.savingsMeters != null && optimization.savingsMeters >= 50
+                          ? `${(optimization.savingsMeters / 1000).toFixed(1)} km shorter`
+                          : null;
+                      return (
+                        <div className="space-y-3">
+                          <p className="text-xs leading-relaxed text-slate-700">
+                            We compared <span className="font-semibold">every allowed order</span> of your
+                            points after pickup using <span className="font-semibold">current traffic</span>{" "}
+                            between them.
+                            {fixDestinationForOptimization ? (
+                              <>
+                                {" "}
+                                The <span className="font-semibold">Destination</span> field stays the final
+                                stop; only intermediate stops are reordered.
+                              </>
+                            ) : (
+                              <>
+                                {" "}
+                                The last leg can be any of your addresses — the former &quot;Destination&quot;
+                                may move if that order is faster.
+                              </>
+                            )}{" "}
+                            Pickup is always first; same addresses, different sequence where it helps.
+                          </p>
+                          <div className="rounded-lg border border-slate-100 bg-slate-50/90 p-2 text-xs text-slate-800">
+                            <p className="font-semibold text-slate-900">Current form order</p>
+                            <ol className="mt-1 list-decimal space-y-0.5 pl-4">
+                              <li>Pickup — {beforeChain[0]}</li>
+                              {beforeChain.slice(1, -1).map((label, idx) => (
+                                <li key={`before-${idx}`}>
+                                  Stop {idx + 1} — {label}
+                                </li>
+                              ))}
+                              <li>Final drop-off — {beforeChain[beforeChain.length - 1]}</li>
+                            </ol>
+                          </div>
+                          <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 p-2 text-xs text-slate-800">
+                            <p className="font-semibold text-emerald-900">Faster order (apply to use)</p>
+                            <ol className="mt-1 list-decimal space-y-0.5 pl-4">
+                              <li>Pickup — {afterChain[0]}</li>
+                              {afterChain.slice(1, -1).map((label, idx) => (
+                                <li key={`after-${idx}`}>
+                                  Via point {idx + 1} — {label}
+                                </li>
+                              ))}
+                              <li>Final drop-off — {afterChain[afterChain.length - 1]}</li>
+                            </ol>
+                          </div>
+                          <p className="text-xs text-emerald-800">
+                            Saves ~{savedLabel} in traffic (
+                            {Math.max(1, Math.round(optimization.optimizedDurationSeconds / 60))} min vs{" "}
+                            {Math.max(1, Math.round(optimization.originalDurationSeconds / 60))} min for the
+                            same points).
+                            {kmSaved ? ` Estimated ${kmSaved} shorter by combined leg distances.` : ""}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={applyOptimization}
+                              className="crm-button-primary h-8 rounded-lg px-3 text-xs font-semibold"
+                            >
+                              Apply order
+                            </button>
+                            <button
+                              type="button"
+                              onClick={dismissOptimization}
+                              className="crm-hover-lift rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()
+                  ) : null}
+                  {!optimization && optimizationInfo ? (
+                    <p className="text-xs text-slate-600">{optimizationInfo}</p>
+                  ) : null}
+                  {optimizationError ? (
+                    <p className="text-xs text-rose-700">{optimizationError}</p>
+                  ) : null}
+                </div>
               ) : null}
 
               <div className={`${rideCard} space-y-3`}>
@@ -1195,6 +2170,7 @@ export default function RequestRidesPage() {
                 {clientsError ? <p className="text-sm text-rose-700">{clientsError}</p> : null}
                 {formError ? <p className="text-sm text-rose-700">{formError}</p> : null}
                 {rideListError ? <p className="text-sm text-rose-700">{rideListError}</p> : null}
+                {smsWarning ? <p className="text-sm text-amber-700">{smsWarning}</p> : null}
               </div>
 
               <div className={rideCard}>
@@ -1251,6 +2227,7 @@ export default function RequestRidesPage() {
                               mapClickLabel || `${mapClickPoint.lat.toFixed(6)}, ${mapClickPoint.lon.toFixed(6)}`,
                             lat: mapClickPoint.lat,
                             lon: mapClickPoint.lon,
+                            phone: "",
                           },
                         ])
                       }
@@ -1263,6 +2240,14 @@ export default function RequestRidesPage() {
               ) : null}
 
               <div className="space-y-3 xl:hidden">
+                <PendingUploadsPanel
+                  items={pendingUploads}
+                  isSubmitting={uploadSubmitting}
+                  cardClassName={rideCard}
+                  onConfirmAll={() => void handleConfirmPendingUploads()}
+                  onClearAll={clearPendingUploads}
+                  onRemove={removePendingUpload}
+                />
                 <article className={rideCard}>
                   <p className="crm-label">Requested rides</p>
                   {requestedRides.length === 0 ? (
@@ -1306,7 +2291,6 @@ export default function RequestRidesPage() {
                             <p>Phone: {ride.riderPhone}</p>
                             <p>Class: {ride.rideClass}</p>
                             <p>Client: {ride.tokenLabel}</p>
-                            <p>Status raw: {ride.status?.statusRaw ?? "n/a"}</p>
                             <div className="pt-1">
                               <button
                                 type="button"
@@ -1314,7 +2298,7 @@ export default function RequestRidesPage() {
                                 onClick={() => void removeRequestedRide(ride.orderId)}
                                 className="crm-hover-lift rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
                               >
-                                {deletingOrderId === ride.orderId ? "Cancelling…" : "Remove (cancel in Yango)"}
+                                {deletingOrderId === ride.orderId ? "Cancelling…" : "Remove (cancel trip)"}
                               </button>
                             </div>
                           </div>
@@ -1329,6 +2313,14 @@ export default function RequestRidesPage() {
           </div>
 
           <aside className="pointer-events-none absolute right-4 top-4 z-20 hidden w-[min(30rem,calc(100%-2rem))] flex-col gap-4 xl:flex">
+            <PendingUploadsPanel
+              items={pendingUploads}
+              isSubmitting={uploadSubmitting}
+              cardClassName={rideCard}
+              onConfirmAll={() => void handleConfirmPendingUploads()}
+              onClearAll={clearPendingUploads}
+              onRemove={removePendingUpload}
+            />
             <article className={rideCard}>
               <p className="crm-label">Requested rides</p>
               {requestedRides.length === 0 ? (
@@ -1372,7 +2364,6 @@ export default function RequestRidesPage() {
                         <p>Phone: {ride.riderPhone}</p>
                         <p>Class: {ride.rideClass}</p>
                         <p>Client: {ride.tokenLabel}</p>
-                        <p>Status raw: {ride.status?.statusRaw ?? "n/a"}</p>
                         <div className="pt-1">
                           <button
                             type="button"
@@ -1380,7 +2371,7 @@ export default function RequestRidesPage() {
                             onClick={() => void removeRequestedRide(ride.orderId)}
                             className="crm-hover-lift rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            {deletingOrderId === ride.orderId ? "Cancelling…" : "Remove (cancel in Yango)"}
+                            {deletingOrderId === ride.orderId ? "Cancelling…" : "Remove (cancel trip)"}
                           </button>
                         </div>
                       </div>

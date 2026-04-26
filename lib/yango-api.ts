@@ -80,10 +80,29 @@ type YangoAuthListResponse = {
   clients?: YangoClient[];
 };
 
+type YangoVehicle = {
+  model?: string;
+  car_model?: string;
+  brand?: string;
+  car_brand?: string;
+  manufacturer?: string;
+  licence_plate?: string;
+  license_plate?: string;
+  plates?: string;
+  number?: string;
+  car_number?: string;
+};
+
 type YangoPerformer = {
   id?: string;
   fullname?: string;
   phone?: string;
+  first_name?: string;
+  last_name?: string;
+  firstname?: string;
+  lastname?: string;
+  vehicle?: YangoVehicle;
+  car?: YangoVehicle;
 };
 
 type YangoOrderInfoResponse = {
@@ -678,23 +697,39 @@ function toDateInputValueUtc(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-/** Default Orders window: month start -> today. */
+/**
+ * Orders page: date inputs stay **month 1st → today** (local), but the Yango `orders/list`
+ * window uses a **wider** `since`/`till` because the API filters mainly by **due_date** —
+ * rides finished today can still carry an older due, and the first list page must be
+ * **newest-first** (`sorting_direction: -1` in `fetchOrdersListSinglePage`).
+ */
 export function getB2BOrdersViewDefaultRange(): {
   since: string;
   till: string;
   fromDateStr: string;
   toDateStr: string;
 } {
-  const from = new Date();
-  from.setDate(1);
-  const to = new Date();
-  const fromDateStr = toDateInputValueUtc(from);
-  const toDateStr = toDateInputValueUtc(to);
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+
+  const today = new Date();
+  const todayEnd = new Date(today);
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const apiSince = new Date(todayEnd);
+  apiSince.setDate(apiSince.getDate() - 90);
+  apiSince.setHours(0, 0, 0, 0);
+
+  const apiTill = new Date(todayEnd);
+  apiTill.setDate(apiTill.getDate() + 2);
+  apiTill.setHours(23, 59, 59, 999);
+
   return {
-    fromDateStr,
-    toDateStr,
-    since: new Date(`${fromDateStr}T00:00:00`).toISOString(),
-    till: new Date(`${toDateStr}T23:59:59`).toISOString(),
+    fromDateStr: toDateInputValueUtc(monthStart),
+    toDateStr: toDateInputValueUtc(today),
+    since: apiSince.toISOString(),
+    till: apiTill.toISOString(),
   };
 }
 
@@ -741,7 +776,11 @@ async function fetchOrdersListSinglePage(
     limit: String(limit),
     offset: String(offset),
     sorting_field: "due_date",
-    sorting_direction: "1",
+    /** API allows only `-1` or `1`. Default `-1` = newest `due_date` first; set `YANGO_B2B_ORDERS_LIST_SORT_DIRECTION=1` for oldest-first. */
+    sorting_direction: (() => {
+      const v = process.env.YANGO_B2B_ORDERS_LIST_SORT_DIRECTION?.trim();
+      return v === "1" ? "1" : "-1";
+    })(),
     since_datetime: sinceDateTime,
     till_datetime: tillDateTime,
   });
@@ -1850,6 +1889,7 @@ export async function getRequestRideStatus(input: {
     progress?.status ?? info?.status ?? reportRideStatus?.value ?? "unknown";
   const lifecycleStatus = normalizeRideLifecycleStatus(statusRaw);
   const performer = progress?.performer ?? info?.performer;
+  const driverDetails = extractDriverDetails(performer, report);
   return {
     orderId: input.orderId,
     tokenLabel: input.tokenLabel,
@@ -1858,8 +1898,12 @@ export async function getRequestRideStatus(input: {
     statusRaw,
     statusText: progress?.status_text ?? reportRideStatus?.text ?? statusRaw,
     fetchedAt: new Date().toISOString(),
-    driverName: performer?.fullname ?? null,
+    driverName: performer?.fullname ?? driverDetails.driverName,
     driverPhone: performer?.phone ?? null,
+    driverFirstName: driverDetails.driverFirstName,
+    driverLastName: driverDetails.driverLastName,
+    carModel: driverDetails.carModel,
+    carPlate: driverDetails.carPlate,
     etaMinutes:
       progress?.eta_minutes ??
       progress?.expected_waiting_time ??
@@ -1870,5 +1914,116 @@ export async function getRequestRideStatus(input: {
     info: (info as Record<string, unknown> | null) ?? null,
     progress: (progress as Record<string, unknown> | null) ?? null,
     report,
+  };
+}
+
+function getStringField(
+  obj: Record<string, unknown> | null | undefined,
+  ...keys: string[]
+): string | null {
+  if (!obj) return null;
+  for (const key of keys) {
+    const v = obj[key];
+    if (typeof v === "string") {
+      const trimmed = v.trim();
+      if (trimmed) return trimmed;
+    }
+  }
+  return null;
+}
+
+function splitFullName(fullname: string | null | undefined): {
+  first: string | null;
+  last: string | null;
+} {
+  if (!fullname || typeof fullname !== "string") return { first: null, last: null };
+  const parts = fullname.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { first: null, last: null };
+  if (parts.length === 1) return { first: parts[0], last: null };
+  return { first: parts[0], last: parts.slice(1).join(" ") };
+}
+
+/**
+ * Extracts driver split-names + vehicle model/plate from various Yango payload
+ * shapes. Tolerant: walks `performer.vehicle`, `performer.car`, and falls back
+ * to top-level `report` keys when present.
+ */
+export function extractDriverDetailsFromYangoShapes(
+  performer: Record<string, unknown> | null | undefined,
+  report: Record<string, unknown> | null,
+): {
+  driverName: string | null;
+  driverFirstName: string | null;
+  driverLastName: string | null;
+  carModel: string | null;
+  carPlate: string | null;
+} {
+  return extractDriverDetails((performer ?? undefined) as YangoPerformer | undefined, report);
+}
+
+function extractDriverDetails(
+  performer: YangoPerformer | undefined,
+  report: Record<string, unknown> | null,
+): {
+  driverName: string | null;
+  driverFirstName: string | null;
+  driverLastName: string | null;
+  carModel: string | null;
+  carPlate: string | null;
+} {
+  const performerRecord = (performer ?? {}) as Record<string, unknown>;
+  const vehicleRecord =
+    ((performer?.vehicle ?? performer?.car) as Record<string, unknown> | undefined) ?? null;
+  const reportRecord = report ?? {};
+
+  let firstName =
+    getStringField(performerRecord, "first_name", "firstname") ??
+    getStringField(reportRecord, "driver_first_name", "performer_first_name");
+  let lastName =
+    getStringField(performerRecord, "last_name", "lastname") ??
+    getStringField(reportRecord, "driver_last_name", "performer_last_name");
+
+  const fullname =
+    getStringField(performerRecord, "fullname", "full_name", "name") ??
+    getStringField(reportRecord, "driver_name", "performer_name");
+
+  if ((!firstName || !lastName) && fullname) {
+    const split = splitFullName(fullname);
+    if (!firstName) firstName = split.first;
+    if (!lastName) lastName = split.last;
+  }
+
+  const carBrand =
+    getStringField(vehicleRecord, "brand", "car_brand", "manufacturer") ??
+    getStringField(reportRecord, "car_brand", "vehicle_brand");
+  const carModelRaw =
+    getStringField(vehicleRecord, "model", "car_model") ??
+    getStringField(reportRecord, "car_model", "vehicle_model");
+  const carModel =
+    carBrand && carModelRaw ? `${carBrand} ${carModelRaw}` : (carModelRaw ?? carBrand ?? null);
+
+  const carPlate =
+    getStringField(
+      vehicleRecord,
+      "licence_plate",
+      "license_plate",
+      "plates",
+      "number",
+      "car_number",
+    ) ??
+    getStringField(
+      reportRecord,
+      "license_plate",
+      "licence_plate",
+      "car_number",
+      "vehicle_plate",
+    );
+
+  return {
+    driverName: fullname,
+    driverFirstName: firstName,
+    driverLastName: lastName,
+    carModel,
+    carPlate,
   };
 }

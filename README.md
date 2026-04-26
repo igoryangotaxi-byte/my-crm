@@ -43,6 +43,16 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 AUTH_SESSION_SECRET=
+# Optional: enables traffic-aware route optimization on Request Rides (Routes API v2)
+GOOGLE_MAPS_API_KEY=
+# SMS + optional WhatsApp for stop / destination passengers (Inforu)
+INFORU_USERNAME=
+INFORU_API_TOKEN=
+INFORU_SENDER=AppliTaxi
+# WhatsApp: approved template in Inforu; without template ID only SMS is sent
+INFORU_WHATSAPP_TEMPLATE_ID=
+# Optional: first Text slot placeholder in that template (default [#1#])
+INFORU_WHATSAPP_BODY_PLACEHOLDER=
 ```
 
 4. Start the development server:
@@ -107,6 +117,76 @@ Flow:
 - production button enqueues a `pending` request in `sync_runs` with source `remote_sync_request`
 - local worker claims request, runs connection check and sync
 - worker writes final request status (`success` / `failed`) and sync data lands in Supabase
+
+## Bulk upload (XLSX) on Request Rides
+
+The `Request Rides` page can create many rides at once from an `.xlsx` file.
+
+1. Pick an API client in the form (the same client is used for every row in the file).
+2. After a client is selected, use `Upload XLSX (bulk)` in the client block (optional: `Sample` downloads an example `.xlsx`) and choose your spreadsheet.
+3. Each row in the file is parsed, addresses are geocoded, and the result appears in the `Pending uploads` panel.
+4. Review the rows, then click `Confirm and create N rides` to submit them sequentially.
+
+Column layout (no header row required — a header row is auto-detected):
+
+| Column | Purpose | Required | Notes |
+| --- | --- | --- | --- |
+| A | Date and time of the ride | yes | Excel date cell, ISO string, or `dd.mm.yyyy hh:mm` / `dd/mm/yyyy hh:mm` |
+| B | Rider phone (Yango passenger user) | yes | Free-form, leading `'` and whitespace are stripped |
+| C | Driver comment | no | Free text |
+| D | Pickup (point A) | yes | Address text, can be Russian, English or Hebrew |
+| E | Stop or destination | yes | If only D and E are present, E is the destination |
+| F | Stop or destination | no | Up to 5 addresses total per row |
+| G | Stop or destination | no | The last non-empty cell among D…H is the destination |
+| H | Stop or destination | no | Cells between D and the last non-empty become "Stops along the way" |
+| I–M | SMS phone aligned with each address D–H | no | Column I (pickup) is parsed but never receives SMS; J–M get an SMS at ride creation and at driver assignment |
+
+Row will be marked `blocked` (and skipped on confirm) when:
+- date is missing or unparseable;
+- phone is missing;
+- pickup is missing;
+- only one address is present;
+- one of the addresses cannot be geocoded.
+
+When a row has 3+ geocoded addresses and `GOOGLE_MAPS_API_KEY` is configured, the address order is **auto-optimized for current traffic** (open TSP — pickup stays first, the remaining stops are reshuffled to the fastest order, the last point becomes the destination). The preview shows an `Optimized · saves Nm` badge for affected rows. Without the key, the bulk flow silently skips optimization.
+
+See [docs/request-rides-bulk-upload-template.md](docs/request-rides-bulk-upload-template.md) for an example sheet.
+
+## Route optimization (single ride)
+
+On the Request Rides page, when there are 3 or more points (pickup + at least 2 stops/destination), an `Optimize order (traffic-aware)` card appears under the Route preview. It uses **Routes API v2** (`computeRouteMatrix` for traffic-aware durations between every pair, then `computeRoutes` for the polyline of the winning permutation). The result is presented as `Pickup → ... → ...` with an estimated saving in current traffic and `Apply` / `Dismiss` buttons. Pickup is always first. By default, intermediate stops and the final drop-off can reorder; optional **Keep final drop-off as in the form** fixes the destination (round trips).
+
+Required env: `GOOGLE_MAPS_API_KEY` (server-only). Without it the form button surfaces an inline error and the bulk flow skips optimization silently.
+
+The **Route preview** panel and map polyline use the same key when set: `/api/route-preview` uses **traffic-aware routing** only (`TRAFFIC_AWARE_OPTIMAL`) for distance, duration in current traffic, and per-leg speed coloring on the map — **no OSRM fallback** when `GOOGLE_MAPS_API_KEY` is set (errors surface in the UI). If the key is **missing**, preview still uses **OSRM** for local/dev.
+
+### Routing access errors (`403`) / `PERMISSION_DENIED` / “ComputeRouteMatrix are blocked”
+
+1. **Billing** — attach a billing account to the project (Routes API is paid after free tier).
+2. **Enable API** — [APIs & Services → Library](https://console.cloud.google.com/apis/library) → search **Routes API** → **Enable** (one API covers route matrix + directions used here).
+3. **Key restrictions** — Credentials → your key → **API restrictions** → either “Don’t restrict” for testing, or **Restrict key** and tick **Routes API** only (not only “Maps JavaScript API”).
+4. **Application restrictions** — for server calls from Next.js use **None** or **IP addresses**, not **Websites** (referrers do not apply to `/api/*` server `fetch`).
+
+## SMS and WhatsApp (Inforu)
+
+Stops and the destination on `Request Rides` accept a passenger phone number that receives notifications at two moments:
+
+1. **Ride created** — on submit, every stop / destination phone gets `Hey, someone requested a pre-order on … with Yango. Be ready on time and have a nice trip.` (or the non-scheduled variant for immediate rides).
+2. **Driver assigned (status: Driving)** — when status polling sees the order transition into `driver_assigned`, recipients get `Hey, your driver is on the way <car model>, <plate>, <first name> <last name>.` Falls back gracefully when some fields are missing in the Yango payload.
+
+SMS is sent server-side via the Inforu gateway (`POST https://api.inforu.co.il/SendMessageXml.ashx`). WhatsApp uses Inforu’s JSON API on `capi.inforu.co.il` ([API InforUMobile](https://apidoc.inforu.co.il/)) with the **same** `INFORU_USERNAME` / `INFORU_API_TOKEN` (HTTP Basic). WhatsApp is **template-based**: create an approved template in Inforu whose first **Text** slot receives the full message string, set `INFORU_WHATSAPP_TEMPLATE_ID` to that template’s numeric id, and optionally `INFORU_WHATSAPP_BODY_PLACEHOLDER` if the slot is not the default `[#1#]`. If the template id is unset, the app only sends SMS (no error).
+
+Configure:
+
+- `INFORU_USERNAME` — Inforu account username.
+- `INFORU_API_TOKEN` — API token from `Account Details → API Token`.
+- `INFORU_SENDER` — Sender ID shown on the recipient’s phone: Inforu usually expects **Latin letters/digits** (≤11 letters or 14 digits), **pre-approved** in your Inforu account. Hebrew or arbitrary strings often return **InvalidSenderIdentification** (`-90`) until Inforu registers a matching sender for you. Defaults to `AppliTaxi` in code if unset.
+
+If Inforu returns **Unverified Account / KYC**, the account must complete **business verification** in the Inforu portal before any SMS can leave their gateway; changing env vars or sender in this app does not replace that step.
+
+When the credentials are not set, ride creation still works — the SMS step is skipped and a soft warning is shown beneath the form. Per-recipient send-once dedupe is persisted in `localStorage` so a hard reload + re-poll never resends.
+
+The bulk XLSX layout is extended with optional phone columns I–M aligned to address columns D–H. See [docs/request-rides-bulk-upload-template.md](docs/request-rides-bulk-upload-template.md).
 
 ## Security
 
