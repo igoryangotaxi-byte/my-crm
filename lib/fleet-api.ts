@@ -1519,6 +1519,9 @@ export async function getDriversOnMapDataOptimized(input: {
 }): Promise<DriversMapResponse> {
   await ensureSnapshotLoadedFromDisk();
   const updatedAt = new Date().toISOString();
+  const snapshotHasGeo = Boolean(
+    lastGoodDriversSnapshot?.drivers.some((driver) => driver.lat != null && driver.lon != null),
+  );
   if (!FLEET_API_KEY || !FLEET_CLIENT_ID || !FLEET_PARK_ID) {
     return {
       ok: false,
@@ -1539,6 +1542,7 @@ export async function getDriversOnMapDataOptimized(input: {
     !input.force &&
     input.includeGeo &&
     lastGoodDriversSnapshot &&
+    snapshotHasGeo &&
     now - lastGoodSnapshotAtMs < FLEET_MAP_CACHE_TTL_MS
   ) {
     const drivers = hydrateSnapshotDriversForResponse();
@@ -1573,7 +1577,12 @@ export async function getDriversOnMapDataOptimized(input: {
     };
   }
 
-  if (!input.force && lastGoodDriversSnapshot && now - lastFleetFetchAtMs < minFetchIntervalMs) {
+  if (
+    !input.force &&
+    lastGoodDriversSnapshot &&
+    now - lastFleetFetchAtMs < minFetchIntervalMs &&
+    (!input.includeGeo || snapshotHasGeo)
+  ) {
     const drivers = hydrateSnapshotDriversForResponse();
     await appendObservationsAndRecordFleetGeo(drivers, input.includeGeo, new Map());
     return {
