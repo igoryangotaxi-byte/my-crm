@@ -1,3 +1,4 @@
+import { relabelGoogleVendorForDisplay } from "@/lib/public-error-message";
 import { cancelYangoOrder } from "@/lib/yango-api";
 import { requireApprovedUser } from "@/lib/server-auth";
 import { revalidateTag } from "next/cache";
@@ -34,7 +35,10 @@ export async function POST(request: Request) {
     revalidateTag("yango-preorders", "default");
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to cancel order.";
-    return Response.json({ ok: false, error: message }, { status: 500 });
+    const message = error instanceof Error ? error.message.trim() : "Failed to cancel order.";
+    return Response.json(
+      { ok: false, error: relabelGoogleVendorForDisplay(message || "Failed to cancel order.") },
+      { status: 500 },
+    );
   }
 }

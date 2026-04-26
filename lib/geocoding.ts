@@ -64,6 +64,24 @@ function normalizeCityHint(city: string): string {
   return city.trim().replace(/\btel-?\s*-?\s*aviv\b/i, "Tel Aviv");
 }
 
+/** Nominatim structured `street`+`city` is unreliable for RTL/Cyrillic free text (and weak hits can block the `q` fallback). */
+function prefersFreeTextGeocodeOnly(text: string): boolean {
+  return /[\u0590-\u05FF]/.test(text) || /[\u0400-\u04FF]/.test(text);
+}
+
+/**
+ * OSM often indexes "הירקון" without the leading word "רחוב" (street); free-text `q` then returns [].
+ * Strip common street-type prefixes so Nominatim matches typical map-style Hebrew typing.
+ */
+function normalizeHebrewAddressQueryForGeocode(query: string): string {
+  if (!/[\u0590-\u05FF]/.test(query)) return query;
+  return query
+    .replace(/(^|\s)רחוב\s+/g, "$1")
+    .replace(/(^|\s)רח['׳]\s*/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** "Street, City" as typed in the form — improves Nominatim precision vs a single free-text `q`. */
 function parseStreetAndCity(query: string): { street: string; city: string } | null {
   const idx = query.indexOf(",");
@@ -124,21 +142,25 @@ export async function searchAddressSuggestions(input: {
   const q = input.query.trim();
   if (!q) return [];
   const limit = Math.max(1, Math.min(input.limit ?? 8, 10));
-  const structured = parseStreetAndCity(q);
-  let items: NominatimSearchItem[] = [];
+  const useStructured = !prefersFreeTextGeocodeOnly(q);
+  const structured = useStructured ? parseStreetAndCity(q) : null;
+  const geocodeQuery = normalizeHebrewAddressQueryForGeocode(q);
+  const items: NominatimSearchItem[] = [];
   if (structured) {
     const sp = new URLSearchParams({
       street: structured.street,
       city: structured.city,
       limit: String(Math.min(limit + 4, 12)),
     });
-    items = await nominatimSearch(sp, input.language);
+    items.push(...(await nominatimSearch(sp, input.language)));
   }
-  if (items.length < limit) {
-    const sp = new URLSearchParams({ q, limit: String(Math.min(limit + 6, 14)) });
-    const extra = await nominatimSearch(sp, input.language);
-    items = [...items, ...extra];
-  }
+  // Always run free-text `q` as well: Hebrew needs it; Latin "street, city" can otherwise fill the
+  // result budget with weak structured hits and skip the full-string search entirely.
+  const qParams = new URLSearchParams({
+    q: geocodeQuery,
+    limit: String(Math.min(limit + (structured ? 8 : 6), 20)),
+  });
+  items.push(...(await nominatimSearch(qParams, input.language)));
   return itemsToSuggestions(items, limit);
 }
 

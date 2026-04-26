@@ -1250,6 +1250,38 @@ function isSchedulingOrderRow(row: B2BDashboardOrder): boolean {
   return (row.statusRaw ?? "").toLowerCase().includes("scheduling");
 }
 
+/** Local calendar YYYY-MM-DD for list / filter alignment (avoids UTC-only ISO edge cases). */
+function localYmdFromIso(iso: string): string | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Orders view: show row if **scheduled** or **created** day falls in [fromDate, toDate] (inclusive). */
+function orderRowMatchesOrdersDateFilter(
+  row: B2BDashboardOrder,
+  fromDate: string | null,
+  toDate: string | null,
+): boolean {
+  const keys = new Set<string>();
+  const sched = localYmdFromIso(row.scheduledAt);
+  if (sched) keys.add(sched);
+  if (row.createdAt && row.createdAt !== "Not provided by API") {
+    const created = localYmdFromIso(row.createdAt);
+    if (created) keys.add(created);
+  }
+  if (keys.size === 0) return false;
+  for (const k of keys) {
+    if (fromDate && k < fromDate) continue;
+    if (toDate && k > toDate) continue;
+    return true;
+  }
+  return false;
+}
+
 function resolveDashboardStatus(row: B2BDashboardOrder): Exclude<StatusFilter, "all"> {
   const rawStatus = (row.statusRaw ?? "").toLowerCase();
   if (
@@ -1418,10 +1450,12 @@ export function B2BPreOrdersPanel({
   }, [apiRowsForView, clientFilter, statusFilter]);
 
   const filteredRows = useMemo(() => {
-    const from = fromDate ? new Date(`${fromDate}T00:00:00`) : null;
-    const to = toDate ? new Date(`${toDate}T23:59:59`) : null;
-
     const result = scopedRows.filter((row) => {
+      if (view === "orders") {
+        return orderRowMatchesOrdersDateFilter(row, fromDate || null, toDate || null);
+      }
+      const from = fromDate ? new Date(`${fromDate}T00:00:00`) : null;
+      const to = toDate ? new Date(`${toDate}T23:59:59`) : null;
       const scheduledDate = new Date(row.scheduledAt);
       if (Number.isNaN(scheduledDate.getTime())) return false;
       if (from && scheduledDate < from) return false;
@@ -1441,7 +1475,7 @@ export function B2BPreOrdersPanel({
     });
 
     return result;
-  }, [scopedRows, fromDate, toDate, sortMode]);
+  }, [scopedRows, fromDate, toDate, sortMode, view]);
   const uiDatesToApiIso = useCallback((from: string, to: string) => {
     return {
       since: new Date(`${from}T00:00:00`).toISOString(),

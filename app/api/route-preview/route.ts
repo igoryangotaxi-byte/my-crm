@@ -1,3 +1,5 @@
+import { googleComputeDrivingRoutePreview } from "@/lib/google-routes";
+import { relabelGoogleVendorForDisplay } from "@/lib/public-error-message";
 import { requireApprovedUser } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
@@ -24,6 +26,8 @@ type RoutePreviewPayload = {
   geojson: { type: "LineString"; coordinates: Array<[number, number]> };
   /** Per-segment line for speed-based coloring on the client. */
   trafficGeojson: RouteTrafficFeatureCollection | null;
+  /** `google` when traffic-aware routing key is set and the request succeeded; otherwise `osrm`. */
+  provider: "google" | "osrm";
 };
 
 function toFiniteNumber(input: unknown): number | null {
@@ -115,7 +119,12 @@ async function fetchOsrmRoute(points: LatLon[], timeoutMs: number): Promise<Rout
   );
   if (!response.ok) {
     const raw = await response.text();
-    throw new Error(`OSRM HTTP ${response.status}: ${raw.slice(0, 200)}`);
+    if (process.env.NODE_ENV !== "test") {
+      console.error("[route-preview:osrm]", response.status, raw.slice(0, 300));
+    }
+    throw new Error(
+      relabelGoogleVendorForDisplay(`OSRM route preview — HTTP ${response.status}: ${raw.slice(0, 2000)}`),
+    );
   }
   const payload = (await response.json().catch(() => null)) as
     | {
@@ -168,6 +177,23 @@ async function fetchOsrmRoute(points: LatLon[], timeoutMs: number): Promise<Rout
       coordinates: route?.geometry?.coordinates ?? [],
     },
     trafficGeojson,
+    provider: "osrm",
+  };
+}
+
+async function fetchGoogleRoutePreview(
+  points: LatLon[],
+  apiKey: string,
+  timeoutMs: number,
+): Promise<RoutePreviewPayload> {
+  const preview = await googleComputeDrivingRoutePreview(points, apiKey, timeoutMs);
+  const trafficGeojson = preview.trafficGeojson as RouteTrafficFeatureCollection | null;
+  return {
+    distanceMeters: preview.distanceMeters,
+    durationSeconds: preview.durationSeconds,
+    geojson: { type: "LineString", coordinates: preview.coordinates },
+    trafficGeojson,
+    provider: "google",
   };
 }
 
@@ -178,14 +204,19 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as { points?: unknown } | null;
   const points = normalizePoints(body?.points);
   if (points.length < 2) {
-    return Response.json({ ok: false, error: "At least 2 points are required." }, { status: 400 });
+    return Response.json({ ok: false, error: "Add at least two places on the map for a route." }, { status: 400 });
   }
 
   const timeoutMsRaw = Number(process.env.ROUTE_PROVIDER_TIMEOUT_MS ?? "5000");
   const timeoutMs = Number.isFinite(timeoutMsRaw) ? Math.max(1500, timeoutMsRaw) : 5000;
 
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
+
   try {
-    const route = await fetchOsrmRoute(points, timeoutMs);
+    /** With `GOOGLE_MAPS_API_KEY`, preview uses traffic-aware routing only (no silent OSRM fallback). */
+    const route: RoutePreviewPayload = apiKey
+      ? await fetchGoogleRoutePreview(points, apiKey, timeoutMs)
+      : await fetchOsrmRoute(points, timeoutMs);
     return Response.json(
       {
         ok: true,
@@ -194,7 +225,14 @@ export async function POST(request: Request) {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to build route preview.";
-    return Response.json({ ok: false, error: message }, { status: 500 });
+    if (process.env.NODE_ENV !== "test") {
+      console.error("[route-preview]", error);
+    }
+    const raw = error instanceof Error ? error.message : String(error);
+    const message = raw.trim() || "Failed to build route preview.";
+    return Response.json(
+      { ok: false, error: relabelGoogleVendorForDisplay(message) },
+      { status: 500 },
+    );
   }
 }

@@ -1,3 +1,4 @@
+import { relabelGoogleVendorForDisplay } from "@/lib/public-error-message";
 import { getRequestRideApiClients } from "@/lib/yango-api";
 import { requireApprovedUser } from "@/lib/server-auth";
 
@@ -14,11 +15,12 @@ export async function GET(request: Request) {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
+    if (process.env.NODE_ENV !== "test") {
+      console.error("[request-rides-clients]", error);
+    }
+    const msg = error instanceof Error ? error.message.trim() : "Failed to load clients.";
     return Response.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Failed to load API clients.",
-      },
+      { ok: false, error: relabelGoogleVendorForDisplay(msg || "Failed to load clients.") },
       { status: 500 },
     );
   }
