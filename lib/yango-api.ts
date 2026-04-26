@@ -698,10 +698,11 @@ function toDateInputValueUtc(date: Date): string {
 }
 
 /**
- * Orders page: date inputs stay **month 1st → today** (local), but the Yango `orders/list`
- * window uses a **wider** `since`/`till` because the API filters mainly by **due_date** —
- * rides finished today can still carry an older due, and the first list page must be
- * **newest-first** (`sorting_direction: -1` in `fetchOrdersListSinglePage`).
+ * Orders page default window for Yango `orders/list` and for **UI date pickers + client filter**.
+ * `since`/`till` are intentionally wider than a single calendar month because the API keys off
+ * **due_date** — rides finished recently can still carry an older due, and the first page is
+ * **newest-first** (`sorting_direction: -1`). `fromDateStr`/`toDateStr` must cover the same
+ * calendar span as `since`/`till`, otherwise SSR rows are filtered out until the user changes dates.
  */
 export function getB2BOrdersViewDefaultRange(): {
   since: string;
@@ -709,10 +710,6 @@ export function getB2BOrdersViewDefaultRange(): {
   fromDateStr: string;
   toDateStr: string;
 } {
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
-
   const today = new Date();
   const todayEnd = new Date(today);
   todayEnd.setHours(23, 59, 59, 999);
@@ -726,8 +723,8 @@ export function getB2BOrdersViewDefaultRange(): {
   apiTill.setHours(23, 59, 59, 999);
 
   return {
-    fromDateStr: toDateInputValueUtc(monthStart),
-    toDateStr: toDateInputValueUtc(today),
+    fromDateStr: toDateInputValueUtc(apiSince),
+    toDateStr: toDateInputValueUtc(apiTill),
     since: apiSince.toISOString(),
     till: apiTill.toISOString(),
   };
