@@ -49,6 +49,16 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Drivers Map persistence (important for production)
+
+`/api/drivers-map` stores last known coordinates and status observations in Vercel KV.
+
+- Required in Vercel Production/Preview:
+  - `KV_REST_API_URL`
+  - `KV_REST_API_TOKEN`
+- Local development can run without KV (fallback to in-memory/local file), but behavior after refresh/cold start will not match production exactly.
+- Before release, keep `KV_REST_*` configured in Vercel and run `npm run build`.
+
 ## Optional: DataGrip manual sync button
 
 If you want to run DataGrip/Greenplum -> Supabase sync from the `Notes` page:
