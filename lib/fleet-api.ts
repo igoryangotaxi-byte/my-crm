@@ -546,8 +546,8 @@ async function persistFleetSnapshot(snapshot: {
   const observations: Record<string, DriverObservation[]> = {};
   for (const driver of snapshot.drivers) {
     const identity = buildDriverObservationIdentity(driver);
-    const { historyKey, list } = collectObservationsForIdentity(identity, driver.id);
-    observations[historyKey] = list.slice(-240);
+    const { list } = collectObservationsForIdentity(identity, driver.id);
+    observations[driver.id] = list.slice(-240);
   }
   const payload: PersistedFleetPayload = { ...snapshot, observations };
 
