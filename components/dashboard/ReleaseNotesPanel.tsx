@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-04-27",
+    title: "Request Rides default routing and collapsible UX",
+    notes:
+      "806c8ee — Default app entry moved to Request Rides, B2B/B2C switch now routes to Request Rides/Drivers Map, Request Rides sections became collapsible with hover + chevron state, and B2B CSV local-time parsing was fixed to avoid +3h drift and missing rows.",
+  },
+  {
     date: "2026-04-25",
     title: "Drivers map: stable markers, Fleet cache, Vercel Fleet env",
     notes:
