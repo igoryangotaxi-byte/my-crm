@@ -1626,6 +1626,10 @@ export default function RequestRidesPage() {
 
   const rideCard =
     "pointer-events-auto rounded-2xl border border-white/70 bg-white/78 p-4 shadow-[0_20px_44px_rgba(15,23,42,0.16)] backdrop-blur-md";
+  const collapsibleCardClass =
+    "group pointer-events-auto rounded-2xl border border-white/80 bg-white/88 p-4 shadow-[0_18px_40px_rgba(15,23,42,0.18)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(15,23,42,0.22)]";
+  const collapsibleSummaryClass =
+    "flex cursor-pointer list-none items-center justify-between rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2.5 select-none text-sm font-semibold text-slate-900 transition-colors duration-200 hover:bg-white [&::-webkit-details-marker]:hidden";
   const dropdownPanelClass =
     "absolute z-[90] mt-1 max-h-56 w-full overflow-auto rounded-2xl border border-white/70 bg-white/90 p-1 shadow-[0_20px_45px_rgba(15,23,42,0.18)] backdrop-blur-md";
   const dropdownOptionClass = "crm-hover-lift w-full rounded-xl px-3 py-2 text-left hover:bg-white/95";
@@ -1803,88 +1807,98 @@ export default function RequestRidesPage() {
                 </label>
               </div>
 
-              <div className={`${rideCard} relative z-30 space-y-3`}>
-                {renderAddressInput({
-                  fieldId: "pickup",
-                  label: "Pickup location",
-                  value: pickup,
-                  required: true,
-                  onChange: setPickup,
-                })}
-                {stops.map((stop) => (
-                  <div key={stop.id} className="rounded-xl border border-slate-100 bg-slate-50/80 p-2">
-                    {renderAddressInput({
-                      fieldId: `stop:${stop.id}`,
-                      label: "Stop along the way",
-                      value: stop,
-                      onChange: (next) =>
-                        setStops((prev) =>
-                          prev.map((item) => (item.id === stop.id ? { ...item, ...next } : item)),
-                        ),
-                    })}
-                    <label className="mt-2 block">
-                      <span className="crm-label mb-1 block">Passenger phone (SMS)</span>
-                      <input
-                        type="tel"
-                        inputMode="tel"
-                        value={stop.phone}
-                        onChange={(event) =>
+              <details className={`${collapsibleCardClass} relative z-30`} open={false}>
+                <summary className={collapsibleSummaryClass}>
+                  <span>Route & stops</span>
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-transform duration-200 group-open:rotate-180">
+                    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.9">
+                      <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </summary>
+                <div className="mt-3 space-y-3">
+                  {renderAddressInput({
+                    fieldId: "pickup",
+                    label: "Pickup location",
+                    value: pickup,
+                    required: true,
+                    onChange: setPickup,
+                  })}
+                  {stops.map((stop) => (
+                    <div key={stop.id} className="rounded-xl border border-slate-100 bg-slate-50/80 p-2">
+                      {renderAddressInput({
+                        fieldId: `stop:${stop.id}`,
+                        label: "Stop along the way",
+                        value: stop,
+                        onChange: (next) =>
                           setStops((prev) =>
-                            prev.map((item) =>
-                              item.id === stop.id ? { ...item, phone: event.target.value } : item,
-                            ),
-                          )
-                        }
-                        className="crm-input h-10 w-full px-3 text-sm"
-                        placeholder="+972..."
-                      />
-                    </label>
-                    <div className="mt-1 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => setStops((prev) => prev.filter((item) => item.id !== stop.id))}
-                        className="crm-hover-lift rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"
-                      >
-                        Remove stop
-                      </button>
+                            prev.map((item) => (item.id === stop.id ? { ...item, ...next } : item)),
+                          ),
+                      })}
+                      <label className="mt-2 block">
+                        <span className="crm-label mb-1 block">Passenger phone (SMS)</span>
+                        <input
+                          type="tel"
+                          inputMode="tel"
+                          value={stop.phone}
+                          onChange={(event) =>
+                            setStops((prev) =>
+                              prev.map((item) =>
+                                item.id === stop.id ? { ...item, phone: event.target.value } : item,
+                              ),
+                            )
+                          }
+                          className="crm-input h-10 w-full px-3 text-sm"
+                          placeholder="+972..."
+                        />
+                      </label>
+                      <div className="mt-1 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setStops((prev) => prev.filter((item) => item.id !== stop.id))}
+                          className="crm-hover-lift rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"
+                        >
+                          Remove stop
+                        </button>
+                      </div>
                     </div>
+                  ))}
+                  {renderAddressInput({
+                    fieldId: "destination",
+                    label: "Destination",
+                    value: destination,
+                    required: true,
+                    onChange: setDestination,
+                  })}
+                  <label className="block">
+                    <span className="crm-label mb-1 block">Passenger phone at destination (SMS)</span>
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      value={destinationPhone}
+                      onChange={(event) => setDestinationPhone(event.target.value)}
+                      className="crm-input h-10 w-full px-3 text-sm"
+                      placeholder="+972..."
+                    />
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setStops((prev) => [...prev, createEmptyStopField()])}
+                      className="crm-hover-lift rounded-lg border border-border/80 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      Add Stop
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearRouteSelection}
+                      className="crm-hover-lift rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:bg-white"
+                    >
+                      Clear route
+                    </button>
                   </div>
-                ))}
-                {renderAddressInput({
-                  fieldId: "destination",
-                  label: "Destination",
-                  value: destination,
-                  required: true,
-                  onChange: setDestination,
-                })}
-                <label className="block">
-                  <span className="crm-label mb-1 block">Passenger phone at destination (SMS)</span>
-                  <input
-                    type="tel"
-                    inputMode="tel"
-                    value={destinationPhone}
-                    onChange={(event) => setDestinationPhone(event.target.value)}
-                    className="crm-input h-10 w-full px-3 text-sm"
-                    placeholder="+972..."
-                  />
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setStops((prev) => [...prev, createEmptyStopField()])}
-                    className="crm-hover-lift rounded-lg border border-border/80 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                  >
-                    Add Stop
-                  </button>
-                  <button
-                    type="button"
-                    onClick={clearRouteSelection}
-                    className="crm-hover-lift rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:bg-white"
-                  >
-                    Clear route
-                  </button>
                 </div>
-              </div>
+              </details>
 
               {mapPoints.length >= 2 ? (
                 <details className={`${rideCard} text-xs text-slate-800`}>
@@ -1909,18 +1923,27 @@ export default function RequestRidesPage() {
               ) : null}
 
               {mapPoints.length >= 3 ? (
-                <div className={`${rideCard} space-y-2 text-sm text-slate-800`}>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="crm-label">Optimize order (traffic-aware)</p>
-                    <button
-                      type="button"
-                      onClick={() => void optimizeCurrentRoute()}
-                      disabled={optimizing}
-                      className="crm-hover-lift shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {optimizing ? "Calculating…" : "Find fastest order"}
-                    </button>
-                  </div>
+                <details className={`${collapsibleCardClass} text-sm text-slate-800`} open={false}>
+                  <summary className={collapsibleSummaryClass}>
+                    <span>Route optimization</span>
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-transform duration-200 group-open:rotate-180">
+                      <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.9">
+                        <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </span>
+                  </summary>
+                  <div className="mt-3 space-y-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="crm-label">Optimize order (traffic-aware)</p>
+                      <button
+                        type="button"
+                        onClick={() => void optimizeCurrentRoute()}
+                        disabled={optimizing}
+                        className="crm-hover-lift shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {optimizing ? "Calculating…" : "Find fastest order"}
+                      </button>
+                    </div>
                   <label className="flex cursor-pointer items-start gap-2 text-xs text-slate-700">
                     <input
                       type="checkbox"
@@ -2033,19 +2056,29 @@ export default function RequestRidesPage() {
                   {optimizationError ? (
                     <p className="text-xs text-rose-700">{optimizationError}</p>
                   ) : null}
-                </div>
+                  </div>
+                </details>
               ) : null}
 
-              <div className={`${rideCard} space-y-3`}>
-                <label className="block">
-                  <span className="crm-label mb-1 block">Tariff class</span>
-                  <input
-                    value={rideClass}
-                    onChange={(event) => setRideClass(event.target.value)}
-                    className="crm-input h-11 w-full px-3 text-sm"
-                    placeholder="comfortplus_b2b"
-                  />
-                </label>
+              <details className={collapsibleCardClass} open={false}>
+                <summary className={collapsibleSummaryClass}>
+                  <span>Ride settings</span>
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-transform duration-200 group-open:rotate-180">
+                    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.9">
+                      <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </summary>
+                <div className="mt-3 space-y-3">
+                  <label className="block">
+                    <span className="crm-label mb-1 block">Tariff class</span>
+                    <input
+                      value={rideClass}
+                      onChange={(event) => setRideClass(event.target.value)}
+                      className="crm-input h-11 w-full px-3 text-sm"
+                      placeholder="comfortplus_b2b"
+                    />
+                  </label>
 
                 <label className="block">
                   <span className="crm-label mb-1 block">Driver instructions...</span>
@@ -2074,40 +2107,51 @@ export default function RequestRidesPage() {
                   />
                   Schedule ride
                 </label>
-                {scheduleEnabled ? (
-                  <label className="block">
-                    <span className="crm-label mb-1 block">Schedule datetime</span>
-                    <input
-                      type="datetime-local"
-                      value={scheduleAtInput}
-                      onChange={(event) => setScheduleAtInput(event.target.value)}
-                      className="crm-input h-11 w-full px-3 text-sm"
-                    />
-                  </label>
-                ) : null}
-              </div>
-
-              <div className={`${rideCard} space-y-2`}>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void checkPhoneRegistration()}
-                    disabled={phoneChecking || !selectedClient || !phoneNumber.trim()}
-                    className="crm-hover-lift rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-55"
-                  >
-                    {phoneChecking ? "Checking phone..." : "Check phone registration"}
-                  </button>
-                  {phoneLookupMessage ? (
-                    <p className={`text-sm ${phoneLookupOk ? "text-emerald-700" : "text-rose-700"}`}>
-                      {phoneLookupMessage}
-                    </p>
+                  {scheduleEnabled ? (
+                    <label className="block">
+                      <span className="crm-label mb-1 block">Schedule datetime</span>
+                      <input
+                        type="datetime-local"
+                        value={scheduleAtInput}
+                        onChange={(event) => setScheduleAtInput(event.target.value)}
+                        className="crm-input h-11 w-full px-3 text-sm"
+                      />
+                    </label>
                   ) : null}
                 </div>
-                {clientsError ? <p className="text-sm text-rose-700">{clientsError}</p> : null}
-                {formError ? <p className="text-sm text-rose-700">{formError}</p> : null}
-                {rideListError ? <p className="text-sm text-rose-700">{rideListError}</p> : null}
-                {smsWarning ? <p className="text-sm text-amber-700">{smsWarning}</p> : null}
-              </div>
+              </details>
+
+              <details className={collapsibleCardClass} open={false}>
+                <summary className={collapsibleSummaryClass}>
+                  <span>Validation & alerts</span>
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-transform duration-200 group-open:rotate-180">
+                    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.9">
+                      <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </summary>
+                <div className="mt-3 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void checkPhoneRegistration()}
+                      disabled={phoneChecking || !selectedClient || !phoneNumber.trim()}
+                      className="crm-hover-lift rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-55"
+                    >
+                      {phoneChecking ? "Checking phone..." : "Check phone registration"}
+                    </button>
+                    {phoneLookupMessage ? (
+                      <p className={`text-sm ${phoneLookupOk ? "text-emerald-700" : "text-rose-700"}`}>
+                        {phoneLookupMessage}
+                      </p>
+                    ) : null}
+                  </div>
+                  {clientsError ? <p className="text-sm text-rose-700">{clientsError}</p> : null}
+                  {formError ? <p className="text-sm text-rose-700">{formError}</p> : null}
+                  {rideListError ? <p className="text-sm text-rose-700">{rideListError}</p> : null}
+                  {smsWarning ? <p className="text-sm text-amber-700">{smsWarning}</p> : null}
+                </div>
+              </details>
 
               <div className={rideCard}>
                 <button
@@ -2120,9 +2164,16 @@ export default function RequestRidesPage() {
               </div>
 
               {mapClickPoint ? (
-                <div className={`${rideCard} text-sm`}>
-                  <p className="font-semibold text-slate-900">Map point selected</p>
-                  <p className="text-slate-700">
+                <details className={`${collapsibleCardClass} text-sm`} open={false}>
+                  <summary className={collapsibleSummaryClass}>
+                    <span>Map point actions</span>
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-transform duration-200 group-open:rotate-180">
+                      <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.9">
+                        <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </span>
+                  </summary>
+                  <p className="mt-3 text-slate-700">
                     {mapClickLoading ? "Resolving address..." : mapClickLabel || "Address not resolved"}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -2172,7 +2223,7 @@ export default function RequestRidesPage() {
                       Add as Stop along the way
                     </button>
                   </div>
-                </div>
+                </details>
               ) : null}
 
               <div className="space-y-3 xl:hidden">

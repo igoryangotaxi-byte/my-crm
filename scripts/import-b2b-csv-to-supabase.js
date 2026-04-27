@@ -5,7 +5,6 @@ const { parse } = require("csv-parse");
 const { createClient } = require("@supabase/supabase-js");
 
 const BATCH_SIZE = 500;
-const SOURCE_UTC_OFFSET_HOURS = Number(process.env.B2B_IMPORT_SOURCE_UTC_OFFSET_HOURS ?? "0");
 
 const CSV_COLUMNS = [
   "order_date",
@@ -105,19 +104,27 @@ function toBoolOrNull(value) {
 function toIsoOrNull(value) {
   const text = normalizeString(value);
   if (!text) return null;
-  const candidate = text.includes("T") ? text : text.replace(" ", "T");
-  const withZone = /[zZ]|[+\-]\d{2}:?\d{2}$/.test(candidate)
-    ? candidate
-    : `${candidate}Z`;
-  const date = new Date(withZone);
+  /**
+   * B2B CSV timestamps are local wall-clock values.
+   * Support single-digit hour rows like "2026-04-27 9:56:20".
+   */
+  const plain = text.replace("T", " ");
+  const m = plain.match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/,
+  );
+  if (m) {
+    const year = Number(m[1]);
+    const month = Number(m[2]) - 1;
+    const day = Number(m[3]);
+    const hour = Number(m[4]);
+    const minute = Number(m[5]);
+    const second = Number(m[6] ?? "0");
+    const ms = Number((m[7] ?? "0").padEnd(3, "0"));
+    const localDate = new Date(year, month, day, hour, minute, second, ms);
+    return Number.isNaN(localDate.getTime()) ? null : localDate.toISOString();
+  }
+  const date = new Date(text);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
-}
-
-function shiftIsoByHours(iso, hours) {
-  if (!iso || !Number.isFinite(hours) || hours === 0) return iso;
-  const ts = new Date(iso).getTime();
-  if (Number.isNaN(ts)) return iso;
-  return new Date(ts + hours * 60 * 60 * 1000).toISOString();
 }
 
 function parsePgArrayText(value) {
@@ -168,7 +175,8 @@ function mapCsvRecord(record) {
   }
 
   const scheduledAtUtc = toIsoOrNull(readField(item, "order_date", "trip_datetime"));
-  const scheduledAt = shiftIsoByHours(scheduledAtUtc, SOURCE_UTC_OFFSET_HOURS);
+  // B2B source timestamps are already in local business time; keep as-is (no +3h shift).
+  const scheduledAt = scheduledAtUtc;
   const etlProcessedAt =
     toIsoOrNull(readField(item, "_etl_processed_dttm", "etl_processed_dttm")) ?? scheduledAt;
   const clientPrice = toNumberOrNull(readField(item, "client_price"));
@@ -311,7 +319,7 @@ async function main() {
   }
 
   process.stdout.write(
-    `Import finished. Read: ${totalRead}, unique: ${dedupedRows.length}, upserted: ${totalUpserted}, duplicates_collapsed: ${duplicateRowsCollapsed}, skipped_empty_order_id: ${skippedEmptyOrderId}, skipped_headers: ${skippedHeaderRows}, source_utc_offset_hours: ${SOURCE_UTC_OFFSET_HOURS}, file: ${filePath}\n`,
+    `Import finished. Read: ${totalRead}, unique: ${dedupedRows.length}, upserted: ${totalUpserted}, duplicates_collapsed: ${duplicateRowsCollapsed}, skipped_empty_order_id: ${skippedEmptyOrderId}, skipped_headers: ${skippedHeaderRows}, source_time_mode: as_is_local, file: ${filePath}\n`,
   );
 }
 

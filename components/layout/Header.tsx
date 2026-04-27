@@ -1,8 +1,9 @@
  "use client";
 
 import { useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
+import type { AppPageKey, BusinessArea } from "@/types/auth";
 
 const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/dashboard": {
@@ -40,8 +41,9 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
 };
 
 export function Header() {
+  const router = useRouter();
   const pathname = usePathname();
-  const { currentUser, logout, currentArea, setCurrentArea, canAccessArea } = useAuth();
+  const { currentUser, logout, currentArea, setCurrentArea, canAccessArea, canAccess } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const pageRoute =
     Object.keys(pageMeta).find((route) => pathname.startsWith(route)) ??
@@ -54,6 +56,23 @@ export function Header() {
       .slice(0, 2)
       .map((part) => part[0]?.toUpperCase())
       .join("") || "AO";
+
+  const areaLandingCandidates: Record<BusinessArea, Array<{ page: AppPageKey; path: string }>> = {
+    b2b: [
+      { page: "requestRides", path: "/request-rides" },
+      { page: "dashboard", path: "/dashboard" },
+      { page: "orders", path: "/orders" },
+      { page: "preOrders", path: "/pre-orders" },
+      { page: "priceCalculator", path: "/price-calculator" },
+    ],
+    b2c: [{ page: "driversMap", path: "/drivers-map" }],
+  };
+
+  const resolveAreaLandingPath = (area: BusinessArea): string => {
+    const candidate = areaLandingCandidates[area].find((item) => canAccess(item.page));
+    if (candidate) return candidate.path;
+    return area === "b2c" ? "/drivers-map" : "/request-rides";
+  };
 
   return (
     <header className="crm-surface sticky top-3 z-10 mx-3 mb-2 flex h-16 items-center justify-between rounded-2xl border-white/70 px-5 lg:px-6">
@@ -85,7 +104,14 @@ export function Header() {
                 key={item.key}
                 type="button"
                 disabled={!allowed}
-                onClick={() => setCurrentArea(item.key)}
+                onClick={() => {
+                  if (currentArea === item.key) return;
+                  setCurrentArea(item.key);
+                  const targetPath = resolveAreaLandingPath(item.key);
+                  if (!pathname.startsWith(targetPath)) {
+                    router.push(targetPath);
+                  }
+                }}
                 className={`rounded-full border px-4 py-1 text-xs font-semibold transition ${
                   active
                     ? "border-red-200 bg-red-50 text-red-700 shadow-[0_8px_16px_rgba(239,68,68,0.15)]"
