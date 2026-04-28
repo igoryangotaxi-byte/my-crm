@@ -6,7 +6,7 @@ import { headers } from "next/headers";
 export const dynamic = "force-dynamic";
 
 export default async function ClientPreOrdersPage() {
-  const request = new Request("http://localhost/client/pre-orders", { headers: headers() });
+  const request = new Request("http://localhost/client/pre-orders", { headers: await headers() });
   const user = await getRequestUser(request);
   const scope =
     user?.accountType === "client" && user.tokenLabel && user.apiClientId

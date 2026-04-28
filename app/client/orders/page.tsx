@@ -6,7 +6,7 @@ import { B2BPreOrdersPanel } from "@/components/dashboard/B2BPreOrdersPanel";
 export const dynamic = "force-dynamic";
 
 export default async function ClientOrdersPage() {
-  const request = new Request("http://localhost/client/orders", { headers: headers() });
+  const request = new Request("http://localhost/client/orders", { headers: await headers() });
   const user = await getRequestUser(request);
   const range = getB2BOrdersViewDefaultRange();
   const scope =

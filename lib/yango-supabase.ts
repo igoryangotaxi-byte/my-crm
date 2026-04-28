@@ -125,7 +125,7 @@ async function loadYangoSupabaseOrderMetrics(corpClientId?: string): Promise<Yan
       .not("corp_client_id", "is", null)
       .not("lcl_order_due_dttm", "is", null)
       .gte("lcl_order_due_dttm", cutoff);
-    const baseResult = (corpClientId ? scoped.eq("corp_client_id", corpClientId) : scoped)
+    const baseResult = await (corpClientId ? scoped.eq("corp_client_id", corpClientId) : scoped)
       .order("lcl_order_due_dttm", { ascending: false })
       .range(offset, endOffset);
     let data = (baseResult.data ?? null) as Array<Record<string, unknown>> | null;

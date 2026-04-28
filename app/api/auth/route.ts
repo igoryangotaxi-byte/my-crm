@@ -338,7 +338,7 @@ export async function POST(request: Request) {
         ];
       }
       const exists = store.users.find((user) => user.email.toLowerCase() === primaryAdminEmail);
-      const users = exists
+      const users: AuthStoreData["users"] = exists
         ? store.users.map((user) =>
             user.id === exists.id
               ? {
