@@ -1,5 +1,9 @@
 import * as XLSX from "xlsx";
-import { normalizePhone as normalizePhoneShared } from "@/lib/phone-utils";
+import {
+  canonicalizePhone,
+  isLikelyPhone,
+  normalizePhone as normalizePhoneShared,
+} from "@/lib/phone-utils";
 
 export const MAX_ADDRESSES_PER_RIDE = 5;
 
@@ -76,6 +80,139 @@ function looksLikeHeaderRow(row: unknown[]): boolean {
   return /date|time|when|дата|время|תאריך|שעה/.test(text);
 }
 
+function findDateInText(text: string): Date | null {
+  const m = text.match(/(\d{1,2})[./](\d{1,2})[./](\d{2,4})/);
+  if (!m) return null;
+  let year = Number(m[3]);
+  if (year < 100) year += 2000;
+  const d = new Date(year, Number(m[2]) - 1, Number(m[1]), 0, 0, 0, 0);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function extractSheetDate(rows: unknown[][]): Date | null {
+  for (const row of rows.slice(0, 8)) {
+    for (const cell of row) {
+      const text = asString(cell);
+      if (!text) continue;
+      const parsed = findDateInText(text);
+      if (parsed) return parsed;
+    }
+  }
+  return null;
+}
+
+function looksLikeDispatchReportFormat(rows: unknown[][]): boolean {
+  return rows.some((row) => {
+    const first = asString(row[0]).toLowerCase();
+    const details = asString(row[10]).toLowerCase();
+    return first.includes("טלפון") || details.includes("כתובת");
+  });
+}
+
+function parseDispatchReportRows(rows: unknown[][]): XlsxRideRow[] {
+  const result: XlsxRideRow[] = [];
+  const reportDate = extractSheetDate(rows);
+  const routeSeedRow = rows.find((row) => asString(row[4]).includes(","));
+  const routeSeed = asString(routeSeedRow?.[4])
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const fallbackPickup = routeSeed[0] ?? "";
+  const fallbackDestination = routeSeed[routeSeed.length - 1] ?? "";
+
+  type RowPoint = {
+    rowIndex: number;
+    order: number;
+    address: string;
+    time: Date | null;
+    phone: string;
+    riderName: string;
+    riderComment: string;
+  };
+  const points: RowPoint[] = [];
+
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i] ?? [];
+    const marker = asString(row[0]);
+    if (!marker.match(/^\(\d+\)$/)) continue;
+    const order = Number(asString(row[13]));
+    const address = asString(row[10]);
+    if (!Number.isFinite(order) || order <= 0 || !address) continue;
+    points.push({
+      rowIndex: i + 1,
+      order,
+      address,
+      time: parseDateCell(row[11]),
+      phone: canonicalizePhone(row[3]),
+      riderName: asString(row[6]),
+      riderComment: asString(row[1]),
+    });
+  }
+
+  let currentChunk: RowPoint[] = [];
+  const chunks: RowPoint[][] = [];
+  for (const point of points) {
+    if (point.order === 1 && currentChunk.length > 0) {
+      chunks.push(currentChunk);
+      currentChunk = [point];
+      continue;
+    }
+    currentChunk.push(point);
+  }
+  if (currentChunk.length > 0) chunks.push(currentChunk);
+
+  for (const chunk of chunks) {
+    const sorted = [...chunk].sort((a, b) => a.order - b.order);
+    const pointA = sorted.find((item) => item.order === 1) ?? sorted[0] ?? null;
+    const addresses = sorted.map((item) => item.address).filter(Boolean);
+    const phoneCandidate = pointA?.phone && isLikelyPhone(pointA.phone) ? pointA.phone : "";
+    const phone =
+      phoneCandidate ||
+      sorted.map((item) => item.phone).find((item) => item && isLikelyPhone(item)) ||
+      "";
+    const comment = [pointA?.riderName ?? "", pointA?.riderComment ?? ""].filter(Boolean).join(" | ");
+    const errors: string[] = [];
+
+    if (!phone) {
+      // No passenger phone means this chunk is not an actionable ride row.
+      continue;
+    }
+    if (addresses.length < 2) {
+      errors.push("Need at least pickup and destination points (#1, #2).");
+    }
+
+    let scheduleAtIso: string | null = null;
+    if (!reportDate || !pointA?.time) {
+      errors.push("Datetime is required from point #1 (column with time).");
+    } else {
+      const merged = new Date(
+        reportDate.getFullYear(),
+        reportDate.getMonth(),
+        reportDate.getDate(),
+        pointA.time.getHours(),
+        pointA.time.getMinutes(),
+        pointA.time.getSeconds(),
+        0,
+      );
+      scheduleAtIso = Number.isNaN(merged.getTime()) ? null : merged.toISOString();
+      if (!scheduleAtIso) errors.push("Invalid datetime.");
+    }
+
+    result.push({
+      rowIndex: pointA?.rowIndex ?? sorted[0].rowIndex,
+      scheduleAtIso,
+      phone,
+      comment,
+      addresses:
+        addresses.length > 0 ? addresses : [fallbackPickup, fallbackDestination].filter(Boolean),
+      addressPhones: new Array(Math.max(addresses.length, 2)).fill(""),
+      errors,
+    });
+  }
+
+  return result;
+}
+
 export async function parseXlsxRidesFile(file: File): Promise<XlsxRideRow[]> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
@@ -90,6 +227,10 @@ export async function parseXlsxRidesFile(file: File): Promise<XlsxRideRow[]> {
     defval: "",
     blankrows: false,
   });
+
+  if (looksLikeDispatchReportFormat(rows)) {
+    return parseDispatchReportRows(rows);
+  }
 
   const start = rows.length > 0 && looksLikeHeaderRow(rows[0]) ? 1 : 0;
   const result: XlsxRideRow[] = [];

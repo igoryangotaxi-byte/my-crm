@@ -570,13 +570,14 @@ async function getClientPreOrders(tokenConfig: TokenConfig, client: YangoClient)
   return preOrders;
 }
 
-async function loadAllYangoPreOrders() {
+async function loadAllYangoPreOrders(scope?: YangoScope) {
   const preOrders: PreOrder[] = [];
   const errors: string[] = [];
   const diagnostics: TokenDiagnostics[] = [];
 
   await Promise.all(
     getTokenConfigs().map(async (tokenConfig) => {
+      if (scope && tokenConfig.label !== scope.tokenLabel) return;
       if (!tokenConfig.token) {
         diagnostics.push({
           label: `${tokenConfig.label} / token`,
@@ -611,6 +612,7 @@ async function loadAllYangoPreOrders() {
         }
 
         for (const client of clients) {
+          if (scope && client.client_id !== scope.clientId) continue;
           try {
             const clientPreOrders = await getClientPreOrders(tokenConfig, client);
             preOrders.push(...clientPreOrders);
@@ -679,6 +681,10 @@ export const getAllYangoPreOrders = unstable_cache(
   ["yango-preorders-v5"],
   { revalidate: PREORDERS_CACHE_REVALIDATE_SECONDS, tags: ["yango-preorders"] },
 );
+
+export async function getScopedYangoPreOrders(scope: { tokenLabel: string; clientId: string }) {
+  return loadAllYangoPreOrders(scope);
+}
 
 function getDashboardDefaultRange() {
   const sinceDays = readPositiveIntEnv("YANGO_B2B_ORDERS_LIST_SINCE_DAYS", 90);
@@ -908,13 +914,17 @@ async function getClientDashboardOrders(
 }
 
 type B2BTokenClientPair = { tokenConfig: TokenConfig; client: YangoClient };
+type YangoScope = { tokenLabel: string; clientId: string };
 
-async function listB2BTokenClientPairs(): Promise<{ pairs: B2BTokenClientPair[]; errors: string[] }> {
+async function listB2BTokenClientPairs(
+  scope?: YangoScope,
+): Promise<{ pairs: B2BTokenClientPair[]; errors: string[] }> {
   const pairs: B2BTokenClientPair[] = [];
   const errors: string[] = [];
 
   await Promise.all(
     getTokenConfigs().map(async (tokenConfig) => {
+      if (scope && tokenConfig.label !== scope.tokenLabel) return;
       if (!tokenConfig.token) return;
       try {
         const authResponse = await fetchJson<YangoAuthListResponse>(
@@ -922,6 +932,7 @@ async function listB2BTokenClientPairs(): Promise<{ pairs: B2BTokenClientPair[];
           tokenConfig.token,
         );
         for (const client of authResponse.clients ?? []) {
+          if (scope && client.client_id !== scope.clientId) continue;
           pairs.push({ tokenConfig, client });
         }
       } catch (error) {
@@ -944,6 +955,7 @@ export async function fetchB2BOrdersListChunk(input: {
   till: string;
   cursors: B2BOrdersListCursors;
   listPageSize?: number;
+  scope?: YangoScope;
 }): Promise<{
   rows: B2BDashboardOrder[];
   nextCursors: B2BOrdersListCursors;
@@ -952,7 +964,7 @@ export async function fetchB2BOrdersListChunk(input: {
 }> {
   const listPageSize = readPositiveIntEnv("YANGO_B2B_ORDERS_CHUNK_LIST_LIMIT", 80);
   const size = input.listPageSize ?? listPageSize;
-  const { pairs, errors } = await listB2BTokenClientPairs();
+  const { pairs, errors } = await listB2BTokenClientPairs(input.scope);
   const nextCursors: B2BOrdersListCursors = { ...input.cursors };
   let anyClientMayHaveMore = false;
   const rowLists = await Promise.all(
@@ -1017,7 +1029,9 @@ export async function pullB2BOrdersRows(input: {
   startCursors: B2BOrdersListCursors;
   targetNewCount: number;
   excludeKeys: Set<string>;
+  excludeScheduling?: boolean;
   maxChunks?: number;
+  scope?: YangoScope;
 }): Promise<{
   newRows: B2BDashboardOrder[];
   nextCursors: B2BOrdersListCursors;
@@ -1036,12 +1050,16 @@ export async function pullB2BOrdersRows(input: {
       since: input.since,
       till: input.till,
       cursors,
+      scope: input.scope,
     });
     cursors = chunk.nextCursors;
     aggErrors.push(...chunk.errors);
     hasMoreRemote = chunk.anyClientMayHaveMore;
 
     for (const row of chunk.rows) {
+      if (input.excludeScheduling && (row.statusRaw ?? "").toLowerCase().includes("scheduling")) {
+        continue;
+      }
       const key = b2bDashboardOrderKey(row);
       if (input.excludeKeys.has(key) || seen.has(key)) continue;
       seen.add(key);
@@ -1717,10 +1735,11 @@ export async function searchRequestRideUsers(input: {
   return [...byId.values()].slice(0, limit);
 }
 
-export async function getRequestRideApiClients(): Promise<YangoApiClientRef[]> {
+export async function getRequestRideApiClients(scope?: YangoScope): Promise<YangoApiClientRef[]> {
   const rows: YangoApiClientRef[] = [];
   await Promise.all(
     getTokenConfigs().map(async (tokenConfig) => {
+      if (scope && tokenConfig.label !== scope.tokenLabel) return;
       if (!tokenConfig.token) return;
       try {
         const authResponse = await fetchJsonNoCache<YangoAuthListResponse>(
@@ -1728,6 +1747,7 @@ export async function getRequestRideApiClients(): Promise<YangoApiClientRef[]> {
           tokenConfig.token,
         );
         for (const client of authResponse.clients ?? []) {
+          if (scope && client.client_id !== scope.clientId) continue;
           rows.push({
             tokenLabel: tokenConfig.label,
             clientId: client.client_id,

@@ -36,6 +36,7 @@ type RequestRidesMapProps = {
   /** When null, route line is derived from `routeCoordinates` as a single low segment. */
   routeTrafficGeojson: RouteTrafficFeatureCollection | null;
   onMapClick: (point: { lat: number; lon: number }) => void;
+  onPointDrag?: (input: { id: string; lat: number; lon: number }) => void;
   /** Extra space so route and pins stay clear of a left UI overlay (MapLibre padding). */
   fitPadding?: RequestRidesMapFitPadding;
 };
@@ -77,7 +78,7 @@ function isLineStringFeature(
 function createPinElement(point: RequestRidesMapPoint): HTMLDivElement {
   const root = document.createElement("div");
   root.style.cssText =
-    "width:40px;height:48px;max-width:40px;min-width:40px;overflow:visible;pointer-events:none;display:block;box-sizing:border-box;";
+    "width:40px;height:48px;max-width:40px;min-width:40px;overflow:visible;pointer-events:auto;display:block;box-sizing:border-box;";
 
   const fill =
     point.role === "pickup" ? "#15803d" : point.role === "destination" ? "#b91c1c" : "#ca8a04";
@@ -106,6 +107,7 @@ export function RequestRidesMap({
   routeCoordinates,
   routeTrafficGeojson,
   onMapClick,
+  onPointDrag,
   fitPadding = DEFAULT_FIT_PADDING,
 }: RequestRidesMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -113,12 +115,17 @@ export function RequestRidesMap({
   const markerRefs = useRef<maplibregl.Marker[]>([]);
   const [styleReadyTick, setStyleReadyTick] = useState(0);
   const clickRef = useRef(onMapClick);
+  const pointDragRef = useRef(onPointDrag);
 
   const styleUrl = useMemo(() => DEFAULT_STYLE, []);
 
   useEffect(() => {
     clickRef.current = onMapClick;
   }, [onMapClick]);
+
+  useEffect(() => {
+    pointDragRef.current = onPointDrag;
+  }, [onPointDrag]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -168,9 +175,18 @@ export function RequestRidesMap({
     markerRefs.current = [];
     for (const point of points) {
       const markerEl = createPinElement(point);
-      const marker = new maplibregl.Marker({ element: markerEl, anchor: "bottom", offset: [0, 4] })
+      const marker = new maplibregl.Marker({
+        element: markerEl,
+        anchor: "bottom",
+        offset: [0, 4],
+        draggable: true,
+      })
         .setLngLat([point.lon, point.lat])
         .addTo(map);
+      marker.on("dragend", () => {
+        const lngLat = marker.getLngLat();
+        pointDragRef.current?.({ id: point.id, lat: lngLat.lat, lon: lngLat.lng });
+      });
       markerRefs.current.push(marker);
     }
   }, [points]);

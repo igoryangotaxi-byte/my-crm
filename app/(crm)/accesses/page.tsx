@@ -88,6 +88,14 @@ export default function AccessesPage() {
 
   const isAdmin = currentUser?.role === "Admin";
   const [selectedRole, setSelectedRole] = useState<AppRole>("Admin");
+  const [tenantName, setTenantName] = useState("");
+  const [corpClientId, setCorpClientId] = useState("");
+  const [tokenLabel, setTokenLabel] = useState("");
+  const [apiClientId, setApiClientId] = useState("");
+  const [adminName, setAdminName] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [onboardingMessage, setOnboardingMessage] = useState<string | null>(null);
   const [selectedSectionKey, setSelectedSectionKey] = useState<string>(
     accessSections[0]?.key ?? "platform",
   );
@@ -113,6 +121,48 @@ export default function AccessesPage() {
 
   return (
     <section className="crm-page">
+      <div className="glass-surface mb-4 rounded-3xl border border-white/70 bg-white/75 p-4 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur-md">
+        <h2 className="crm-section-title">Client onboarding bridge</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Bind tenant to `corp_client_id`, `tokenLabel`, `clientId` and create the primary client admin.
+        </p>
+        <div className="mt-3 grid gap-2 md:grid-cols-4">
+          <input className="crm-input h-10 px-3 text-sm" placeholder="Tenant name" value={tenantName} onChange={(e) => setTenantName(e.target.value)} />
+          <input className="crm-input h-10 px-3 text-sm" placeholder="corp_client_id" value={corpClientId} onChange={(e) => setCorpClientId(e.target.value)} />
+          <input className="crm-input h-10 px-3 text-sm" placeholder="tokenLabel" value={tokenLabel} onChange={(e) => setTokenLabel(e.target.value)} />
+          <input className="crm-input h-10 px-3 text-sm" placeholder="clientId" value={apiClientId} onChange={(e) => setApiClientId(e.target.value)} />
+          <input className="crm-input h-10 px-3 text-sm" placeholder="Primary admin name" value={adminName} onChange={(e) => setAdminName(e.target.value)} />
+          <input className="crm-input h-10 px-3 text-sm" placeholder="Primary admin email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} />
+          <input className="crm-input h-10 px-3 text-sm" placeholder="Primary admin password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} />
+        </div>
+        <button
+          type="button"
+          disabled={!isAdmin}
+          onClick={async () => {
+            const response = await fetch("/api/auth", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "upsertTenantAccount",
+                name: tenantName,
+                corpClientId,
+                tokenLabel,
+                apiClientId,
+                primaryAdminName: adminName,
+                primaryAdminEmail: adminEmail,
+                primaryAdminPassword: adminPassword,
+              }),
+            });
+            const payload = (await response.json().catch(() => null)) as { ok?: boolean; message?: string } | null;
+            setOnboardingMessage(response.ok && payload?.ok ? "Tenant onboarding saved." : payload?.message ?? `HTTP ${response.status}`);
+          }}
+          className="crm-button-primary mt-3 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
+        >
+          Save onboarding
+        </button>
+        {onboardingMessage ? <p className="mt-2 text-sm text-slate-600">{onboardingMessage}</p> : null}
+      </div>
+
       <div className="glass-surface mb-4 overflow-hidden rounded-3xl border border-white/70 bg-white/75 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur-md">
         <div className="grid min-h-[380px] grid-cols-1 divide-y divide-border lg:grid-cols-3 lg:divide-x lg:divide-y-0">
           <div className="p-4">

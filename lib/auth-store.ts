@@ -1,9 +1,13 @@
 import { kv } from "@vercel/kv";
 import {
+  type AccountType,
   type AppRole,
+  type ClientRoleDefinition,
   type AuthStoreData,
   type AuthUser,
+  type TenantAccount,
   type UserStatus,
+  defaultClientPortalPermissions,
   defaultRoleAreaAccess,
   defaultRoleDashboardBlockAccess,
   defaultRolePermissions,
@@ -64,7 +68,24 @@ function ensureDefaultAdmin(users: AuthUser[]): AuthUser[] {
 }
 
 /** v2 first migration; v3 fixes stores that already had meta v2 but User.orders/preOrders stayed false. */
-const CURRENT_PERMISSIONS_VERSION = 3;
+const CURRENT_PERMISSIONS_VERSION = 4;
+
+function defaultTenantRoleSet(): ClientRoleDefinition[] {
+  return [
+    {
+      id: "client-admin",
+      name: "Client Admin",
+      isDefault: true,
+      permissions: { ...defaultClientPortalPermissions, employees: true },
+    },
+    {
+      id: "employee",
+      name: "Employee",
+      isDefault: true,
+      permissions: { ...defaultClientPortalPermissions, employees: false },
+    },
+  ];
+}
 
 function createDefaultStore(): AuthStoreData {
   return {
@@ -72,6 +93,8 @@ function createDefaultStore(): AuthStoreData {
     rolePermissions: defaultRolePermissions,
     roleAreaAccess: defaultRoleAreaAccess,
     roleDashboardBlockAccess: defaultRoleDashboardBlockAccess,
+    tenantAccounts: [],
+    tenantRoles: {},
     storeMeta: { permissionsVersion: CURRENT_PERMISSIONS_VERSION },
   };
 }
@@ -100,6 +123,52 @@ function isAuthUser(value: unknown): value is AuthUser {
   );
 }
 
+function normalizeAccountType(value: unknown): AccountType {
+  return value === "client" ? "client" : "internal";
+}
+
+function normalizeTenantAccounts(input: unknown): TenantAccount[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+    .map((item) => ({
+      id: typeof item.id === "string" ? item.id : `tenant-${crypto.randomUUID()}`,
+      name: typeof item.name === "string" ? item.name : "Client",
+      corpClientId: typeof item.corpClientId === "string" ? item.corpClientId : "",
+      tokenLabel: typeof item.tokenLabel === "string" ? item.tokenLabel : "",
+      apiClientId: typeof item.apiClientId === "string" ? item.apiClientId : "",
+      enabled: item.enabled !== false,
+      createdAt:
+        typeof item.createdAt === "string" && item.createdAt
+          ? item.createdAt
+          : new Date().toISOString(),
+    }))
+    .filter((item) => item.corpClientId && item.tokenLabel && item.apiClientId);
+}
+
+function normalizeTenantRoles(input: unknown, tenantAccounts: TenantAccount[]) {
+  const out: Record<string, ClientRoleDefinition[]> = {};
+  const raw = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  for (const tenant of tenantAccounts) {
+    const tenantRaw = raw[tenant.id];
+    const roles = Array.isArray(tenantRaw)
+      ? (tenantRaw as unknown[])
+          .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+          .map((item) => ({
+            id: typeof item.id === "string" ? item.id : `role-${crypto.randomUUID()}`,
+            name: typeof item.name === "string" ? item.name : "Role",
+            isDefault: item.isDefault === true,
+            permissions: {
+              ...defaultClientPortalPermissions,
+              ...((item.permissions as Record<string, boolean> | undefined) ?? {}),
+            },
+          }))
+      : [];
+    out[tenant.id] = roles.length > 0 ? roles : defaultTenantRoleSet();
+  }
+  return out;
+}
+
 function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthStoreData {
   const base = createDefaultStore();
   if (!data) {
@@ -108,8 +177,20 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
 
   const users =
     Array.isArray(data.users) && data.users.length > 0
-      ? ensureDefaultAdmin(data.users.filter(isAuthUser))
+      ? ensureDefaultAdmin(
+          data.users.filter(isAuthUser).map((item) => ({
+            ...item,
+            accountType: normalizeAccountType(item.accountType),
+            tenantId: item.tenantId ?? null,
+            corpClientId: item.corpClientId ?? null,
+            tokenLabel: item.tokenLabel ?? null,
+            apiClientId: item.apiClientId ?? null,
+            clientRoleId: item.clientRoleId ?? null,
+          })),
+        )
       : base.users;
+  const tenantAccounts = normalizeTenantAccounts(data.tenantAccounts);
+  const tenantRoles = normalizeTenantRoles(data.tenantRoles, tenantAccounts);
 
   const storedVersion = data.storeMeta?.permissionsVersion ?? 0;
   const mergedUserPerms = {
@@ -154,6 +235,8 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
         ...(data.roleDashboardBlockAccess?.["Team Lead"] ?? {}),
       },
     },
+    tenantAccounts,
+    tenantRoles,
     storeMeta: {
       permissionsVersion: Math.max(storedVersion, CURRENT_PERMISSIONS_VERSION),
     },

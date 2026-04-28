@@ -16,6 +16,7 @@ import { dedupePhones, normalizePhone } from "@/lib/phone-utils";
 import { publicErrorMessage } from "@/lib/public-error-message";
 import { downloadBulkUploadSampleXlsx } from "@/lib/xlsx-bulk-upload-sample";
 import { parseXlsxRidesFile } from "@/lib/xlsx-rides-parser";
+import { useAuth } from "@/components/auth/AuthProvider";
 import type {
   RequestRideResult,
   RequestRideStatus,
@@ -274,6 +275,8 @@ function CarIcon() {
 }
 
 export default function RequestRidesPage() {
+  const { currentUser } = useAuth();
+  const isClientScopedUser = currentUser?.accountType === "client";
   const [clients, setClients] = useState<YangoApiClientRef[]>([]);
   const [clientsLoading, setClientsLoading] = useState(true);
   const [clientsError, setClientsError] = useState<string | null>(null);
@@ -346,6 +349,7 @@ export default function RequestRidesPage() {
   const [overlayWideLayout, setOverlayWideLayout] = useState(false);
   const [rightOverlayVisible, setRightOverlayVisible] = useState(false);
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
+  const [focusedPendingUploadId, setFocusedPendingUploadId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadParsing, setUploadParsing] = useState(false);
   const [uploadSubmitting, setUploadSubmitting] = useState(false);
@@ -433,6 +437,34 @@ export default function RequestRidesPage() {
     return points;
   }, [destination.lat, destination.lon, destination.text, pickup.lat, pickup.lon, pickup.text, stops]);
 
+  const focusedPendingUpload = useMemo(
+    () => pendingUploads.find((row) => row.id === focusedPendingUploadId) ?? null,
+    [pendingUploads, focusedPendingUploadId],
+  );
+
+  const pendingUploadMapPoints = useMemo<RequestRidesMapPoint[]>(() => {
+    if (!focusedPendingUpload) return [];
+    const filledAddresses = focusedPendingUpload.addresses.filter((entry) => entry.text.trim().length > 0);
+    if (filledAddresses.length < 2) return [];
+    return filledAddresses
+      .map((address, idx): RequestRidesMapPoint | null => {
+        if (address.lat == null || address.lon == null) return null;
+        const role =
+          idx === 0 ? "pickup" : idx === filledAddresses.length - 1 ? "destination" : "stop";
+        return {
+          id: `pending:${focusedPendingUpload.id}:${idx}`,
+          role,
+          label: address.text,
+          lat: address.lat,
+          lon: address.lon,
+        };
+      })
+      .filter((item): item is RequestRidesMapPoint => Boolean(item));
+  }, [focusedPendingUpload]);
+
+  const effectiveMapPoints = pendingUploadMapPoints.length >= 2 ? pendingUploadMapPoints : mapPoints;
+
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -445,7 +477,8 @@ export default function RequestRidesPage() {
           throw new Error(data.error ?? "Couldn’t load clients.");
         }
         if (cancelled) return;
-        setClients(data.clients ?? []);
+        const loadedClients = data.clients ?? [];
+        setClients(loadedClients);
       } catch (error) {
         if (!cancelled) {
           setClientsError(publicErrorMessage(error, "Couldn’t load clients. Try again later."));
@@ -556,7 +589,7 @@ export default function RequestRidesPage() {
   }, [activeAddressFieldId, destination, pickup, stops]);
 
   useEffect(() => {
-    if (mapPoints.length < 2) {
+    if (effectiveMapPoints.length < 2) {
       const clearId = window.setTimeout(() => {
         setMapRouteCoordinates([]);
         setMapTrafficGeojson(null);
@@ -574,7 +607,7 @@ export default function RequestRidesPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            points: mapPoints.map((point) => ({ lat: point.lat, lon: point.lon })),
+            points: effectiveMapPoints.map((point) => ({ lat: point.lat, lon: point.lon })),
           }),
         });
         const data = (await response.json()) as RoutePreviewResponse;
@@ -617,7 +650,7 @@ export default function RequestRidesPage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [mapPoints]);
+  }, [effectiveMapPoints]);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -751,6 +784,101 @@ export default function RequestRidesPage() {
       setMapClickLabel("Couldn’t look up this spot.");
     } finally {
       setMapClickLoading(false);
+    }
+  };
+
+  const handleMapPointDrag = async (input: { id: string; lat: number; lon: number }) => {
+    if (input.id.startsWith("pending:")) {
+      const [, rowId, rawAddressIndex] = input.id.split(":");
+      const addressIndex = Number(rawAddressIndex);
+      if (!rowId || !Number.isInteger(addressIndex) || addressIndex < 0) return;
+      const language = detectInputLanguage(
+        pendingUploads
+          .find((row) => row.id === rowId)
+          ?.addresses.map((entry) => entry.text)
+          .join(" ") ?? "",
+      );
+      setPendingUploads((prev) =>
+        prev.map((row) => {
+          if (row.id !== rowId) return row;
+          const nextAddresses = row.addresses.map((entry, idx) =>
+            idx === addressIndex
+              ? { ...entry, lat: input.lat, lon: input.lon, geocodeError: undefined }
+              : entry,
+          );
+          return { ...row, addresses: nextAddresses };
+        }),
+      );
+      try {
+        const response = await fetch("/api/address-reverse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lat: input.lat, lon: input.lon, language }),
+        });
+        const data = (await response.json()) as AddressReverseResponse;
+        if (!response.ok || !data.ok || !data.suggestion) {
+          throw new Error(data.error ?? "Failed to decode dragged point.");
+        }
+        const label = data.suggestion.label || data.suggestion.displayName;
+        setPendingUploads((prev) =>
+          prev.map((row) => {
+            if (row.id !== rowId) return row;
+            const nextAddresses = row.addresses.map((entry, idx) =>
+              idx === addressIndex
+                ? { ...entry, text: label, lat: input.lat, lon: input.lon, geocodeError: undefined }
+                : entry,
+            );
+            return { ...row, addresses: nextAddresses };
+          }),
+        );
+      } catch {
+        // Keep dragged coordinates on pending row even when reverse-geocoding fails.
+      }
+      return;
+    }
+    if (input.id !== "pickup" && input.id !== "destination" && !input.id.startsWith("stop:")) {
+      return;
+    }
+    const language = detectInputLanguage(
+      [pickup.text, destination.text, ...stops.map((stop) => stop.text)].join(" "),
+    );
+
+    if (input.id === "pickup") {
+      setPickup((prev) => ({ ...prev, lat: input.lat, lon: input.lon }));
+    } else if (input.id === "destination") {
+      setDestination((prev) => ({ ...prev, lat: input.lat, lon: input.lon }));
+    } else {
+      const stopId = input.id.slice("stop:".length);
+      setStops((prev) =>
+        prev.map((stop) => (stop.id === stopId ? { ...stop, lat: input.lat, lon: input.lon } : stop)),
+      );
+    }
+
+    try {
+      const response = await fetch("/api/address-reverse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lat: input.lat, lon: input.lon, language }),
+      });
+      const data = (await response.json()) as AddressReverseResponse;
+      if (!response.ok || !data.ok || !data.suggestion) {
+        throw new Error(data.error ?? "Failed to decode dragged point.");
+      }
+      const label = data.suggestion.label || data.suggestion.displayName;
+      if (input.id === "pickup") {
+        setPickup({ text: label, lat: input.lat, lon: input.lon });
+      } else if (input.id === "destination") {
+        setDestination({ text: label, lat: input.lat, lon: input.lon });
+      } else {
+        const stopId = input.id.slice("stop:".length);
+        setStops((prev) =>
+          prev.map((stop) =>
+            stop.id === stopId ? { ...stop, text: label, lat: input.lat, lon: input.lon } : stop,
+          ),
+        );
+      }
+    } catch {
+      // Keep dragged coordinates even if reverse-geocode fails.
     }
   };
 
@@ -1188,7 +1316,7 @@ export default function RequestRidesPage() {
       }));
       setPendingUploads((prev) => [...prev, ...parsed]);
 
-      const concurrency = 4;
+      const concurrency = 1;
       const tasks = parsed.flatMap((row) =>
         row.state === "blocked"
           ? []
@@ -1198,6 +1326,15 @@ export default function RequestRidesPage() {
               text: address.text,
             })),
       );
+      const geocodeCache = new Map<string, Promise<PendingUploadAddress>>();
+      const resolveGeocodeCached = (text: string) => {
+        const key = text.trim().toLowerCase();
+        const existing = geocodeCache.get(key);
+        if (existing) return existing;
+        const pending = geocodeAddressText(text);
+        geocodeCache.set(key, pending);
+        return pending;
+      };
 
       let cursor = 0;
       const worker = async () => {
@@ -1206,7 +1343,7 @@ export default function RequestRidesPage() {
           cursor += 1;
           if (taskIndex >= tasks.length) return;
           const task = tasks[taskIndex];
-          const resolved = await geocodeAddressText(task.text);
+          const resolved = await resolveGeocodeCached(task.text);
           setPendingUploads((prev) =>
             prev.map((row) => {
               if (row.id !== task.rowId) return row;
@@ -1458,11 +1595,15 @@ export default function RequestRidesPage() {
   };
 
   const removePendingUpload = (id: string) => {
+    if (focusedPendingUploadId === id) {
+      setFocusedPendingUploadId(null);
+    }
     setPendingUploads((prev) => prev.filter((row) => row.id !== id));
   };
 
   const clearPendingUploads = () => {
     if (uploadSubmitting) return;
+    setFocusedPendingUploadId(null);
     setPendingUploads([]);
     setUploadError(null);
   };
@@ -1640,11 +1781,12 @@ export default function RequestRidesPage() {
         <div className="relative h-[calc(100dvh-6.5rem)] min-h-[620px] w-full overflow-hidden sm:h-[calc(100dvh-7rem)] lg:h-[calc(100dvh-8rem)]">
           <div className="absolute inset-0 z-0 bg-slate-100">
             <RequestRidesMap
-              points={mapPoints}
+              points={effectiveMapPoints}
               routeCoordinates={mapRouteCoordinates}
               routeTrafficGeojson={mapTrafficGeojson}
               fitPadding={mapFitPadding}
               onMapClick={(point) => void handleMapClick(point)}
+              onPointDrag={(point) => void handleMapPointDrag(point)}
             />
           </div>
 
@@ -1655,12 +1797,17 @@ export default function RequestRidesPage() {
             >
               <div className={`${rideCard} relative z-40 space-y-3`}>
                 <label className="block">
-                  <span className="crm-label mb-1 block">Select the client</span>
+                  <span className="crm-label mb-1 block">
+                    {isClientScopedUser ? "Client context" : "Select the client"}
+                  </span>
                   <div className="relative">
                     <button
                       type="button"
-                      disabled={clientsLoading}
-                      onClick={() => setShowClientDropdown((prev) => !prev)}
+                      disabled={clientsLoading || isClientScopedUser}
+                      onClick={() => {
+                        if (isClientScopedUser) return;
+                        setShowClientDropdown((prev) => !prev);
+                      }}
                       onBlur={() => {
                         window.setTimeout(() => setShowClientDropdown(false), 120);
                       }}
@@ -1671,13 +1818,15 @@ export default function RequestRidesPage() {
                           ? "Loading clients..."
                           : selectedClient
                             ? `${selectedClient.clientName} (${selectedClient.tokenLabel})`
-                            : "Select Client"}
+                            : isClientScopedUser
+                              ? "Client is fixed by your account"
+                              : "Select Client"}
                       </span>
                       <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5 text-slate-700" stroke="currentColor" strokeWidth="1.7">
                         <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </button>
-                    {showClientDropdown ? (
+                    {showClientDropdown && !isClientScopedUser ? (
                       <div className={dropdownPanelClass}>
                         {!clientsLoading && clients.length === 0 ? (
                           <p className="px-3 py-2 text-xs text-slate-500">No clients available</p>
@@ -1726,7 +1875,7 @@ export default function RequestRidesPage() {
                         disabled={uploadParsing}
                         className="crm-hover-lift min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {uploadParsing ? "Parsing XLSX…" : "Upload XLSX (bulk)"}
+                        {uploadParsing ? "Parsing XLS/XLSX…" : "Upload XLS/XLSX (bulk)"}
                       </button>
                       <button
                         type="button"
@@ -1740,7 +1889,7 @@ export default function RequestRidesPage() {
                     <input
                       ref={xlsxInputRef}
                       type="file"
-                      accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                      accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                       className="hidden"
                       onChange={(event) => void handleXlsxFileChange(event)}
                     />
@@ -1900,7 +2049,7 @@ export default function RequestRidesPage() {
                 </div>
               </details>
 
-              {mapPoints.length >= 2 ? (
+              {effectiveMapPoints.length >= 2 ? (
                 <details className={`${rideCard} text-xs text-slate-800`}>
                   <summary className="cursor-pointer select-none text-sm font-semibold text-slate-800">
                     Route preview
@@ -2230,6 +2379,10 @@ export default function RequestRidesPage() {
                 <PendingUploadsPanel
                   items={pendingUploads}
                   isSubmitting={uploadSubmitting}
+                  selectedItemId={focusedPendingUploadId}
+                  onSelectItem={(id) =>
+                    setFocusedPendingUploadId((prev) => (prev === id ? null : id))
+                  }
                   cardClassName={rideCard}
                   onConfirmAll={() => void handleConfirmPendingUploads()}
                   onClearAll={clearPendingUploads}
@@ -2303,6 +2456,10 @@ export default function RequestRidesPage() {
             <PendingUploadsPanel
               items={pendingUploads}
               isSubmitting={uploadSubmitting}
+              selectedItemId={focusedPendingUploadId}
+              onSelectItem={(id) =>
+                setFocusedPendingUploadId((prev) => (prev === id ? null : id))
+              }
               cardClassName={rideCard}
               onConfirmAll={() => void handleConfirmPendingUploads()}
               onClearAll={clearPendingUploads}

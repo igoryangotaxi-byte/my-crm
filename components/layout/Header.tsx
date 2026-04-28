@@ -69,9 +69,10 @@ export function Header() {
   };
 
   const resolveAreaLandingPath = (area: BusinessArea): string => {
+    const prefix = pathname.startsWith("/client") ? "/client" : "";
     const candidate = areaLandingCandidates[area].find((item) => canAccess(item.page));
-    if (candidate) return candidate.path;
-    return area === "b2c" ? "/drivers-map" : "/request-rides";
+    if (candidate) return `${prefix}${candidate.path}`;
+    return area === "b2c" ? `${prefix}/drivers-map` : `${prefix}/request-rides`;
   };
 
   return (

@@ -146,11 +146,23 @@ const footerNavItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const { startRouteLoading } = useRouteLoading();
-  const { canAccess, currentArea } = useAuth();
-  const filteredNavItems = navItems.filter(
+  const { canAccess, currentArea, currentUser } = useAuth();
+  const isClientPortal = pathname.startsWith("/client");
+  const mainNavItems = isClientPortal
+    ? [
+        { href: "/client/request-rides", label: "Request Rides", page: "requestRides" as AppPageKey, area: "b2b" as const, icon: RideRequestIcon },
+        { href: "/client/pre-orders", label: "Pre-Orders", page: "preOrders" as AppPageKey, area: "b2b" as const, icon: CalendarIcon },
+        { href: "/client/orders", label: "Orders", page: "orders" as AppPageKey, area: "b2b" as const, icon: OrdersIcon },
+        { href: "/client/drivers-map", label: "Drivers on the Map", page: "driversMap" as AppPageKey, area: "b2c" as const, icon: DriversMapIcon },
+        { href: "/client/employees", label: "Employees", page: "notes" as AppPageKey, area: "b2b" as const, icon: ShieldIcon },
+      ]
+    : navItems;
+  const filteredNavItems = mainNavItems.filter(
     (item) => item.area === currentArea && canAccess(item.page),
   );
-  const filteredFooterNavItems = footerNavItems.filter((item) => canAccess(item.page));
+  const filteredFooterNavItems = isClientPortal
+    ? []
+    : footerNavItems.filter((item) => canAccess(item.page));
 
   return (
     <div className="relative z-20 ml-3 mr-0.5 my-3 h-[calc(100vh-1.5rem)] w-20 shrink-0">
@@ -165,7 +177,9 @@ export function Sidebar() {
             <p className="text-xs font-semibold uppercase tracking-wide text-muted">
               Appli Taxi Oz
             </p>
-            <p className="mt-1 text-base font-semibold text-slate-900">Operations</p>
+            <p className="mt-1 text-base font-semibold text-slate-900">
+              {currentUser?.accountType === "client" ? "Client Cabinet" : "Operations"}
+            </p>
           </div>
         </div>
 

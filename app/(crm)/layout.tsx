@@ -41,6 +41,10 @@ export default function CrmLayout({
       router.replace("/login");
       return;
     }
+    if (currentUser.accountType === "client") {
+      router.replace("/client/request-rides");
+      return;
+    }
 
     const pageKey = resolvePageKey(pathname);
     if (!canAccess(pageKey)) {
@@ -52,6 +56,13 @@ export default function CrmLayout({
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted">
         Checking access...
+      </div>
+    );
+  }
+  if (currentUser.accountType === "client") {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted">
+        Redirecting...
       </div>
     );
   }

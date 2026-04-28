@@ -6,6 +6,18 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-04-28",
+    title: "Orders pagination + pending route editing",
+    notes:
+      "Restored Orders behavior to show the latest 20 non-scheduling rides on first open, continue loading by Load more (+20 each click), and added Pending uploads map focus so clicking a pending card shows its route and allows drag-updating points back into the card.",
+  },
+  {
+    date: "2026-04-28",
+    title: "Client cabinet MVP foundation",
+    notes:
+      "In progress — Added tenant-scoped auth schema + KV migration v4, /client portal routes with guarded layout and scoped Orders/Pre-Orders/Request Rides context, tenant-aware API scope enforcement, Employees MVP, and internal onboarding bridge for corp_client_id + tokenLabel/clientId binding.",
+  },
+  {
     date: "2026-04-27",
     title: "Request Rides default routing and collapsible UX",
     notes:

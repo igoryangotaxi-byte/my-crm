@@ -44,6 +44,8 @@ type PendingUploadsPanelProps = {
   items: PendingUpload[];
   isSubmitting: boolean;
   cardClassName?: string;
+  selectedItemId?: string | null;
+  onSelectItem?: (id: string) => void;
   onConfirmAll: () => void;
   onClearAll: () => void;
   onRemove: (id: string) => void;
@@ -104,6 +106,8 @@ export function PendingUploadsPanel({
   items,
   isSubmitting,
   cardClassName,
+  selectedItemId,
+  onSelectItem,
   onConfirmAll,
   onClearAll,
   onRemove,
@@ -148,9 +152,16 @@ export function PendingUploadsPanel({
           return (
             <details
               key={item.id}
-              className="overflow-hidden rounded-xl border border-slate-100 bg-slate-50/90 shadow-sm"
+              className={`overflow-hidden rounded-xl border shadow-sm ${
+                selectedItemId === item.id
+                  ? "border-sky-300 bg-sky-50/70 ring-1 ring-sky-200"
+                  : "border-slate-100 bg-slate-50/90"
+              }`}
             >
-              <summary className="cursor-pointer list-none p-3 text-sm text-slate-800">
+              <summary
+                className="cursor-pointer list-none p-3 text-sm text-slate-800"
+                onClick={() => onSelectItem?.(item.id)}
+              >
                 <div className="flex items-start gap-2">
                   <span className="mt-0.5 rounded-lg bg-slate-100 p-1 text-[10px] font-semibold text-slate-700">
                     #{item.rowIndex}

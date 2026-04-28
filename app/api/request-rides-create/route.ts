@@ -1,6 +1,6 @@
 import { createRequestRide, resolveRequestRideUserIdByPhone } from "@/lib/yango-api";
 import { searchAddressSuggestions } from "@/lib/geocoding";
-import { requireApprovedUser } from "@/lib/server-auth";
+import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 import type { RequestRidePayload } from "@/types/crm";
 
 export const runtime = "nodejs";
@@ -32,10 +32,11 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lon: numb
 export async function POST(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
+  const scope = getClientScope(auth.user);
   const body = (await request.json().catch(() => null)) as Partial<RequestRidePayload> | null;
   const payload: RequestRidePayload = {
-    tokenLabel: normalizeString(body?.tokenLabel),
-    clientId: normalizeString(body?.clientId),
+    tokenLabel: scope?.tokenLabel ?? normalizeString(body?.tokenLabel),
+    clientId: scope?.apiClientId ?? normalizeString(body?.clientId),
     rideClass: normalizeString(body?.rideClass) || "comfortplus_b2b",
     userId: undefined,
     sourceAddress: normalizeString(body?.sourceAddress),

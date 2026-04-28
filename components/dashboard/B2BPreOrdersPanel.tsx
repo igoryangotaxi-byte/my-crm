@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { b2bDashboardOrderKey, type B2BOrdersListCursors } from "@/lib/b2b-orders-keys";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useRouteLoading } from "@/components/layout/RouteLoadingContext";
@@ -1399,7 +1399,6 @@ export function B2BPreOrdersPanel({
   const [hasMoreRemote, setHasMoreRemote] = useState(() => ordersRemote?.initialHasMore ?? false);
   const [remoteLoading, setRemoteLoading] = useState(false);
   const [remoteError, setRemoteError] = useState<string | null>(null);
-  const skipDateEffectRef = useRef(true);
   const canSeeApiData = view !== "dashboard" || canAccessDashboardBlock("apiData");
   const canSeeYangoData = view !== "dashboard" || canAccessDashboardBlock("yangoData");
   const dashboardSectionParam = searchParams.get("section");
@@ -1500,6 +1499,7 @@ export function B2BPreOrdersPanel({
           cursors: input.cursors,
           excludeOrderKeys: [...input.excludeKeys],
           targetCount: input.targetCount,
+          excludeScheduling: true,
         }),
       });
       const data = (await response.json()) as {
@@ -1520,42 +1520,6 @@ export function B2BPreOrdersPanel({
     },
     [],
   );
-
-  useEffect(() => {
-    if (!ordersRemote || view !== "orders") return;
-    if (skipDateEffectRef.current) {
-      skipDateEffectRef.current = false;
-      return;
-    }
-    const { since, till } = uiDatesToApiIso(fromDate, toDate);
-    let cancelled = false;
-    (async () => {
-      setRemoteLoading(true);
-      setRemoteError(null);
-      try {
-        const result = await fetchOrdersRemoteBatch({
-          since,
-          till,
-          cursors: {},
-          excludeKeys: new Set(),
-          targetCount: 20,
-        });
-        if (cancelled) return;
-        setLoadedOrders(result.rows);
-        setListCursors(result.nextCursors);
-        setHasMoreRemote(result.hasMore);
-      } catch (error) {
-        if (!cancelled) {
-          setRemoteError(error instanceof Error ? error.message : "Failed to reload orders.");
-        }
-      } finally {
-        if (!cancelled) setRemoteLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchOrdersRemoteBatch, fromDate, ordersRemote, toDate, uiDatesToApiIso, view]);
 
   const handleLoadMoreOrders = useCallback(async () => {
     if (!ordersRemote || view !== "orders") return;

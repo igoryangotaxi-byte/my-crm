@@ -2,6 +2,7 @@ export type AppRole = "Admin" | "User" | "Team Lead";
 export type UserStatus = "pending" | "approved" | "rejected";
 export type BusinessArea = "b2b" | "b2c";
 export type DashboardBlockKey = "apiData" | "yangoData" | "tariffHealthCheck";
+export type AccountType = "internal" | "client";
 
 export type AppPageKey =
   | "dashboard"
@@ -22,7 +23,31 @@ export type AuthUser = {
   role: AppRole;
   status: UserStatus;
   createdAt: string;
+  accountType?: AccountType;
+  tenantId?: string | null;
+  corpClientId?: string | null;
+  tokenLabel?: string | null;
+  apiClientId?: string | null;
+  clientRoleId?: string | null;
 };
+
+export type ClientPortalPageKey = "requestRides" | "orders" | "preOrders" | "driversMap" | "employees";
+export type ClientRoleDefinition = {
+  id: string;
+  name: string;
+  permissions: Record<ClientPortalPageKey, boolean>;
+  isDefault?: boolean;
+};
+export type TenantAccount = {
+  id: string;
+  name: string;
+  corpClientId: string;
+  tokenLabel: string;
+  apiClientId: string;
+  enabled: boolean;
+  createdAt: string;
+};
+export type TenantRoleDefinitions = Record<string, ClientRoleDefinition[]>;
 
 export type RolePermissions = Record<AppRole, Record<AppPageKey, boolean>>;
 export type RoleAreaAccess = Record<AppRole, Record<BusinessArea, boolean>>;
@@ -32,6 +57,8 @@ export type AuthStoreData = {
   rolePermissions: RolePermissions;
   roleAreaAccess: RoleAreaAccess;
   roleDashboardBlockAccess: RoleDashboardBlockAccess;
+  tenantAccounts?: TenantAccount[];
+  tenantRoles?: TenantRoleDefinitions;
   /** Bumped when role defaults are migrated in `normalizeStore` (e.g. KV from older builds). */
   storeMeta?: { permissionsVersion?: number };
 };
@@ -155,4 +182,45 @@ export type AuthApiActionRequest =
   | {
       action: "deleteUser";
       userId: string;
+    }
+  | {
+      action: "upsertTenantAccount";
+      tenantId?: string;
+      name: string;
+      corpClientId: string;
+      tokenLabel: string;
+      apiClientId: string;
+      primaryAdminName: string;
+      primaryAdminEmail: string;
+      primaryAdminPassword: string;
+    }
+  | {
+      action: "createTenantEmployee";
+      tenantId: string;
+      name: string;
+      email: string;
+      password: string;
+      clientRoleId: string;
+    }
+  | {
+      action: "updateTenantEmployee";
+      userId: string;
+      name?: string;
+      status?: UserStatus;
+      clientRoleId?: string;
+    }
+  | {
+      action: "upsertTenantRole";
+      tenantId: string;
+      roleId?: string;
+      name: string;
+      permissions: Partial<Record<ClientPortalPageKey, boolean>>;
     };
+
+export const defaultClientPortalPermissions: Record<ClientPortalPageKey, boolean> = {
+  requestRides: true,
+  orders: true,
+  preOrders: true,
+  driversMap: true,
+  employees: false,
+};

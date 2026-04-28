@@ -1,5 +1,5 @@
 import { searchRequestRideUsers } from "@/lib/yango-api";
-import { requireApprovedUser } from "@/lib/server-auth";
+import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,8 +19,9 @@ export async function POST(request: Request) {
   if (!auth.ok) return auth.response;
 
   const body = (await request.json().catch(() => null)) as SuggestPayload | null;
-  const tokenLabel = normalizeString(body?.tokenLabel);
-  const clientId = normalizeString(body?.clientId);
+  const scope = getClientScope(auth.user);
+  const tokenLabel = scope?.tokenLabel ?? normalizeString(body?.tokenLabel);
+  const clientId = scope?.apiClientId ?? normalizeString(body?.clientId);
   const query = normalizeString(body?.query);
 
   if (!tokenLabel || !clientId || !query) {

@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { loadAuthStore, saveAuthStore } from "@/lib/auth-store";
 import { getRequestUser } from "@/lib/server-auth";
 import { createSessionToken, SESSION_COOKIE_NAME } from "@/lib/server-session";
-import type { AuthApiActionRequest, AuthStoreData } from "@/types/auth";
+import {
+  type AuthApiActionRequest,
+  type AuthStoreData,
+  type ClientPortalPageKey,
+  defaultClientPortalPermissions,
+} from "@/types/auth";
 
 type AuthActionResponse = {
   ok: boolean;
@@ -16,6 +21,17 @@ function sanitizeStore(data: AuthStoreData): AuthStoreData {
     ...data,
     users: data.users.map((user) => ({ ...user, password: "" })),
   };
+}
+
+function isInternalAdmin(user: Awaited<ReturnType<typeof getRequestUser>>) {
+  return Boolean(user && user.accountType !== "client" && user.role === "Admin");
+}
+
+function hasTenantEmployeesPermission(user: Awaited<ReturnType<typeof getRequestUser>>, store: AuthStoreData) {
+  if (!user || user.accountType !== "client" || !user.tenantId || !user.clientRoleId) return false;
+  const roles = store.tenantRoles?.[user.tenantId] ?? [];
+  const role = roles.find((item) => item.id === user.clientRoleId);
+  return Boolean(role?.permissions?.employees);
 }
 
 function applySessionCookie(response: NextResponse, userId: string) {
@@ -268,6 +284,198 @@ export async function POST(request: Request) {
       const nextStore: AuthStoreData = {
         ...store,
         users: store.users.filter((user) => user.id !== payload.userId),
+      };
+      await saveAuthStore(nextStore);
+      return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
+    }
+    case "upsertTenantAccount": {
+      if (!isInternalAdmin(sessionUser)) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Forbidden" },
+          { status: 403 },
+        );
+      }
+      const corpClientId = payload.corpClientId.trim();
+      const tokenLabel = payload.tokenLabel.trim();
+      const apiClientId = payload.apiClientId.trim();
+      const primaryAdminEmail = payload.primaryAdminEmail.trim().toLowerCase();
+      if (!corpClientId || !tokenLabel || !apiClientId || !primaryAdminEmail || !payload.primaryAdminPassword) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Missing required tenant onboarding fields." },
+          { status: 400 },
+        );
+      }
+      const tenantId = payload.tenantId?.trim() || `tenant-${crypto.randomUUID()}`;
+      const tenantAccounts = [...(store.tenantAccounts ?? [])];
+      const accountIndex = tenantAccounts.findIndex((item) => item.id === tenantId);
+      const account = {
+        id: tenantId,
+        name: payload.name.trim() || payload.primaryAdminName.trim() || corpClientId,
+        corpClientId,
+        tokenLabel,
+        apiClientId,
+        enabled: true,
+        createdAt: accountIndex >= 0 ? tenantAccounts[accountIndex].createdAt : new Date().toISOString(),
+      };
+      if (accountIndex >= 0) tenantAccounts[accountIndex] = account;
+      else tenantAccounts.push(account);
+
+      const tenantRoles = { ...(store.tenantRoles ?? {}) };
+      if (!tenantRoles[tenantId] || tenantRoles[tenantId].length === 0) {
+        tenantRoles[tenantId] = [
+          {
+            id: "client-admin",
+            name: "Client Admin",
+            isDefault: true,
+            permissions: { ...defaultClientPortalPermissions, employees: true },
+          },
+          {
+            id: "employee",
+            name: "Employee",
+            isDefault: true,
+            permissions: { ...defaultClientPortalPermissions, employees: false },
+          },
+        ];
+      }
+      const exists = store.users.find((user) => user.email.toLowerCase() === primaryAdminEmail);
+      const users = exists
+        ? store.users.map((user) =>
+            user.id === exists.id
+              ? {
+                  ...user,
+                  name: payload.primaryAdminName.trim() || user.name,
+                  password: payload.primaryAdminPassword || user.password,
+                  status: "approved",
+                  accountType: "client",
+                  tenantId,
+                  corpClientId,
+                  tokenLabel,
+                  apiClientId,
+                  clientRoleId: "client-admin",
+                }
+              : user,
+          )
+        : [
+            ...store.users,
+            {
+              id: `user-${crypto.randomUUID()}`,
+              name: payload.primaryAdminName.trim() || "Client Admin",
+              email: primaryAdminEmail,
+              password: payload.primaryAdminPassword,
+              role: "User",
+              status: "approved",
+              createdAt: new Date().toISOString(),
+              accountType: "client",
+              tenantId,
+              corpClientId,
+              tokenLabel,
+              apiClientId,
+              clientRoleId: "client-admin",
+            },
+          ];
+      const nextStore: AuthStoreData = { ...store, users, tenantAccounts, tenantRoles };
+      await saveAuthStore(nextStore);
+      return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
+    }
+    case "upsertTenantRole": {
+      if (!hasTenantEmployeesPermission(sessionUser, store) && !isInternalAdmin(sessionUser)) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Forbidden" },
+          { status: 403 },
+        );
+      }
+      const tenantId = payload.tenantId.trim();
+      const tenantRoles = { ...(store.tenantRoles ?? {}) };
+      const roles = [...(tenantRoles[tenantId] ?? [])];
+      const roleId = payload.roleId?.trim() || `role-${crypto.randomUUID()}`;
+      const permissions: Record<ClientPortalPageKey, boolean> = {
+        ...defaultClientPortalPermissions,
+        ...(payload.permissions ?? {}),
+      };
+      const existingIdx = roles.findIndex((item) => item.id === roleId);
+      const nextRole = {
+        id: roleId,
+        name: payload.name.trim() || "Role",
+        permissions,
+        isDefault: existingIdx >= 0 ? roles[existingIdx].isDefault : false,
+      };
+      if (existingIdx >= 0) roles[existingIdx] = nextRole;
+      else roles.push(nextRole);
+      tenantRoles[tenantId] = roles;
+      const nextStore: AuthStoreData = { ...store, tenantRoles };
+      await saveAuthStore(nextStore);
+      return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
+    }
+    case "createTenantEmployee": {
+      if (!hasTenantEmployeesPermission(sessionUser, store) && !isInternalAdmin(sessionUser)) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Forbidden" },
+          { status: 403 },
+        );
+      }
+      const email = payload.email.trim().toLowerCase();
+      if (!email || !payload.password.trim()) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Email and password are required." },
+          { status: 400 },
+        );
+      }
+      if (store.users.some((user) => user.email.toLowerCase() === email)) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "User with this email already exists." },
+          { status: 400 },
+        );
+      }
+      const tenant = (store.tenantAccounts ?? []).find((item) => item.id === payload.tenantId);
+      if (!tenant) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Tenant not found." },
+          { status: 404 },
+        );
+      }
+      const nextStore: AuthStoreData = {
+        ...store,
+        users: [
+          ...store.users,
+          {
+            id: `user-${crypto.randomUUID()}`,
+            name: payload.name.trim() || "Employee",
+            email,
+            password: payload.password,
+            role: "User",
+            status: "approved",
+            createdAt: new Date().toISOString(),
+            accountType: "client",
+            tenantId: tenant.id,
+            corpClientId: tenant.corpClientId,
+            tokenLabel: tenant.tokenLabel,
+            apiClientId: tenant.apiClientId,
+            clientRoleId: payload.clientRoleId,
+          },
+        ],
+      };
+      await saveAuthStore(nextStore);
+      return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
+    }
+    case "updateTenantEmployee": {
+      if (!hasTenantEmployeesPermission(sessionUser, store) && !isInternalAdmin(sessionUser)) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Forbidden" },
+          { status: 403 },
+        );
+      }
+      const nextStore: AuthStoreData = {
+        ...store,
+        users: store.users.map((user) =>
+          user.id === payload.userId
+            ? {
+                ...user,
+                ...(payload.name ? { name: payload.name.trim() } : {}),
+                ...(payload.status ? { status: payload.status } : {}),
+                ...(payload.clientRoleId ? { clientRoleId: payload.clientRoleId } : {}),
+              }
+            : user,
+        ),
       };
       await saveAuthStore(nextStore);
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });

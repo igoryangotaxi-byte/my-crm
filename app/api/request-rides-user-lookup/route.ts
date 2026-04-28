@@ -1,5 +1,5 @@
 import { resolveRequestRideUserIdByPhone } from "@/lib/yango-api";
-import { requireApprovedUser } from "@/lib/server-auth";
+import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,8 +18,9 @@ export async function POST(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
   const body = (await request.json().catch(() => null)) as LookupPayload | null;
-  const tokenLabel = normalizeString(body?.tokenLabel);
-  const clientId = normalizeString(body?.clientId);
+  const scope = getClientScope(auth.user);
+  const tokenLabel = scope?.tokenLabel ?? normalizeString(body?.tokenLabel);
+  const clientId = scope?.apiClientId ?? normalizeString(body?.clientId);
   const phoneNumber = normalizeString(body?.phoneNumber);
 
   if (!tokenLabel || !clientId || !phoneNumber) {

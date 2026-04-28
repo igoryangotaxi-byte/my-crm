@@ -1,5 +1,5 @@
 import { getRequestRideStatus } from "@/lib/yango-api";
-import { requireApprovedUser } from "@/lib/server-auth";
+import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,8 +18,9 @@ export async function POST(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
   const payload = (await request.json().catch(() => null)) as StatusPayload | null;
-  const tokenLabel = normalizeString(payload?.tokenLabel);
-  const clientId = normalizeString(payload?.clientId);
+  const scope = getClientScope(auth.user);
+  const tokenLabel = scope?.tokenLabel ?? normalizeString(payload?.tokenLabel);
+  const clientId = scope?.apiClientId ?? normalizeString(payload?.clientId);
   const orderId = normalizeString(payload?.orderId);
 
   if (!tokenLabel || !clientId || !orderId) {

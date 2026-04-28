@@ -7,6 +7,7 @@ import {
   normalizeRideLifecycleStatus,
 } from "../lib/yango-api";
 import { dedupePhones, isLikelyPhone, normalizePhone } from "../lib/phone-utils";
+import { getClientScope } from "../lib/server-auth";
 
 test("buildRequestRideBody maps fields and includes due_date when scheduled", () => {
   const body = buildRequestRideBody({
@@ -151,4 +152,45 @@ test("dedupePhones normalizes, drops invalid, and keeps order", () => {
     "abc",
   ]);
   assert.deepEqual(result, ["+972501234567", "0501112222"]);
+});
+
+test("getClientScope returns null for internal user and scope for client user", () => {
+  assert.equal(
+    getClientScope({
+      id: "u1",
+      name: "Internal",
+      email: "internal@test.local",
+      password: "",
+      role: "Admin",
+      status: "approved",
+      createdAt: new Date().toISOString(),
+      accountType: "internal",
+    }),
+    null,
+  );
+
+  assert.deepEqual(
+    getClientScope({
+      id: "u2",
+      name: "Client",
+      email: "client@test.local",
+      password: "",
+      role: "User",
+      status: "approved",
+      createdAt: new Date().toISOString(),
+      accountType: "client",
+      tenantId: "tenant-1",
+      corpClientId: "corp-1",
+      tokenLabel: "TOKEN",
+      apiClientId: "client-1",
+      clientRoleId: "employee",
+    }),
+    {
+      tenantId: "tenant-1",
+      corpClientId: "corp-1",
+      tokenLabel: "TOKEN",
+      apiClientId: "client-1",
+      clientRoleId: "employee",
+    },
+  );
 });

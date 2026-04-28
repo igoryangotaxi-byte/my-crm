@@ -1,5 +1,5 @@
 import { pullB2BOrdersRows } from "@/lib/yango-api";
-import { requireApprovedUser } from "@/lib/server-auth";
+import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +12,7 @@ function normalizeString(input: unknown): string {
 export async function POST(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
+  const scope = getClientScope(auth.user);
 
   const body = (await request.json().catch(() => null)) as {
     since?: unknown;
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
     targetCount?: unknown;
     cursors?: unknown;
     excludeOrderKeys?: unknown;
+    excludeScheduling?: unknown;
   } | null;
 
   const since = normalizeString(body?.since);
@@ -41,6 +43,7 @@ export async function POST(request: Request) {
   const excludeKeys = new Set(
     excludeList.filter((key): key is string => typeof key === "string" && key.length > 0),
   );
+  const excludeScheduling = body?.excludeScheduling === true;
 
   try {
     const result = await pullB2BOrdersRows({
@@ -49,6 +52,8 @@ export async function POST(request: Request) {
       startCursors: cursors,
       targetNewCount: targetCount,
       excludeKeys,
+      excludeScheduling,
+      scope: scope ? { tokenLabel: scope.tokenLabel, clientId: scope.apiClientId } : undefined,
     });
 
     return Response.json(

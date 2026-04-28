@@ -92,7 +92,7 @@ function applyCorpClientMap(
   });
 }
 
-async function loadYangoSupabaseOrderMetrics(): Promise<YangoSupabaseOrderMetric[]> {
+async function loadYangoSupabaseOrderMetrics(corpClientId?: string): Promise<YangoSupabaseOrderMetric[]> {
   if (!isSupabaseConfigured()) {
     return [];
   }
@@ -119,12 +119,13 @@ async function loadYangoSupabaseOrderMetrics(): Promise<YangoSupabaseOrderMetric
       ? `${selectBase},decoupling_flg`
       : selectBase;
 
-    const baseResult = await supabase
+    const scoped = supabase
       .from("gp_fct_order_raw")
       .select(selectExpr)
       .not("corp_client_id", "is", null)
       .not("lcl_order_due_dttm", "is", null)
-      .gte("lcl_order_due_dttm", cutoff)
+      .gte("lcl_order_due_dttm", cutoff);
+    const baseResult = (corpClientId ? scoped.eq("corp_client_id", corpClientId) : scoped)
       .order("lcl_order_due_dttm", { ascending: false })
       .range(offset, endOffset);
     let data = (baseResult.data ?? null) as Array<Record<string, unknown>> | null;
@@ -205,7 +206,10 @@ async function loadYangoSupabaseOrderMetrics(): Promise<YangoSupabaseOrderMetric
   return rows;
 }
 
-export async function getYangoSupabaseOrderMetrics(): Promise<YangoSupabaseOrderMetric[]> {
+export async function getYangoSupabaseOrderMetrics(corpClientId?: string): Promise<YangoSupabaseOrderMetric[]> {
+  if (corpClientId) {
+    return loadYangoSupabaseOrderMetrics(corpClientId);
+  }
   const supabase = getSupabaseAdminClient();
   const corpClientMap = await loadCorpClientMap(supabase);
   const now = Date.now();
