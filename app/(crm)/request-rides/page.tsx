@@ -46,6 +46,8 @@ type UserLookupResponse = {
   ok: boolean;
   found?: boolean;
   userId?: string | null;
+  fullName?: string | null;
+  phone?: string | null;
   error?: string;
 };
 
@@ -212,6 +214,14 @@ function detectInputLanguage(value: string): "he" | "ru" | "en" {
   return "en";
 }
 
+function normalizePhoneLookupKey(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("972")) return digits;
+  if (digits.startsWith("0")) return `972${digits.slice(1)}`;
+  return digits;
+}
+
 function toLocalDateTimeInput(isoDate: string) {
   const date = new Date(isoDate);
   if (Number.isNaN(date.getTime())) return "";
@@ -275,7 +285,7 @@ function CarIcon() {
 }
 
 export default function RequestRidesPage() {
-  const { currentUser } = useAuth();
+  const { currentUser, users } = useAuth();
   const isClientScopedUser = currentUser?.accountType === "client";
   const [clients, setClients] = useState<YangoApiClientRef[]>([]);
   const [clientsLoading, setClientsLoading] = useState(true);
@@ -391,6 +401,22 @@ export default function RequestRidesPage() {
         : clients.find((c) => `${c.tokenLabel}:${c.clientId}` === selectedClientKey) ?? null,
     [clients, isClientScopedUser, selectedClientKey],
   );
+  const tenantEmployeeNameByPhone = useMemo(() => {
+    const tokenLabel = selectedClient?.tokenLabel?.trim();
+    const apiClientId = selectedClient?.clientId?.trim();
+    if (!tokenLabel || !apiClientId) return new Map<string, string>();
+    const out = new Map<string, string>();
+    for (const user of users) {
+      if (user.accountType !== "client") continue;
+      if ((user.tokenLabel ?? "").trim() !== tokenLabel) continue;
+      if ((user.apiClientId ?? "").trim() !== apiClientId) continue;
+      const key = normalizePhoneLookupKey(user.phoneNumber ?? "");
+      const name = user.name?.trim();
+      if (!key || !name) continue;
+      out.set(key, name);
+    }
+    return out;
+  }, [selectedClient, users]);
 
   const setAddressFieldById = (
     fieldId: string,
@@ -1235,7 +1261,13 @@ export default function RequestRidesPage() {
       }
       if (data.found && data.userId) {
         setPhoneLookupOk(true);
-        setPhoneLookupMessage("Registered user found.");
+        const name = data.fullName?.trim();
+        const phone = data.phone?.trim();
+        setPhoneLookupMessage(
+          name
+            ? `Registered user: ${name}${phone ? ` (${phone})` : ""}.`
+            : `Registered user found${phone ? ` (${phone})` : ""}.`,
+        );
       } else {
         setPhoneLookupOk(false);
         setPhoneLookupMessage("This phone isn’t registered for the selected client.");
@@ -2024,27 +2056,39 @@ export default function RequestRidesPage() {
                           <p className="px-3 py-2 text-xs text-slate-500">Searching users...</p>
                         ) : phoneSuggestions.length > 0 ? (
                           phoneSuggestions.map((item) => (
-                            <button
-                              key={`${item.userId}:${item.phone ?? "none"}`}
-                              type="button"
-                              onMouseDown={(event) => {
-                                event.preventDefault();
-                                if (item.phone) {
-                                  setPhoneNumber(item.phone);
-                                }
-                                setPhoneLookupOk(true);
-                                setPhoneLookupMessage(`Selected ${item.userId}${item.phone ? ` (${item.phone})` : ""}.`);
-                                setShowPhoneSuggestions(false);
-                              }}
-                              className={dropdownOptionClass}
-                            >
-                              <p className="text-sm font-semibold text-slate-800">
-                                {item.fullName || "Employee"}
-                              </p>
-                              <p className="text-xs text-slate-600">
-                                {item.phone ?? "Phone n/a"} • {item.userId} • {item.source}
-                              </p>
-                            </button>
+                            (() => {
+                              const phoneKey = normalizePhoneLookupKey(item.phone ?? "");
+                              const resolvedName =
+                                (phoneKey ? tenantEmployeeNameByPhone.get(phoneKey) : null) ||
+                                item.fullName?.trim() ||
+                                null;
+                              return (
+                                <button
+                                  key={`${item.userId}:${item.phone ?? "none"}`}
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    const displayName = resolvedName || item.phone?.trim() || "employee";
+                                    if (item.phone) {
+                                      setPhoneNumber(item.phone);
+                                    }
+                                    setPhoneLookupOk(true);
+                                    setPhoneLookupMessage(
+                                      `Selected ${displayName}${item.phone ? ` (${item.phone})` : ""}.`,
+                                    );
+                                    setShowPhoneSuggestions(false);
+                                  }}
+                                  className={dropdownOptionClass}
+                                >
+                                  <p className="text-sm font-semibold text-slate-800">
+                                    {resolvedName || item.phone || "Employee"}
+                                  </p>
+                                  <p className="text-xs text-slate-600">
+                                    {item.phone ?? "Phone n/a"} • {item.source}
+                                  </p>
+                                </button>
+                              );
+                            })()
                           ))
                         ) : (
                           <p className="px-3 py-2 text-xs text-slate-500">No matching users found.</p>

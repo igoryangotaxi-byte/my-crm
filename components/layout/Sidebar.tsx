@@ -46,6 +46,16 @@ function CalculatorIcon({ className = "h-4 w-4" }: IconProps) {
   );
 }
 
+function WalletIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth="1.8">
+      <path d="M4 7.5A2.5 2.5 0 016.5 5H18a2 2 0 012 2v2H8a2.5 2.5 0 100 5h12v2a2 2 0 01-2 2H6.5A2.5 2.5 0 014 15.5z" />
+      <path d="M20 9v5H8a2.5 2.5 0 010-5h12z" />
+      <circle cx="16" cy="11.5" r="0.8" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 function RideRequestIcon({ className = "h-4 w-4" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth="1.8">
@@ -153,8 +163,9 @@ export function Sidebar() {
         { href: "/client/request-rides", label: "Request Rides", page: "requestRides" as AppPageKey, area: "b2b" as const, icon: RideRequestIcon },
         { href: "/client/pre-orders", label: "Pre-Orders", page: "preOrders" as AppPageKey, area: "b2b" as const, icon: CalendarIcon },
         { href: "/client/orders", label: "Orders", page: "orders" as AppPageKey, area: "b2b" as const, icon: OrdersIcon },
+        { href: "/client/financial-center", label: "Financial Center", page: "orders" as AppPageKey, area: "b2b" as const, icon: WalletIcon },
         { href: "/client/drivers-map", label: "Drivers on the Map", page: "driversMap" as AppPageKey, area: "b2c" as const, icon: DriversMapIcon },
-        { href: "/client/employees", label: "Employees", page: "notes" as AppPageKey, area: "b2b" as const, icon: ShieldIcon },
+        { href: "/client/employees", label: "Employees", page: "orders" as AppPageKey, area: "b2b" as const, icon: ShieldIcon },
       ]
     : navItems;
   const filteredNavItems = mainNavItems.filter(

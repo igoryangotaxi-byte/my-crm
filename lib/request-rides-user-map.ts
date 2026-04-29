@@ -95,6 +95,33 @@ export function upsertMappedUserId(params: {
   return changed;
 }
 
+export function removeMappedUserId(params: {
+  tokenLabel: string;
+  clientId: string;
+  phoneNumber: string;
+}): boolean {
+  const phoneKey = normalizePhoneKey(params.phoneNumber);
+  if (!phoneKey) return false;
+  const map = readUserMap();
+  const scopedKey = `${params.tokenLabel}:${params.clientId}`;
+  const scoped = map[scopedKey] ?? {};
+  const byClientId = map[params.clientId] ?? {};
+
+  let changed = false;
+  if (phoneKey in scoped) {
+    delete scoped[phoneKey];
+    changed = true;
+  }
+  if (phoneKey in byClientId) {
+    delete byClientId[phoneKey];
+    changed = true;
+  }
+  map[scopedKey] = scoped;
+  map[params.clientId] = byClientId;
+  if (changed) writeUserMap(map);
+  return changed;
+}
+
 export function searchMappedUsers(params: {
   tokenLabel: string;
   clientId: string;
@@ -133,4 +160,26 @@ export function searchMappedUsers(params: {
   }
 
   return [...byPhone.values()];
+}
+
+export function listMappedPhonesForClient(params: {
+  tokenLabel: string;
+  clientId: string;
+  limit?: number;
+}): string[] {
+  const map = readUserMap();
+  const scopedKey = `${params.tokenLabel}:${params.clientId}`;
+  const pools = [map[scopedKey] ?? {}, map[params.clientId] ?? {}];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const limit = Math.max(1, Math.min(params.limit ?? 50, 500));
+  for (const pool of pools) {
+    for (const phoneKey of Object.keys(pool)) {
+      if (!phoneKey || seen.has(phoneKey)) continue;
+      seen.add(phoneKey);
+      out.push(`+${phoneKey}`);
+      if (out.length >= limit) return out;
+    }
+  }
+  return out;
 }

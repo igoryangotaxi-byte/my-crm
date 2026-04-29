@@ -19,6 +19,8 @@ export type AuthUser = {
   id: string;
   name: string;
   email: string;
+  phoneNumber?: string | null;
+  costCenterId?: string | null;
   password: string;
   role: AppRole;
   status: UserStatus;
@@ -199,6 +201,8 @@ export type AuthApiActionRequest =
       tenantId: string;
       name: string;
       email: string;
+      phoneNumber?: string;
+      costCenterId?: string;
       password: string;
       clientRoleId: string;
     }
@@ -206,6 +210,8 @@ export type AuthApiActionRequest =
       action: "updateTenantEmployee";
       userId: string;
       name?: string;
+      phoneNumber?: string;
+      costCenterId?: string;
       status?: UserStatus;
       clientRoleId?: string;
     }

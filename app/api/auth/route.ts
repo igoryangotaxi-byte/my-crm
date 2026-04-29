@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 import { loadAuthStore, saveAuthStore } from "@/lib/auth-store";
+import {
+  detectYangoDefaultCostCenterId,
+  ensureRequestRideUserByPhone,
+  listYangoCostCenters,
+} from "@/lib/yango-api";
+import { removeMappedUserId } from "@/lib/request-rides-user-map";
 import { getRequestUser } from "@/lib/server-auth";
 import { createSessionToken, SESSION_COOKIE_NAME } from "@/lib/server-session";
 import {
@@ -14,6 +20,11 @@ type AuthActionResponse = {
   message?: string;
   userId?: string;
   data?: AuthStoreData;
+};
+
+const HARD_CODED_COST_CENTER_BY_CLIENT_ID: Record<string, string> = {
+  // TEST CABINET: discovered from existing active employees in Yango.
+  "1beae7f94af44ee596c2ca86ae0a3551": "0e65ab747fd849beac2c6ee22baff2ba",
 };
 
 function sanitizeStore(data: AuthStoreData): AuthStoreData {
@@ -56,6 +67,16 @@ function clearSessionCookie(response: NextResponse) {
     path: "/",
     maxAge: 0,
   });
+}
+
+async function resolveTenantCostCenterId(tokenLabel: string, clientId: string) {
+  const pinned = HARD_CODED_COST_CENTER_BY_CLIENT_ID[clientId]?.trim();
+  if (pinned) return pinned;
+  const fromUsers = await detectYangoDefaultCostCenterId({ tokenLabel, clientId }).catch(() => null);
+  if (fromUsers) return fromUsers;
+  const centers = await listYangoCostCenters({ tokenLabel, clientId }).catch(() => []);
+  if (!Array.isArray(centers) || centers.length === 0) return "";
+  return centers[0]?.id?.trim() || "";
 }
 
 export async function GET(request: Request) {
@@ -414,6 +435,7 @@ export async function POST(request: Request) {
         );
       }
       const email = payload.email.trim().toLowerCase();
+      const phoneNumber = (payload.phoneNumber ?? "").trim();
       if (!email || !payload.password.trim()) {
         return NextResponse.json<AuthActionResponse>(
           { ok: false, message: "Email and password are required." },
@@ -433,6 +455,9 @@ export async function POST(request: Request) {
           { status: 404 },
         );
       }
+      const costCenterId =
+        (payload.costCenterId ?? "").trim() ||
+        (await resolveTenantCostCenterId(tenant.tokenLabel, tenant.apiClientId));
       const nextStore: AuthStoreData = {
         ...store,
         users: [
@@ -441,6 +466,8 @@ export async function POST(request: Request) {
             id: `user-${crypto.randomUUID()}`,
             name: payload.name.trim() || "Employee",
             email,
+            phoneNumber: phoneNumber || null,
+            costCenterId: costCenterId || null,
             password: payload.password,
             role: "User",
             status: "approved",
@@ -455,6 +482,19 @@ export async function POST(request: Request) {
         ],
       };
       await saveAuthStore(nextStore);
+      if (phoneNumber) {
+        try {
+          await ensureRequestRideUserByPhone({
+            tokenLabel: tenant.tokenLabel,
+            clientId: tenant.apiClientId,
+            phoneNumber,
+            fullName: payload.name,
+            costCenterId,
+          });
+        } catch {
+          // Keep employee creation successful even if Yango user lookup is unavailable.
+        }
+      }
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
     case "updateTenantEmployee": {
@@ -464,6 +504,7 @@ export async function POST(request: Request) {
           { status: 403 },
         );
       }
+      const previous = store.users.find((user) => user.id === payload.userId) ?? null;
       const nextStore: AuthStoreData = {
         ...store,
         users: store.users.map((user) =>
@@ -471,6 +512,12 @@ export async function POST(request: Request) {
             ? {
                 ...user,
                 ...(payload.name ? { name: payload.name.trim() } : {}),
+                ...(typeof payload.phoneNumber === "string"
+                  ? { phoneNumber: payload.phoneNumber.trim() || null }
+                  : {}),
+                ...(typeof payload.costCenterId === "string"
+                  ? { costCenterId: payload.costCenterId.trim() || null }
+                  : {}),
                 ...(payload.status ? { status: payload.status } : {}),
                 ...(payload.clientRoleId ? { clientRoleId: payload.clientRoleId } : {}),
               }
@@ -478,6 +525,44 @@ export async function POST(request: Request) {
         ),
       };
       await saveAuthStore(nextStore);
+      if (typeof payload.phoneNumber === "string") {
+        const updated = nextStore.users.find((user) => user.id === payload.userId);
+        const prevPhone = previous?.phoneNumber?.trim() ?? "";
+        const nextPhone = payload.phoneNumber.trim();
+        if (
+          previous?.accountType === "client" &&
+          previous.tokenLabel &&
+          previous.apiClientId &&
+          prevPhone &&
+          prevPhone !== nextPhone
+        ) {
+          removeMappedUserId({
+            tokenLabel: previous.tokenLabel,
+            clientId: previous.apiClientId,
+            phoneNumber: prevPhone,
+          });
+        }
+        if (updated?.accountType === "client" && updated.tokenLabel && updated.apiClientId) {
+          const phoneNumber = nextPhone;
+          const costCenterId =
+            (typeof payload.costCenterId === "string" ? payload.costCenterId : "").trim() ||
+            (updated.costCenterId ?? "").trim() ||
+            (await resolveTenantCostCenterId(updated.tokenLabel, updated.apiClientId));
+          if (phoneNumber) {
+            try {
+              await ensureRequestRideUserByPhone({
+                tokenLabel: updated.tokenLabel,
+                clientId: updated.apiClientId,
+                phoneNumber,
+                fullName: payload.name ?? updated.name,
+                costCenterId,
+              });
+            } catch {
+              // Keep profile update successful even if Yango user lookup is unavailable.
+            }
+          }
+        }
+      }
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
     default:

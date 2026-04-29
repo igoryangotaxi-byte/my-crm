@@ -30,6 +30,26 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
     title: "Request Rides",
     subtitle: "Create ride requests via selected client API",
   },
+  "/client/request-rides": {
+    title: "Request Rides",
+    subtitle: "Client cabinet ride requests",
+  },
+  "/client/pre-orders": {
+    title: "Pre-Orders",
+    subtitle: "Upcoming scheduled rides for your company",
+  },
+  "/client/orders": {
+    title: "Orders",
+    subtitle: "All rides for your client account",
+  },
+  "/client/financial-center": {
+    title: "Financial Center",
+    subtitle: "Spend analytics, average check, users and departments",
+  },
+  "/client/employees": {
+    title: "My Employees",
+    subtitle: "Team members, ride activity and restrictions",
+  },
   "/accesses": {
     title: "Access managment",
     subtitle: "Manage role permissions and registration approvals",

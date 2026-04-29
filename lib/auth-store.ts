@@ -180,6 +180,8 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
       ? ensureDefaultAdmin(
           data.users.filter(isAuthUser).map((item) => ({
             ...item,
+            phoneNumber: typeof item.phoneNumber === "string" ? item.phoneNumber : null,
+            costCenterId: typeof item.costCenterId === "string" ? item.costCenterId : null,
             accountType: normalizeAccountType(item.accountType),
             tenantId: item.tenantId ?? null,
             corpClientId: item.corpClientId ?? null,

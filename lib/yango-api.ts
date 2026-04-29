@@ -12,6 +12,7 @@ import type {
 } from "@/types/crm";
 import { b2bDashboardOrderKey, type B2BOrdersListCursors } from "@/lib/b2b-orders-keys";
 import {
+  listMappedPhonesForClient,
   normalizePhoneKey,
   resolveMappedUserId,
   searchMappedUsers,
@@ -1430,9 +1431,15 @@ function rowToSuggestion(record: Record<string, unknown>): RequestRideUserSugges
   const userId =
     asString(record.user_id) || asString(record.userId) || asString(record.id);
   if (!userId) return null;
+  const firstName = asString(record.first_name) || asString(record.firstName);
+  const lastName = asString(record.last_name) || asString(record.lastName);
+  const splitName = [firstName, lastName].filter(Boolean).join(" ").trim();
   const fullName =
+    splitName ||
     asString(record.fullname) ||
     asString(record.full_name) ||
+    asString(record.user_name) ||
+    asString(record.username) ||
     asString(record.name) ||
     asString(record.nickname) ||
     null;
@@ -1452,6 +1459,18 @@ type YangoUserListResponse = {
   cursor?: string;
   limit?: number;
   total_amount?: number;
+};
+
+export type YangoClientUserDirectoryEntry = {
+  userId: string;
+  fullName: string | null;
+  phone: string | null;
+  department: string | null;
+};
+
+export type YangoCostCenter = {
+  id: string;
+  name: string;
 };
 
 /** Official employee list: GET /2.0/users (see Yandex B2B «Список сотрудников клиента»). */
@@ -1591,16 +1610,32 @@ function suggestionMatchesQuery(suggestion: RequestRideUserSuggestion, rawQuery:
   return false;
 }
 
-export async function resolveRequestRideUserIdByPhone(input: {
+export async function resolveRequestRideUserByPhone(input: {
   tokenLabel: string;
   clientId: string;
   phoneNumber: string;
-}): Promise<string | null> {
-  const mapped = resolveMappedUserId(input);
-  if (mapped) return mapped;
-
+}): Promise<RequestRideUserSuggestion | null> {
   const tokenConfig = await resolveTokenConfig(input.tokenLabel);
   const variants = phoneVariants(input.phoneNumber);
+  const mapped = resolveMappedUserId(input);
+  if (mapped) {
+    const directory = await listYangoClientUsers({
+      tokenLabel: input.tokenLabel,
+      clientId: input.clientId,
+      limit: 1000,
+    }).catch(() => []);
+    const matchById = directory.find((item) => item.userId === mapped);
+    if (matchById) {
+      return {
+        userId: matchById.userId,
+        phone: matchById.phone,
+        fullName: matchById.fullName,
+        source: "api",
+      };
+    }
+    return { userId: mapped, phone: null, fullName: null, source: "map" };
+  }
+
   let permissionDenied = false;
   for (const phone of variants) {
     const attempts = [
@@ -1621,8 +1656,17 @@ export async function resolveRequestRideUserIdByPhone(input: {
           response,
           phone,
         );
+        const suggestions = extractUserSuggestionsFromPayload(response);
+        const exactPhone = suggestions.find((item) =>
+          variants.some((variant) => phoneKeysMatchYango(item.phone, variant)),
+        );
+        if (exactPhone) return exactPhone;
         const userId = extractUserId(response);
-        if (userId) return userId;
+        if (userId) {
+          const fallback = suggestions.find((item) => item.userId === userId);
+          if (fallback) return fallback;
+          return { userId, phone, fullName: null, source: "api" };
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (message.includes("permission_check_failed")) {
@@ -1646,17 +1690,150 @@ export async function resolveRequestRideUserIdByPhone(input: {
       phoneNumber: input.phoneNumber,
       userId: fromOfficialList,
     });
-    return fromOfficialList;
+    const directory = await listYangoClientUsers({
+      tokenLabel: input.tokenLabel,
+      clientId: input.clientId,
+      limit: 1000,
+    }).catch(() => []);
+    const match =
+      directory.find((item) => item.userId === fromOfficialList) ??
+      directory.find((item) => variants.some((variant) => phoneKeysMatchYango(item.phone, variant)));
+    if (match) {
+      return {
+        userId: match.userId,
+        phone: match.phone,
+        fullName: match.fullName,
+        source: "api",
+      };
+    }
+    return { userId: fromOfficialList, phone: null, fullName: null, source: "api" };
   }
 
   const mappedAfterProbe = resolveMappedUserId(input);
-  if (mappedAfterProbe) return mappedAfterProbe;
+  if (mappedAfterProbe) {
+    return { userId: mappedAfterProbe, phone: null, fullName: null, source: "map" };
+  }
   if (permissionDenied) {
     throw new Error(
       "Selected API token has no permission to query users and no local phone->user_id mapping matched.",
     );
   }
   return null;
+}
+
+export async function ensureRequestRideUserByPhone(input: {
+  tokenLabel: string;
+  clientId: string;
+  phoneNumber: string;
+  fullName?: string | null;
+  costCenterId?: string | null;
+}) {
+  const existing = await resolveRequestRideUserByPhone(input);
+  if (existing?.userId) {
+    return { ok: true as const, created: false as const, user: existing };
+  }
+
+  const tokenConfig = await resolveTokenConfig(input.tokenLabel);
+  const trimmedName = input.fullName?.trim() || "";
+  const costCenterId = input.costCenterId?.trim() || "";
+  const [firstName, ...rest] = trimmedName.split(/\s+/).filter(Boolean);
+  const lastName = rest.join(" ").trim();
+  const bodyCandidates: Array<Record<string, unknown>> = [
+    {
+      phone: input.phoneNumber,
+      fullname: trimmedName || undefined,
+      is_active: true,
+      cost_centers_id: costCenterId || undefined,
+    },
+    {
+      phone: input.phoneNumber,
+      fullname: trimmedName || undefined,
+      is_active: true,
+      cost_centers_id: costCenterId ? [costCenterId] : undefined,
+    },
+    {
+      phone_number: input.phoneNumber,
+      fullname: trimmedName || undefined,
+      is_active: true,
+      cost_centers_id: costCenterId || undefined,
+    },
+    {
+      phone_number: input.phoneNumber,
+      fullname: trimmedName || undefined,
+      is_active: true,
+      cost_centers_id: costCenterId ? [costCenterId] : undefined,
+    },
+    { phone: input.phoneNumber, full_name: trimmedName || undefined },
+    { phone_number: input.phoneNumber, full_name: trimmedName || undefined },
+    {
+      phone: input.phoneNumber,
+      name: trimmedName || undefined,
+      fullname: trimmedName || undefined,
+      is_active: true,
+      cost_centers_id: costCenterId || undefined,
+    },
+    {
+      phone: input.phoneNumber,
+      name: trimmedName || undefined,
+      fullname: trimmedName || undefined,
+      is_active: true,
+      cost_centers_id: costCenterId ? [costCenterId] : undefined,
+    },
+    {
+      phone: input.phoneNumber,
+      first_name: firstName || undefined,
+      last_name: lastName || undefined,
+    },
+  ];
+  const requestCandidates: Array<{ endpoint: string; method: "POST" | "PUT" }> = [
+    { endpoint: "/2.0/users/create", method: "POST" },
+    { endpoint: "/2.0/users", method: "POST" },
+    { endpoint: "/2.0/users", method: "PUT" },
+    { endpoint: "/2.0/users/add", method: "POST" },
+    { endpoint: "/2.0/users/register", method: "POST" },
+  ];
+  const errors: string[] = [];
+
+  for (const candidate of requestCandidates) {
+    for (const body of bodyCandidates) {
+      try {
+        await fetchJsonNoCache<Record<string, unknown>>(
+          `${YANGO_BASE_URL}${candidate.endpoint}`,
+          tokenConfig.token,
+          input.clientId,
+          { method: candidate.method, body: JSON.stringify(body) },
+          { allowEmptyBody: true },
+        );
+        const resolved = await resolveRequestRideUserByPhone(input);
+        if (resolved?.userId) {
+          return { ok: true as const, created: true as const, user: resolved };
+        }
+      } catch (error) {
+        errors.push(
+          `${candidate.method} ${candidate.endpoint}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+  }
+
+  return {
+    ok: false as const,
+    created: false as const,
+    error: errors[0] ??
+      "Yango did not return a supported endpoint for employee creation; create employee in Yango corporate cabinet first.",
+    attempts: errors,
+  };
+}
+
+export async function resolveRequestRideUserIdByPhone(input: {
+  tokenLabel: string;
+  clientId: string;
+  phoneNumber: string;
+}): Promise<string | null> {
+  const match = await resolveRequestRideUserByPhone(input);
+  return match?.userId ?? null;
 }
 
 export async function searchRequestRideUsers(input: {
@@ -1684,11 +1861,29 @@ export async function searchRequestRideUsers(input: {
     limit,
     strictClientScope: true,
   });
+  const mappedPhoneKeys = new Set(mapped.map((item) => normalizePhoneKey(item.phone)));
+  const directoryByPhoneKey = new Map<string, YangoClientUserDirectoryEntry>();
+  const directoryByUserId = new Map<string, YangoClientUserDirectoryEntry>();
+  if (mapped.length > 0) {
+    const directory = await listYangoClientUsers({
+      tokenLabel: input.tokenLabel,
+      clientId: input.clientId,
+      limit: 1200,
+    }).catch(() => []);
+    for (const entry of directory) {
+      directoryByUserId.set(entry.userId, entry);
+      const key = normalizePhoneKey(entry.phone ?? "");
+      if (key) directoryByPhoneKey.set(key, entry);
+    }
+  }
   for (const item of mapped) {
+    const phoneKey = normalizePhoneKey(item.phone);
+    const directoryHit =
+      directoryByPhoneKey.get(phoneKey) || directoryByUserId.get(item.userId) || null;
     push({
       userId: item.userId,
       phone: item.phone,
-      fullName: null,
+      fullName: directoryHit?.fullName ?? null,
       source: "map",
     });
   }
@@ -1764,6 +1959,210 @@ export async function searchRequestRideUsers(input: {
   }
 
   return [...byId.values()].slice(0, limit);
+}
+
+export async function listYangoClientUsers(input: {
+  tokenLabel: string;
+  clientId: string;
+  limit?: number;
+}): Promise<YangoClientUserDirectoryEntry[]> {
+  const tokenConfig = await resolveTokenConfig(input.tokenLabel);
+  const limit = Math.max(1, Math.min(input.limit ?? 500, 2000));
+  const pageSize = Math.min(100, Math.max(20, readPositiveIntEnv("YANGO_USER_LIST_PAGE_SIZE", 100)));
+  const maxPages = Math.max(1, Math.ceil(limit / pageSize) + 2);
+  const out = new Map<string, YangoClientUserDirectoryEntry>();
+
+  await forEachYangoUserListPage(
+    tokenConfig.token,
+    input.clientId,
+    maxPages,
+    pageSize,
+    (page) => {
+      for (const raw of page.items ?? []) {
+        if (out.size >= limit) return false;
+        if (!raw || typeof raw !== "object") continue;
+        const row = raw as Record<string, unknown>;
+        if (isYangoUserListRowDeleted(row)) continue;
+        const userId = asString(row.user_id) || asString(row.userId) || asString(row.id);
+        if (!userId || out.has(userId)) continue;
+        const firstName = asString(row.first_name) || asString(row.firstName);
+        const lastName = asString(row.last_name) || asString(row.lastName);
+        const fullNameFromSplit = [firstName, lastName].filter(Boolean).join(" ").trim();
+        const fullName =
+          fullNameFromSplit ||
+          asString(row.full_name) ||
+          asString(row.fullName) ||
+          asString(row.name) ||
+          null;
+        const department =
+          asString(row.department) ||
+          asString(row.department_name) ||
+          asString(row.division) ||
+          asString(row.cost_center) ||
+          null;
+        out.set(userId, {
+          userId,
+          fullName,
+          phone: asString(row.phone) || asString(row.phone_number) || asString(row.msisdn) || null,
+          department,
+        });
+      }
+      return out.size < limit;
+    },
+  );
+
+  return [...out.values()];
+}
+
+function extractCostCentersFromPayload(payload: unknown): YangoCostCenter[] {
+  if (!payload || typeof payload !== "object") return [];
+  const root = payload as Record<string, unknown>;
+  const lists: unknown[] = [];
+  for (const key of ["cost_centers", "costCenters", "items", "data", "result"]) {
+    const value = root[key];
+    if (Array.isArray(value)) lists.push(...value);
+  }
+  const out = new Map<string, YangoCostCenter>();
+  for (const raw of lists) {
+    if (!raw || typeof raw !== "object") continue;
+    const row = raw as Record<string, unknown>;
+    const id =
+      asString(row.id) ||
+      asString(row.cost_center_id) ||
+      asString(row.costCenterId) ||
+      asString(row.cost_centerid);
+    if (!id) continue;
+    const name =
+      asString(row.name) ||
+      asString(row.title) ||
+      asString(row.full_name) ||
+      asString(row.fullName) ||
+      id;
+    if (!out.has(id)) out.set(id, { id, name: name || id });
+  }
+  return [...out.values()];
+}
+
+export async function listYangoCostCenters(input: {
+  tokenLabel: string;
+  clientId: string;
+}): Promise<YangoCostCenter[]> {
+  const tokenConfig = await resolveTokenConfig(input.tokenLabel);
+  const candidates = [
+    `${YANGO_BASE_URL}/2.0/cost_centers`,
+    `${YANGO_BASE_URL}/2.0/cost-centers`,
+    `${YANGO_BASE_URL}/2.0/costcenters`,
+    `${YANGO_BASE_URL}/2.0/users/cost_centers`,
+  ];
+  const out = new Map<string, YangoCostCenter>();
+  for (const url of candidates) {
+    try {
+      const payload = await fetchJsonNoCache<Record<string, unknown>>(
+        url,
+        tokenConfig.token,
+        input.clientId,
+      );
+      for (const item of extractCostCentersFromPayload(payload)) {
+        out.set(item.id, item);
+      }
+      if (out.size > 0) break;
+    } catch {
+      // continue probing
+    }
+  }
+  return [...out.values()];
+}
+
+function extractCostCenterIdFromUserRow(row: Record<string, unknown>): string | null {
+  const direct =
+    asString(row.cost_center_id) ||
+    asString(row.costCenterId) ||
+    asString(row.cost_centerid);
+  if (direct) return direct;
+  const list =
+    (Array.isArray(row.cost_centers_id) ? row.cost_centers_id : null) ||
+    (Array.isArray(row.costCentersId) ? row.costCentersId : null) ||
+    (Array.isArray(row.cost_centers) ? row.cost_centers : null);
+  if (!list) return null;
+  for (const item of list) {
+    if (typeof item === "string" && item.trim()) return item.trim();
+    if (item && typeof item === "object") {
+      const id =
+        asString((item as Record<string, unknown>).id) ||
+        asString((item as Record<string, unknown>).cost_center_id);
+      if (id) return id;
+    }
+  }
+  return null;
+}
+
+export async function detectYangoDefaultCostCenterId(input: {
+  tokenLabel: string;
+  clientId: string;
+}): Promise<string | null> {
+  const tokenConfig = await resolveTokenConfig(input.tokenLabel);
+  const attempts = [
+    `${YANGO_BASE_URL}/2.0/users?limit=50`,
+    `${YANGO_BASE_URL}/2.0/users/list?limit=50`,
+  ];
+  for (const url of attempts) {
+    try {
+      const payload = await fetchJsonNoCache<Record<string, unknown>>(
+        url,
+        tokenConfig.token,
+        input.clientId,
+      );
+      const rows = Array.isArray(payload.items)
+        ? payload.items
+        : Array.isArray(payload.users)
+          ? payload.users
+          : [];
+      for (const raw of rows) {
+        if (!raw || typeof raw !== "object") continue;
+        const id = extractCostCenterIdFromUserRow(raw as Record<string, unknown>);
+        if (id) return id;
+      }
+    } catch {
+      // continue probing
+    }
+  }
+
+  const knownPhones = listMappedPhonesForClient({
+    tokenLabel: input.tokenLabel,
+    clientId: input.clientId,
+    limit: 20,
+  });
+  for (const phone of knownPhones) {
+    const endpoints = [
+      `${YANGO_BASE_URL}/2.0/users/info?phone=${encodeURIComponent(phone)}`,
+      `${YANGO_BASE_URL}/2.0/users/info?phone_number=${encodeURIComponent(phone)}`,
+      `${YANGO_BASE_URL}/2.0/users/list?phone=${encodeURIComponent(phone)}`,
+      `${YANGO_BASE_URL}/2.0/users/list?phone_number=${encodeURIComponent(phone)}`,
+    ];
+    for (const url of endpoints) {
+      try {
+        const payload = await fetchJsonNoCache<Record<string, unknown>>(
+          url,
+          tokenConfig.token,
+          input.clientId,
+        );
+        const direct = extractCostCenterIdFromUserRow(payload);
+        if (direct) return direct;
+        const rows = [
+          ...(Array.isArray(payload.items) ? payload.items : []),
+          ...(Array.isArray(payload.users) ? payload.users : []),
+        ];
+        for (const raw of rows) {
+          if (!raw || typeof raw !== "object") continue;
+          const id = extractCostCenterIdFromUserRow(raw as Record<string, unknown>);
+          if (id) return id;
+        }
+      } catch {
+        // continue probing
+      }
+    }
+  }
+  return null;
 }
 
 export async function getRequestRideApiClients(scope?: YangoScope): Promise<YangoApiClientRef[]> {

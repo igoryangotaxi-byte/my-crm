@@ -1,4 +1,4 @@
-import { resolveRequestRideUserIdByPhone } from "@/lib/yango-api";
+import { resolveRequestRideUserByPhone } from "@/lib/yango-api";
 import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const userId = await resolveRequestRideUserIdByPhone({
+    const match = await resolveRequestRideUserByPhone({
       tokenLabel,
       clientId,
       phoneNumber,
@@ -39,8 +39,10 @@ export async function POST(request: Request) {
     return Response.json(
       {
         ok: true,
-        found: Boolean(userId),
-        userId: userId ?? null,
+        found: Boolean(match?.userId),
+        userId: match?.userId ?? null,
+        fullName: match?.fullName ?? null,
+        phone: match?.phone ?? null,
       },
       { headers: { "Cache-Control": "no-store" } },
     );
