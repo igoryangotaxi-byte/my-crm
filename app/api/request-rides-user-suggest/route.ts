@@ -1,4 +1,4 @@
-import { searchRequestRideUsers } from "@/lib/yango-api";
+import { resolveRequestRideUserByPhone, searchRequestRideUsers } from "@/lib/yango-api";
 import { loadAuthStore } from "@/lib/auth-store";
 import { getTenantEmployeeLinks } from "@/lib/client-employee-links";
 import { normalizePhoneKey } from "@/lib/request-rides-user-map";
@@ -35,7 +35,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    const users = await searchRequestRideUsers({ tokenLabel, clientId, query, limit: 8 });
+    let users: Awaited<ReturnType<typeof searchRequestRideUsers>> = [];
+    try {
+      users = await searchRequestRideUsers({ tokenLabel, clientId, query, limit: 8 });
+    } catch {
+      users = [];
+    }
     let enriched = users;
     if (scope?.tenantId) {
       const store = await loadAuthStore();
@@ -49,6 +54,7 @@ export async function POST(request: Request) {
         source: "map";
       }> = [];
       const digitsQuery = query.replace(/\D/g, "");
+      const normalizedQuery = query.trim().toLowerCase();
       for (const user of store.users) {
         if (user.accountType !== "client" || user.tenantId !== scope.tenantId) continue;
         const phone = typeof user.phoneNumber === "string" ? user.phoneNumber.trim() : "";
@@ -58,9 +64,26 @@ export async function POST(request: Request) {
         byPhone.set(key, name);
         const linkedRemoteId = links[user.id];
         if (linkedRemoteId) byRemoteUserId.set(linkedRemoteId, name);
-        if (digitsQuery && key.includes(digitsQuery)) {
+        const nameMatched = normalizedQuery.length > 0 && name.toLowerCase().includes(normalizedQuery);
+        const phoneMatched = digitsQuery.length > 0 && key.includes(digitsQuery);
+        if (nameMatched || phoneMatched) {
+          const existingByPhone = users.find((item) => normalizePhoneKey(item.phone ?? "") === key);
+          let resolvedRemoteUserId = linkedRemoteId || existingByPhone?.userId || "";
+          if (!resolvedRemoteUserId && localTenantSuggestions.length < 4) {
+            try {
+              const probe = await resolveRequestRideUserByPhone({
+                tokenLabel,
+                clientId,
+                phoneNumber: phone,
+              });
+              resolvedRemoteUserId = probe?.userId ?? "";
+            } catch {
+              resolvedRemoteUserId = "";
+            }
+          }
+          if (!resolvedRemoteUserId) continue;
           localTenantSuggestions.push({
-            userId: user.id,
+            userId: resolvedRemoteUserId,
             phone: phone || `+${key}`,
             fullName: name,
             source: "map",
