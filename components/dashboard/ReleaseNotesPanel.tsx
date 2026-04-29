@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-04-29",
+    title: "Request Rides production suggest hotfix",
+    notes:
+      "427eab0 — Fixed Rider Phone employee suggestions in production by adding tenant-level fallback resolution to remote Yango user ids when users/list is empty or restricted, restoring reliable employee selection in client cabinets.",
+  },
+  {
+    date: "2026-04-29",
     title: "Client cabinet onboarding + financial center release",
     notes:
       "afa0ed6 — Added Financial Center (summary + CSV/XLSX export), My Employees activity with tenant/Yango matching, universal employee auto-sync to Yango with cost-center fallback per client cabinet, and Request Rides/client-scope UX fixes including lookup improvements and cabinet-specific header/navigation behavior.",
