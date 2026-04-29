@@ -26,6 +26,8 @@
 
 # server runtime cache (Fleet drivers snapshot — не коммитить)
 /.cache/
+/data/request-rides-user-map.json
+/data/client-employee-links.json
 
 # debug
 npm-debug.log*
