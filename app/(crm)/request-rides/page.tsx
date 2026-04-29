@@ -1952,11 +1952,12 @@ export default function RequestRidesPage() {
             />
           </div>
 
-          <div className="absolute inset-0 z-10 overflow-y-auto overflow-x-hidden p-4 pointer-events-auto">
-            <form
-              onSubmit={handleSubmit}
-              className="flex max-w-[24.5rem] flex-col gap-4 pb-6 pointer-events-auto"
-            >
+          <div className="pointer-events-none absolute inset-0 z-10 p-4">
+            <div className="pointer-events-auto h-full max-w-[24.5rem] overflow-y-auto overflow-x-hidden pr-1">
+              <form
+                onSubmit={handleSubmit}
+                className="flex flex-col gap-4 pb-6 pointer-events-auto"
+              >
               <div className={`${rideCard} relative z-40 space-y-3`}>
                 <label className="block">
                   <span className="crm-label mb-1 block">
@@ -2621,7 +2622,8 @@ export default function RequestRidesPage() {
                 </article>
               </div>
 
-            </form>
+              </form>
+            </div>
           </div>
 
           <aside className="pointer-events-none absolute right-4 top-4 z-20 hidden w-[min(30rem,calc(100%-2rem))] flex-col gap-4 xl:flex">
