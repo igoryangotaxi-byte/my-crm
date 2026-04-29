@@ -1,5 +1,6 @@
 import { ReleaseNotesPanel } from "@/components/dashboard/ReleaseNotesPanel";
 import { GreenplumSyncPanel } from "@/components/notes/GreenplumSyncPanel";
+import { TokenOnboardingPanel } from "@/components/notes/TokenOnboardingPanel";
 import { TokenDiagnosticsPanel } from "@/components/notes/TokenDiagnosticsPanel";
 import { UnmappedCorpClientsPanel } from "@/components/notes/UnmappedCorpClientsPanel";
 import {
@@ -31,6 +32,7 @@ export default async function NotesPage() {
         supabaseMessage={supabaseStatus.message}
         lastSyncSummary={lastSyncSummary}
       />
+      <TokenOnboardingPanel />
       <UnmappedCorpClientsPanel rows={unmappedCorpClients} />
       <TokenDiagnosticsPanel diagnostics={diagnostics} />
       <ReleaseNotesPanel />

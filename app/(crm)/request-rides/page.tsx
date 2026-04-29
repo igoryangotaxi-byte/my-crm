@@ -350,6 +350,9 @@ export default function RequestRidesPage() {
   const [rightOverlayVisible, setRightOverlayVisible] = useState(false);
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
   const [focusedPendingUploadId, setFocusedPendingUploadId] = useState<string | null>(null);
+  const [optimizingPendingUploadIds, setOptimizingPendingUploadIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadParsing, setUploadParsing] = useState(false);
   const [uploadSubmitting, setUploadSubmitting] = useState(false);
@@ -382,8 +385,11 @@ export default function RequestRidesPage() {
   const pollTimerRef = useRef<number | null>(null);
 
   const selectedClient = useMemo(
-    () => clients.find((c) => `${c.tokenLabel}:${c.clientId}` === selectedClientKey) ?? null,
-    [clients, selectedClientKey],
+    () =>
+      isClientScopedUser
+        ? (clients[0] ?? null)
+        : clients.find((c) => `${c.tokenLabel}:${c.clientId}` === selectedClientKey) ?? null,
+    [clients, isClientScopedUser, selectedClientKey],
   );
 
   const setAddressFieldById = (
@@ -1138,7 +1144,6 @@ export default function RequestRidesPage() {
       const created = data.result;
       const createdAtIso = new Date().toISOString();
       const addressPhones = dedupePhones([
-        phoneNumber,
         ...stops.map((stop) => stop.phone),
         destinationPhone,
       ]);
@@ -1187,9 +1192,9 @@ export default function RequestRidesPage() {
             ),
           );
         }
-      } else if (phoneNumber.trim()) {
+      } else {
         setSmsWarning(
-          "Passenger notifications were skipped: the rider phone doesn’t look like a valid mobile number, and no stop/destination phones were entered. Check the format (e.g. +972… or 05…).",
+          "Passenger notifications were skipped: add at least one phone on stop/destination points. Rider Phone is not used for SMS delivery.",
         );
       }
       await requestStatus(createdRide, { withRetry: true });
@@ -1201,7 +1206,7 @@ export default function RequestRidesPage() {
   };
 
   const checkPhoneRegistration = async () => {
-    if (!selectedClient) {
+    if (!selectedClient && !isClientScopedUser) {
       setPhoneLookupOk(false);
       setPhoneLookupMessage("Select a client first.");
       return;
@@ -1219,8 +1224,8 @@ export default function RequestRidesPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tokenLabel: selectedClient.tokenLabel,
-          clientId: selectedClient.clientId,
+          tokenLabel: selectedClient?.tokenLabel ?? "",
+          clientId: selectedClient?.clientId ?? "",
           phoneNumber,
         }),
       });
@@ -1259,18 +1264,51 @@ export default function RequestRidesPage() {
     }
     try {
       const language = detectInputLanguage(trimmed);
-      const response = await fetch("/api/address-suggest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: trimmed, language }),
-      });
-      const data = (await response.json()) as AddressSuggestResponse;
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error ?? "Failed to geocode address.");
+      const queryCandidates = [trimmed];
+      const commaParts = trimmed
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean);
+      if (commaParts.length >= 2) {
+        const swapped = [commaParts.slice(1).join(", "), commaParts[0]].filter(Boolean).join(", ");
+        if (swapped && !queryCandidates.includes(swapped)) queryCandidates.push(swapped);
       }
-      const first = data.suggestions?.[0];
+      if (language === "en") {
+        const withCountry = `${trimmed}, Israel`;
+        if (!queryCandidates.includes(withCountry)) queryCandidates.push(withCountry);
+        if (commaParts.length >= 2) {
+          const swappedWithCountry = `${[commaParts.slice(1).join(", "), commaParts[0]]
+            .filter(Boolean)
+            .join(", ")}, Israel`;
+          if (swappedWithCountry && !queryCandidates.includes(swappedWithCountry)) {
+            queryCandidates.push(swappedWithCountry);
+          }
+        }
+      }
+
+      let first: AddressSuggestion | undefined;
+      let lastError: string | null = null;
+      for (const query of queryCandidates) {
+        const response = await fetch("/api/address-suggest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query, language }),
+        });
+        const data = (await response.json()) as AddressSuggestResponse;
+        if (!response.ok || !data.ok) {
+          lastError = data.error ?? "Failed to geocode address.";
+          continue;
+        }
+        first = data.suggestions?.[0];
+        if (first) break;
+      }
       if (!first) {
-        return { text: trimmed, lat: null, lon: null, geocodeError: "No matching address found." };
+        return {
+          text: trimmed,
+          lat: null,
+          lon: null,
+          geocodeError: lastError ?? "No matching address found.",
+        };
       }
       return {
         text: first.label || first.displayName || trimmed,
@@ -1467,6 +1505,99 @@ export default function RequestRidesPage() {
     await Promise.all(Array.from({ length: Math.min(concurrency, candidates.length) }, () => worker()));
   };
 
+  const optimizePendingUploadRoute = async (rowId: string) => {
+    if (optimizingPendingUploadIds.has(rowId)) return;
+    const row = pendingUploads.find((entry) => entry.id === rowId);
+    if (!row || row.state === "creating" || row.state === "created") return;
+    const filled = row.addresses.filter((entry) => entry.text);
+    if (filled.length < 3) {
+      setPendingUploads((prev) =>
+        prev.map((entry) =>
+          entry.id === rowId
+            ? { ...entry, message: "Add at least one stop between pickup and destination to optimize." }
+            : entry,
+        ),
+      );
+      return;
+    }
+    const hasMissingCoords = filled.some((entry) => entry.lat == null || entry.lon == null);
+    if (hasMissingCoords) {
+      setPendingUploads((prev) =>
+        prev.map((entry) =>
+          entry.id === rowId
+            ? { ...entry, message: "All points must be geocoded before route optimization." }
+            : entry,
+        ),
+      );
+      return;
+    }
+
+    const pickupAddr = filled[0];
+    const others = filled
+      .slice(1)
+      .map((entry) => ({ lat: entry.lat as number, lon: entry.lon as number }));
+
+    setOptimizingPendingUploadIds((prev) => {
+      const next = new Set(prev);
+      next.add(rowId);
+      return next;
+    });
+    try {
+      const response = await fetch("/api/route-optimize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pickup: { lat: pickupAddr.lat as number, lon: pickupAddr.lon as number },
+          others,
+        }),
+      });
+      const data = (await response.json()) as RouteOptimizeResponse;
+      if (!response.ok || !data.ok || !data.result) {
+        throw new Error(data.error ?? "Failed to optimize route.");
+      }
+      const result = data.result;
+      const isIdentity = result.orderedIndices.every((idx, position) => idx === position);
+      setPendingUploads((prev) =>
+        prev.map((entry) => {
+          if (entry.id !== rowId) return entry;
+          const filledCurrent = entry.addresses.filter((addr) => addr.text);
+          if (filledCurrent.length < 3) return entry;
+          if (result.savingsSeconds <= 0 || isIdentity) {
+            return { ...entry, message: "Route is already optimal." };
+          }
+          const pickupCurrent = filledCurrent[0];
+          const tail = filledCurrent.slice(1);
+          const reorderedTail = result.orderedIndices.map((idx) => tail[idx]).filter(Boolean);
+          if (reorderedTail.length !== tail.length) {
+            return { ...entry, message: "Couldn’t apply optimized stop order." };
+          }
+          return {
+            ...entry,
+            addresses: [pickupCurrent, ...reorderedTail],
+            message: "Route optimized for current traffic.",
+            optimization: {
+              savingsSeconds: result.savingsSeconds,
+              originalDurationSeconds: result.original.durationSeconds,
+              optimizedDurationSeconds: result.optimized.durationSeconds,
+              savingsMeters: result.savingsMeters ?? undefined,
+            },
+          };
+        }),
+      );
+    } catch (error) {
+      const message = publicErrorMessage(error, "Couldn’t optimize this route right now.");
+      setPendingUploads((prev) =>
+        prev.map((entry) => (entry.id === rowId ? { ...entry, message } : entry)),
+      );
+    } finally {
+      setOptimizingPendingUploadIds((prev) => {
+        const next = new Set(prev);
+        next.delete(rowId);
+        return next;
+      });
+    }
+  };
+
   const handleConfirmPendingUploads = async () => {
     if (uploadSubmitting) return;
     if (!selectedClient) {
@@ -1523,10 +1654,9 @@ export default function RequestRidesPage() {
         }
         const created = data.result;
         const createdAtIso = new Date().toISOString();
-        const bulkAddressPhones = dedupePhones([
-          snapshot.phone,
-          ...snapshot.addresses.slice(1).map((entry) => entry.phone ?? ""),
-        ]);
+        const bulkAddressPhones = dedupePhones(
+          snapshot.addresses.slice(1).map((entry) => entry.phone ?? ""),
+        );
         const createdRide: RequestedRideItem = {
           orderId: created.orderId,
           createdAtIso,
@@ -1790,112 +1920,81 @@ export default function RequestRidesPage() {
             />
           </div>
 
-          <div className="absolute inset-0 z-10 overflow-y-auto overflow-x-hidden p-4 pointer-events-none">
+          <div className="absolute inset-0 z-10 overflow-y-auto overflow-x-hidden p-4 pointer-events-auto">
             <form
               onSubmit={handleSubmit}
-              className="flex max-w-[24.5rem] flex-col gap-4 pb-6 pointer-events-none"
+              className="flex max-w-[24.5rem] flex-col gap-4 pb-6 pointer-events-auto"
             >
               <div className={`${rideCard} relative z-40 space-y-3`}>
                 <label className="block">
                   <span className="crm-label mb-1 block">
                     {isClientScopedUser ? "Client context" : "Select the client"}
                   </span>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      disabled={clientsLoading || isClientScopedUser}
-                      onClick={() => {
-                        if (isClientScopedUser) return;
-                        setShowClientDropdown((prev) => !prev);
-                      }}
-                      onBlur={() => {
-                        window.setTimeout(() => setShowClientDropdown(false), 120);
-                      }}
-                      className="crm-input flex h-11 w-full items-center justify-between px-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <span className="truncate text-slate-900">
-                        {clientsLoading
-                          ? "Loading clients..."
-                          : selectedClient
-                            ? `${selectedClient.clientName} (${selectedClient.tokenLabel})`
-                            : isClientScopedUser
-                              ? "Client is fixed by your account"
-                              : "Select Client"}
-                      </span>
-                      <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5 text-slate-700" stroke="currentColor" strokeWidth="1.7">
-                        <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
-                    {showClientDropdown && !isClientScopedUser ? (
-                      <div className={dropdownPanelClass}>
-                        {!clientsLoading && clients.length === 0 ? (
-                          <p className="px-3 py-2 text-xs text-slate-500">No clients available</p>
-                        ) : (
-                          clients.map((client) => {
-                            const key = `${client.tokenLabel}:${client.clientId}`;
-                            const active = selectedClientKey === key;
-                            return (
-                              <button
-                                key={key}
-                                type="button"
-                                onMouseDown={(event) => {
-                                  event.preventDefault();
-                                  setSelectedClientKey(key);
-                                  setPhoneSuggestions([]);
-                                  setPhoneLookupOk(null);
-                                  setPhoneLookupMessage(null);
-                                  setShowClientDropdown(false);
-                                }}
-                                className={`${dropdownOptionClass} ${active ? "bg-white" : ""}`}
-                              >
-                                <p className="text-sm font-semibold text-slate-800">
-                                  {client.clientName} ({client.tokenLabel})
-                                </p>
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    ) : null}
-                  </div>
-                </label>
-
-                {selectedClient ? (
-                  <div className="space-y-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
-                    <p className="text-xs text-slate-600">
-                      Bulk orders use this client:{" "}
-                      <span className="font-semibold text-slate-800">
-                        {selectedClient.clientName} ({selectedClient.tokenLabel})
-                      </span>
-                    </p>
-                    <div className="flex items-stretch gap-2">
-                      <button
-                        type="button"
-                        onClick={handleUploadButtonClick}
-                        disabled={uploadParsing}
-                        className="crm-hover-lift min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {uploadParsing ? "Parsing XLS/XLSX…" : "Upload XLS/XLSX (bulk)"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => downloadBulkUploadSampleXlsx()}
-                        className="crm-hover-lift shrink-0 self-stretch rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-white hover:text-slate-900"
-                        title="Download example .xlsx"
-                      >
-                        Sample
-                      </button>
+                  {isClientScopedUser ? (
+                    <div className="crm-input flex h-11 w-full items-center px-3 text-left text-sm font-semibold text-slate-900">
+                      {selectedClient
+                        ? `${selectedClient.clientName} (${selectedClient.tokenLabel})`
+                        : "Client from your cabinet"}
                     </div>
-                    <input
-                      ref={xlsxInputRef}
-                      type="file"
-                      accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                      className="hidden"
-                      onChange={(event) => void handleXlsxFileChange(event)}
-                    />
-                    {uploadError ? <p className="text-xs text-rose-700">{uploadError}</p> : null}
-                  </div>
-                ) : null}
+                  ) : (
+                    <div className="relative">
+                      <button
+                        type="button"
+                        disabled={clientsLoading || isClientScopedUser}
+                        onClick={() => {
+                          if (isClientScopedUser) return;
+                          setShowClientDropdown((prev) => !prev);
+                        }}
+                        onBlur={() => {
+                          window.setTimeout(() => setShowClientDropdown(false), 120);
+                        }}
+                        className="crm-input flex h-11 w-full items-center justify-between px-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <span className="truncate text-slate-900">
+                          {clientsLoading
+                            ? "Loading clients..."
+                            : selectedClient
+                              ? `${selectedClient.clientName} (${selectedClient.tokenLabel})`
+                              : "Select Client"}
+                        </span>
+                        <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5 text-slate-700" stroke="currentColor" strokeWidth="1.7">
+                          <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                      {showClientDropdown ? (
+                        <div className={dropdownPanelClass}>
+                          {!clientsLoading && clients.length === 0 ? (
+                            <p className="px-3 py-2 text-xs text-slate-500">No clients available</p>
+                          ) : (
+                            clients.map((client) => {
+                              const key = `${client.tokenLabel}:${client.clientId}`;
+                              const active = selectedClientKey === key;
+                              return (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    setSelectedClientKey(key);
+                                    setPhoneSuggestions([]);
+                                    setPhoneLookupOk(null);
+                                    setPhoneLookupMessage(null);
+                                    setShowClientDropdown(false);
+                                  }}
+                                  className={`${dropdownOptionClass} ${active ? "bg-white" : ""}`}
+                                >
+                                  <p className="text-sm font-semibold text-slate-800">
+                                    {client.clientName} ({client.tokenLabel})
+                                  </p>
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </label>
 
                 <label className="block">
                   <span className="crm-label mb-1 block">Rider phone</span>
@@ -1954,6 +2053,42 @@ export default function RequestRidesPage() {
                     ) : null}
                   </div>
                 </label>
+                {selectedClient ? (
+                  <div className="space-y-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+                    <p className="text-xs text-slate-600">
+                      Bulk orders use this client:{" "}
+                      <span className="font-semibold text-slate-800">
+                        {selectedClient.clientName} ({selectedClient.tokenLabel})
+                      </span>
+                    </p>
+                    <div className="flex items-stretch gap-2">
+                      <button
+                        type="button"
+                        onClick={handleUploadButtonClick}
+                        disabled={uploadParsing}
+                        className="crm-hover-lift min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {uploadParsing ? "Parsing XLS/XLSX…" : "Upload XLS/XLSX (bulk)"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadBulkUploadSampleXlsx()}
+                        className="crm-hover-lift shrink-0 self-stretch rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-white hover:text-slate-900"
+                        title="Download example .xlsx"
+                      >
+                        Sample
+                      </button>
+                    </div>
+                    <input
+                      ref={xlsxInputRef}
+                      type="file"
+                      accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                      className="hidden"
+                      onChange={(event) => void handleXlsxFileChange(event)}
+                    />
+                    {uploadError ? <p className="text-xs text-rose-700">{uploadError}</p> : null}
+                  </div>
+                ) : null}
               </div>
 
               <details className={`${collapsibleCardClass} relative z-30`} open={false}>
@@ -2270,38 +2405,6 @@ export default function RequestRidesPage() {
                 </div>
               </details>
 
-              <details className={collapsibleCardClass} open={false}>
-                <summary className={collapsibleSummaryClass}>
-                  <span>Validation & alerts</span>
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-transform duration-200 group-open:rotate-180">
-                    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.9">
-                      <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </span>
-                </summary>
-                <div className="mt-3 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void checkPhoneRegistration()}
-                      disabled={phoneChecking || !selectedClient || !phoneNumber.trim()}
-                      className="crm-hover-lift rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-55"
-                    >
-                      {phoneChecking ? "Checking phone..." : "Check phone registration"}
-                    </button>
-                    {phoneLookupMessage ? (
-                      <p className={`text-sm ${phoneLookupOk ? "text-emerald-700" : "text-rose-700"}`}>
-                        {phoneLookupMessage}
-                      </p>
-                    ) : null}
-                  </div>
-                  {clientsError ? <p className="text-sm text-rose-700">{clientsError}</p> : null}
-                  {formError ? <p className="text-sm text-rose-700">{formError}</p> : null}
-                  {rideListError ? <p className="text-sm text-rose-700">{rideListError}</p> : null}
-                  {smsWarning ? <p className="text-sm text-amber-700">{smsWarning}</p> : null}
-                </div>
-              </details>
-
               <div className={rideCard}>
                 <button
                   type="submit"
@@ -2310,6 +2413,29 @@ export default function RequestRidesPage() {
                 >
                   {submitting ? "Requesting ride..." : "Request ride"}
                 </button>
+                <div className="mt-3 space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => void checkPhoneRegistration()}
+                    disabled={
+                      phoneChecking ||
+                      (!selectedClient && !isClientScopedUser) ||
+                      !phoneNumber.trim()
+                    }
+                    className="crm-hover-lift w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-55"
+                  >
+                    {phoneChecking ? "Checking phone..." : "Check phone registration"}
+                  </button>
+                  {phoneLookupMessage ? (
+                    <p className={`text-sm ${phoneLookupOk ? "text-emerald-700" : "text-rose-700"}`}>
+                      {phoneLookupMessage}
+                    </p>
+                  ) : null}
+                  {clientsError ? <p className="text-sm text-rose-700">{clientsError}</p> : null}
+                  {formError ? <p className="text-sm text-rose-700">{formError}</p> : null}
+                  {rideListError ? <p className="text-sm text-rose-700">{rideListError}</p> : null}
+                  {smsWarning ? <p className="text-sm text-amber-700">{smsWarning}</p> : null}
+                </div>
               </div>
 
               {mapClickPoint ? (
@@ -2379,10 +2505,12 @@ export default function RequestRidesPage() {
                 <PendingUploadsPanel
                   items={pendingUploads}
                   isSubmitting={uploadSubmitting}
+                  optimizingItemIds={optimizingPendingUploadIds}
                   selectedItemId={focusedPendingUploadId}
                   onSelectItem={(id) =>
                     setFocusedPendingUploadId((prev) => (prev === id ? null : id))
                   }
+                  onOptimizeItem={(id) => void optimizePendingUploadRoute(id)}
                   cardClassName={rideCard}
                   onConfirmAll={() => void handleConfirmPendingUploads()}
                   onClearAll={clearPendingUploads}
@@ -2456,10 +2584,12 @@ export default function RequestRidesPage() {
             <PendingUploadsPanel
               items={pendingUploads}
               isSubmitting={uploadSubmitting}
+              optimizingItemIds={optimizingPendingUploadIds}
               selectedItemId={focusedPendingUploadId}
               onSelectItem={(id) =>
                 setFocusedPendingUploadId((prev) => (prev === id ? null : id))
               }
+              onOptimizeItem={(id) => void optimizePendingUploadRoute(id)}
               cardClassName={rideCard}
               onConfirmAll={() => void handleConfirmPendingUploads()}
               onClearAll={clearPendingUploads}

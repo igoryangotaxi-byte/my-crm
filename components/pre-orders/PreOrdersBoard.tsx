@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { useAuth } from "@/components/auth/AuthProvider";
 import type { PreOrder } from "@/types/crm";
 
 type PreOrdersBoardProps = {
@@ -47,6 +48,8 @@ function isDriverAssigned(preOrder: PreOrder) {
 }
 
 export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
+  const { currentUser } = useAuth();
+  const isClientScopedUser = currentUser?.accountType === "client";
   const router = useRouter();
   const [selectedPreOrder, setSelectedPreOrder] = useState<PreOrder | null>(null);
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
@@ -254,9 +257,11 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                     Pre-order
                   </th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                    Client
-                  </th>
+                  {!isClientScopedUser ? (
+                    <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                      Client
+                    </th>
+                  ) : null}
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                     Status
                   </th>
@@ -284,7 +289,9 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                       onClick={() => setSelectedPreOrder(preOrder)}
                     >
                       <td className="px-3 py-2 text-sm font-medium text-slate-900">{preOrder.orderId}</td>
-                      <td className="px-3 py-2 text-sm text-slate-700">{preOrder.clientName}</td>
+                      {!isClientScopedUser ? (
+                        <td className="px-3 py-2 text-sm text-slate-700">{preOrder.clientName}</td>
+                      ) : null}
                       <td className="px-3 py-2 text-sm">
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -329,7 +336,10 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                 })}
                 {filteredPreOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-3 py-8 text-center text-sm text-muted">
+                    <td
+                      colSpan={isClientScopedUser ? 6 : 7}
+                      className="px-3 py-8 text-center text-sm text-muted"
+                    >
                       No pre-orders for selected filters.
                     </td>
                   </tr>

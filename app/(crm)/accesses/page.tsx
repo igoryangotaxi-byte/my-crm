@@ -1,8 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
-import type { AppPageKey, AppRole, BusinessArea, DashboardBlockKey } from "@/types/auth";
+import type {
+  AppPageKey,
+  AppRole,
+  BusinessArea,
+  ClientRoleDefinition,
+  DashboardBlockKey,
+  TenantAccount,
+} from "@/types/auth";
 
 const roleItems: AppRole[] = ["Admin", "User", "Team Lead"];
 type AccessAction =
@@ -96,12 +103,55 @@ export default function AccessesPage() {
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [onboardingMessage, setOnboardingMessage] = useState<string | null>(null);
+  const [tenantAccounts, setTenantAccounts] = useState<TenantAccount[]>([]);
+  const [tenantRoles, setTenantRoles] = useState<Record<string, ClientRoleDefinition[]>>({});
+  const [cabinetMessage, setCabinetMessage] = useState<string | null>(null);
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+  const [newUserDrafts, setNewUserDrafts] = useState<
+    Record<string, { name: string; email: string; password: string; roleId: string }>
+  >({});
   const [selectedSectionKey, setSelectedSectionKey] = useState<string>(
     accessSections[0]?.key ?? "platform",
   );
   const selectedSection =
     accessSections.find((section) => section.key === selectedSectionKey) ??
     accessSections[0];
+
+  const fetchTenantData = useCallback(async () => {
+    const response = await fetch("/api/auth", { cache: "no-store" });
+    if (!response.ok) return;
+    const payload = (await response.json()) as {
+      tenantAccounts?: TenantAccount[];
+      tenantRoles?: Record<string, ClientRoleDefinition[]>;
+    };
+    setTenantAccounts(payload.tenantAccounts ?? []);
+    setTenantRoles(payload.tenantRoles ?? {});
+  }, []);
+
+  const callAuthAction = useCallback(
+    async (body: Record<string, unknown>) => {
+      const response = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const payload = (await response.json().catch(() => null)) as { ok?: boolean; message?: string } | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.message ?? `HTTP ${response.status}`);
+      }
+      await fetchTenantData();
+    },
+    [fetchTenantData],
+  );
+
+  useEffect(() => {
+    const timerId = window.setTimeout(() => {
+      void fetchTenantData();
+    }, 0);
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [fetchTenantData]);
 
   const roleStats = useMemo(() => {
     const allActions = accessSections.flatMap((section) => section.actions);
@@ -118,6 +168,26 @@ export default function AccessesPage() {
       return { role, allowedCount };
     });
   }, [rolePermissions, roleAreaAccess, roleDashboardBlockAccess]);
+
+  const mainCrmUsers = useMemo(
+    () => users.filter((user) => user.accountType !== "client"),
+    [users],
+  );
+
+  const tenantUsersById = useMemo(() => {
+    const map = new Map<string, typeof users>();
+    for (const tenant of tenantAccounts) {
+      map.set(
+        tenant.id,
+        users.filter((user) => user.accountType === "client" && user.tenantId === tenant.id),
+      );
+    }
+    return map;
+  }, [tenantAccounts, users]);
+  const selectedTenant = useMemo(
+    () => tenantAccounts.find((tenant) => tenant.id === selectedTenantId) ?? null,
+    [tenantAccounts, selectedTenantId],
+  );
 
   return (
     <section className="crm-page">
@@ -335,7 +405,227 @@ export default function AccessesPage() {
 
       <details className="glass-surface mt-4 rounded-3xl border border-white/70 bg-white/75 p-4 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur-md">
         <summary className="crm-section-title cursor-pointer">
-          All users ({users.length})
+          Clients Cabinet ({tenantAccounts.length})
+        </summary>
+        <div className="mt-3 space-y-3">
+          <button
+            type="button"
+            onClick={() => void fetchTenantData()}
+            className="crm-hover-lift rounded-lg border border-white/70 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            Refresh client cabinets
+          </button>
+          {tenantAccounts.length === 0 ? (
+            <p className="text-sm text-muted">No client cabinets created yet.</p>
+          ) : null}
+          {tenantAccounts.map((tenant) => {
+            const tenantUsers = tenantUsersById.get(tenant.id) ?? [];
+            return (
+              <button
+                key={tenant.id}
+                type="button"
+                onClick={() => setSelectedTenantId(tenant.id)}
+                className="w-full rounded-2xl border border-border bg-white p-3 text-left transition hover:bg-slate-50"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{tenant.name}</p>
+                    <p className="text-xs text-slate-500">
+                      corp_client_id: {tenant.corpClientId} | token: {tenant.tokenLabel}
+                    </p>
+                  </div>
+                  <span className="text-xs text-slate-500">Users: {tenantUsers.length}</span>
+                </div>
+              </button>
+            );
+          })}
+          {cabinetMessage ? <p className="text-sm text-slate-600">{cabinetMessage}</p> : null}
+        </div>
+      </details>
+      {selectedTenant ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-8 backdrop-blur-sm"
+          onClick={() => setSelectedTenantId(null)}
+        >
+          <div
+            className="crm-modal-surface w-full max-w-5xl rounded-3xl p-4"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-semibold text-slate-900">{selectedTenant.name}</h3>
+                <p className="text-xs text-slate-500">
+                  corp_client_id: {selectedTenant.corpClientId} | token: {selectedTenant.tokenLabel}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedTenantId(null)}
+                className="crm-hover-lift inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-lg font-semibold leading-none text-slate-700"
+                aria-label="Close modal"
+              >
+                ×
+              </button>
+            </div>
+            {(() => {
+              const tenantUsers = tenantUsersById.get(selectedTenant.id) ?? [];
+              const roles = tenantRoles[selectedTenant.id] ?? [];
+              const draft = newUserDrafts[selectedTenant.id] ?? {
+                name: "",
+                email: "",
+                password: "",
+                roleId: "employee",
+              };
+              return (
+                <div className="space-y-3">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                      <thead className="bg-white/60">
+                        <tr>
+                          <th className="px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-muted">Name</th>
+                          <th className="px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-muted">Email</th>
+                          <th className="px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-muted">Access</th>
+                          <th className="px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-muted">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {tenantUsers.map((user) => (
+                          <tr key={user.id}>
+                            <td className="px-2 py-1.5 text-sm text-slate-900">{user.name}</td>
+                            <td className="px-2 py-1.5 text-sm text-slate-700">{user.email}</td>
+                            <td className="px-2 py-1.5 text-sm text-slate-700">
+                              <select
+                                value={user.clientRoleId ?? "employee"}
+                                disabled={!isAdmin}
+                                onChange={async (event) => {
+                                  try {
+                                    await callAuthAction({
+                                      action: "updateTenantEmployee",
+                                      userId: user.id,
+                                      clientRoleId: event.target.value,
+                                    });
+                                    setCabinetMessage("Client user access updated.");
+                                  } catch (error) {
+                                    setCabinetMessage(
+                                      error instanceof Error ? error.message : "Failed to update access.",
+                                    );
+                                  }
+                                }}
+                                className="crm-input h-8 px-2 text-sm text-slate-700 disabled:opacity-50"
+                              >
+                                {roles.map((role) => (
+                                  <option key={role.id} value={role.id}>
+                                    {role.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-2 py-1.5 text-sm text-slate-700">
+                              <button
+                                type="button"
+                                aria-label={`Delete ${user.email}`}
+                                disabled={!isAdmin || currentUser?.id === user.id}
+                                onClick={() => deleteUser(user.id)}
+                                className="crm-hover-lift inline-flex h-7 w-7 items-center justify-center rounded-md border border-rose-300/80 bg-gradient-to-b from-rose-500 to-red-600 text-white shadow-[0_8px_16px_rgba(225,29,72,0.3)] transition disabled:cursor-not-allowed disabled:opacity-45"
+                              >
+                                <DeleteIcon />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-5">
+                    <input
+                      className="crm-input h-9 px-2 text-sm"
+                      placeholder="Name"
+                      value={draft.name}
+                      onChange={(event) =>
+                        setNewUserDrafts((prev) => ({
+                          ...prev,
+                          [selectedTenant.id]: { ...draft, name: event.target.value },
+                        }))
+                      }
+                    />
+                    <input
+                      className="crm-input h-9 px-2 text-sm"
+                      placeholder="Email"
+                      value={draft.email}
+                      onChange={(event) =>
+                        setNewUserDrafts((prev) => ({
+                          ...prev,
+                          [selectedTenant.id]: { ...draft, email: event.target.value },
+                        }))
+                      }
+                    />
+                    <input
+                      className="crm-input h-9 px-2 text-sm"
+                      placeholder="Password"
+                      type="password"
+                      value={draft.password}
+                      onChange={(event) =>
+                        setNewUserDrafts((prev) => ({
+                          ...prev,
+                          [selectedTenant.id]: { ...draft, password: event.target.value },
+                        }))
+                      }
+                    />
+                    <select
+                      className="crm-input h-9 px-2 text-sm"
+                      value={draft.roleId}
+                      onChange={(event) =>
+                        setNewUserDrafts((prev) => ({
+                          ...prev,
+                          [selectedTenant.id]: { ...draft, roleId: event.target.value },
+                        }))
+                      }
+                    >
+                      {roles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={!isAdmin}
+                      onClick={async () => {
+                        try {
+                          await callAuthAction({
+                            action: "createTenantEmployee",
+                            tenantId: selectedTenant.id,
+                            name: draft.name,
+                            email: draft.email,
+                            password: draft.password,
+                            clientRoleId: draft.roleId || "employee",
+                          });
+                          setCabinetMessage("Client cabinet user added.");
+                          setNewUserDrafts((prev) => ({
+                            ...prev,
+                            [selectedTenant.id]: { ...draft, name: "", email: "", password: "" },
+                          }));
+                        } catch (error) {
+                          setCabinetMessage(
+                            error instanceof Error ? error.message : "Failed to add client user.",
+                          );
+                        }
+                      }}
+                      className="crm-button-primary rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
+                    >
+                      Add user
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      ) : null}
+
+      <details className="glass-surface mt-4 rounded-3xl border border-white/70 bg-white/75 p-4 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur-md">
+        <summary className="crm-section-title cursor-pointer">
+          Main CRM Users ({mainCrmUsers.length})
         </summary>
         <div className="mt-3 overflow-x-auto">
           <table className="min-w-full">
@@ -359,7 +649,7 @@ export default function AccessesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {users.map((user) => (
+              {mainCrmUsers.map((user) => (
                 <tr key={user.id}>
                   <td className="px-3 py-2 text-sm text-slate-900">{user.name}</td>
                   <td className="px-3 py-2 text-sm text-slate-700">{user.email}</td>

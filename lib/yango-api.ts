@@ -17,6 +17,7 @@ import {
   searchMappedUsers,
   upsertMappedUserId,
 } from "@/lib/request-rides-user-map";
+import { loadYangoTokenRegistry } from "@/lib/yango-token-registry";
 import { unstable_cache } from "next/cache";
 
 const YANGO_BASE_URL = "https://b2b-api.yango.com/integration";
@@ -151,7 +152,7 @@ type YangoTaxiReportResponse = {
 };
 
 /** Read tokens per call so new Vercel env + cache bust work; avoid module-init snapshot on warm serverless. */
-function getTokenConfigs(): TokenConfig[] {
+function getStaticTokenConfigs(): TokenConfig[] {
   return [
     {
       label: "COFIX",
@@ -206,7 +207,34 @@ function getTokenConfigs(): TokenConfig[] {
       crmClientName: "Opticity",
       token: readToken(process.env.YANGO_TOKEN_OPTICITY),
     },
+    {
+      label: "ZHAK",
+      crmClientName: "ZHAK",
+      token: readToken(process.env.YANGO_TOKEN_ZHAK),
+    },
   ];
+}
+
+async function getTokenConfigs(): Promise<TokenConfig[]> {
+  const staticEntries = getStaticTokenConfigs();
+  const dynamicEntries = await loadYangoTokenRegistry();
+  if (dynamicEntries.length === 0) {
+    return staticEntries;
+  }
+
+  const byLabel = new Map<string, TokenConfig>();
+  for (const row of staticEntries) {
+    byLabel.set(row.label, row);
+  }
+  for (const row of dynamicEntries) {
+    byLabel.set(row.label, {
+      label: row.label,
+      crmClientName: row.crmClientName,
+      token: row.token,
+    });
+  }
+
+  return [...byLabel.values()];
 }
 
 let dashboardInMemoryCache:
@@ -574,9 +602,10 @@ async function loadAllYangoPreOrders(scope?: YangoScope) {
   const preOrders: PreOrder[] = [];
   const errors: string[] = [];
   const diagnostics: TokenDiagnostics[] = [];
+  const tokenConfigs = await getTokenConfigs();
 
   await Promise.all(
-    getTokenConfigs().map(async (tokenConfig) => {
+    tokenConfigs.map(async (tokenConfig) => {
       if (scope && tokenConfig.label !== scope.tokenLabel) return;
       if (!tokenConfig.token) {
         diagnostics.push({
@@ -921,9 +950,10 @@ async function listB2BTokenClientPairs(
 ): Promise<{ pairs: B2BTokenClientPair[]; errors: string[] }> {
   const pairs: B2BTokenClientPair[] = [];
   const errors: string[] = [];
+  const tokenConfigs = await getTokenConfigs();
 
   await Promise.all(
-    getTokenConfigs().map(async (tokenConfig) => {
+    tokenConfigs.map(async (tokenConfig) => {
       if (scope && tokenConfig.label !== scope.tokenLabel) return;
       if (!tokenConfig.token) return;
       try {
@@ -1091,9 +1121,10 @@ async function loadB2BPreOrdersDashboardData(range?: { since: string; till: stri
   const { since, till } = range ?? getDashboardDefaultRange();
   const rows: B2BDashboardOrder[] = [];
   const errors: string[] = [];
+  const tokenConfigs = await getTokenConfigs();
 
   await Promise.all(
-    getTokenConfigs().map(async (tokenConfig) => {
+    tokenConfigs.map(async (tokenConfig) => {
       if (!tokenConfig.token) {
         return;
       }
@@ -1179,7 +1210,7 @@ export async function getB2BOrderDetails({
   clientId,
   orderId,
 }: B2BOrderDetailsInput): Promise<B2BOrderDetailsResponse> {
-  const tokenConfig = getTokenConfigs().find((item) => item.label === tokenLabel);
+  const tokenConfig = (await getTokenConfigs()).find((item) => item.label === tokenLabel);
 
   if (!tokenConfig) {
     throw new Error(`Unknown token label: ${tokenLabel}`);
@@ -1223,8 +1254,8 @@ export async function getB2BOrderDetails({
   };
 }
 
-function resolveTokenConfig(tokenLabel: string) {
-  const tokenConfig = getTokenConfigs().find((item) => item.label === tokenLabel);
+async function resolveTokenConfig(tokenLabel: string) {
+  const tokenConfig = (await getTokenConfigs()).find((item) => item.label === tokenLabel);
   if (!tokenConfig) {
     throw new Error(`Unknown token label: ${tokenLabel}`);
   }
@@ -1568,7 +1599,7 @@ export async function resolveRequestRideUserIdByPhone(input: {
   const mapped = resolveMappedUserId(input);
   if (mapped) return mapped;
 
-  const tokenConfig = resolveTokenConfig(input.tokenLabel);
+  const tokenConfig = await resolveTokenConfig(input.tokenLabel);
   const variants = phoneVariants(input.phoneNumber);
   let permissionDenied = false;
   for (const phone of variants) {
@@ -1638,7 +1669,7 @@ export async function searchRequestRideUsers(input: {
   const limit = Math.max(1, Math.min(input.limit ?? 8, 20));
   if (!query) return [];
 
-  const tokenConfig = resolveTokenConfig(input.tokenLabel);
+  const tokenConfig = await resolveTokenConfig(input.tokenLabel);
   const byId = new Map<string, RequestRideUserSuggestion>();
 
   const push = (item: RequestRideUserSuggestion) => {
@@ -1737,8 +1768,9 @@ export async function searchRequestRideUsers(input: {
 
 export async function getRequestRideApiClients(scope?: YangoScope): Promise<YangoApiClientRef[]> {
   const rows: YangoApiClientRef[] = [];
+  const tokenConfigs = await getTokenConfigs();
   await Promise.all(
-    getTokenConfigs().map(async (tokenConfig) => {
+    tokenConfigs.map(async (tokenConfig) => {
       if (scope && tokenConfig.label !== scope.tokenLabel) return;
       if (!tokenConfig.token) return;
       try {
@@ -1768,7 +1800,7 @@ export async function getRequestRideApiClients(scope?: YangoScope): Promise<Yang
 }
 
 export async function createRequestRide(payload: RequestRidePayload): Promise<RequestRideResult> {
-  const tokenConfig = resolveTokenConfig(payload.tokenLabel);
+  const tokenConfig = await resolveTokenConfig(payload.tokenLabel);
   if (payload.userId?.trim() && payload.phoneNumber.trim()) {
     upsertMappedUserId({
       tokenLabel: payload.tokenLabel,
@@ -1826,34 +1858,122 @@ export async function cancelYangoOrder(input: {
   clientId: string;
   orderId: string;
 }): Promise<void> {
-  const tokenConfig = resolveTokenConfig(input.tokenLabel);
-  const endpoint = process.env.YANGO_CANCEL_ORDER_ENDPOINT ?? "/2.0/orders/cancel";
-  const bodies = [
+  const tokenConfig = await resolveTokenConfig(input.tokenLabel);
+  const endpointCandidates = [
+    process.env.YANGO_CANCEL_ORDER_ENDPOINT?.trim(),
+    "/2.0/orders/cancel",
+  ].filter((item): item is string => Boolean(item && item.length > 0));
+  const uniqueEndpoints = [...new Set(endpointCandidates)];
+  const bodyCandidates = [
+    JSON.stringify({ state: "free" }),
+    JSON.stringify({ state: "paid" }),
+    JSON.stringify({ state: "minimal" }),
     JSON.stringify({ order_id: input.orderId }),
+    JSON.stringify({ order_id: input.orderId, state: "free" }),
+    JSON.stringify({ order_id: input.orderId, state: "paid" }),
+    JSON.stringify({ order_id: input.orderId, state: "minimal" }),
     JSON.stringify({ orderId: input.orderId }),
+    JSON.stringify({ id: input.orderId }),
+    JSON.stringify({ order_id: input.orderId, reason: "client_request" }),
+    JSON.stringify({ order_id: input.orderId, cancel_reason: "client_request" }),
   ];
-  let lastError: Error | null = null;
-  for (const body of bodies) {
-    try {
-      await fetchJsonNoCache<Record<string, unknown>>(
-        `${YANGO_BASE_URL}${endpoint}`,
-        tokenConfig.token,
-        input.clientId,
-        {
-          method: "POST",
-          headers: {
-            "X-Idempotency-Token": globalThis.crypto.randomUUID(),
+  const uniqueBodies = [...new Set(bodyCandidates)];
+  const attemptErrors: string[] = [];
+  for (const endpoint of uniqueEndpoints) {
+    const endpointWithQuery = `${endpoint}?order_id=${encodeURIComponent(input.orderId)}`;
+    const queryAttempts: Array<{
+      method: "POST";
+      url: string;
+      body?: string;
+      headers?: HeadersInit;
+    }> = [
+      {
+        method: "POST",
+        url: endpointWithQuery,
+        body: JSON.stringify({ order_id: input.orderId, state: "free" }),
+        headers: { "Content-Type": "application/json" },
+      },
+      {
+        method: "POST",
+        url: endpointWithQuery,
+        body: JSON.stringify({ order_id: input.orderId, state: "paid" }),
+        headers: { "Content-Type": "application/json" },
+      },
+      {
+        method: "POST",
+        url: endpointWithQuery,
+        body: JSON.stringify({ order_id: input.orderId, state: "minimal" }),
+        headers: { "Content-Type": "application/json" },
+      },
+      {
+        method: "POST",
+        url: endpointWithQuery,
+        body: `order_id=${encodeURIComponent(input.orderId)}&state=free`,
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      },
+      {
+        method: "POST",
+        url: endpointWithQuery,
+        body: `order_id=${encodeURIComponent(input.orderId)}&state=paid`,
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      },
+      {
+        method: "POST",
+        url: endpoint,
+        body: `order_id=${encodeURIComponent(input.orderId)}&state=free`,
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      },
+    ];
+    for (const attempt of queryAttempts) {
+      try {
+        await fetchJsonNoCache<Record<string, unknown>>(
+          `${YANGO_BASE_URL}${attempt.url}`,
+          tokenConfig.token,
+          input.clientId,
+          {
+            method: attempt.method,
+            headers: {
+              "X-Idempotency-Token": globalThis.crypto.randomUUID(),
+              ...(attempt.headers ?? {}),
+            },
+            body: attempt.body,
           },
-          body,
-        },
-        { allowEmptyBody: true },
-      );
-      return;
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
+          { allowEmptyBody: true },
+        );
+        return;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        attemptErrors.push(`${attempt.method} ${attempt.url}: ${message}`);
+      }
+    }
+
+    for (const body of uniqueBodies) {
+      try {
+        await fetchJsonNoCache<Record<string, unknown>>(
+          `${YANGO_BASE_URL}${endpoint}`,
+          tokenConfig.token,
+          input.clientId,
+          {
+            method: "POST",
+            headers: {
+              "X-Idempotency-Token": globalThis.crypto.randomUUID(),
+            },
+            body,
+          },
+          { allowEmptyBody: true },
+        );
+        return;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        attemptErrors.push(`POST ${endpoint} ${body}: ${message}`);
+      }
     }
   }
-  throw lastError ?? new Error("Failed to cancel order.");
+  throw new Error(
+    attemptErrors.length > 0
+      ? `Failed to cancel order after ${attemptErrors.length} attempts. ${attemptErrors[0]}`
+      : "Failed to cancel order.",
+  );
 }
 
 export async function getRequestRideStatus(input: {
@@ -1861,7 +1981,7 @@ export async function getRequestRideStatus(input: {
   clientId: string;
   orderId: string;
 }): Promise<RequestRideStatus> {
-  const tokenConfig = resolveTokenConfig(input.tokenLabel);
+  const tokenConfig = await resolveTokenConfig(input.tokenLabel);
 
   const [info, progress, report] = await Promise.all([
     fetchJsonNoCache<YangoOrderInfoResponse>(

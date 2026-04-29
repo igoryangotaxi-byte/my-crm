@@ -1340,7 +1340,7 @@ export function B2BPreOrdersPanel({
   corpClientNameMap = {},
   ordersRemote,
 }: B2BPreOrdersPanelProps) {
-  const { canAccessDashboardBlock } = useAuth();
+  const { canAccessDashboardBlock, currentUser } = useAuth();
   const { startRouteLoading } = useRouteLoading();
   const searchParams = useSearchParams();
   const defaultFromDate = (() => {
@@ -1439,14 +1439,21 @@ export function B2BPreOrdersPanel({
     () => ["all", ...new Set(apiRowsForView.map((row) => row.clientName))],
     [apiRowsForView],
   );
+  const isClientScopedUser = currentUser?.accountType === "client";
+  const fixedClientName = useMemo(
+    () => (isClientScopedUser ? apiRowsForView[0]?.clientName ?? null : null),
+    [apiRowsForView, isClientScopedUser],
+  );
+  const effectiveClientFilter =
+    isClientScopedUser && fixedClientName ? fixedClientName : clientFilter;
 
   const scopedRows = useMemo(() => {
     return apiRowsForView.filter((row) => {
-      if (clientFilter !== "all" && row.clientName !== clientFilter) return false;
+      if (effectiveClientFilter !== "all" && row.clientName !== effectiveClientFilter) return false;
       if (statusFilter !== "all" && resolveDashboardStatus(row) !== statusFilter) return false;
       return true;
     });
-  }, [apiRowsForView, clientFilter, statusFilter]);
+  }, [apiRowsForView, effectiveClientFilter, statusFilter]);
 
   const filteredRows = useMemo(() => {
     const result = scopedRows.filter((row) => {
@@ -2297,20 +2304,29 @@ export function B2BPreOrdersPanel({
               className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700 sm:w-auto"
             />
           </label>
-          <label className="text-xs text-muted">
-            Client
-            <select
-              value={clientFilter}
-              onChange={(event) => setClientFilter(event.target.value)}
-              className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700 sm:w-auto"
-            >
-              {clientOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option === "all" ? "All clients" : option}
-                </option>
-              ))}
-            </select>
-          </label>
+          {isClientScopedUser ? (
+            <label className="text-xs text-muted">
+              Client
+              <div className="crm-input mt-1 flex h-9 w-full items-center px-2.5 text-sm font-semibold text-slate-800 sm:w-auto">
+                {fixedClientName ?? "Client from your cabinet"}
+              </div>
+            </label>
+          ) : (
+            <label className="text-xs text-muted">
+              Client
+              <select
+                value={clientFilter}
+                onChange={(event) => setClientFilter(event.target.value)}
+                className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700 sm:w-auto"
+              >
+                {clientOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option === "all" ? "All clients" : option}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="text-xs text-muted">
             Status
             <select
@@ -2742,9 +2758,11 @@ export function B2BPreOrdersPanel({
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                   Order
                 </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                  Client
-                </th>
+                {!isClientScopedUser ? (
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                    Client
+                  </th>
+                ) : null}
                 <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                   Status
                 </th>
@@ -2780,7 +2798,9 @@ export function B2BPreOrdersPanel({
                     onClick={() => openOrderModal(row)}
                   >
                     <td className="px-3 py-2 text-sm font-medium text-slate-900">{row.orderId}</td>
-                    <td className="px-3 py-2 text-sm text-slate-700">{row.clientName}</td>
+                    {!isClientScopedUser ? (
+                      <td className="px-3 py-2 text-sm text-slate-700">{row.clientName}</td>
+                    ) : null}
                     <td className="px-3 py-2 text-sm">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -2814,7 +2834,10 @@ export function B2BPreOrdersPanel({
               })}
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-sm text-muted">
+                  <td
+                    colSpan={isClientScopedUser ? 5 : 6}
+                    className="px-3 py-8 text-center text-sm text-muted"
+                  >
                     No orders for selected filters.
                   </td>
                 </tr>

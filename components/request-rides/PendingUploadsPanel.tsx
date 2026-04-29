@@ -45,7 +45,9 @@ type PendingUploadsPanelProps = {
   isSubmitting: boolean;
   cardClassName?: string;
   selectedItemId?: string | null;
+  optimizingItemIds?: ReadonlySet<string>;
   onSelectItem?: (id: string) => void;
+  onOptimizeItem?: (id: string) => void;
   onConfirmAll: () => void;
   onClearAll: () => void;
   onRemove: (id: string) => void;
@@ -107,7 +109,9 @@ export function PendingUploadsPanel({
   isSubmitting,
   cardClassName,
   selectedItemId,
+  optimizingItemIds,
   onSelectItem,
+  onOptimizeItem,
   onConfirmAll,
   onClearAll,
   onRemove,
@@ -134,6 +138,11 @@ export function PendingUploadsPanel({
       <div className="mt-2 max-h-[42dvh] space-y-2 overflow-y-auto pr-1">
         {items.map((item) => {
           const filledAddresses = item.addresses.filter((entry) => entry.text);
+          const canOptimize =
+            (item.state === "ready" || item.state === "blocked") &&
+            filledAddresses.length >= 3 &&
+            filledAddresses.every((entry) => entry.lat != null && entry.lon != null);
+          const isOptimizing = Boolean(optimizingItemIds?.has(item.id));
           const pickup = filledAddresses[0];
           const destination =
             filledAddresses.length > 1 ? filledAddresses[filledAddresses.length - 1] : null;
@@ -239,7 +248,17 @@ export function PendingUploadsPanel({
                   </ul>
                 ) : null}
                 {item.createdOrderId ? <p>Order: {item.createdOrderId}</p> : null}
-                <div className="pt-1">
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {onOptimizeItem && canOptimize ? (
+                    <button
+                      type="button"
+                      onClick={() => onOptimizeItem(item.id)}
+                      disabled={isOptimizing || item.state === "creating"}
+                      className="crm-hover-lift rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isOptimizing ? "Optimizing…" : "Optimize route"}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => onRemove(item.id)}

@@ -56,6 +56,13 @@ export function Header() {
       .slice(0, 2)
       .map((part) => part[0]?.toUpperCase())
       .join("") || "AO";
+  const isClientCabinet = currentUser?.accountType === "client";
+  const areaToggleItems: Array<{ key: BusinessArea; label: string }> = isClientCabinet
+    ? [{ key: "b2b", label: "B2B" }]
+    : [
+        { key: "b2b", label: "B2B" },
+        { key: "b2c", label: "B2C" },
+      ];
 
   const areaLandingCandidates: Record<BusinessArea, Array<{ page: AppPageKey; path: string }>> = {
     b2b: [
@@ -94,10 +101,7 @@ export function Header() {
           className="crm-input h-10 w-full px-3 text-sm"
         />
         <div className="inline-flex rounded-full border border-white/70 bg-white/75 p-1 shadow-[0_8px_18px_rgba(15,23,42,0.14)]">
-          {([
-            { key: "b2b", label: "B2B" },
-            { key: "b2c", label: "B2C" },
-          ] as const).map((item) => {
+          {areaToggleItems.map((item) => {
             const allowed = canAccessArea(item.key);
             const active = currentArea === item.key;
             return (
