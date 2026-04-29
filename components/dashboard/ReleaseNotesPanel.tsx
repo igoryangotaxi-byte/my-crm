@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-04-29",
+    title: "Client cabinet onboarding + financial center release",
+    notes:
+      "afa0ed6 — Added Financial Center (summary + CSV/XLSX export), My Employees activity with tenant/Yango matching, universal employee auto-sync to Yango with cost-center fallback per client cabinet, and Request Rides/client-scope UX fixes including lookup improvements and cabinet-specific header/navigation behavior.",
+  },
+  {
     date: "2026-04-28",
     title: "Orders pagination + pending route editing",
     notes:
