@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-04-29",
+    title: "Request Rides map interaction hotfix",
+    notes:
+      "5e7c047 — Fixed non-responsive Request Rides map in production by making the full-screen overlay non-interactive and keeping pointer events only on the left control column, restoring ride preview clicks and drag-to-move point editing.",
+  },
+  {
+    date: "2026-04-29",
     title: "Request Rides production suggest hotfix",
     notes:
       "427eab0 — Fixed Rider Phone employee suggestions in production by adding tenant-level fallback resolution to remote Yango user ids when users/list is empty or restricted, restoring reliable employee selection in client cabinets.",
