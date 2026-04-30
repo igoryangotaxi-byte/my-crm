@@ -2075,11 +2075,11 @@ export async function listYangoClientUsers(input: {
 
 function extractCostCentersFromPayload(payload: unknown): YangoCostCenter[] {
   if (!payload || typeof payload !== "object") return [];
-  const lists: unknown[] = [];
+  const candidates: unknown[] = [];
   const walk = (node: unknown, depth = 0) => {
     if (!node || depth > 5) return;
     if (Array.isArray(node)) {
-      lists.push(...node);
+      candidates.push(...node);
       for (const item of node) walk(item, depth + 1);
       return;
     }
@@ -2097,7 +2097,13 @@ function extractCostCentersFromPayload(payload: unknown): YangoCostCenter[] {
       "cost_centers_ids",
     ]) {
       const value = row[key];
-      if (Array.isArray(value)) lists.push(...value);
+      if (Array.isArray(value)) {
+        candidates.push(...value);
+      } else if (value && typeof value === "object") {
+        candidates.push(value);
+      } else if (typeof value === "string" && value.trim()) {
+        candidates.push({ id: value.trim(), name: value.trim() });
+      }
     }
     for (const value of Object.values(row)) {
       if (value && typeof value === "object") walk(value, depth + 1);
@@ -2105,14 +2111,16 @@ function extractCostCentersFromPayload(payload: unknown): YangoCostCenter[] {
   };
   walk(payload);
   const out = new Map<string, YangoCostCenter>();
-  for (const raw of lists) {
+  for (const raw of candidates) {
     if (!raw || typeof raw !== "object") continue;
     const row = raw as Record<string, unknown>;
     const id =
       asString(row.id) ||
       asString(row.cost_center_id) ||
       asString(row.costCenterId) ||
-      asString(row.cost_centerid);
+      asString(row.cost_centerid) ||
+      asString(row.cost_center) ||
+      asString(row.costCenter);
     if (!id) continue;
     const name =
       asString(row.name) ||
