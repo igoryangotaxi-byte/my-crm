@@ -1488,6 +1488,7 @@ export type YangoClientUserDirectoryEntry = {
   fullName: string | null;
   phone: string | null;
   department: string | null;
+  costCenterId: string | null;
 };
 
 export type YangoCostCenter = {
@@ -2062,6 +2063,7 @@ export async function listYangoClientUsers(input: {
           fullName,
           phone: asString(row.phone) || asString(row.phone_number) || asString(row.msisdn) || null,
           department,
+          costCenterId: extractCostCenterIdFromUserRow(row),
         });
       }
       return out.size < limit;

@@ -157,6 +157,8 @@ async function upsertTenantAdmin(input: {
     clientId: input.apiClientId,
     limit: 1200,
   }).catch(() => []);
+  const discoveredDefaultCostCenterId =
+    yangoUsers.find((user) => (user.costCenterId ?? "").trim())?.costCenterId?.trim() ?? "";
 
   for (const yangoUser of yangoUsers) {
     const phoneRaw = (yangoUser.phone ?? "").trim();
@@ -180,6 +182,7 @@ async function upsertTenantAdmin(input: {
       name: (yangoUser.fullName ?? "").trim() || phoneRaw || "Employee",
       email: candidateEmail,
       phoneNumber: phoneRaw || null,
+      costCenterId: (yangoUser.costCenterId ?? "").trim() || null,
       password: generatedPassword,
       role: "User",
       status: "approved",
@@ -200,8 +203,24 @@ async function upsertTenantAdmin(input: {
       });
     }
   }
+  const nextTenantAccounts = tenantAccounts.map((tenant) =>
+    tenant.id === tenantId && discoveredDefaultCostCenterId
+      ? { ...tenant, defaultCostCenterId: discoveredDefaultCostCenterId }
+      : tenant,
+  );
+  const nextUsers = discoveredDefaultCostCenterId
+    ? users.map((user) =>
+        user.accountType === "client" &&
+        user.tenantId === tenantId &&
+        user.tokenLabel === input.tokenLabel &&
+        user.apiClientId === input.apiClientId &&
+        (user.costCenterId == null || user.costCenterId.trim() === "")
+          ? { ...user, costCenterId: discoveredDefaultCostCenterId }
+          : user,
+      )
+    : users;
 
-  await saveAuthStore({ ...store, users, tenantAccounts, tenantRoles });
+  await saveAuthStore({ ...store, users: nextUsers, tenantAccounts: nextTenantAccounts, tenantRoles });
   return { tenantId, adminEmail: normalizedAdminEmail };
 }
 

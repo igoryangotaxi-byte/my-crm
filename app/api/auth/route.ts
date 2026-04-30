@@ -130,6 +130,17 @@ async function syncTenantEmployeesFromYango(params: {
     limit: 1200,
   }).catch(() => []);
   let added = 0;
+  let updated = 0;
+  let tenantDefaultCostCenterId = "";
+  const phoneToCostCenter = new Map<string, string>();
+  for (const remoteUser of remoteUsers) {
+    const phoneDigits = (remoteUser.phone ?? "").replace(/\D/g, "");
+    const cc = (remoteUser.costCenterId ?? "").trim();
+    if (phoneDigits && cc) {
+      phoneToCostCenter.set(phoneDigits, cc);
+      if (!tenantDefaultCostCenterId) tenantDefaultCostCenterId = cc;
+    }
+  }
   for (const remoteUser of remoteUsers) {
     const phoneRaw = (remoteUser.phone ?? "").trim();
     const phoneDigits = phoneRaw.replace(/\D/g, "");
@@ -149,6 +160,7 @@ async function syncTenantEmployeesFromYango(params: {
       name: (remoteUser.fullName ?? "").trim() || phoneRaw || "Employee",
       email: candidateEmail,
       phoneNumber: phoneRaw || null,
+      costCenterId: (remoteUser.costCenterId ?? "").trim() || null,
       password: `auto-${crypto.randomUUID()}`,
       role: "User",
       status: "approved",
@@ -170,7 +182,25 @@ async function syncTenantEmployeesFromYango(params: {
     }
     added += 1;
   }
-  return { users, added };
+  for (let i = 0; i < users.length; i += 1) {
+    const user = users[i];
+    if (
+      user.accountType !== "client" ||
+      user.tenantId !== tenant.id ||
+      user.tokenLabel !== tenant.tokenLabel ||
+      user.apiClientId !== tenant.apiClientId
+    ) {
+      continue;
+    }
+    if ((user.costCenterId ?? "").trim()) continue;
+    const digits = (user.phoneNumber ?? "").replace(/\D/g, "");
+    const cc = phoneToCostCenter.get(digits) ?? "";
+    if (!cc) continue;
+    users[i] = { ...user, costCenterId: cc };
+    updated += 1;
+    if (!tenantDefaultCostCenterId) tenantDefaultCostCenterId = cc;
+  }
+  return { users, added, updated, tenantDefaultCostCenterId };
 }
 
 export async function GET(request: Request) {
@@ -499,7 +529,16 @@ export async function POST(request: Request) {
           apiClientId,
         },
       });
-      const nextStore: AuthStoreData = { ...store, users: synced.users, tenantAccounts, tenantRoles };
+      const nextStore: AuthStoreData = {
+        ...store,
+        users: synced.users,
+        tenantAccounts: tenantAccounts.map((item) =>
+          item.id === tenantId && synced.tenantDefaultCostCenterId
+            ? { ...item, defaultCostCenterId: synced.tenantDefaultCostCenterId }
+            : item,
+        ),
+        tenantRoles,
+      };
       await saveAuthStore(nextStore);
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
@@ -868,11 +907,19 @@ export async function POST(request: Request) {
           apiClientId: tenant.apiClientId,
         },
       });
-      const nextStore: AuthStoreData = { ...store, users: synced.users };
+      const nextStore: AuthStoreData = {
+        ...store,
+        users: synced.users,
+        tenantAccounts: (store.tenantAccounts ?? []).map((item) =>
+          item.id === tenant.id && synced.tenantDefaultCostCenterId
+            ? { ...item, defaultCostCenterId: synced.tenantDefaultCostCenterId }
+            : item,
+        ),
+      };
       await saveAuthStore(nextStore);
       return NextResponse.json<AuthActionResponse>({
         ok: true,
-        message: `Synced ${synced.added} employee(s) from Yango.`,
+        message: `Synced ${synced.added} new and ${synced.updated} existing employee(s) from Yango.`,
         data: sanitizeStore(nextStore),
       });
     }
