@@ -2075,12 +2075,35 @@ export async function listYangoClientUsers(input: {
 
 function extractCostCentersFromPayload(payload: unknown): YangoCostCenter[] {
   if (!payload || typeof payload !== "object") return [];
-  const root = payload as Record<string, unknown>;
   const lists: unknown[] = [];
-  for (const key of ["cost_centers", "costCenters", "items", "data", "result"]) {
-    const value = root[key];
-    if (Array.isArray(value)) lists.push(...value);
-  }
+  const walk = (node: unknown, depth = 0) => {
+    if (!node || depth > 5) return;
+    if (Array.isArray(node)) {
+      lists.push(...node);
+      for (const item of node) walk(item, depth + 1);
+      return;
+    }
+    if (typeof node !== "object") return;
+    const row = node as Record<string, unknown>;
+    for (const key of [
+      "cost_centers",
+      "costCenters",
+      "items",
+      "data",
+      "result",
+      "cost_center",
+      "costCenter",
+      "cost_centers_id",
+      "cost_centers_ids",
+    ]) {
+      const value = row[key];
+      if (Array.isArray(value)) lists.push(...value);
+    }
+    for (const value of Object.values(row)) {
+      if (value && typeof value === "object") walk(value, depth + 1);
+    }
+  };
+  walk(payload);
   const out = new Map<string, YangoCostCenter>();
   for (const raw of lists) {
     if (!raw || typeof raw !== "object") continue;
@@ -2136,12 +2159,16 @@ function extractCostCenterIdFromUserRow(row: Record<string, unknown>): string | 
   const direct =
     asString(row.cost_center_id) ||
     asString(row.costCenterId) ||
-    asString(row.cost_centerid);
+    asString(row.cost_centerid) ||
+    asString(row.cost_center) ||
+    asString(row.costCenter);
   if (direct) return direct;
   const list =
     (Array.isArray(row.cost_centers_id) ? row.cost_centers_id : null) ||
+    (Array.isArray(row.cost_centers_ids) ? row.cost_centers_ids : null) ||
     (Array.isArray(row.costCentersId) ? row.costCentersId : null) ||
-    (Array.isArray(row.cost_centers) ? row.cost_centers : null);
+    (Array.isArray(row.cost_centers) ? row.cost_centers : null) ||
+    (Array.isArray(row.costCenters) ? row.costCenters : null);
   if (!list) return null;
   for (const item of list) {
     if (typeof item === "string" && item.trim()) return item.trim();
@@ -2151,6 +2178,18 @@ function extractCostCenterIdFromUserRow(row: Record<string, unknown>): string | 
         asString((item as Record<string, unknown>).cost_center_id);
       if (id) return id;
     }
+  }
+  const listString =
+    asString(row.cost_centers_id) ||
+    asString(row.cost_centers_ids) ||
+    asString(row.costCentersId) ||
+    asString(row.costCenters);
+  if (listString) {
+    const candidate = listString
+      .split(/[,\s;]+/)
+      .map((part) => part.trim())
+      .find(Boolean);
+    if (candidate) return candidate;
   }
   return null;
 }
