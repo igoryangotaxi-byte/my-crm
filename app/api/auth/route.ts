@@ -3,9 +3,10 @@ import { loadAuthStore, saveAuthStore } from "@/lib/auth-store";
 import {
   detectYangoDefaultCostCenterId,
   ensureRequestRideUserByPhone,
+  listYangoClientUsers,
   listYangoCostCenters,
 } from "@/lib/yango-api";
-import { removeMappedUserId } from "@/lib/request-rides-user-map";
+import { removeMappedUserId, upsertMappedUserId } from "@/lib/request-rides-user-map";
 import { getRequestUser } from "@/lib/server-auth";
 import { createSessionToken, SESSION_COOKIE_NAME } from "@/lib/server-session";
 import {
@@ -77,6 +78,99 @@ async function resolveTenantCostCenterId(tokenLabel: string, clientId: string) {
   const centers = await listYangoCostCenters({ tokenLabel, clientId }).catch(() => []);
   if (!Array.isArray(centers) || centers.length === 0) return "";
   return centers[0]?.id?.trim() || "";
+}
+
+function resolveTenantSharedCostCenterId(store: AuthStoreData, tenantId: string): string {
+  const fromUsers = store.users.find(
+    (user) =>
+      user.accountType === "client" &&
+      user.tenantId === tenantId &&
+      typeof user.costCenterId === "string" &&
+      user.costCenterId.trim().length > 0,
+  );
+  return fromUsers?.costCenterId?.trim() ?? "";
+}
+
+function sanitizeEmailLocalPart(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+}
+
+async function syncTenantEmployeesFromYango(params: {
+  store: AuthStoreData;
+  tenant: {
+    id: string;
+    corpClientId: string;
+    tokenLabel: string;
+    apiClientId: string;
+  };
+}) {
+  const { store, tenant } = params;
+  const users = [...store.users];
+  const existingEmails = new Set(users.map((user) => user.email.toLowerCase()));
+  const existingPhones = new Set(
+    users
+      .filter(
+        (user) =>
+          user.accountType === "client" &&
+          user.tenantId === tenant.id &&
+          user.tokenLabel === tenant.tokenLabel &&
+          user.apiClientId === tenant.apiClientId,
+      )
+      .map((user) => (user.phoneNumber ?? "").replace(/\D/g, ""))
+      .filter(Boolean),
+  );
+  const remoteUsers = await listYangoClientUsers({
+    tokenLabel: tenant.tokenLabel,
+    clientId: tenant.apiClientId,
+    limit: 1200,
+  }).catch(() => []);
+  let added = 0;
+  for (const remoteUser of remoteUsers) {
+    const phoneRaw = (remoteUser.phone ?? "").trim();
+    const phoneDigits = phoneRaw.replace(/\D/g, "");
+    if (!phoneDigits || existingPhones.has(phoneDigits)) continue;
+    const safeUserPart = sanitizeEmailLocalPart(remoteUser.userId || `legacy-${phoneDigits.slice(-6)}`);
+    const safeTenantPart = sanitizeEmailLocalPart(tenant.id);
+    let candidateEmail = `${safeTenantPart}.${safeUserPart}@client.local`;
+    let suffix = 1;
+    while (existingEmails.has(candidateEmail.toLowerCase())) {
+      candidateEmail = `${safeTenantPart}.${safeUserPart}.${suffix}@client.local`;
+      suffix += 1;
+    }
+    existingEmails.add(candidateEmail.toLowerCase());
+    existingPhones.add(phoneDigits);
+    users.push({
+      id: `user-${crypto.randomUUID()}`,
+      name: (remoteUser.fullName ?? "").trim() || phoneRaw || "Employee",
+      email: candidateEmail,
+      phoneNumber: phoneRaw || null,
+      password: `auto-${crypto.randomUUID()}`,
+      role: "User",
+      status: "approved",
+      createdAt: new Date().toISOString(),
+      accountType: "client",
+      tenantId: tenant.id,
+      corpClientId: tenant.corpClientId,
+      tokenLabel: tenant.tokenLabel,
+      apiClientId: tenant.apiClientId,
+      clientRoleId: "employee",
+    });
+    if (phoneRaw && remoteUser.userId) {
+      upsertMappedUserId({
+        tokenLabel: tenant.tokenLabel,
+        clientId: tenant.apiClientId,
+        phoneNumber: phoneRaw,
+        userId: remoteUser.userId,
+      });
+    }
+    added += 1;
+  }
+  return { users, added };
 }
 
 export async function GET(request: Request) {
@@ -335,6 +429,8 @@ export async function POST(request: Request) {
         corpClientId,
         tokenLabel,
         apiClientId,
+        defaultCostCenterId:
+          accountIndex >= 0 ? (tenantAccounts[accountIndex].defaultCostCenterId ?? null) : null,
         enabled: true,
         createdAt: accountIndex >= 0 ? tenantAccounts[accountIndex].createdAt : new Date().toISOString(),
       };
@@ -394,7 +490,16 @@ export async function POST(request: Request) {
               clientRoleId: "client-admin",
             },
           ];
-      const nextStore: AuthStoreData = { ...store, users, tenantAccounts, tenantRoles };
+      const synced = await syncTenantEmployeesFromYango({
+        store: { ...store, users, tenantAccounts, tenantRoles },
+        tenant: {
+          id: tenantId,
+          corpClientId,
+          tokenLabel,
+          apiClientId,
+        },
+      });
+      const nextStore: AuthStoreData = { ...store, users: synced.users, tenantAccounts, tenantRoles };
       await saveAuthStore(nextStore);
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
@@ -501,12 +606,6 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
-      if (store.users.some((user) => user.email.toLowerCase() === email)) {
-        return NextResponse.json<AuthActionResponse>(
-          { ok: false, message: "User with this email already exists." },
-          { status: 400 },
-        );
-      }
       const tenant = (store.tenantAccounts ?? []).find((item) => item.id === payload.tenantId);
       if (!tenant) {
         return NextResponse.json<AuthActionResponse>(
@@ -514,17 +613,77 @@ export async function POST(request: Request) {
           { status: 404 },
         );
       }
+      const existingByEmail = store.users.find((user) => user.email.toLowerCase() === email);
+      if (
+        existingByEmail &&
+        !(
+          existingByEmail.accountType === "client" &&
+          existingByEmail.tenantId === tenant.id &&
+          existingByEmail.tokenLabel === tenant.tokenLabel &&
+          existingByEmail.apiClientId === tenant.apiClientId
+        )
+      ) {
+        return NextResponse.json<AuthActionResponse>(
+          {
+            ok: false,
+            message:
+              "User with this email already exists in another account. Use a different email for this cabinet.",
+          },
+          { status: 400 },
+        );
+      }
+      const phoneDigits = phoneNumber.replace(/\D/g, "");
+      let workingStore = store;
+      if (phoneDigits) {
+        const duplicatePhone = workingStore.users.find(
+          (user) =>
+            user.accountType === "client" &&
+            user.tenantId === tenant.id &&
+            (user.phoneNumber ?? "").replace(/\D/g, "") === phoneDigits,
+        );
+        if (duplicatePhone) {
+          return NextResponse.json<AuthActionResponse>(
+            { ok: false, message: "Employee with this phone already exists in this cabinet." },
+            { status: 400 },
+          );
+        }
+      }
       const costCenterId =
         (payload.costCenterId ?? "").trim() ||
+        (tenant.defaultCostCenterId ?? "").trim() ||
+        resolveTenantSharedCostCenterId(store, tenant.id) ||
         (await resolveTenantCostCenterId(tenant.tokenLabel, tenant.apiClientId));
       if (phoneNumber) {
-        const ensure = await ensureRequestRideUserByPhone({
+        let ensure = await ensureRequestRideUserByPhone({
           tokenLabel: tenant.tokenLabel,
           clientId: tenant.apiClientId,
           phoneNumber,
           fullName: payload.name,
           costCenterId,
         });
+        if (!ensure.ok) {
+          // Try to refresh local user map from Yango once, then retry create/resolve.
+          const synced = await syncTenantEmployeesFromYango({
+            store: workingStore,
+            tenant: {
+              id: tenant.id,
+              corpClientId: tenant.corpClientId,
+              tokenLabel: tenant.tokenLabel,
+              apiClientId: tenant.apiClientId,
+            },
+          });
+          if (synced.added > 0) {
+            workingStore = { ...workingStore, users: synced.users };
+            await saveAuthStore(workingStore);
+          }
+          ensure = await ensureRequestRideUserByPhone({
+            tokenLabel: tenant.tokenLabel,
+            clientId: tenant.apiClientId,
+            phoneNumber,
+            fullName: payload.name,
+            costCenterId,
+          });
+        }
         if (!ensure.ok) {
           return NextResponse.json<AuthActionResponse>(
             {
@@ -537,31 +696,63 @@ export async function POST(request: Request) {
           );
         }
       }
-      const nextStore: AuthStoreData = {
-        ...store,
-        users: [
-          ...store.users,
-          {
-            id: `user-${crypto.randomUUID()}`,
-            name: payload.name.trim() || "Employee",
-            email,
-            phoneNumber: phoneNumber || null,
-            costCenterId: costCenterId || null,
-            password: payload.password,
-            role: "User",
-            status: "approved",
-            createdAt: new Date().toISOString(),
-            accountType: "client",
-            tenantId: tenant.id,
-            corpClientId: tenant.corpClientId,
-            tokenLabel: tenant.tokenLabel,
-            apiClientId: tenant.apiClientId,
-            clientRoleId: payload.clientRoleId,
-          },
-        ],
+      const nextUsers: AuthStoreData["users"] = existingByEmail
+        ? workingStore.users.map((user) =>
+            user.id === existingByEmail.id
+              ? {
+                  ...user,
+                  name: payload.name.trim() || user.name || "Employee",
+                  phoneNumber: phoneNumber || null,
+                  costCenterId: costCenterId || null,
+                  password: payload.password,
+                  status: "approved" as const,
+                  accountType: "client" as const,
+                  tenantId: tenant.id,
+                  corpClientId: tenant.corpClientId,
+                  tokenLabel: tenant.tokenLabel,
+                  apiClientId: tenant.apiClientId,
+                  clientRoleId: payload.clientRoleId,
+                }
+              : user,
+          )
+        : [
+            ...workingStore.users,
+            {
+              id: `user-${crypto.randomUUID()}`,
+              name: payload.name.trim() || "Employee",
+              email,
+              phoneNumber: phoneNumber || null,
+              costCenterId: costCenterId || null,
+              password: payload.password,
+              role: "User" as const,
+              status: "approved" as const,
+              createdAt: new Date().toISOString(),
+              accountType: "client" as const,
+              tenantId: tenant.id,
+              corpClientId: tenant.corpClientId,
+              tokenLabel: tenant.tokenLabel,
+              apiClientId: tenant.apiClientId,
+              clientRoleId: payload.clientRoleId,
+            },
+          ];
+      let nextStore: AuthStoreData = {
+        ...workingStore,
+        users: nextUsers,
       };
+      if (costCenterId && (tenant.defaultCostCenterId ?? "").trim() !== costCenterId) {
+        nextStore = {
+          ...nextStore,
+          tenantAccounts: (nextStore.tenantAccounts ?? []).map((item) =>
+            item.id === tenant.id ? { ...item, defaultCostCenterId: costCenterId } : item,
+          ),
+        };
+      }
       await saveAuthStore(nextStore);
-      return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
+      return NextResponse.json<AuthActionResponse>({
+        ok: true,
+        message: existingByEmail ? "Employee updated in this cabinet." : "Employee created.",
+        data: sanitizeStore(nextStore),
+      });
     }
     case "updateTenantEmployee": {
       if (!hasTenantEmployeesPermission(sessionUser, store) && !isInternalAdmin(sessionUser)) {
@@ -607,6 +798,8 @@ export async function POST(request: Request) {
           const costCenterId =
             (typeof payload.costCenterId === "string" ? payload.costCenterId : "").trim() ||
             (updated.costCenterId ?? "").trim() ||
+            (store.tenantAccounts ?? []).find((item) => item.id === updated.tenantId)?.defaultCostCenterId ||
+            (updated.tenantId ? resolveTenantSharedCostCenterId(store, updated.tenantId) : "") ||
             (await resolveTenantCostCenterId(updated.tokenLabel, updated.apiClientId));
           if (phoneNumber) {
             const ensure = await ensureRequestRideUserByPhone({
@@ -651,6 +844,37 @@ export async function POST(request: Request) {
       };
       await saveAuthStore(nextStore);
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
+    }
+    case "syncTenantEmployees": {
+      if (!isInternalAdmin(sessionUser)) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Forbidden" },
+          { status: 403 },
+        );
+      }
+      const tenant = (store.tenantAccounts ?? []).find((item) => item.id === payload.tenantId);
+      if (!tenant) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Tenant not found." },
+          { status: 404 },
+        );
+      }
+      const synced = await syncTenantEmployeesFromYango({
+        store,
+        tenant: {
+          id: tenant.id,
+          corpClientId: tenant.corpClientId,
+          tokenLabel: tenant.tokenLabel,
+          apiClientId: tenant.apiClientId,
+        },
+      });
+      const nextStore: AuthStoreData = { ...store, users: synced.users };
+      await saveAuthStore(nextStore);
+      return NextResponse.json<AuthActionResponse>({
+        ok: true,
+        message: `Synced ${synced.added} employee(s) from Yango.`,
+        data: sanitizeStore(nextStore),
+      });
     }
     default:
       return NextResponse.json<AuthActionResponse>(

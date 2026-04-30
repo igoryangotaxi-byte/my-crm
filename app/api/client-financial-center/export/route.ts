@@ -25,6 +25,12 @@ function normalizeDateRange(input: { since?: unknown; till?: unknown }) {
   return { since, till };
 }
 
+function resolveMaxOrdersCap(): number {
+  const raw = Number.parseInt(process.env.YANGO_FINANCE_EXPORT_MAX_ORDERS ?? "", 10);
+  if (Number.isFinite(raw) && raw > 0) return raw;
+  return 20000;
+}
+
 function toRows(rows: B2BDashboardOrder[]) {
   return rows.map((row) => ({
     order_id: row.orderId,
@@ -55,7 +61,7 @@ export async function POST(request: Request) {
   const range = normalizeDateRange({ since: body?.since, till: body?.till });
   const format = body?.format === "xlsx" ? "xlsx" : "csv";
 
-  const maxOrders = 2000;
+  const maxOrders = resolveMaxOrdersCap();
   const rows: B2BDashboardOrder[] = [];
   let cursors: Record<string, number> = {};
   let hasMore = true;

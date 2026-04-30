@@ -1,8 +1,9 @@
 import { revalidateTag } from "next/cache";
 import { loadAuthStore, saveAuthStore } from "@/lib/auth-store";
 import { relabelGoogleVendorForDisplay } from "@/lib/public-error-message";
+import { upsertMappedUserId } from "@/lib/request-rides-user-map";
 import { requireAdminUser } from "@/lib/server-auth";
-import { getRequestRideApiClients } from "@/lib/yango-api";
+import { getRequestRideApiClients, listYangoClientUsers } from "@/lib/yango-api";
 import { validateYangoApiToken } from "@/lib/yango-token-onboarding";
 import { upsertYangoTokenRegistryEntry } from "@/lib/yango-token-registry";
 import type { AuthStoreData } from "@/types/auth";
@@ -24,6 +25,15 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+function sanitizeEmailLocalPart(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+}
+
 async function upsertTenantAdmin(input: {
   tenantName: string;
   corpClientId: string;
@@ -40,52 +50,55 @@ async function upsertTenantAdmin(input: {
       item.corpClientId === input.corpClientId ||
       (item.tokenLabel === input.tokenLabel && item.apiClientId === input.apiClientId),
   );
-  if (existingTenant) {
-    throw new Error(
-      `Client cabinet already exists (tenant: ${existingTenant.name}, corp_client_id: ${existingTenant.corpClientId}).`,
-    );
-  }
-  const tenantId = `tenant-${crypto.randomUUID()}`;
+  const tenantId = existingTenant?.id ?? `tenant-${crypto.randomUUID()}`;
   const nextTenant = {
     id: tenantId,
     name: input.tenantName || input.adminName || input.corpClientId,
     corpClientId: input.corpClientId,
     tokenLabel: input.tokenLabel,
     apiClientId: input.apiClientId,
+    defaultCostCenterId: existingTenant?.defaultCostCenterId ?? null,
     enabled: true,
-    createdAt: new Date().toISOString(),
+    createdAt: existingTenant?.createdAt ?? new Date().toISOString(),
   };
-  tenantAccounts.push(nextTenant);
+  if (existingTenant) {
+    const existingTenantIndex = tenantAccounts.findIndex((item) => item.id === existingTenant.id);
+    tenantAccounts[existingTenantIndex] = nextTenant;
+  } else {
+    tenantAccounts.push(nextTenant);
+  }
 
   const tenantRoles = { ...(store.tenantRoles ?? {}) };
-  tenantRoles[tenantId] = [
-    {
-      id: "client-admin",
-      name: "Client Admin",
-      isDefault: true,
-      permissions: {
-        requestRides: true,
-        orders: true,
-        preOrders: true,
-        communications: true,
-        driversMap: true,
-        employees: true,
+  if (!tenantRoles[tenantId] || tenantRoles[tenantId].length === 0) {
+    tenantRoles[tenantId] = [
+      {
+        id: "client-admin",
+        name: "Client Admin",
+        isDefault: true,
+        permissions: {
+          requestRides: true,
+          orders: true,
+          preOrders: true,
+          communications: true,
+          driversMap: true,
+          employees: true,
+        },
       },
-    },
-    {
-      id: "employee",
-      name: "Employee",
-      isDefault: true,
-      permissions: {
-        requestRides: true,
-        orders: true,
-        preOrders: true,
-        communications: true,
-        driversMap: true,
-        employees: false,
+      {
+        id: "employee",
+        name: "Employee",
+        isDefault: true,
+        permissions: {
+          requestRides: true,
+          orders: true,
+          preOrders: true,
+          communications: true,
+          driversMap: true,
+          employees: false,
+        },
       },
-    },
-  ];
+    ];
+  }
 
   const normalizedAdminEmail = input.adminEmail.toLowerCase();
   const existing = store.users.find((user) => user.email.toLowerCase() === normalizedAdminEmail);
@@ -124,6 +137,69 @@ async function upsertTenantAdmin(input: {
           clientRoleId: "client-admin",
         },
       ];
+
+  const existingEmails = new Set(users.map((user) => user.email.toLowerCase()));
+  const existingPhonesInTenant = new Set(
+    users
+      .filter(
+        (user) =>
+          user.accountType === "client" &&
+          user.tenantId === tenantId &&
+          user.tokenLabel === input.tokenLabel &&
+          user.apiClientId === input.apiClientId,
+      )
+      .map((user) => (user.phoneNumber ?? "").replace(/\D/g, ""))
+      .filter(Boolean),
+  );
+
+  const yangoUsers = await listYangoClientUsers({
+    tokenLabel: input.tokenLabel,
+    clientId: input.apiClientId,
+    limit: 1200,
+  }).catch(() => []);
+
+  for (const yangoUser of yangoUsers) {
+    const phoneRaw = (yangoUser.phone ?? "").trim();
+    const phoneDigits = phoneRaw.replace(/\D/g, "");
+    if (!phoneDigits || existingPhonesInTenant.has(phoneDigits)) {
+      continue;
+    }
+    const safeUserPart = sanitizeEmailLocalPart(yangoUser.userId || `legacy-${phoneDigits.slice(-6)}`);
+    const safeTenantPart = sanitizeEmailLocalPart(tenantId);
+    let candidateEmail = `${safeTenantPart}.${safeUserPart}@client.local`;
+    let suffix = 1;
+    while (existingEmails.has(candidateEmail.toLowerCase())) {
+      candidateEmail = `${safeTenantPart}.${safeUserPart}.${suffix}@client.local`;
+      suffix += 1;
+    }
+    existingEmails.add(candidateEmail.toLowerCase());
+    existingPhonesInTenant.add(phoneDigits);
+    const generatedPassword = `auto-${crypto.randomUUID()}`;
+    users.push({
+      id: `user-${crypto.randomUUID()}`,
+      name: (yangoUser.fullName ?? "").trim() || phoneRaw || "Employee",
+      email: candidateEmail,
+      phoneNumber: phoneRaw || null,
+      password: generatedPassword,
+      role: "User",
+      status: "approved",
+      createdAt: new Date().toISOString(),
+      accountType: "client",
+      tenantId,
+      corpClientId: input.corpClientId,
+      tokenLabel: input.tokenLabel,
+      apiClientId: input.apiClientId,
+      clientRoleId: "employee",
+    });
+    if (phoneRaw && yangoUser.userId) {
+      upsertMappedUserId({
+        tokenLabel: input.tokenLabel,
+        clientId: input.apiClientId,
+        phoneNumber: phoneRaw,
+        userId: yangoUser.userId,
+      });
+    }
+  }
 
   await saveAuthStore({ ...store, users, tenantAccounts, tenantRoles });
   return { tenantId, adminEmail: normalizedAdminEmail };

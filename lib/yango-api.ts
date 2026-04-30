@@ -1366,6 +1366,14 @@ export function buildRequestRideBody(payload: RequestRidePayload): Record<string
     phone: payload.phoneNumber.trim(),
     comment: payload.comment?.trim() || undefined,
   };
+  const costCenterId = payload.costCenterId?.trim();
+  if (costCenterId) {
+    body.cost_center = costCenterId;
+    body.cost_center_id = costCenterId;
+    body.cost_centers_id = costCenterId;
+    body.cost_centers_ids = [costCenterId];
+    body.cost_centers = [costCenterId];
+  }
   const scheduleAt = payload.scheduleAtIso?.trim();
   if (scheduleAt) {
     body.due_date = scheduleAt;
@@ -1762,25 +1770,45 @@ export async function ensureRequestRideUserByPhone(input: {
       phone: input.phoneNumber,
       fullname: trimmedName || undefined,
       is_active: true,
+      cost_center_id: costCenterId || undefined,
+      cost_center: costCenterId || undefined,
       cost_centers_id: costCenterId || undefined,
     },
     {
       phone: input.phoneNumber,
       fullname: trimmedName || undefined,
       is_active: true,
+      cost_center_id: costCenterId || undefined,
+      cost_center: costCenterId || undefined,
       cost_centers_id: costCenterId ? [costCenterId] : undefined,
     },
     {
       phone_number: input.phoneNumber,
       fullname: trimmedName || undefined,
       is_active: true,
+      cost_center_id: costCenterId || undefined,
+      cost_center: costCenterId || undefined,
       cost_centers_id: costCenterId || undefined,
     },
     {
       phone_number: input.phoneNumber,
       fullname: trimmedName || undefined,
       is_active: true,
+      cost_center_id: costCenterId || undefined,
+      cost_center: costCenterId || undefined,
       cost_centers_id: costCenterId ? [costCenterId] : undefined,
+    },
+    {
+      phone: input.phoneNumber,
+      fullname: trimmedName || undefined,
+      is_active: true,
+      cost_centers: costCenterId ? [costCenterId] : undefined,
+    },
+    {
+      phone_number: input.phoneNumber,
+      fullname: trimmedName || undefined,
+      is_active: true,
+      cost_centers: costCenterId ? [costCenterId] : undefined,
     },
     { phone: input.phoneNumber, full_name: trimmedName || undefined },
     { phone_number: input.phoneNumber, full_name: trimmedName || undefined },
@@ -1789,6 +1817,8 @@ export async function ensureRequestRideUserByPhone(input: {
       name: trimmedName || undefined,
       fullname: trimmedName || undefined,
       is_active: true,
+      cost_center_id: costCenterId || undefined,
+      cost_center: costCenterId || undefined,
       cost_centers_id: costCenterId || undefined,
     },
     {
@@ -1796,6 +1826,8 @@ export async function ensureRequestRideUserByPhone(input: {
       name: trimmedName || undefined,
       fullname: trimmedName || undefined,
       is_active: true,
+      cost_center_id: costCenterId || undefined,
+      cost_center: costCenterId || undefined,
       cost_centers_id: costCenterId ? [costCenterId] : undefined,
     },
     {
@@ -1864,8 +1896,6 @@ export async function searchRequestRideUsers(input: {
   const query = input.query.trim();
   const limit = Math.max(1, Math.min(input.limit ?? 8, 20));
   if (!query) return [];
-
-  const tokenConfig = await resolveTokenConfig(input.tokenLabel);
   const byId = new Map<string, RequestRideUserSuggestion>();
 
   const push = (item: RequestRideUserSuggestion) => {
@@ -1907,7 +1937,14 @@ export async function searchRequestRideUsers(input: {
     });
   }
 
-  if (byId.size < limit) {
+  let tokenConfig: { token: string } | null = null;
+  try {
+    tokenConfig = await resolveTokenConfig(input.tokenLabel);
+  } catch {
+    tokenConfig = null;
+  }
+
+  if (tokenConfig && byId.size < limit) {
     const maxPages = readPositiveIntEnv("YANGO_USER_LIST_MAX_PAGES_SEARCH", 25);
     const pageSize = readPositiveIntEnv("YANGO_USER_LIST_PAGE_SIZE", 100);
     await forEachYangoUserListPage(
@@ -1950,6 +1987,7 @@ export async function searchRequestRideUsers(input: {
   ];
 
   for (const url of attempts) {
+    if (!tokenConfig) break;
     if (byId.size >= limit) break;
     try {
       const response = await fetchJsonNoCache<Record<string, unknown>>(
@@ -2179,6 +2217,45 @@ export async function detectYangoDefaultCostCenterId(input: {
       } catch {
         // continue probing
       }
+    }
+  }
+  return null;
+}
+
+export async function resolveUserCostCenterIdByPhone(input: {
+  tokenLabel: string;
+  clientId: string;
+  phoneNumber: string;
+}): Promise<string | null> {
+  const phone = input.phoneNumber.trim();
+  if (!phone) return null;
+  const tokenConfig = await resolveTokenConfig(input.tokenLabel);
+  const endpoints = [
+    `${YANGO_BASE_URL}/2.0/users/info?phone=${encodeURIComponent(phone)}`,
+    `${YANGO_BASE_URL}/2.0/users/info?phone_number=${encodeURIComponent(phone)}`,
+    `${YANGO_BASE_URL}/2.0/users/list?phone=${encodeURIComponent(phone)}`,
+    `${YANGO_BASE_URL}/2.0/users/list?phone_number=${encodeURIComponent(phone)}`,
+  ];
+  for (const url of endpoints) {
+    try {
+      const payload = await fetchJsonNoCache<Record<string, unknown>>(
+        url,
+        tokenConfig.token,
+        input.clientId,
+      );
+      const direct = extractCostCenterIdFromUserRow(payload);
+      if (direct) return direct;
+      const rows = [
+        ...(Array.isArray(payload.items) ? payload.items : []),
+        ...(Array.isArray(payload.users) ? payload.users : []),
+      ];
+      for (const raw of rows) {
+        if (!raw || typeof raw !== "object") continue;
+        const id = extractCostCenterIdFromUserRow(raw as Record<string, unknown>);
+        if (id) return id;
+      }
+    } catch {
+      // continue probing
     }
   }
   return null;

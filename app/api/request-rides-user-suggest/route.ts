@@ -1,7 +1,7 @@
 import { resolveRequestRideUserByPhone, searchRequestRideUsers } from "@/lib/yango-api";
 import { loadAuthStore } from "@/lib/auth-store";
 import { getTenantEmployeeLinks } from "@/lib/client-employee-links";
-import { normalizePhoneKey } from "@/lib/request-rides-user-map";
+import { normalizePhoneKey, resolveMappedUserId } from "@/lib/request-rides-user-map";
 import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
@@ -105,6 +105,44 @@ export async function POST(request: Request) {
         const key = normalizePhoneKey(local.phone ?? "");
         if (!key || existingKeys.has(key)) continue;
         enriched.unshift(local);
+      }
+      enriched = enriched.slice(0, 8);
+    } else {
+      const store = await loadAuthStore();
+      const digitsQuery = query.replace(/\D/g, "");
+      const normalizedQuery = query.trim().toLowerCase();
+      const localCandidates = store.users
+        .filter(
+          (user) =>
+            user.accountType === "client" &&
+            user.tokenLabel === tokenLabel &&
+            user.apiClientId === clientId,
+        )
+        .slice(0, 400);
+      const existingByPhone = new Set(enriched.map((item) => normalizePhoneKey(item.phone ?? "")));
+      for (const user of localCandidates) {
+        if (enriched.length >= 8) break;
+        const phone = user.phoneNumber?.trim() ?? "";
+        const key = normalizePhoneKey(phone);
+        if (!key || existingByPhone.has(key)) continue;
+        const name = user.name?.trim() ?? "";
+        const nameMatched =
+          normalizedQuery.length > 0 && name.length > 0 && name.toLowerCase().includes(normalizedQuery);
+        const phoneMatched = digitsQuery.length > 0 && key.includes(digitsQuery);
+        if (!nameMatched && !phoneMatched) continue;
+        const mappedUserId = resolveMappedUserId({
+          tokenLabel,
+          clientId,
+          phoneNumber: phone,
+        });
+        if (!mappedUserId) continue;
+        existingByPhone.add(key);
+        enriched.unshift({
+          userId: mappedUserId,
+          phone: phone || `+${key}`,
+          fullName: name || phone || `+${key}`,
+          source: "map",
+        });
       }
       enriched = enriched.slice(0, 8);
     }

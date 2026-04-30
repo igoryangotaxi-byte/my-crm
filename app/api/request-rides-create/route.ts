@@ -1,4 +1,11 @@
-import { createRequestRide, resolveRequestRideUserIdByPhone } from "@/lib/yango-api";
+import {
+  createRequestRide,
+  detectYangoDefaultCostCenterId,
+  listYangoCostCenters,
+  resolveUserCostCenterIdByPhone,
+  resolveRequestRideUserIdByPhone,
+} from "@/lib/yango-api";
+import { loadAuthStore, saveAuthStore } from "@/lib/auth-store";
 import { searchAddressSuggestions } from "@/lib/geocoding";
 import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 import type { RequestRidePayload } from "@/types/crm";
@@ -20,6 +27,23 @@ function toFiniteNumber(input: unknown): number | null {
   return null;
 }
 
+function normalizePhoneDigits(input: string): string {
+  return input.replace(/\D/g, "");
+}
+
+async function resolveCabinetDefaultCostCenterId(input: {
+  tokenLabel: string;
+  clientId: string;
+}): Promise<string> {
+  const centers = await listYangoCostCenters(input).catch(() => []);
+  if (centers.length === 1 && centers[0]?.id?.trim()) {
+    return centers[0].id.trim();
+  }
+  const fromUsers = await detectYangoDefaultCostCenterId(input).catch(() => null);
+  if (fromUsers) return fromUsers.trim();
+  return centers[0]?.id?.trim() ?? "";
+}
+
 type WaypointPayload = { address: string; lat?: number; lon?: number };
 
 async function geocodeAddress(address: string): Promise<{ lat: number; lon: number } | null> {
@@ -39,6 +63,7 @@ export async function POST(request: Request) {
     clientId: scope?.apiClientId ?? normalizeString(body?.clientId),
     rideClass: normalizeString(body?.rideClass) || "comfortplus_b2b",
     userId: undefined,
+    costCenterId: normalizeString(body?.costCenterId) || null,
     sourceAddress: normalizeString(body?.sourceAddress),
     destinationAddress: normalizeString(body?.destinationAddress),
     sourceLat: toFiniteNumber(body?.sourceLat) ?? undefined,
@@ -98,6 +123,85 @@ export async function POST(request: Request) {
     );
   }
   payload.userId = resolvedUserId;
+  const apiUserCostCenter = await resolveUserCostCenterIdByPhone({
+    tokenLabel: payload.tokenLabel,
+    clientId: payload.clientId,
+    phoneNumber: payload.phoneNumber,
+  }).catch(() => null);
+  if (apiUserCostCenter?.trim()) {
+    payload.costCenterId = apiUserCostCenter.trim();
+  }
+  const apiSingleCostCenter = await resolveCabinetDefaultCostCenterId({
+    tokenLabel: payload.tokenLabel,
+    clientId: payload.clientId,
+  });
+  if (!payload.costCenterId && apiSingleCostCenter) {
+    payload.costCenterId = apiSingleCostCenter;
+  }
+  if (!payload.costCenterId) {
+    const store = await loadAuthStore();
+    const phoneDigits = normalizePhoneDigits(payload.phoneNumber);
+    const scopedTenant =
+      scope?.tenantId != null
+        ? (store.tenantAccounts ?? []).find((tenant) => tenant.id === scope.tenantId) ?? null
+        : null;
+    const candidateByScope = scope?.tenantId
+      ? store.users.find(
+          (user) =>
+            user.accountType === "client" &&
+            user.tenantId === scope.tenantId &&
+            normalizePhoneDigits(user.phoneNumber ?? "") === phoneDigits,
+        )
+      : store.users.find(
+          (user) =>
+            user.accountType === "client" &&
+            user.tokenLabel === payload.tokenLabel &&
+            user.apiClientId === payload.clientId &&
+            normalizePhoneDigits(user.phoneNumber ?? "") === phoneDigits,
+        );
+    const anyClientUserWithCostCenter = scope?.tenantId
+      ? store.users.find(
+          (user) =>
+            user.accountType === "client" &&
+            user.tenantId === scope.tenantId &&
+            Boolean((user.costCenterId ?? "").trim()),
+        )
+      : store.users.find(
+          (user) =>
+            user.accountType === "client" &&
+            user.tokenLabel === payload.tokenLabel &&
+            user.apiClientId === payload.clientId &&
+            Boolean((user.costCenterId ?? "").trim()),
+        );
+    let tenantDefault = (scopedTenant?.defaultCostCenterId ?? "").trim();
+    if (!tenantDefault && scope?.tenantId) {
+      tenantDefault = await resolveCabinetDefaultCostCenterId({
+        tokenLabel: payload.tokenLabel,
+        clientId: payload.clientId,
+      });
+      if (tenantDefault) {
+        const nextStore = {
+          ...store,
+          tenantAccounts: (store.tenantAccounts ?? []).map((tenant) =>
+            tenant.id === scope.tenantId ? { ...tenant, defaultCostCenterId: tenantDefault } : tenant,
+          ),
+          users: store.users.map((user) =>
+            user.accountType === "client" &&
+            user.tenantId === scope.tenantId &&
+            (user.costCenterId == null || user.costCenterId.trim() === "")
+              ? { ...user, costCenterId: tenantDefault }
+              : user,
+          ),
+        };
+        await saveAuthStore(nextStore);
+      }
+    }
+    payload.costCenterId =
+      (candidateByScope?.costCenterId ?? "").trim() ||
+      (anyClientUserWithCostCenter?.costCenterId ?? "").trim() ||
+      tenantDefault ||
+      null;
+  }
   if (payload.sourceLat == null || payload.sourceLon == null) {
     const src = await geocodeAddress(payload.sourceAddress);
     if (src) {

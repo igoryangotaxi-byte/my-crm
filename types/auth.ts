@@ -53,6 +53,7 @@ export type TenantAccount = {
   corpClientId: string;
   tokenLabel: string;
   apiClientId: string;
+  defaultCostCenterId?: string | null;
   b2cEnabled?: boolean;
   b2cToken?: string | null;
   b2cClientId?: string | null;
@@ -261,6 +262,10 @@ export type AuthApiActionRequest =
       clientId?: string;
       rideClass?: string;
       createEndpoint?: string;
+    }
+  | {
+      action: "syncTenantEmployees";
+      tenantId: string;
     };
 
 export const defaultClientPortalPermissions: Record<ClientPortalPageKey, boolean> = {

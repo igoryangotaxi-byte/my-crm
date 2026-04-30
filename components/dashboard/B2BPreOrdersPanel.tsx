@@ -123,7 +123,14 @@ type OpsPoint = {
 
 type YangoGranularity = "day" | "week" | "month";
 type YangoCompareWindow = "day" | "week" | "month";
-type YangoClientSortKey = "clientId" | "trips" | "spend" | "decoupling" | "rate" | "lastTripDate";
+type YangoClientSortKey =
+  | "clientId"
+  | "requests"
+  | "trips"
+  | "spend"
+  | "decoupling"
+  | "rate"
+  | "lastTripDate";
 
 const YANGO_NUMERIC_CARD_CLASS =
   "rounded-[24px] border border-white/70 bg-white/75 p-4 shadow-[0_14px_30px_rgba(15,23,42,0.08)] backdrop-blur-md transition-all duration-300 crm-hover-lift min-h-[160px]";
@@ -1956,6 +1963,7 @@ export function B2BPreOrdersPanel({
       {
         clientId: string;
         clientName: string;
+        requests: number;
         trips: number;
         spend: number;
         driversReceived: number;
@@ -1974,6 +1982,7 @@ export function B2BPreOrdersPanel({
       const client = byClient.get(clientId) ?? {
         clientId,
         clientName: resolvedClientName,
+        requests: 0,
         trips: 0,
         spend: 0,
         driversReceived: 0,
@@ -1981,7 +1990,10 @@ export function B2BPreOrdersPanel({
         lastTripDate: null,
         lastTripTs: Number.NaN,
       };
-      client.trips += 1;
+      client.requests += 1;
+      if (row.successOrderFlag === true) {
+        client.trips += 1;
+      }
       client.spend += row.clientPaid;
       client.driversReceived += row.driverReceived;
       client.decoupling += row.clientPaid - row.driverReceived;
@@ -2002,6 +2014,7 @@ export function B2BPreOrdersPanel({
     rows.sort((a, b) => {
       const factor = yangoClientSortDir === "asc" ? 1 : -1;
       if (yangoClientSortKey === "clientId") return factor * a.clientName.localeCompare(b.clientName);
+      if (yangoClientSortKey === "requests") return factor * (a.requests - b.requests);
       if (yangoClientSortKey === "trips") return factor * (a.trips - b.trips);
       if (yangoClientSortKey === "spend") return factor * (a.spend - b.spend);
       if (yangoClientSortKey === "rate") return factor * (a.rate - b.rate);
@@ -2173,6 +2186,7 @@ export function B2BPreOrdersPanel({
     const headers = [
       "client_name",
       "corp_client_id",
+      "requests",
       "trips",
       "abs_spend",
       "abs_decoupling",
@@ -2183,6 +2197,7 @@ export function B2BPreOrdersPanel({
       [
         row.clientName,
         row.clientId,
+        row.requests,
         row.trips,
         row.spend,
         row.decoupling,
@@ -2636,6 +2651,15 @@ export function B2BPreOrdersPanel({
                     <th className="px-3 py-2 text-right">
                       <button
                         type="button"
+                        onClick={() => toggleYangoClientSort("requests")}
+                        className="inline-flex items-center gap-1"
+                      >
+                        Requests {renderYangoSortIndicator("requests")}
+                      </button>
+                    </th>
+                    <th className="px-3 py-2 text-right">
+                      <button
+                        type="button"
                         onClick={() => toggleYangoClientSort("trips")}
                         className="inline-flex items-center gap-1"
                       >
@@ -2703,6 +2727,7 @@ export function B2BPreOrdersPanel({
                           ) : null}
                         </a>
                       </td>
+                      <td className="px-3 py-2 text-right text-slate-900">{row.requests.toLocaleString("en-US")}</td>
                       <td className="px-3 py-2 text-right text-slate-900">{row.trips.toLocaleString("en-US")}</td>
                       <td className="px-3 py-2 text-right text-slate-900">{formatMoney(row.spend)}</td>
                       <td className="px-3 py-2 text-right text-slate-900">{formatMoney(row.decoupling)}</td>
@@ -2714,7 +2739,7 @@ export function B2BPreOrdersPanel({
                   ))}
                   {decouplingData.rows.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-3 py-6 text-center text-muted">
+                      <td colSpan={7} className="px-3 py-6 text-center text-muted">
                         No client rows for selected filters.
                       </td>
                     </tr>

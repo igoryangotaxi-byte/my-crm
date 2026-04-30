@@ -31,6 +31,12 @@ function normalizeDateRange(input: { since?: unknown; till?: unknown }) {
   return { since, till };
 }
 
+function resolveMaxOrdersCap(): number {
+  const raw = Number.parseInt(process.env.YANGO_FINANCE_SUMMARY_MAX_ORDERS ?? "", 10);
+  if (Number.isFinite(raw) && raw > 0) return raw;
+  return 10000;
+}
+
 function startOfDay(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
@@ -101,7 +107,7 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as { since?: unknown; till?: unknown } | null;
   const range = normalizeDateRange({ since: body?.since, till: body?.till });
-  const maxOrders = 800;
+  const maxOrders = resolveMaxOrdersCap();
   const rows: B2BDashboardOrder[] = [];
   let cursors: Record<string, number> = {};
   let hasMore = true;

@@ -435,16 +435,18 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                           >
                             {cancellingOrderId === preOrder.orderId ? "Cancelling…" : "Cancel in Yango"}
                           </button>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void openB2CWebOrder(preOrder);
-                            }}
-                            className="inline-flex items-center rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            Open in Yango B2C
-                          </button>
+                          {!isClientScopedUser ? (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void openB2CWebOrder(preOrder);
+                              }}
+                              className="inline-flex items-center rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Open in Yango B2C
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -677,19 +679,21 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                     ? "Cancelling in Yango…"
                     : "Cancel order in Yango"}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void openB2CWebOrder(selectedPreOrder)}
-                  className="mt-2 w-full rounded-xl border border-sky-200 bg-sky-50 py-2.5 text-sm font-semibold text-sky-800 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Open in Yango B2C
-                </button>
+                {!isClientScopedUser ? (
+                  <button
+                    type="button"
+                    onClick={() => void openB2CWebOrder(selectedPreOrder)}
+                    className="mt-2 w-full rounded-xl border border-sky-200 bg-sky-50 py-2.5 text-sm font-semibold text-sky-800 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Open in Yango B2C
+                  </button>
+                ) : null}
               </aside>
             </div>
           </div>
         </div>
       ) : null}
-      {handoffPreOrder ? (
+      {handoffPreOrder && !isClientScopedUser ? (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/45 px-4 py-6 backdrop-blur-sm"
           onClick={() => {

@@ -118,6 +118,7 @@ export type RequestRidePayload = {
   clientId: string;
   rideClass: string;
   userId?: string;
+  costCenterId?: string | null;
   sourceAddress: string;
   destinationAddress: string;
   waypoints?: Array<{

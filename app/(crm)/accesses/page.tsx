@@ -69,6 +69,7 @@ const accessSections: AccessSection[] = [
     actions: [{ type: "page", key: "accesses", label: "Access management" }],
   },
 ];
+const COMMUNICATIONS_ROLE_SUFFIX = "__communications";
 
 function DeleteIcon() {
   return (
@@ -108,6 +109,9 @@ export default function AccessesPage() {
   const [tenantRoles, setTenantRoles] = useState<Record<string, ClientRoleDefinition[]>>({});
   const [cabinetMessage, setCabinetMessage] = useState<string | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+  const [cabinetUsersExpanded, setCabinetUsersExpanded] = useState(false);
+  const [cabinetUsersPhoneQuery, setCabinetUsersPhoneQuery] = useState("");
+  const [cabinetUsersVisibleCount, setCabinetUsersVisibleCount] = useState(10);
   const [globalB2CDraft, setGlobalB2CDraft] = useState({
     enabled: false,
     token: "",
@@ -127,6 +131,11 @@ export default function AccessesPage() {
   const selectedSection =
     accessSections.find((section) => section.key === selectedSectionKey) ??
     accessSections[0];
+  const isCommunicationsRole = (roleId: string) => roleId.endsWith(COMMUNICATIONS_ROLE_SUFFIX);
+  const getBaseRoleId = (roleId: string) =>
+    isCommunicationsRole(roleId)
+      ? roleId.slice(0, roleId.length - COMMUNICATIONS_ROLE_SUFFIX.length)
+      : roleId;
 
   const fetchTenantData = useCallback(async () => {
     const response = await fetch("/api/auth", { cache: "no-store" });
@@ -213,6 +222,17 @@ export default function AccessesPage() {
     () => tenantAccounts.find((tenant) => tenant.id === selectedTenantId) ?? null,
     [tenantAccounts, selectedTenantId],
   );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setCabinetUsersExpanded(false);
+      setCabinetUsersPhoneQuery("");
+      setCabinetUsersVisibleCount(10);
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [selectedTenantId]);
 
   return (
     <section className="crm-page">
@@ -567,7 +587,16 @@ export default function AccessesPage() {
             </div>
             {(() => {
               const tenantUsers = tenantUsersById.get(selectedTenant.id) ?? [];
+              const normalizedPhoneQuery = cabinetUsersPhoneQuery.replace(/\D/g, "");
+              const filteredTenantUsers = normalizedPhoneQuery
+                ? tenantUsers.filter((user) =>
+                    (user.phoneNumber ?? "").replace(/\D/g, "").includes(normalizedPhoneQuery),
+                  )
+                : tenantUsers;
+              const visibleTenantUsers = filteredTenantUsers.slice(0, cabinetUsersVisibleCount);
+              const hasMoreTenantUsers = visibleTenantUsers.length < filteredTenantUsers.length;
               const roles = tenantRoles[selectedTenant.id] ?? [];
+              const baseRoles = roles.filter((role) => !isCommunicationsRole(role.id));
               const b2cDraft = b2cDrafts[selectedTenant.id] ?? {
                 enabled: selectedTenant.b2cEnabled === true,
                 token: selectedTenant.b2cToken ?? "",
@@ -579,7 +608,33 @@ export default function AccessesPage() {
                 name: "",
                 email: "",
                 password: "",
-                roleId: "employee",
+                roleId: baseRoles.find((role) => role.id === "employee")?.id ?? baseRoles[0]?.id ?? "employee",
+              };
+              const ensureCommunicationsRoleId = async (baseRoleId: string) => {
+                const baseRole =
+                  roles.find((role) => role.id === baseRoleId) ??
+                  baseRoles.find((role) => role.id === baseRoleId) ??
+                  null;
+                if (!baseRole) return baseRoleId;
+                const commRoleId = `${baseRole.id}${COMMUNICATIONS_ROLE_SUFFIX}`;
+                const existing = roles.find((role) => role.id === commRoleId);
+                if (existing) return existing.id;
+                await callAuthAction({
+                  action: "upsertTenantRole",
+                  tenantId: selectedTenant.id,
+                  roleId: commRoleId,
+                  name: `${baseRole.name} + Communications`,
+                  permissions: {
+                    requestRides: baseRole.permissions.requestRides,
+                    orders: baseRole.permissions.orders,
+                    preOrders: baseRole.permissions.preOrders,
+                    communications: true,
+                    driversMap: baseRole.permissions.driversMap,
+                    employees: baseRole.permissions.employees,
+                  },
+                });
+                await fetchTenantData();
+                return commRoleId;
               };
               return (
                 <div className="space-y-3">
@@ -673,63 +728,144 @@ export default function AccessesPage() {
                       Save B2C account
                     </button>
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full">
-                      <thead className="bg-white/60">
-                        <tr>
-                          <th className="px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-muted">Name</th>
-                          <th className="px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-muted">Email</th>
-                          <th className="px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-muted">Access</th>
-                          <th className="px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-muted">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {tenantUsers.map((user) => (
-                          <tr key={user.id}>
-                            <td className="px-2 py-1.5 text-sm text-slate-900">{user.name}</td>
-                            <td className="px-2 py-1.5 text-sm text-slate-700">{user.email}</td>
-                            <td className="px-2 py-1.5 text-sm text-slate-700">
-                              <select
-                                value={user.clientRoleId ?? "employee"}
-                                disabled={!isAdmin}
-                                onChange={async (event) => {
-                                  try {
-                                    await callAuthAction({
-                                      action: "updateTenantEmployee",
-                                      userId: user.id,
-                                      clientRoleId: event.target.value,
-                                    });
-                                    setCabinetMessage("Client user access updated.");
-                                  } catch (error) {
-                                    setCabinetMessage(
-                                      error instanceof Error ? error.message : "Failed to update access.",
-                                    );
-                                  }
-                                }}
-                                className="crm-input h-8 px-2 text-sm text-slate-700 disabled:opacity-50"
-                              >
-                                {roles.map((role) => (
-                                  <option key={role.id} value={role.id}>
-                                    {role.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className="px-2 py-1.5 text-sm text-slate-700">
-                              <button
-                                type="button"
-                                aria-label={`Delete ${user.email}`}
-                                disabled={!isAdmin || currentUser?.id === user.id}
-                                onClick={() => deleteUser(user.id)}
-                                className="crm-hover-lift inline-flex h-7 w-7 items-center justify-center rounded-md border border-rose-300/80 bg-gradient-to-b from-rose-500 to-red-600 text-white shadow-[0_8px_16px_rgba(225,29,72,0.3)] transition disabled:cursor-not-allowed disabled:opacity-45"
-                              >
-                                <DeleteIcon />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="rounded-2xl border border-border bg-white p-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCabinetUsersExpanded((prev) => !prev);
+                        if (!cabinetUsersExpanded) setCabinetUsersVisibleCount(10);
+                      }}
+                      className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm font-semibold text-slate-900"
+                    >
+                      <span>Cabinet users ({tenantUsers.length})</span>
+                      <span className="text-xs text-slate-500">
+                        {cabinetUsersExpanded ? "Hide" : "Show first 10"}
+                      </span>
+                    </button>
+                    {cabinetUsersExpanded ? (
+                      <div className="mt-3 space-y-3">
+                        <input
+                          className="crm-input h-9 w-full px-3 text-sm"
+                          placeholder="Search by phone across all users"
+                          value={cabinetUsersPhoneQuery}
+                          onChange={(event) => {
+                            setCabinetUsersPhoneQuery(event.target.value);
+                            setCabinetUsersVisibleCount(10);
+                          }}
+                        />
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full">
+                            <thead className="bg-white/60">
+                              <tr>
+                                <th className="px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-muted">Name</th>
+                                <th className="px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-muted">Email</th>
+                                <th className="px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-muted">Access</th>
+                                <th className="px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-muted">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                              {visibleTenantUsers.map((user) => (
+                                <tr key={user.id}>
+                                  <td className="px-2 py-1.5 text-sm text-slate-900">{user.name}</td>
+                                  <td className="px-2 py-1.5 text-sm text-slate-700">{user.email}</td>
+                                  <td className="px-2 py-1.5 text-sm text-slate-700">
+                                    <select
+                                      value={getBaseRoleId(user.clientRoleId ?? "employee")}
+                                      disabled={!isAdmin}
+                                      onChange={async (event) => {
+                                        try {
+                                          const currentRole = roles.find(
+                                            (role) => role.id === (user.clientRoleId ?? "employee"),
+                                          );
+                                          const communicationsEnabled = Boolean(
+                                            currentRole?.permissions?.communications,
+                                          );
+                                          const nextBaseRoleId = event.target.value;
+                                          const nextRoleId = communicationsEnabled
+                                            ? await ensureCommunicationsRoleId(nextBaseRoleId)
+                                            : nextBaseRoleId;
+                                          await callAuthAction({
+                                            action: "updateTenantEmployee",
+                                            userId: user.id,
+                                            clientRoleId: nextRoleId,
+                                          });
+                                          setCabinetMessage("Client user access updated.");
+                                        } catch (error) {
+                                          setCabinetMessage(
+                                            error instanceof Error ? error.message : "Failed to update access.",
+                                          );
+                                        }
+                                      }}
+                                      className="crm-input h-8 px-2 text-sm text-slate-700 disabled:opacity-50"
+                                    >
+                                      {baseRoles.map((role) => (
+                                        <option key={role.id} value={role.id}>
+                                          {role.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <label className="ml-2 inline-flex items-center gap-1.5 text-xs text-slate-600">
+                                      <input
+                                        type="checkbox"
+                                        disabled={!isAdmin}
+                                        checked={Boolean(
+                                          roles.find((role) => role.id === (user.clientRoleId ?? "employee"))
+                                            ?.permissions?.communications,
+                                        )}
+                                        onChange={async (event) => {
+                                          try {
+                                            const baseRoleId = getBaseRoleId(user.clientRoleId ?? "employee");
+                                            const targetRoleId = event.target.checked
+                                              ? await ensureCommunicationsRoleId(baseRoleId)
+                                              : baseRoleId;
+                                            await callAuthAction({
+                                              action: "updateTenantEmployee",
+                                              userId: user.id,
+                                              clientRoleId: targetRoleId,
+                                            });
+                                            setCabinetMessage("Communications access updated.");
+                                          } catch (error) {
+                                            setCabinetMessage(
+                                              error instanceof Error
+                                                ? error.message
+                                                : "Failed to update communications access.",
+                                            );
+                                          }
+                                        }}
+                                      />
+                                      Communications
+                                    </label>
+                                  </td>
+                                  <td className="px-2 py-1.5 text-sm text-slate-700">
+                                    <button
+                                      type="button"
+                                      aria-label={`Delete ${user.email}`}
+                                      disabled={!isAdmin || currentUser?.id === user.id}
+                                      onClick={() => deleteUser(user.id)}
+                                      className="crm-hover-lift inline-flex h-7 w-7 items-center justify-center rounded-md border border-rose-300/80 bg-gradient-to-b from-rose-500 to-red-600 text-white shadow-[0_8px_16px_rgba(225,29,72,0.3)] transition disabled:cursor-not-allowed disabled:opacity-45"
+                                    >
+                                      <DeleteIcon />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {filteredTenantUsers.length === 0 ? (
+                          <p className="text-xs text-slate-500">No users found for this phone query.</p>
+                        ) : null}
+                        {hasMoreTenantUsers ? (
+                          <button
+                            type="button"
+                            onClick={() => setCabinetUsersVisibleCount((prev) => prev + 10)}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700"
+                          >
+                            Load more
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="grid gap-2 md:grid-cols-5">
                     <input
@@ -776,7 +912,7 @@ export default function AccessesPage() {
                         }))
                       }
                     >
-                      {roles.map((role) => (
+                      {baseRoles.map((role) => (
                         <option key={role.id} value={role.id}>
                           {role.name}
                         </option>
