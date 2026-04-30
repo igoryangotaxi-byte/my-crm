@@ -88,6 +88,15 @@ export async function POST(request: Request) {
         }, [])
       : [],
   };
+  const costCenterDebug: {
+    selectedCostCenterId: string | null;
+    source: string | null;
+    candidates: Array<{ source: string; value: string | null }>;
+  } = {
+    selectedCostCenterId: payload.costCenterId ?? null,
+    source: payload.costCenterId ? "request.body" : null,
+    candidates: payload.costCenterId ? [{ source: "request.body", value: payload.costCenterId }] : [],
+  };
 
   if (!payload.tokenLabel || !payload.clientId) {
     return Response.json(
@@ -128,15 +137,27 @@ export async function POST(request: Request) {
     clientId: payload.clientId,
     phoneNumber: payload.phoneNumber,
   }).catch(() => null);
+  costCenterDebug.candidates.push({
+    source: "api.user.by_phone",
+    value: apiUserCostCenter?.trim() || null,
+  });
   if (apiUserCostCenter?.trim()) {
     payload.costCenterId = apiUserCostCenter.trim();
+    costCenterDebug.selectedCostCenterId = payload.costCenterId;
+    costCenterDebug.source = "api.user.by_phone";
   }
   const apiSingleCostCenter = await resolveCabinetDefaultCostCenterId({
     tokenLabel: payload.tokenLabel,
     clientId: payload.clientId,
   });
+  costCenterDebug.candidates.push({
+    source: "api.client.default_or_single",
+    value: apiSingleCostCenter || null,
+  });
   if (!payload.costCenterId && apiSingleCostCenter) {
     payload.costCenterId = apiSingleCostCenter;
+    costCenterDebug.selectedCostCenterId = payload.costCenterId;
+    costCenterDebug.source = "api.client.default_or_single";
   }
   if (!payload.costCenterId) {
     const store = await loadAuthStore();
@@ -174,6 +195,10 @@ export async function POST(request: Request) {
             Boolean((user.costCenterId ?? "").trim()),
         );
     let tenantDefault = (scopedTenant?.defaultCostCenterId ?? "").trim();
+    costCenterDebug.candidates.push({
+      source: "tenant.default_cost_center",
+      value: tenantDefault || null,
+    });
     if (!tenantDefault && scope?.tenantId) {
       tenantDefault = await resolveCabinetDefaultCostCenterId({
         tokenLabel: payload.tokenLabel,
@@ -201,6 +226,24 @@ export async function POST(request: Request) {
       (anyClientUserWithCostCenter?.costCenterId ?? "").trim() ||
       tenantDefault ||
       null;
+    costCenterDebug.candidates.push({
+      source: "user.same_phone",
+      value: (candidateByScope?.costCenterId ?? "").trim() || null,
+    });
+    costCenterDebug.candidates.push({
+      source: "user.any_in_tenant",
+      value: (anyClientUserWithCostCenter?.costCenterId ?? "").trim() || null,
+    });
+    if (payload.costCenterId && !costCenterDebug.source) {
+      if ((candidateByScope?.costCenterId ?? "").trim()) {
+        costCenterDebug.source = "user.same_phone";
+      } else if ((anyClientUserWithCostCenter?.costCenterId ?? "").trim()) {
+        costCenterDebug.source = "user.any_in_tenant";
+      } else if (tenantDefault) {
+        costCenterDebug.source = "tenant.default_cost_center";
+      }
+      costCenterDebug.selectedCostCenterId = payload.costCenterId;
+    }
   }
   if (payload.sourceLat == null || payload.sourceLon == null) {
     const src = await geocodeAddress(payload.sourceAddress);
@@ -247,7 +290,20 @@ export async function POST(request: Request) {
 
   try {
     const result = await createRequestRide(payload);
-    return Response.json({ ok: true, result }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json(
+      {
+        ok: true,
+        result,
+        debug: {
+          tenantId: scope?.tenantId ?? null,
+          tokenLabel: payload.tokenLabel,
+          clientId: payload.clientId,
+          userId: payload.userId ?? null,
+          costCenter: costCenterDebug,
+        },
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create ride.";
     const userHint = message.includes("User not found")
@@ -257,6 +313,13 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: `${message}${userHint}`,
+        debug: {
+          tenantId: scope?.tenantId ?? null,
+          tokenLabel: payload.tokenLabel,
+          clientId: payload.clientId,
+          userId: payload.userId ?? null,
+          costCenter: costCenterDebug,
+        },
       },
       { status: 500 },
     );
