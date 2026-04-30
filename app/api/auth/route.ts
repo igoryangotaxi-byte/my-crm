@@ -200,6 +200,38 @@ async function syncTenantEmployeesFromYango(params: {
     updated += 1;
     if (!tenantDefaultCostCenterId) tenantDefaultCostCenterId = cc;
   }
+  if (!tenantDefaultCostCenterId) {
+    tenantDefaultCostCenterId =
+      (await detectYangoDefaultCostCenterId({
+        tokenLabel: tenant.tokenLabel,
+        clientId: tenant.apiClientId,
+      }).catch(() => null))?.trim() || "";
+  }
+  if (!tenantDefaultCostCenterId) {
+    const centers = await listYangoCostCenters({
+      tokenLabel: tenant.tokenLabel,
+      clientId: tenant.apiClientId,
+    }).catch(() => []);
+    if (centers.length > 0) {
+      tenantDefaultCostCenterId = centers[0]?.id?.trim() || "";
+    }
+  }
+  if (tenantDefaultCostCenterId) {
+    for (let i = 0; i < users.length; i += 1) {
+      const user = users[i];
+      if (
+        user.accountType !== "client" ||
+        user.tenantId !== tenant.id ||
+        user.tokenLabel !== tenant.tokenLabel ||
+        user.apiClientId !== tenant.apiClientId
+      ) {
+        continue;
+      }
+      if ((user.costCenterId ?? "").trim()) continue;
+      users[i] = { ...user, costCenterId: tenantDefaultCostCenterId };
+      updated += 1;
+    }
+  }
   return { users, added, updated, tenantDefaultCostCenterId };
 }
 

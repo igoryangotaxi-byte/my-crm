@@ -3,7 +3,12 @@ import { loadAuthStore, saveAuthStore } from "@/lib/auth-store";
 import { relabelGoogleVendorForDisplay } from "@/lib/public-error-message";
 import { upsertMappedUserId } from "@/lib/request-rides-user-map";
 import { requireAdminUser } from "@/lib/server-auth";
-import { getRequestRideApiClients, listYangoClientUsers } from "@/lib/yango-api";
+import {
+  detectYangoDefaultCostCenterId,
+  getRequestRideApiClients,
+  listYangoClientUsers,
+  listYangoCostCenters,
+} from "@/lib/yango-api";
 import { validateYangoApiToken } from "@/lib/yango-token-onboarding";
 import { upsertYangoTokenRegistryEntry } from "@/lib/yango-token-registry";
 import type { AuthStoreData } from "@/types/auth";
@@ -157,8 +162,24 @@ async function upsertTenantAdmin(input: {
     clientId: input.apiClientId,
     limit: 1200,
   }).catch(() => []);
-  const discoveredDefaultCostCenterId =
+  let discoveredDefaultCostCenterId =
     yangoUsers.find((user) => (user.costCenterId ?? "").trim())?.costCenterId?.trim() ?? "";
+  if (!discoveredDefaultCostCenterId) {
+    discoveredDefaultCostCenterId =
+      (await detectYangoDefaultCostCenterId({
+        tokenLabel: input.tokenLabel,
+        clientId: input.apiClientId,
+      }).catch(() => null))?.trim() || "";
+  }
+  if (!discoveredDefaultCostCenterId) {
+    const centers = await listYangoCostCenters({
+      tokenLabel: input.tokenLabel,
+      clientId: input.apiClientId,
+    }).catch(() => []);
+    if (centers.length > 0) {
+      discoveredDefaultCostCenterId = centers[0]?.id?.trim() || "";
+    }
+  }
 
   for (const yangoUser of yangoUsers) {
     const phoneRaw = (yangoUser.phone ?? "").trim();
