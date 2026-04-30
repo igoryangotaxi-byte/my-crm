@@ -54,9 +54,6 @@ export function resolveMappedUserId(params: {
   const byClientId = map[params.clientId] ?? {};
   if (byClientId[phoneKey]) return byClientId[phoneKey];
 
-  const global = map["global"] ?? {};
-  if (global[phoneKey]) return global[phoneKey];
-
   return null;
 }
 
@@ -74,21 +71,17 @@ export function upsertMappedUserId(params: {
   const scopedKey = `${params.tokenLabel}:${params.clientId}`;
   const scoped = map[scopedKey] ?? {};
   const byClientId = map[params.clientId] ?? {};
-  const global = map.global ?? {};
 
   const prevScoped = scoped[phoneKey];
   const prevByClient = byClientId[phoneKey];
-  const prevGlobal = global[phoneKey];
 
   scoped[phoneKey] = userId;
   byClientId[phoneKey] = userId;
-  global[phoneKey] = userId;
 
   map[scopedKey] = scoped;
   map[params.clientId] = byClientId;
-  map.global = global;
 
-  const changed = prevScoped !== userId || prevByClient !== userId || prevGlobal !== userId;
+  const changed = prevScoped !== userId || prevByClient !== userId;
   if (changed) {
     writeUserMap(map);
   }

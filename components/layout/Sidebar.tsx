@@ -95,6 +95,15 @@ function NotesIcon({ className = "h-4 w-4" }: IconProps) {
   );
 }
 
+function CommunicationsIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth="1.8">
+      <path d="M4 6.5A2.5 2.5 0 016.5 4h11A2.5 2.5 0 0120 6.5v7A2.5 2.5 0 0117.5 16H10l-4.5 4v-4H6.5A2.5 2.5 0 014 13.5z" />
+      <path d="M8 8.5h8M8 11.5h5" />
+    </svg>
+  );
+}
+
 function ChevronRightIcon({ className = "h-3.5 w-3.5" }: IconProps) {
   return (
     <svg viewBox="0 0 20 20" fill="none" className={className} stroke="currentColor" strokeWidth="2">
@@ -124,6 +133,13 @@ const navItems = [
     page: "orders" as AppPageKey,
     area: "b2b" as const,
     icon: OrdersIcon,
+  },
+  {
+    href: "/communications",
+    label: "Communications",
+    page: "communications" as AppPageKey,
+    area: "b2b" as const,
+    icon: CommunicationsIcon,
   },
   {
     href: "/price-calculator",
@@ -163,6 +179,7 @@ export function Sidebar() {
         { href: "/client/request-rides", label: "Request Rides", page: "requestRides" as AppPageKey, area: "b2b" as const, icon: RideRequestIcon },
         { href: "/client/pre-orders", label: "Pre-Orders", page: "preOrders" as AppPageKey, area: "b2b" as const, icon: CalendarIcon },
         { href: "/client/orders", label: "Orders", page: "orders" as AppPageKey, area: "b2b" as const, icon: OrdersIcon },
+        { href: "/client/communications", label: "Communications", page: "communications" as AppPageKey, area: "b2b" as const, icon: CommunicationsIcon },
         { href: "/client/financial-center", label: "Financial Center", page: "orders" as AppPageKey, area: "b2b" as const, icon: WalletIcon },
         { href: "/client/drivers-map", label: "Drivers on the Map", page: "driversMap" as AppPageKey, area: "b2c" as const, icon: DriversMapIcon },
         { href: "/client/employees", label: "Employees", page: "orders" as AppPageKey, area: "b2b" as const, icon: ShieldIcon },

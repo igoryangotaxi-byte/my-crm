@@ -5,6 +5,7 @@ import {
   buildRequestRideBody,
   extractDriverDetailsFromYangoShapes,
   normalizeRideLifecycleStatus,
+  shouldRunPreOrderFallbackByTime,
 } from "../lib/yango-api";
 import { dedupePhones, isLikelyPhone, normalizePhone } from "../lib/phone-utils";
 import { getClientScope } from "../lib/server-auth";
@@ -192,5 +193,33 @@ test("getClientScope returns null for internal user and scope for client user", 
       apiClientId: "client-1",
       clientRoleId: "employee",
     },
+  );
+});
+
+test("shouldRunPreOrderFallbackByTime activates at threshold window", () => {
+  const scheduledTs = Date.UTC(2026, 3, 30, 12, 0, 0);
+  assert.equal(
+    shouldRunPreOrderFallbackByTime({
+      scheduledAtIso: new Date(scheduledTs).toISOString(),
+      thresholdMinutes: 5,
+      nowTs: scheduledTs - 6 * 60_000,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldRunPreOrderFallbackByTime({
+      scheduledAtIso: new Date(scheduledTs).toISOString(),
+      thresholdMinutes: 5,
+      nowTs: scheduledTs - 5 * 60_000,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldRunPreOrderFallbackByTime({
+      scheduledAtIso: null,
+      thresholdMinutes: 5,
+      nowTs: scheduledTs,
+    }),
+    false,
   );
 });

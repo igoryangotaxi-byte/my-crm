@@ -47,6 +47,27 @@ function isDriverAssigned(preOrder: PreOrder) {
   return preOrder.driverAssigned || assignedStatuses.has(status);
 }
 
+function buildYangoB2CHandoffUrl(preOrder: PreOrder) {
+  const baseUrl = new URL("https://yango.com/en_int/order/");
+  const comment = `CRM fallback from B2B pre-order ${preOrder.orderId}`;
+  const params = baseUrl.searchParams;
+  // Best-effort aliases because Yango web can read different keys in different locales/versions.
+  params.set("pickup", preOrder.pointA);
+  params.set("from", preOrder.pointA);
+  params.set("source", preOrder.pointA);
+  params.set("destination", preOrder.pointB);
+  params.set("to", preOrder.pointB);
+  params.set("dropoff", preOrder.pointB);
+  params.set("comment", comment);
+  params.set("notes", comment);
+  params.set("scheduled_for", preOrder.scheduledFor);
+  params.set("when", preOrder.scheduledFor);
+  params.set("ride_class", "comfortplus");
+  params.set("class", "comfortplus");
+  params.set("utm_source", "crm_b2c_handoff");
+  return baseUrl.toString();
+}
+
 export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
   const { currentUser } = useAuth();
   const isClientScopedUser = currentUser?.accountType === "client";
@@ -58,6 +79,10 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [fallbackActionError, setFallbackActionError] = useState<string | null>(null);
+  const [handoffMessage, setHandoffMessage] = useState<string | null>(null);
+  const [handoffPreOrder, setHandoffPreOrder] = useState<PreOrder | null>(null);
+  const [handoffOpenedOrderId, setHandoffOpenedOrderId] = useState<string | null>(null);
 
   const cancelPreOrder = async (preOrder: PreOrder) => {
     if (
@@ -84,6 +109,8 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
         throw new Error(data.error ?? "Failed to cancel order.");
       }
       setSelectedPreOrder(null);
+      setHandoffPreOrder(null);
+      setHandoffOpenedOrderId(null);
       router.refresh();
     } catch (error) {
       setCancelError(error instanceof Error ? error.message : "Failed to cancel order.");
@@ -96,6 +123,68 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
     preOrder.orderStatus === "scheduling"
       ? "Not provided by API yet"
       : "Not assigned";
+
+  const handoffTextForPreOrder = (preOrder: PreOrder) =>
+    [
+      `Order ID: ${preOrder.orderId}`,
+      `Client: ${preOrder.clientName}`,
+      `Scheduled for: ${preOrder.scheduledFor}`,
+      `Pickup: ${preOrder.pointA}`,
+      `Destination: ${preOrder.pointB}`,
+      `Comment: CRM fallback from B2B pre-order ${preOrder.orderId}`,
+    ].join("\n");
+
+  const openB2CWebOrder = async (preOrder: PreOrder) => {
+    setFallbackActionError(null);
+    setHandoffMessage(null);
+    setHandoffPreOrder(preOrder);
+    setHandoffOpenedOrderId(null);
+  };
+
+  const openYangoOrderPageFromHandoff = (preOrder: PreOrder) => {
+    window.open(buildYangoB2CHandoffUrl(preOrder), "_blank", "noopener,noreferrer");
+    setHandoffOpenedOrderId(preOrder.orderId);
+  };
+
+  const copyHandoffDetails = async (preOrder: PreOrder) => {
+    try {
+      await navigator.clipboard.writeText(handoffTextForPreOrder(preOrder));
+      setHandoffMessage("Ride details copied to clipboard.");
+    } catch {
+      setHandoffMessage("Could not copy automatically. Copy route details manually from the modal.");
+    }
+  };
+
+  const fallbackStatusBadge = (preOrder: PreOrder) => {
+    const status = preOrder.fallback?.status;
+    if (!status || status === "idle") return null;
+    if (status === "completed") {
+      return (
+        <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+          Fallback to B2C
+        </span>
+      );
+    }
+    if (status === "failed") {
+      return (
+        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+          Fallback failed
+        </span>
+      );
+    }
+    if (status === "in_progress") {
+      return (
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+          Fallback running
+        </span>
+      );
+    }
+    return (
+      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+        Fallback skipped
+      </span>
+    );
+  };
 
   const copyToClipboard = async (fieldKey: string, value?: string | null) => {
     if (!value) {
@@ -179,6 +268,18 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
         <div className="mb-0.5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
           <p className="font-semibold">Could not cancel order</p>
           <p className="mt-1">{cancelError}</p>
+        </div>
+      ) : null}
+      {fallbackActionError ? (
+        <div className="mb-0.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-semibold">Fallback warning</p>
+          <p className="mt-1">{fallbackActionError}</p>
+        </div>
+      ) : null}
+      {handoffMessage ? (
+        <div className="mb-0.5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          <p className="font-semibold">B2C handoff</p>
+          <p className="mt-1">{handoffMessage}</p>
         </div>
       ) : null}
 
@@ -293,13 +394,16 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                         <td className="px-3 py-2 text-sm text-slate-700">{preOrder.clientName}</td>
                       ) : null}
                       <td className="px-3 py-2 text-sm">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                            assigned ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
-                          }`}
-                        >
-                          {assigned ? "Assigned" : "Unassigned"}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                              assigned ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                            }`}
+                          >
+                            {assigned ? "Assigned" : "Unassigned"}
+                          </span>
+                          {fallbackStatusBadge(preOrder)}
+                        </div>
                       </td>
                       <td className="px-3 py-2 text-sm text-slate-700">{preOrder.scheduledFor}</td>
                       <td className="px-3 py-2 text-sm text-slate-700">
@@ -319,17 +423,29 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                         </Link>
                       </td>
                       <td className="px-3 py-2 text-sm">
-                        <button
-                          type="button"
-                          disabled={cancellingOrderId === preOrder.orderId}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void cancelPreOrder(preOrder);
-                          }}
-                          className="inline-flex items-center rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {cancellingOrderId === preOrder.orderId ? "Cancelling…" : "Cancel in Yango"}
-                        </button>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={cancellingOrderId === preOrder.orderId}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void cancelPreOrder(preOrder);
+                            }}
+                            className="inline-flex items-center rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {cancellingOrderId === preOrder.orderId ? "Cancelling…" : "Cancel in Yango"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void openB2CWebOrder(preOrder);
+                            }}
+                            className="inline-flex items-center rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Open in Yango B2C
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -479,6 +595,21 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                             : getDriverFallbackText(selectedPreOrder)}
                         </dd>
                       </div>
+                      {selectedPreOrder.fallback?.status &&
+                      selectedPreOrder.fallback.status !== "idle" ? (
+                        <div>
+                          <dt className="text-muted">Fallback status</dt>
+                          <dd className="font-medium text-slate-900">
+                            {selectedPreOrder.fallback.status}
+                            {selectedPreOrder.fallback.fallbackOrderId
+                              ? ` -> ${selectedPreOrder.fallback.fallbackOrderId}`
+                              : ""}
+                            {selectedPreOrder.fallback.reason
+                              ? ` (${selectedPreOrder.fallback.reason})`
+                              : ""}
+                          </dd>
+                        </div>
+                      ) : null}
                     </dl>
                   </div>
                 </div>
@@ -546,8 +677,142 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                     ? "Cancelling in Yango…"
                     : "Cancel order in Yango"}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => void openB2CWebOrder(selectedPreOrder)}
+                  className="mt-2 w-full rounded-xl border border-sky-200 bg-sky-50 py-2.5 text-sm font-semibold text-sky-800 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Open in Yango B2C
+                </button>
               </aside>
             </div>
+          </div>
+        </div>
+      ) : null}
+      {handoffPreOrder ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/45 px-4 py-6 backdrop-blur-sm"
+          onClick={() => {
+            setHandoffPreOrder(null);
+            setHandoffOpenedOrderId(null);
+          }}
+        >
+          <div
+            className="crm-modal-surface grid h-[86vh] w-full max-w-7xl gap-3 rounded-3xl p-3 lg:grid-cols-[1.7fr_0.9fr]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <section className="flex min-h-[420px] flex-col justify-center rounded-2xl border border-slate-200 bg-white p-5">
+              <h3 className="text-lg font-semibold text-slate-900">Yango web order</h3>
+              <p className="mt-2 text-sm text-slate-600">
+                Yango blocks embedding its order page in an iframe, so open it in a new tab and use the
+                copied route details from the panel on the right.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <a
+                  href={buildYangoB2CHandoffUrl(handoffPreOrder)}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    openYangoOrderPageFromHandoff(handoffPreOrder);
+                  }}
+                  className="crm-button-primary rounded-xl px-3 py-2 text-sm font-semibold"
+                >
+                  Open Yango order page
+                </a>
+                <button
+                  type="button"
+                  onClick={() => void copyHandoffDetails(handoffPreOrder)}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Copy full details
+                </button>
+              </div>
+            </section>
+            <aside className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-3">
+              <div className="mb-2 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">B2C order details</h3>
+                  <p className="text-xs text-slate-500">
+                    Copy addresses and paste if the page did not auto-fill.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHandoffPreOrder(null);
+                    setHandoffOpenedOrderId(null);
+                  }}
+                  className="crm-hover-lift inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-lg font-semibold leading-none text-slate-700"
+                  aria-label="Close B2C order modal"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                <p>
+                  <span className="font-semibold text-slate-900">Order ID:</span> {handoffPreOrder.orderId}
+                </p>
+                <p>
+                  <span className="font-semibold text-slate-900">Client:</span> {handoffPreOrder.clientName}
+                </p>
+                <p>
+                  <span className="font-semibold text-slate-900">Scheduled for:</span> {handoffPreOrder.scheduledFor}
+                </p>
+              </div>
+              <div className="mt-3 space-y-2">
+                <div className="rounded-xl border border-slate-200 bg-white p-2.5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pickup</p>
+                  <p className="mt-1 text-sm font-medium text-slate-900">{handoffPreOrder.pointA}</p>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard("handoffPickup", handoffPreOrder.pointA)}
+                    className="mt-2 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
+                  >
+                    {copiedField === "handoffPickup" ? "Copied" : "Copy pickup"}
+                  </button>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-2.5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Destination</p>
+                  <p className="mt-1 text-sm font-medium text-slate-900">{handoffPreOrder.pointB}</p>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard("handoffDestination", handoffPreOrder.pointB)}
+                    className="mt-2 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
+                  >
+                    {copiedField === "handoffDestination" ? "Copied" : "Copy destination"}
+                  </button>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void copyHandoffDetails(handoffPreOrder)}
+                  className="crm-hover-lift rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Copy full details
+                </button>
+                <a
+                  href={buildYangoB2CHandoffUrl(handoffPreOrder)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setHandoffOpenedOrderId(handoffPreOrder.orderId)}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Open in new tab
+                </a>
+                {handoffOpenedOrderId === handoffPreOrder.orderId ? (
+                  <button
+                    type="button"
+                    disabled={cancellingOrderId === handoffPreOrder.orderId}
+                    onClick={() => void cancelPreOrder(handoffPreOrder)}
+                    className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {cancellingOrderId === handoffPreOrder.orderId
+                      ? "Cancelling B2B order..."
+                      : "Cancel B2B order"}
+                  </button>
+                ) : null}
+              </div>
+            </aside>
           </div>
         </div>
       ) : null}

@@ -68,7 +68,7 @@ function ensureDefaultAdmin(users: AuthUser[]): AuthUser[] {
 }
 
 /** v2 first migration; v3 fixes stores that already had meta v2 but User.orders/preOrders stayed false. */
-const CURRENT_PERMISSIONS_VERSION = 4;
+const CURRENT_PERMISSIONS_VERSION = 5;
 
 function defaultTenantRoleSet(): ClientRoleDefinition[] {
   return [
@@ -95,6 +95,13 @@ function createDefaultStore(): AuthStoreData {
     roleDashboardBlockAccess: defaultRoleDashboardBlockAccess,
     tenantAccounts: [],
     tenantRoles: {},
+    globalB2CSettings: {
+      enabled: false,
+      token: null,
+      clientId: null,
+      rideClass: "comfortplus",
+      createEndpoint: null,
+    },
     storeMeta: { permissionsVersion: CURRENT_PERMISSIONS_VERSION },
   };
 }
@@ -137,6 +144,12 @@ function normalizeTenantAccounts(input: unknown): TenantAccount[] {
       corpClientId: typeof item.corpClientId === "string" ? item.corpClientId : "",
       tokenLabel: typeof item.tokenLabel === "string" ? item.tokenLabel : "",
       apiClientId: typeof item.apiClientId === "string" ? item.apiClientId : "",
+      b2cEnabled: item.b2cEnabled === true,
+      b2cToken: typeof item.b2cToken === "string" ? item.b2cToken : null,
+      b2cClientId: typeof item.b2cClientId === "string" ? item.b2cClientId : null,
+      b2cRideClass: typeof item.b2cRideClass === "string" ? item.b2cRideClass : "comfortplus",
+      b2cCreateEndpoint:
+        typeof item.b2cCreateEndpoint === "string" ? item.b2cCreateEndpoint : null,
       enabled: item.enabled !== false,
       createdAt:
         typeof item.createdAt === "string" && item.createdAt
@@ -202,7 +215,7 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
   /** Older KV had User.orders/preOrders false; v3 re-applies after some stores hit meta v2 without fixing User. */
   const userPerms =
     storedVersion < CURRENT_PERMISSIONS_VERSION
-      ? { ...mergedUserPerms, orders: true, preOrders: true }
+      ? { ...mergedUserPerms, orders: true, preOrders: true, communications: true }
       : mergedUserPerms;
 
   return {
@@ -239,6 +252,20 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
     },
     tenantAccounts,
     tenantRoles,
+    globalB2CSettings: {
+      enabled: data.globalB2CSettings?.enabled === true,
+      token: typeof data.globalB2CSettings?.token === "string" ? data.globalB2CSettings.token : null,
+      clientId:
+        typeof data.globalB2CSettings?.clientId === "string" ? data.globalB2CSettings.clientId : null,
+      rideClass:
+        typeof data.globalB2CSettings?.rideClass === "string"
+          ? data.globalB2CSettings.rideClass
+          : "comfortplus",
+      createEndpoint:
+        typeof data.globalB2CSettings?.createEndpoint === "string"
+          ? data.globalB2CSettings.createEndpoint
+          : null,
+    },
     storeMeta: {
       permissionsVersion: Math.max(storedVersion, CURRENT_PERMISSIONS_VERSION),
     },

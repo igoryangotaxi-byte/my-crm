@@ -40,6 +40,7 @@ const accessSections: AccessSection[] = [
       { type: "page", key: "requestRides", label: "Request Rides" },
       { type: "page", key: "preOrders", label: "Pre-Orders" },
       { type: "page", key: "orders", label: "Orders" },
+      { type: "page", key: "communications", label: "Communications" },
       { type: "page", key: "priceCalculator", label: "Price Calculator" },
       { type: "page", key: "notes", label: "Notes" },
     ],
@@ -107,6 +108,16 @@ export default function AccessesPage() {
   const [tenantRoles, setTenantRoles] = useState<Record<string, ClientRoleDefinition[]>>({});
   const [cabinetMessage, setCabinetMessage] = useState<string | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+  const [globalB2CDraft, setGlobalB2CDraft] = useState({
+    enabled: false,
+    token: "",
+    clientId: "",
+    rideClass: "comfortplus",
+    createEndpoint: "",
+  });
+  const [b2cDrafts, setB2cDrafts] = useState<
+    Record<string, { enabled: boolean; token: string; clientId: string; rideClass: string; createEndpoint: string }>
+  >({});
   const [newUserDrafts, setNewUserDrafts] = useState<
     Record<string, { name: string; email: string; password: string; roleId: string }>
   >({});
@@ -123,9 +134,23 @@ export default function AccessesPage() {
     const payload = (await response.json()) as {
       tenantAccounts?: TenantAccount[];
       tenantRoles?: Record<string, ClientRoleDefinition[]>;
+      globalB2CSettings?: {
+        enabled?: boolean;
+        token?: string | null;
+        clientId?: string | null;
+        rideClass?: string | null;
+        createEndpoint?: string | null;
+      };
     };
     setTenantAccounts(payload.tenantAccounts ?? []);
     setTenantRoles(payload.tenantRoles ?? {});
+    setGlobalB2CDraft({
+      enabled: payload.globalB2CSettings?.enabled === true,
+      token: payload.globalB2CSettings?.token ?? "",
+      clientId: payload.globalB2CSettings?.clientId ?? "",
+      rideClass: payload.globalB2CSettings?.rideClass ?? "comfortplus",
+      createEndpoint: payload.globalB2CSettings?.createEndpoint ?? "",
+    });
   }, []);
 
   const callAuthAction = useCallback(
@@ -191,6 +216,79 @@ export default function AccessesPage() {
 
   return (
     <section className="crm-page">
+      <div className="glass-surface mb-4 rounded-3xl border border-white/70 bg-white/75 p-4 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur-md">
+        <h2 className="crm-section-title">Global B2C fallback (main CRM)</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          This single B2C account is used for `Order B2C` actions triggered from the main CRM.
+        </p>
+        <div className="mt-3 grid gap-2 md:grid-cols-5">
+          <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={globalB2CDraft.enabled}
+              onChange={(event) =>
+                setGlobalB2CDraft((prev) => ({ ...prev, enabled: event.target.checked }))
+              }
+            />
+            Enabled
+          </label>
+          <input
+            className="crm-input h-10 px-3 text-sm"
+            placeholder="B2C API token"
+            value={globalB2CDraft.token}
+            onChange={(event) => setGlobalB2CDraft((prev) => ({ ...prev, token: event.target.value }))}
+          />
+          <input
+            className="crm-input h-10 px-3 text-sm"
+            placeholder="B2C clientId (optional)"
+            value={globalB2CDraft.clientId}
+            onChange={(event) =>
+              setGlobalB2CDraft((prev) => ({ ...prev, clientId: event.target.value }))
+            }
+          />
+          <input
+            className="crm-input h-10 px-3 text-sm"
+            placeholder="Ride class (Comfort+)"
+            value={globalB2CDraft.rideClass}
+            onChange={(event) =>
+              setGlobalB2CDraft((prev) => ({ ...prev, rideClass: event.target.value }))
+            }
+          />
+          <input
+            className="crm-input h-10 px-3 text-sm"
+            placeholder="Create endpoint override (optional)"
+            value={globalB2CDraft.createEndpoint}
+            onChange={(event) =>
+              setGlobalB2CDraft((prev) => ({ ...prev, createEndpoint: event.target.value }))
+            }
+          />
+        </div>
+        <button
+          type="button"
+          disabled={!isAdmin}
+          onClick={async () => {
+            try {
+              await callAuthAction({
+                action: "updateGlobalB2CSettings",
+                enabled: globalB2CDraft.enabled,
+                token: globalB2CDraft.token,
+                clientId: globalB2CDraft.clientId,
+                rideClass: globalB2CDraft.rideClass,
+                createEndpoint: globalB2CDraft.createEndpoint,
+              });
+              setOnboardingMessage("Global B2C fallback account saved.");
+            } catch (error) {
+              setOnboardingMessage(
+                error instanceof Error ? error.message : "Failed to save global B2C fallback settings.",
+              );
+            }
+          }}
+          className="crm-button-primary mt-3 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
+        >
+          Save global B2C account
+        </button>
+      </div>
+
       <div className="glass-surface mb-4 rounded-3xl border border-white/70 bg-white/75 p-4 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur-md">
         <h2 className="crm-section-title">Client onboarding bridge</h2>
         <p className="mt-1 text-sm text-slate-600">
@@ -470,6 +568,13 @@ export default function AccessesPage() {
             {(() => {
               const tenantUsers = tenantUsersById.get(selectedTenant.id) ?? [];
               const roles = tenantRoles[selectedTenant.id] ?? [];
+              const b2cDraft = b2cDrafts[selectedTenant.id] ?? {
+                enabled: selectedTenant.b2cEnabled === true,
+                token: selectedTenant.b2cToken ?? "",
+                clientId: selectedTenant.b2cClientId ?? "",
+                rideClass: selectedTenant.b2cRideClass ?? "comfortplus",
+                createEndpoint: selectedTenant.b2cCreateEndpoint ?? "",
+              };
               const draft = newUserDrafts[selectedTenant.id] ?? {
                 name: "",
                 email: "",
@@ -478,6 +583,96 @@ export default function AccessesPage() {
               };
               return (
                 <div className="space-y-3">
+                  <div className="rounded-2xl border border-border bg-white p-3">
+                    <p className="text-sm font-semibold text-slate-900">B2C fallback account</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Used by `Order B2C` in pre-orders for this client (main CRM + client cabinet).
+                    </p>
+                    <div className="mt-2 grid gap-2 md:grid-cols-5">
+                      <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={b2cDraft.enabled}
+                          onChange={(event) =>
+                            setB2cDrafts((prev) => ({
+                              ...prev,
+                              [selectedTenant.id]: { ...b2cDraft, enabled: event.target.checked },
+                            }))
+                          }
+                        />
+                        Enabled
+                      </label>
+                      <input
+                        className="crm-input h-9 px-2 text-sm"
+                        placeholder="B2C API token"
+                        value={b2cDraft.token}
+                        onChange={(event) =>
+                          setB2cDrafts((prev) => ({
+                            ...prev,
+                            [selectedTenant.id]: { ...b2cDraft, token: event.target.value },
+                          }))
+                        }
+                      />
+                      <input
+                        className="crm-input h-9 px-2 text-sm"
+                        placeholder="B2C clientId (optional)"
+                        value={b2cDraft.clientId}
+                        onChange={(event) =>
+                          setB2cDrafts((prev) => ({
+                            ...prev,
+                            [selectedTenant.id]: { ...b2cDraft, clientId: event.target.value },
+                          }))
+                        }
+                      />
+                      <input
+                        className="crm-input h-9 px-2 text-sm"
+                        placeholder="Ride class (Comfort+)"
+                        value={b2cDraft.rideClass}
+                        onChange={(event) =>
+                          setB2cDrafts((prev) => ({
+                            ...prev,
+                            [selectedTenant.id]: { ...b2cDraft, rideClass: event.target.value },
+                          }))
+                        }
+                      />
+                      <input
+                        className="crm-input h-9 px-2 text-sm"
+                        placeholder="Create endpoint override (optional)"
+                        value={b2cDraft.createEndpoint}
+                        onChange={(event) =>
+                          setB2cDrafts((prev) => ({
+                            ...prev,
+                            [selectedTenant.id]: { ...b2cDraft, createEndpoint: event.target.value },
+                          }))
+                        }
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!isAdmin}
+                      onClick={async () => {
+                        try {
+                          await callAuthAction({
+                            action: "updateTenantB2CSettings",
+                            tenantId: selectedTenant.id,
+                            b2cEnabled: b2cDraft.enabled,
+                            b2cToken: b2cDraft.token,
+                            b2cClientId: b2cDraft.clientId,
+                            b2cRideClass: b2cDraft.rideClass,
+                            b2cCreateEndpoint: b2cDraft.createEndpoint,
+                          });
+                          setCabinetMessage("B2C fallback account saved.");
+                        } catch (error) {
+                          setCabinetMessage(
+                            error instanceof Error ? error.message : "Failed to save B2C settings.",
+                          );
+                        }
+                      }}
+                      className="crm-button-primary mt-2 rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
+                    >
+                      Save B2C account
+                    </button>
+                  </div>
                   <div className="overflow-x-auto">
                     <table className="min-w-full">
                       <thead className="bg-white/60">

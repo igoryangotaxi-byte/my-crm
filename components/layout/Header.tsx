@@ -30,9 +30,17 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
     title: "Request Rides",
     subtitle: "Create ride requests via selected client API",
   },
+  "/communications": {
+    title: "Communications",
+    subtitle: "Send messages to client employees",
+  },
   "/client/request-rides": {
     title: "Request Rides",
     subtitle: "Client cabinet ride requests",
+  },
+  "/client/communications": {
+    title: "Communications",
+    subtitle: "Send messages to your employees",
   },
   "/client/pre-orders": {
     title: "Pre-Orders",

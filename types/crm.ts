@@ -40,6 +40,26 @@ export type PreOrder = {
   driverFirstName: string | null;
   driverLastName: string | null;
   driverPhone: string | null;
+  fallback?: PreOrderFallbackSnapshot | null;
+};
+
+export type PreOrderFallbackStatus =
+  | "idle"
+  | "skipped"
+  | "in_progress"
+  | "failed"
+  | "completed";
+
+export type PreOrderFallbackSnapshot = {
+  status: PreOrderFallbackStatus;
+  reason: string | null;
+  attempts: number;
+  lastAttemptAt: string | null;
+  completedAt: string | null;
+  failedAt: string | null;
+  fallbackOrderId: string | null;
+  sourceOrderId: string;
+  thresholdMinutes: number;
 };
 
 export type Kpi = {

@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-type SmsKind = "request_created" | "driver_on_way";
+type SmsKind = "request_created" | "driver_on_way" | "communications";
 
 function normalizeString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -24,7 +24,7 @@ function normalizePhonesInput(value: unknown): string[] {
 }
 
 function isAllowedKind(value: unknown): value is SmsKind {
-  return value === "request_created" || value === "driver_on_way";
+  return value === "request_created" || value === "driver_on_way" || value === "communications";
 }
 
 /** SMS is opt-in until Inforu enables outbound for the API user (KYC). */
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
   }
   if (!kind) {
     return Response.json(
-      { ok: false, error: "kind must be 'request_created' or 'driver_on_way'." },
+      { ok: false, error: "kind must be 'request_created', 'driver_on_way' or 'communications'." },
       { status: 400 },
     );
   }

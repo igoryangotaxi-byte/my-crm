@@ -18,7 +18,14 @@ import {
   searchMappedUsers,
   upsertMappedUserId,
 } from "@/lib/request-rides-user-map";
+import {
+  finishPreOrderFallbackAttempt,
+  getPreOrderFallbackSnapshot,
+  listPreOrderFallbackSnapshotsByScope,
+  tryStartPreOrderFallbackAttempt,
+} from "@/lib/preorder-fallback-store";
 import { loadYangoTokenRegistry } from "@/lib/yango-token-registry";
+import { loadAuthStore } from "@/lib/auth-store";
 import { unstable_cache } from "next/cache";
 
 const YANGO_BASE_URL = "https://b2b-api.yango.com/integration";
@@ -703,6 +710,22 @@ async function loadAllYangoPreOrders(scope?: YangoScope) {
     return aTime - bTime;
   });
 
+  const fallbackCache = new Map<string, Record<string, ReturnType<typeof getPreOrderFallbackSnapshot>>>();
+  for (const row of preOrders) {
+    const scopeKey = `${row.tokenLabel}:${row.clientId}`;
+    if (!fallbackCache.has(scopeKey)) {
+      fallbackCache.set(
+        scopeKey,
+        listPreOrderFallbackSnapshotsByScope({
+          tokenLabel: row.tokenLabel,
+          clientId: row.clientId,
+        }),
+      );
+    }
+    const scopeEntries = fallbackCache.get(scopeKey) ?? {};
+    row.fallback = scopeEntries[row.orderId] ?? null;
+  }
+
   return { preOrders, errors, diagnostics };
 }
 
@@ -1385,42 +1408,33 @@ function extractUserId(payload: Record<string, unknown>): string | null {
   return null;
 }
 
-function collectPhones(payload: unknown, set: Set<string>) {
-  if (!payload || typeof payload !== "object") return;
-  if (Array.isArray(payload)) {
-    for (const item of payload) collectPhones(item, set);
-    return;
-  }
-  for (const [key, value] of Object.entries(payload)) {
-    if (typeof value === "string" && key.toLowerCase().includes("phone")) {
-      set.add(value);
-    } else if (value && typeof value === "object") {
-      collectPhones(value, set);
-    }
-  }
-}
-
 function persistUserMapFromApiPayload(
   context: { tokenLabel: string; clientId: string },
   payload: unknown,
   fallbackPhone?: string,
 ) {
   if (!payload || typeof payload !== "object") return;
-  const userId = extractUserId(payload as Record<string, unknown>);
-  if (!userId) return;
-
-  const phones = new Set<string>();
-  collectPhones(payload, phones);
-  if (fallbackPhone) phones.add(fallbackPhone);
-
-  for (const phone of phones) {
-    upsertMappedUserId({
-      tokenLabel: context.tokenLabel,
-      clientId: context.clientId,
-      phoneNumber: phone,
-      userId,
-    });
+  const suggestions = extractUserSuggestionsFromPayload(payload);
+  if (suggestions.length > 0) {
+    for (const item of suggestions) {
+      if (!item.phone || !item.userId) continue;
+      upsertMappedUserId({
+        tokenLabel: context.tokenLabel,
+        clientId: context.clientId,
+        phoneNumber: item.phone,
+        userId: item.userId,
+      });
+    }
+    return;
   }
+  const userId = extractUserId(payload as Record<string, unknown>);
+  if (!userId || !fallbackPhone) return;
+  upsertMappedUserId({
+    tokenLabel: context.tokenLabel,
+    clientId: context.clientId,
+    phoneNumber: fallbackPhone,
+    userId,
+  });
 }
 
 function isYangoUserListRowDeleted(record: Record<string, unknown>): boolean {
@@ -1618,23 +1632,6 @@ export async function resolveRequestRideUserByPhone(input: {
   const tokenConfig = await resolveTokenConfig(input.tokenLabel);
   const variants = phoneVariants(input.phoneNumber);
   const mapped = resolveMappedUserId(input);
-  if (mapped) {
-    const directory = await listYangoClientUsers({
-      tokenLabel: input.tokenLabel,
-      clientId: input.clientId,
-      limit: 1000,
-    }).catch(() => []);
-    const matchById = directory.find((item) => item.userId === mapped);
-    if (matchById) {
-      return {
-        userId: matchById.userId,
-        phone: matchById.phone,
-        fullName: matchById.fullName,
-        source: "api",
-      };
-    }
-    return { userId: mapped, phone: null, fullName: null, source: "map" };
-  }
 
   let permissionDenied = false;
   for (const phone of variants) {
@@ -1661,12 +1658,7 @@ export async function resolveRequestRideUserByPhone(input: {
           variants.some((variant) => phoneKeysMatchYango(item.phone, variant)),
         );
         if (exactPhone) return exactPhone;
-        const userId = extractUserId(response);
-        if (userId) {
-          const fallback = suggestions.find((item) => item.userId === userId);
-          if (fallback) return fallback;
-          return { userId, phone, fullName: null, source: "api" };
-        }
+        // Do not fallback by arbitrary user_id from payload: it may belong to another phone.
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (message.includes("permission_check_failed")) {
@@ -1696,8 +1688,8 @@ export async function resolveRequestRideUserByPhone(input: {
       limit: 1000,
     }).catch(() => []);
     const match =
-      directory.find((item) => item.userId === fromOfficialList) ??
-      directory.find((item) => variants.some((variant) => phoneKeysMatchYango(item.phone, variant)));
+      directory.find((item) => variants.some((variant) => phoneKeysMatchYango(item.phone, variant))) ??
+      directory.find((item) => item.userId === fromOfficialList);
     if (match) {
       return {
         userId: match.userId,
@@ -1709,9 +1701,36 @@ export async function resolveRequestRideUserByPhone(input: {
     return { userId: fromOfficialList, phone: null, fullName: null, source: "api" };
   }
 
-  const mappedAfterProbe = resolveMappedUserId(input);
+  const mappedAfterProbe = resolveMappedUserId(input) ?? mapped;
   if (mappedAfterProbe) {
-    return { userId: mappedAfterProbe, phone: null, fullName: null, source: "map" };
+    const directory = await listYangoClientUsers({
+      tokenLabel: input.tokenLabel,
+      clientId: input.clientId,
+      limit: 1200,
+    }).catch(() => []);
+    const match =
+      directory.find((item) =>
+        variants.some((variant) => phoneKeysMatchYango(item.phone, variant)),
+      ) ?? directory.find((item) => item.userId === mappedAfterProbe);
+    if (
+      match &&
+      variants.some((variant) => phoneKeysMatchYango(match.phone, variant))
+    ) {
+      if (match.userId !== mappedAfterProbe) {
+        upsertMappedUserId({
+          tokenLabel: input.tokenLabel,
+          clientId: input.clientId,
+          phoneNumber: input.phoneNumber,
+          userId: match.userId,
+        });
+      }
+      return {
+        userId: match.userId,
+        phone: match.phone,
+        fullName: match.fullName,
+        source: "api",
+      };
+    }
   }
   if (permissionDenied) {
     throw new Error(
@@ -2198,25 +2217,41 @@ export async function getRequestRideApiClients(scope?: YangoScope): Promise<Yang
   return [...unique.values()].sort((a, b) => a.clientName.localeCompare(b.clientName));
 }
 
-export async function createRequestRide(payload: RequestRidePayload): Promise<RequestRideResult> {
-  const tokenConfig = await resolveTokenConfig(payload.tokenLabel);
+type CreateRequestRideOptions = {
+  endpointOverride?: string;
+  idempotencyToken?: string;
+  tokenOverride?: string;
+  clientIdOverride?: string;
+};
+
+async function createRequestRideInternal(
+  payload: RequestRidePayload,
+  options?: CreateRequestRideOptions,
+): Promise<RequestRideResult> {
+  const tokenConfig = options?.tokenOverride
+    ? { token: options.tokenOverride, label: payload.tokenLabel }
+    : await resolveTokenConfig(payload.tokenLabel);
+  const targetClientId = options?.clientIdOverride?.trim() || payload.clientId;
   if (payload.userId?.trim() && payload.phoneNumber.trim()) {
     upsertMappedUserId({
       tokenLabel: payload.tokenLabel,
-      clientId: payload.clientId,
+      clientId: targetClientId,
       phoneNumber: payload.phoneNumber,
       userId: payload.userId,
     });
   }
-  const endpoint = process.env.YANGO_CREATE_ORDER_ENDPOINT ?? "/2.0/orders/create";
+  const endpoint =
+    options?.endpointOverride?.trim() ||
+    process.env.YANGO_CREATE_ORDER_ENDPOINT ||
+    "/2.0/orders/create";
   const createResponse = await fetchJsonNoCache<Record<string, unknown>>(
     `${YANGO_BASE_URL}${endpoint}`,
     tokenConfig.token,
-    payload.clientId,
+    targetClientId,
     {
       method: "POST",
       headers: {
-        "X-Idempotency-Token": globalThis.crypto.randomUUID(),
+        "X-Idempotency-Token": options?.idempotencyToken || globalThis.crypto.randomUUID(),
       },
       body: JSON.stringify(buildRequestRideBody(payload)),
     },
@@ -2246,6 +2281,10 @@ export async function createRequestRide(payload: RequestRidePayload): Promise<Re
         ? undefined
         : `Create endpoint overridden via YANGO_CREATE_ORDER_ENDPOINT=${endpoint}`,
   };
+}
+
+export async function createRequestRide(payload: RequestRidePayload): Promise<RequestRideResult> {
+  return createRequestRideInternal(payload);
 }
 
 /**
@@ -2556,4 +2595,406 @@ function extractDriverDetails(
     carModel,
     carPlate,
   };
+}
+
+export type PreOrderFallbackRunResult = {
+  sourceOrderId: string;
+  tokenLabel: string;
+  clientId: string;
+  status: "skipped" | "completed" | "failed";
+  reason: string;
+  fallbackOrderId?: string | null;
+};
+
+export type B2CFallbackAccountSettings = {
+  token: string;
+  clientId: string;
+  rideClass: string;
+  createEndpoint: string | null;
+};
+
+export function shouldRunPreOrderFallbackByTime(input: {
+  scheduledAtIso: string | null | undefined;
+  thresholdMinutes: number;
+  nowTs?: number;
+}): boolean {
+  const scheduledTs = input.scheduledAtIso ? new Date(input.scheduledAtIso).getTime() : 0;
+  if (!scheduledTs || !Number.isFinite(scheduledTs)) return false;
+  const now = input.nowTs ?? Date.now();
+  return now >= scheduledTs - Math.max(1, input.thresholdMinutes) * 60_000;
+}
+
+function getPreOrderScheduledTs(preOrder: PreOrder, details: B2BOrderDetailsResponse): number {
+  const candidates = [
+    preOrder.scheduledAt,
+    asString(details.report?.local_due_datetime),
+    asString(details.report?.due_datetime),
+    asString(details.info?.due_date),
+  ];
+  for (const item of candidates) {
+    if (!item) continue;
+    const ts = new Date(item).getTime();
+    if (Number.isFinite(ts) && ts > 0) return ts;
+  }
+  return 0;
+}
+
+function hasAssignedDriver(details: B2BOrderDetailsResponse, preOrder: PreOrder): boolean {
+  const performerInfo =
+    (details.info?.performer as Record<string, unknown> | undefined) ??
+    (details.progress?.performer as Record<string, unknown> | undefined) ??
+    null;
+  const statusRaw = (
+    asString(details.progress?.status) ||
+    asString(details.info?.status) ||
+    preOrder.orderStatus ||
+    ""
+  ).toLowerCase();
+  const lifecycle = normalizeRideLifecycleStatus(statusRaw);
+  if (lifecycle === "driver_assigned" || lifecycle === "pickup" || lifecycle === "in_progress") {
+    return true;
+  }
+  return Boolean(
+    preOrder.driverAssigned ||
+      preOrder.driverId ||
+      preOrder.driverPhone ||
+      asString(performerInfo?.id) ||
+      asString(performerInfo?.phone) ||
+      asString(performerInfo?.fullname),
+  );
+}
+
+function readGeopoint(value: unknown): { lat: number; lon: number } | null {
+  if (!value) return null;
+  if (Array.isArray(value) && value.length >= 2) {
+    const lon = asNumberOrNull(value[0]);
+    const lat = asNumberOrNull(value[1]);
+    if (lat != null && lon != null) return { lat, lon };
+  }
+  if (typeof value === "object") {
+    const row = value as Record<string, unknown>;
+    const lon = asNumberOrNull(row.lon ?? row.longitude ?? row.lng);
+    const lat = asNumberOrNull(row.lat ?? row.latitude);
+    if (lat != null && lon != null) return { lat, lon };
+  }
+  return null;
+}
+
+function extractOrderRouteSeed(preOrder: PreOrder, details: B2BOrderDetailsResponse): {
+  sourceAddress: string;
+  destinationAddress: string;
+  sourceLat: number | null;
+  sourceLon: number | null;
+  destinationLat: number | null;
+  destinationLon: number | null;
+  comment: string | null;
+  userId: string | null;
+  phoneNumber: string | null;
+} {
+  const info = (details.info ?? {}) as Record<string, unknown>;
+  const report = (details.report ?? {}) as Record<string, unknown>;
+  const sourceObj =
+    (info.source as Record<string, unknown> | undefined) ??
+    (report.source as Record<string, unknown> | undefined) ??
+    null;
+  const destinationObj =
+    (info.destination as Record<string, unknown> | undefined) ??
+    (report.destination as Record<string, unknown> | undefined) ??
+    null;
+  const sourcePoint = readGeopoint(sourceObj?.geopoint ?? sourceObj?.point ?? null);
+  const destinationPoint = readGeopoint(destinationObj?.geopoint ?? destinationObj?.point ?? null);
+  const sourceAddress =
+    asString(sourceObj?.fullname) || asString(report.source_fullname) || preOrder.pointA;
+  const destinationAddress =
+    asString(destinationObj?.fullname) || asString(report.destination_fullname) || preOrder.pointB;
+  const comment =
+    asString(info.comment) || asString(info.notes) || asString((info.route_info as Record<string, unknown>)?.comment);
+  const phone =
+    asString(info.phone) ||
+    asString((info.user as Record<string, unknown> | undefined)?.phone) ||
+    asString((info.passenger as Record<string, unknown> | undefined)?.phone) ||
+    asString((report.user as Record<string, unknown> | undefined)?.phone) ||
+    null;
+  const userId =
+    asString(info.user_id) ||
+    asString((info.user as Record<string, unknown> | undefined)?.id) ||
+    asString((info.passenger as Record<string, unknown> | undefined)?.id) ||
+    null;
+  return {
+    sourceAddress: sourceAddress || preOrder.pointA,
+    destinationAddress: destinationAddress || preOrder.pointB,
+    sourceLat: sourcePoint?.lat ?? null,
+    sourceLon: sourcePoint?.lon ?? null,
+    destinationLat: destinationPoint?.lat ?? null,
+    destinationLon: destinationPoint?.lon ?? null,
+    comment: comment || null,
+    userId: userId || null,
+    phoneNumber: phone || null,
+  };
+}
+
+async function findTenantB2CSettingsByScope(input: {
+  tokenLabel: string;
+  clientId: string;
+}): Promise<B2CFallbackAccountSettings | null> {
+  const store = await loadAuthStore();
+  const tenant = (store.tenantAccounts ?? []).find(
+    (item) => item.tokenLabel === input.tokenLabel && item.apiClientId === input.clientId,
+  );
+  if (!tenant || !tenant.b2cEnabled) return null;
+  const token = tenant.b2cToken?.trim() || "";
+  if (!token) return null;
+  return {
+    token,
+    clientId: tenant.b2cClientId?.trim() || input.clientId,
+    rideClass: tenant.b2cRideClass?.trim() || "comfortplus",
+    createEndpoint: tenant.b2cCreateEndpoint?.trim() || null,
+  };
+}
+
+async function resolveUserPhoneByUserId(input: {
+  tokenLabel: string;
+  clientId: string;
+  userId: string;
+}): Promise<string | null> {
+  const tokenConfig = await resolveTokenConfig(input.tokenLabel);
+  const endpoints = [
+    `${YANGO_BASE_URL}/2.0/users/info?user_id=${encodeURIComponent(input.userId)}`,
+    `${YANGO_BASE_URL}/2.0/users/list?user_id=${encodeURIComponent(input.userId)}`,
+    `${YANGO_BASE_URL}/2.0/users?user_id=${encodeURIComponent(input.userId)}`,
+  ];
+  for (const url of endpoints) {
+    try {
+      const payload = await fetchJsonNoCache<Record<string, unknown>>(
+        url,
+        tokenConfig.token,
+        input.clientId,
+      );
+      const suggestions = extractUserSuggestionsFromPayload(payload);
+      const match = suggestions.find((item) => item.userId === input.userId && item.phone?.trim());
+      if (match?.phone?.trim()) return match.phone.trim();
+      const direct =
+        asString(payload.phone) ||
+        asString(payload.phone_number) ||
+        asString((payload.user as Record<string, unknown> | undefined)?.phone);
+      if (direct.trim()) return direct.trim();
+    } catch {
+      // continue probing
+    }
+  }
+  return null;
+}
+
+export async function fallbackPreOrderToB2C(input: {
+  preOrder: PreOrder;
+  thresholdMinutes?: number;
+  force?: boolean;
+  b2cSettingsOverride?: B2CFallbackAccountSettings | null;
+}): Promise<PreOrderFallbackRunResult> {
+  const thresholdMinutes = Math.max(1, input.thresholdMinutes ?? 5);
+  const lockOwner = `run-${globalThis.crypto.randomUUID()}`;
+  const lock = tryStartPreOrderFallbackAttempt({
+    tokenLabel: input.preOrder.tokenLabel,
+    clientId: input.preOrder.clientId,
+    orderId: input.preOrder.orderId,
+    thresholdMinutes,
+    lockOwner,
+  });
+  if (!lock.ok) {
+    return {
+      sourceOrderId: input.preOrder.orderId,
+      tokenLabel: input.preOrder.tokenLabel,
+      clientId: input.preOrder.clientId,
+      status: "skipped",
+      reason: lock.reason,
+      fallbackOrderId: lock.snapshot?.fallbackOrderId ?? null,
+    };
+  }
+
+  const finish = (
+    outcome: "skipped" | "failed" | "completed",
+    reason: string,
+    fallbackOrderId?: string | null,
+  ): PreOrderFallbackRunResult => {
+    finishPreOrderFallbackAttempt({
+      tokenLabel: input.preOrder.tokenLabel,
+      clientId: input.preOrder.clientId,
+      orderId: input.preOrder.orderId,
+      lockOwner,
+      outcome,
+      reason,
+      fallbackOrderId: fallbackOrderId ?? null,
+    });
+    return {
+      sourceOrderId: input.preOrder.orderId,
+      tokenLabel: input.preOrder.tokenLabel,
+      clientId: input.preOrder.clientId,
+      status: outcome,
+      reason,
+      fallbackOrderId: fallbackOrderId ?? null,
+    };
+  };
+
+  try {
+    const details = await getB2BOrderDetails({
+      tokenLabel: input.preOrder.tokenLabel,
+      clientId: input.preOrder.clientId,
+      orderId: input.preOrder.orderId,
+    });
+    const statusRaw = (
+      asString(details.progress?.status) ||
+      asString(details.info?.status) ||
+      input.preOrder.orderStatus ||
+      ""
+    ).toLowerCase();
+    if (isCancelledStatus(statusRaw) || isCompletedStatus(statusRaw)) {
+      return finish("skipped", "already_terminal");
+    }
+    const scheduledTs = getPreOrderScheduledTs(input.preOrder, details);
+    if (!scheduledTs) {
+      return finish("failed", "scheduled_time_missing");
+    }
+    if (
+      !input.force &&
+      !shouldRunPreOrderFallbackByTime({
+        scheduledAtIso: new Date(scheduledTs).toISOString(),
+        thresholdMinutes,
+      })
+    ) {
+      return finish("skipped", "before_threshold");
+    }
+    if (!input.force && hasAssignedDriver(details, input.preOrder)) {
+      return finish("skipped", "driver_assigned");
+    }
+
+    const routeSeed = extractOrderRouteSeed(input.preOrder, details);
+    if (
+      !routeSeed.sourceAddress ||
+      !routeSeed.destinationAddress ||
+      routeSeed.sourceLat == null ||
+      routeSeed.sourceLon == null ||
+      routeSeed.destinationLat == null ||
+      routeSeed.destinationLon == null
+    ) {
+      return finish("failed", "route_seed_incomplete");
+    }
+    let userId = routeSeed.userId?.trim() || "";
+    if (!userId && routeSeed.phoneNumber?.trim()) {
+      const resolved = await resolveRequestRideUserByPhone({
+        tokenLabel: input.preOrder.tokenLabel,
+        clientId: input.preOrder.clientId,
+        phoneNumber: routeSeed.phoneNumber.trim(),
+      }).catch(() => null);
+      userId = resolved?.userId ?? "";
+    }
+    if (!userId) {
+      return finish("failed", "user_id_missing_for_phone");
+    }
+    let phoneNumber = routeSeed.phoneNumber?.trim() || "";
+    if (!phoneNumber) {
+      const resolvedPhone = await resolveUserPhoneByUserId({
+        tokenLabel: input.preOrder.tokenLabel,
+        clientId: input.preOrder.clientId,
+        userId,
+      }).catch(() => null);
+      phoneNumber = resolvedPhone?.trim() || "";
+    }
+    if (!phoneNumber) {
+      return finish("failed", "rider_phone_missing");
+    }
+
+    await cancelYangoOrder({
+      tokenLabel: input.preOrder.tokenLabel,
+      clientId: input.preOrder.clientId,
+      orderId: input.preOrder.orderId,
+    });
+
+    const b2cSettings =
+      input.b2cSettingsOverride ??
+      (await findTenantB2CSettingsByScope({
+        tokenLabel: input.preOrder.tokenLabel,
+        clientId: input.preOrder.clientId,
+      }));
+    if (!b2cSettings) {
+      return finish("failed", "b2c_account_not_configured");
+    }
+    const fallbackResult = await createRequestRideInternal(
+      {
+        tokenLabel: input.preOrder.tokenLabel,
+        clientId: b2cSettings.clientId,
+        rideClass: b2cSettings.rideClass,
+        userId,
+        sourceAddress: routeSeed.sourceAddress,
+        destinationAddress: routeSeed.destinationAddress,
+        sourceLat: routeSeed.sourceLat,
+        sourceLon: routeSeed.sourceLon,
+        destinationLat: routeSeed.destinationLat,
+        destinationLon: routeSeed.destinationLon,
+        phoneNumber,
+        comment: routeSeed.comment,
+        scheduleAtIso: null,
+      },
+      {
+        endpointOverride: b2cSettings.createEndpoint ?? undefined,
+        tokenOverride: b2cSettings.token,
+        clientIdOverride: b2cSettings.clientId,
+        idempotencyToken: `fallback-${input.preOrder.orderId}`,
+      },
+    );
+    return finish("completed", "fallback_created", fallbackResult.orderId);
+  } catch (error) {
+    return finish("failed", error instanceof Error ? error.message : String(error));
+  }
+}
+
+export async function runPreOrderFallbackSweep(input?: {
+  preOrders?: PreOrder[];
+  scope?: { tokenLabel: string; clientId: string };
+  thresholdMinutes?: number;
+  force?: boolean;
+  b2cSettingsOverride?: B2CFallbackAccountSettings | null;
+}) {
+  const thresholdMinutes = Math.max(1, input?.thresholdMinutes ?? 5);
+  const sourcePreOrders =
+    input?.preOrders ??
+    (input?.scope
+      ? (await getScopedYangoPreOrders(input.scope)).preOrders
+      : (await loadAllYangoPreOrders()).preOrders);
+  const now = Date.now();
+  const candidates = sourcePreOrders.filter((preOrder) => {
+    if (input?.scope) {
+      if (
+        preOrder.tokenLabel !== input.scope.tokenLabel ||
+        preOrder.clientId !== input.scope.clientId
+      ) {
+        return false;
+      }
+    }
+    const scheduledTs = preOrder.scheduledAt ? new Date(preOrder.scheduledAt).getTime() : 0;
+    if (!scheduledTs || !Number.isFinite(scheduledTs)) return false;
+    if (
+      !input?.force &&
+      !shouldRunPreOrderFallbackByTime({
+        scheduledAtIso: preOrder.scheduledAt,
+        thresholdMinutes,
+        nowTs: now,
+      })
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  const results: PreOrderFallbackRunResult[] = [];
+  for (const preOrder of candidates) {
+    const result = await fallbackPreOrderToB2C({
+      preOrder,
+      thresholdMinutes,
+      force: input?.force,
+      b2cSettingsOverride: input?.b2cSettingsOverride ?? null,
+    });
+    results.push(result);
+  }
+  const changed = results.some((item) => item.status === "completed");
+  return { changed, checked: candidates.length, results };
 }

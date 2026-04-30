@@ -10,6 +10,7 @@ export type AppPageKey =
   | "orders"
   | "preOrders"
   | "requestRides"
+  | "communications"
   | "driversMap"
   | "priceCalculator"
   | "accesses"
@@ -33,7 +34,13 @@ export type AuthUser = {
   clientRoleId?: string | null;
 };
 
-export type ClientPortalPageKey = "requestRides" | "orders" | "preOrders" | "driversMap" | "employees";
+export type ClientPortalPageKey =
+  | "requestRides"
+  | "orders"
+  | "preOrders"
+  | "communications"
+  | "driversMap"
+  | "employees";
 export type ClientRoleDefinition = {
   id: string;
   name: string;
@@ -46,10 +53,22 @@ export type TenantAccount = {
   corpClientId: string;
   tokenLabel: string;
   apiClientId: string;
+  b2cEnabled?: boolean;
+  b2cToken?: string | null;
+  b2cClientId?: string | null;
+  b2cRideClass?: string | null;
+  b2cCreateEndpoint?: string | null;
   enabled: boolean;
   createdAt: string;
 };
 export type TenantRoleDefinitions = Record<string, ClientRoleDefinition[]>;
+export type GlobalB2CFallbackSettings = {
+  enabled: boolean;
+  token: string | null;
+  clientId: string | null;
+  rideClass: string | null;
+  createEndpoint: string | null;
+};
 
 export type RolePermissions = Record<AppRole, Record<AppPageKey, boolean>>;
 export type RoleAreaAccess = Record<AppRole, Record<BusinessArea, boolean>>;
@@ -61,6 +80,7 @@ export type AuthStoreData = {
   roleDashboardBlockAccess: RoleDashboardBlockAccess;
   tenantAccounts?: TenantAccount[];
   tenantRoles?: TenantRoleDefinitions;
+  globalB2CSettings?: GlobalB2CFallbackSettings;
   /** Bumped when role defaults are migrated in `normalizeStore` (e.g. KV from older builds). */
   storeMeta?: { permissionsVersion?: number };
 };
@@ -72,6 +92,7 @@ export const defaultRolePermissions: RolePermissions = {
     orders: true,
     preOrders: true,
     requestRides: true,
+    communications: true,
     driversMap: true,
     priceCalculator: true,
     accesses: true,
@@ -83,6 +104,7 @@ export const defaultRolePermissions: RolePermissions = {
     orders: true,
     preOrders: true,
     requestRides: true,
+    communications: true,
     driversMap: false,
     priceCalculator: true,
     accesses: false,
@@ -94,6 +116,7 @@ export const defaultRolePermissions: RolePermissions = {
     orders: true,
     preOrders: true,
     requestRides: true,
+    communications: true,
     driversMap: false,
     priceCalculator: true,
     accesses: false,
@@ -221,12 +244,30 @@ export type AuthApiActionRequest =
       roleId?: string;
       name: string;
       permissions: Partial<Record<ClientPortalPageKey, boolean>>;
+    }
+  | {
+      action: "updateTenantB2CSettings";
+      tenantId: string;
+      b2cEnabled: boolean;
+      b2cToken?: string;
+      b2cClientId?: string;
+      b2cRideClass?: string;
+      b2cCreateEndpoint?: string;
+    }
+  | {
+      action: "updateGlobalB2CSettings";
+      enabled: boolean;
+      token?: string;
+      clientId?: string;
+      rideClass?: string;
+      createEndpoint?: string;
     };
 
 export const defaultClientPortalPermissions: Record<ClientPortalPageKey, boolean> = {
   requestRides: true,
   orders: true,
   preOrders: true,
+  communications: true,
   driversMap: true,
   employees: false,
 };

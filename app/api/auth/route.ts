@@ -427,6 +427,65 @@ export async function POST(request: Request) {
       await saveAuthStore(nextStore);
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
+    case "updateTenantB2CSettings": {
+      if (!isInternalAdmin(sessionUser)) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Forbidden" },
+          { status: 403 },
+        );
+      }
+      const tenantId = payload.tenantId.trim();
+      const token = (payload.b2cToken ?? "").trim();
+      const createEndpoint = (payload.b2cCreateEndpoint ?? "").trim();
+      const rideClass = (payload.b2cRideClass ?? "").trim() || "comfortplus";
+      const nextAccounts = (store.tenantAccounts ?? []).map((tenant) =>
+        tenant.id === tenantId
+          ? {
+              ...tenant,
+              b2cEnabled: payload.b2cEnabled && Boolean(token),
+              b2cToken: token || null,
+              b2cClientId: (payload.b2cClientId ?? "").trim() || null,
+              b2cRideClass: rideClass,
+              b2cCreateEndpoint: createEndpoint || null,
+            }
+          : tenant,
+      );
+      const nextStore: AuthStoreData = {
+        ...store,
+        tenantAccounts: nextAccounts,
+      };
+      await saveAuthStore(nextStore);
+      return NextResponse.json<AuthActionResponse>({
+        ok: true,
+        message: "B2C fallback settings saved.",
+        data: sanitizeStore(nextStore),
+      });
+    }
+    case "updateGlobalB2CSettings": {
+      if (!isInternalAdmin(sessionUser)) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Forbidden" },
+          { status: 403 },
+        );
+      }
+      const token = (payload.token ?? "").trim();
+      const nextStore: AuthStoreData = {
+        ...store,
+        globalB2CSettings: {
+          enabled: payload.enabled && Boolean(token),
+          token: token || null,
+          clientId: (payload.clientId ?? "").trim() || null,
+          rideClass: (payload.rideClass ?? "").trim() || "comfortplus",
+          createEndpoint: (payload.createEndpoint ?? "").trim() || null,
+        },
+      };
+      await saveAuthStore(nextStore);
+      return NextResponse.json<AuthActionResponse>({
+        ok: true,
+        message: "Global B2C fallback settings saved.",
+        data: sanitizeStore(nextStore),
+      });
+    }
     case "createTenantEmployee": {
       if (!hasTenantEmployeesPermission(sessionUser, store) && !isInternalAdmin(sessionUser)) {
         return NextResponse.json<AuthActionResponse>(
@@ -458,6 +517,26 @@ export async function POST(request: Request) {
       const costCenterId =
         (payload.costCenterId ?? "").trim() ||
         (await resolveTenantCostCenterId(tenant.tokenLabel, tenant.apiClientId));
+      if (phoneNumber) {
+        const ensure = await ensureRequestRideUserByPhone({
+          tokenLabel: tenant.tokenLabel,
+          clientId: tenant.apiClientId,
+          phoneNumber,
+          fullName: payload.name,
+          costCenterId,
+        });
+        if (!ensure.ok) {
+          return NextResponse.json<AuthActionResponse>(
+            {
+              ok: false,
+              message:
+                ensure.error ??
+                "Failed to create employee in Yango. Employee was not added to the cabinet.",
+            },
+            { status: 502 },
+          );
+        }
+      }
       const nextStore: AuthStoreData = {
         ...store,
         users: [
@@ -482,19 +561,6 @@ export async function POST(request: Request) {
         ],
       };
       await saveAuthStore(nextStore);
-      if (phoneNumber) {
-        try {
-          await ensureRequestRideUserByPhone({
-            tokenLabel: tenant.tokenLabel,
-            clientId: tenant.apiClientId,
-            phoneNumber,
-            fullName: payload.name,
-            costCenterId,
-          });
-        } catch {
-          // Keep employee creation successful even if Yango user lookup is unavailable.
-        }
-      }
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
     case "updateTenantEmployee": {
@@ -505,28 +571,22 @@ export async function POST(request: Request) {
         );
       }
       const previous = store.users.find((user) => user.id === payload.userId) ?? null;
-      const nextStore: AuthStoreData = {
-        ...store,
-        users: store.users.map((user) =>
-          user.id === payload.userId
-            ? {
-                ...user,
-                ...(payload.name ? { name: payload.name.trim() } : {}),
-                ...(typeof payload.phoneNumber === "string"
-                  ? { phoneNumber: payload.phoneNumber.trim() || null }
-                  : {}),
-                ...(typeof payload.costCenterId === "string"
-                  ? { costCenterId: payload.costCenterId.trim() || null }
-                  : {}),
-                ...(payload.status ? { status: payload.status } : {}),
-                ...(payload.clientRoleId ? { clientRoleId: payload.clientRoleId } : {}),
-              }
-            : user,
-        ),
-      };
-      await saveAuthStore(nextStore);
+      const previewUpdated = store.users.find((user) => user.id === payload.userId);
+      if (!previewUpdated) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "User not found." },
+          { status: 404 },
+        );
+      }
       if (typeof payload.phoneNumber === "string") {
-        const updated = nextStore.users.find((user) => user.id === payload.userId);
+        const updated = {
+          ...previewUpdated,
+          ...(payload.name ? { name: payload.name.trim() } : {}),
+          phoneNumber: payload.phoneNumber.trim() || null,
+          ...(typeof payload.costCenterId === "string"
+            ? { costCenterId: payload.costCenterId.trim() || null }
+            : {}),
+        };
         const prevPhone = previous?.phoneNumber?.trim() ?? "";
         const nextPhone = payload.phoneNumber.trim();
         if (
@@ -549,20 +609,47 @@ export async function POST(request: Request) {
             (updated.costCenterId ?? "").trim() ||
             (await resolveTenantCostCenterId(updated.tokenLabel, updated.apiClientId));
           if (phoneNumber) {
-            try {
-              await ensureRequestRideUserByPhone({
-                tokenLabel: updated.tokenLabel,
-                clientId: updated.apiClientId,
-                phoneNumber,
-                fullName: payload.name ?? updated.name,
-                costCenterId,
-              });
-            } catch {
-              // Keep profile update successful even if Yango user lookup is unavailable.
+            const ensure = await ensureRequestRideUserByPhone({
+              tokenLabel: updated.tokenLabel,
+              clientId: updated.apiClientId,
+              phoneNumber,
+              fullName: payload.name ?? updated.name,
+              costCenterId,
+            });
+            if (!ensure.ok) {
+              return NextResponse.json<AuthActionResponse>(
+                {
+                  ok: false,
+                  message:
+                    ensure.error ??
+                    "Failed to update employee in Yango. Phone update was not applied.",
+                },
+                { status: 502 },
+              );
             }
           }
         }
       }
+      const nextStore: AuthStoreData = {
+        ...store,
+        users: store.users.map((user) =>
+          user.id === payload.userId
+            ? {
+                ...user,
+                ...(payload.name ? { name: payload.name.trim() } : {}),
+                ...(typeof payload.phoneNumber === "string"
+                  ? { phoneNumber: payload.phoneNumber.trim() || null }
+                  : {}),
+                ...(typeof payload.costCenterId === "string"
+                  ? { costCenterId: payload.costCenterId.trim() || null }
+                  : {}),
+                ...(payload.status ? { status: payload.status } : {}),
+                ...(payload.clientRoleId ? { clientRoleId: payload.clientRoleId } : {}),
+              }
+            : user,
+        ),
+      };
+      await saveAuthStore(nextStore);
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
     default:
