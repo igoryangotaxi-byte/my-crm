@@ -3,12 +3,8 @@ import { loadAuthStore, saveAuthStore } from "@/lib/auth-store";
 import { relabelGoogleVendorForDisplay } from "@/lib/public-error-message";
 import { upsertMappedUserId } from "@/lib/request-rides-user-map";
 import { requireAdminUser } from "@/lib/server-auth";
-import {
-  detectYangoDefaultCostCenterId,
-  getRequestRideApiClients,
-  listYangoClientUsers,
-  listYangoCostCenters,
-} from "@/lib/yango-api";
+import { discoverYangoTenantDefaultCostCenterId } from "@/lib/tenant-yango-bootstrap";
+import { getRequestRideApiClients, listYangoClientUsers, listYangoCostCenters } from "@/lib/yango-api";
 import { validateYangoApiToken } from "@/lib/yango-token-onboarding";
 import { upsertYangoTokenRegistryEntry } from "@/lib/yango-token-registry";
 import type { AuthStoreData } from "@/types/auth";
@@ -57,12 +53,17 @@ async function upsertTenantAdmin(input: {
   );
   const tenantId = existingTenant?.id ?? `tenant-${crypto.randomUUID()}`;
   const nextTenant = {
+    ...(existingTenant ?? {}),
     id: tenantId,
     name: input.tenantName || input.adminName || input.corpClientId,
     corpClientId: input.corpClientId,
     tokenLabel: input.tokenLabel,
     apiClientId: input.apiClientId,
     defaultCostCenterId: existingTenant?.defaultCostCenterId ?? null,
+    clientPortalCommunicationsEnabled:
+      existingTenant?.clientPortalCommunicationsEnabled !== false,
+    clientPortalFinancialCenterEnabled:
+      existingTenant?.clientPortalFinancialCenterEnabled !== false,
     enabled: true,
     createdAt: existingTenant?.createdAt ?? new Date().toISOString(),
   };
@@ -85,6 +86,7 @@ async function upsertTenantAdmin(input: {
           orders: true,
           preOrders: true,
           communications: true,
+          financialCenter: true,
           driversMap: true,
           employees: true,
         },
@@ -98,6 +100,7 @@ async function upsertTenantAdmin(input: {
           orders: true,
           preOrders: true,
           communications: true,
+          financialCenter: true,
           driversMap: true,
           employees: false,
         },
@@ -162,24 +165,11 @@ async function upsertTenantAdmin(input: {
     clientId: input.apiClientId,
     limit: 1200,
   }).catch(() => []);
-  let discoveredDefaultCostCenterId =
-    yangoUsers.find((user) => (user.costCenterId ?? "").trim())?.costCenterId?.trim() ?? "";
-  if (!discoveredDefaultCostCenterId) {
-    discoveredDefaultCostCenterId =
-      (await detectYangoDefaultCostCenterId({
-        tokenLabel: input.tokenLabel,
-        clientId: input.apiClientId,
-      }).catch(() => null))?.trim() || "";
-  }
-  if (!discoveredDefaultCostCenterId) {
-    const centers = await listYangoCostCenters({
-      tokenLabel: input.tokenLabel,
-      clientId: input.apiClientId,
-    }).catch(() => []);
-    if (centers.length > 0) {
-      discoveredDefaultCostCenterId = centers[0]?.id?.trim() || "";
-    }
-  }
+  const discoveredDefaultCostCenterId = await discoverYangoTenantDefaultCostCenterId({
+    tokenLabel: input.tokenLabel,
+    apiClientId: input.apiClientId,
+    yangoUsers,
+  });
 
   for (const yangoUser of yangoUsers) {
     const phoneRaw = (yangoUser.phone ?? "").trim();
@@ -198,12 +188,14 @@ async function upsertTenantAdmin(input: {
     existingEmails.add(candidateEmail.toLowerCase());
     existingPhonesInTenant.add(phoneDigits);
     const generatedPassword = `auto-${crypto.randomUUID()}`;
+    const employeeCostCenterId =
+      (yangoUser.costCenterId ?? "").trim() || discoveredDefaultCostCenterId || "";
     users.push({
       id: `user-${crypto.randomUUID()}`,
       name: (yangoUser.fullName ?? "").trim() || phoneRaw || "Employee",
       email: candidateEmail,
       phoneNumber: phoneRaw || null,
-      costCenterId: (yangoUser.costCenterId ?? "").trim() || null,
+      costCenterId: employeeCostCenterId || null,
       password: generatedPassword,
       role: "User",
       status: "approved",
@@ -242,7 +234,11 @@ async function upsertTenantAdmin(input: {
     : users;
 
   await saveAuthStore({ ...store, users: nextUsers, tenantAccounts: nextTenantAccounts, tenantRoles });
-  return { tenantId, adminEmail: normalizedAdminEmail };
+  return {
+    tenantId,
+    adminEmail: normalizedAdminEmail,
+    defaultCostCenterId: discoveredDefaultCostCenterId || null,
+  };
 }
 
 export async function POST(request: Request) {
@@ -341,6 +337,17 @@ export async function POST(request: Request) {
           })
         : null;
 
+    const onboardingWarnings: string[] = [];
+    if (
+      tenantResult &&
+      shouldCreateTenantAdmin &&
+      !(tenantResult.defaultCostCenterId ?? "").trim()
+    ) {
+      onboardingWarnings.push(
+        "No default cost center was found in Yango for this park client. Configure cost centers in Yango, then sync employees from Access or register the token again.",
+      );
+    }
+
     revalidateTag("yango-preorders", "max");
 
     return Response.json(
@@ -356,8 +363,10 @@ export async function POST(request: Request) {
             ? {
                 tenantId: tenantResult.tenantId,
                 adminEmail: tenantResult.adminEmail,
+                defaultCostCenterId: tenantResult.defaultCostCenterId,
               }
             : null,
+        onboardingWarnings,
         clients: clientsPayload,
       },
       { headers: { "Cache-Control": "no-store" } },

@@ -8,13 +8,33 @@ Appli Taxi Oz CRM built with Next.js App Router, TypeScript and Tailwind CSS.
 npm install
 ```
 
-2. Create local env file from template:
+2. **Production parity (recommended before shipping or when localhost diverges from prod)**  
+   Link the repo to your Vercel project once, then pull **Production** env into `.env.local` (same Supabase keys, `YANGO_TOKEN_*`, `KV_REST_*`, etc. as live prod):
+
+```bash
+npx vercel link
+# optional: cp .env.local .env.local.bak
+npm run env:pull:production
+```
+
+If Vercel Production omits some keys (empty Supabase or `YANGO_TOKEN_*`), restore non-empty values from a backup file:
+
+```bash
+cp .env.local .env.local.bak.$(date +%Y%m%d)
+npm run env:merge-from-backup
+```
+
+Optional: `node scripts/merge-env-local-from-backup.mjs path/to/backup` — default is `.env.local.bak.20260501` if present, else the script errors. The merge fills only **empty** keys in `.env.local` from the backup and drops `YANGO_TOKEN_REGISTRY_PRECEDENCE=env` for prod parity.
+
+`npm run env:pull:preview` pulls Preview env instead. Requires `vercel login` and access to the team/project.
+
+3. **Or** create `.env.local` from the template and fill values by hand:
 
 ```bash
 cp .env.example .env.local
 ```
 
-3. Fill the Yango API tokens in `.env.local`:
+4. Fill the Yango API tokens in `.env.local` (skip if you already ran `env:pull:production`):
 
 ```env
 YANGO_TOKEN_COFIX=
@@ -30,6 +50,9 @@ YANGO_TOKEN_SAMLET_MOTORS=
 YANGO_TOKEN_HAMOSHAVA_20=
 YANGO_TOKEN_STAR_TAXI_POINT=
 YANGO_TOKEN_OPTICITY=
+YANGO_TOKEN_ZHAK=
+# Optional: omit for prod parity (registry/KV wins over duplicate YANGO_TOKEN_*). Only set to force env:
+# YANGO_TOKEN_REGISTRY_PRECEDENCE=env
 ENABLE_LOCAL_GREENPLUM_SYNC=false
 GREENPLUM_SYNC_COMMAND=npm run sync:datagrip:run
 DATAGRIP_CONNECTION_CHECK_COMMAND=npm run sync:datagrip:check
@@ -52,13 +75,34 @@ INFORU_SENDER=AppliTaxi
 # SMS is opt-in (omit or false until Inforu clears KYC): INFORU_SMS_ENABLED=true
 ```
 
-4. Start the development server:
+5. Start the development server:
 
 ```bash
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+### Why localhost matched prod after `env:pull:production`
+
+- **Supabase**: same `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` as Production; getters **trim** whitespace so `isSupabaseConfigured()` matches reality.
+- **KV** (`KV_REST_API_URL`, `KV_REST_API_TOKEN`): same token registry reads as Production when you pulled prod env.
+- **Yango merge**: static `getStaticTokenConfigs()` + KV `appli:yango:token-registry:v1` are merged by **normalized label** (one row per cabinet). Default **`YANGO_TOKEN_REGISTRY_PRECEDENCE=registry`** (omit the variable): when both env and KV supply a token for the same cabinet, **KV wins** — same order as historical production, safe for new releases. Set **`YANGO_TOKEN_REGISTRY_PRECEDENCE=env` only** if you deliberately use prod KV but **refuse** to put prod-equivalent tokens in env (off-parity dev mode).
+- **Dashboard**: if Supabase is unreachable or misconfigured locally, metrics return **empty** instead of a 500 so you can still navigate; with a full prod pull this path should not trigger.
+
+## Client cabinet onboarding (Yango)
+
+New client cabinets are created from CRM **Notes → Add client by API token**: validate or resolve the token, optionally create an admin login, then save. That flow writes tenant accounts and users to KV and discovers the tenant **default cost center** using the same rules as employee sync (Yango user directory with CC → default-cost-center detection API → first listed cost center).
+
+- **`upsertTenantAccount`** on `POST /api/auth` exists for programmatic/server bootstrap (integrations or scripts). It is **not** the primary UI path; operators should use Notes onboarding unless automation depends on the API action.
+- **`YANGO_PINNED_COST_CENTER_JSON`** (optional): JSON object mapping Yango park `client_id` → cost center UUID when automatic discovery is not enough. Example: `{"1beae7f94af44ee596c2ca86ae0a3551":"0e65ab747fd849beac2c6ee22baff2ba"}`. Prefer fixing configuration in Yango; pins are for rare deploy-time overrides. Rare per-tenant overrides can also be stored in KV as `pinnedDefaultCostCenterId` on the tenant row (internal).
+- **KV audit** when a cabinet behaves unlike TEST CABINET: compare `tokenLabel`, `apiClientId`, `corpClientId`, tenant `defaultCostCenterId`, and client users’ `costCenterId` in the auth store after onboarding or **Sync employees from Yango** (Access).
+
+### Regression checks before release
+
+1. TEST CABINET: place an order from main CRM, place an order from the client portal, add an employee from the cabinet.
+2. New cabinet after full onboarding: repeat the same three flows.
+3. Negative: no cost centers in Yango — onboarding shows a warning in Notes; cabinet employee creation returns a clear error instead of opaque failures.
 
 ## Drivers Map persistence (important for production)
 

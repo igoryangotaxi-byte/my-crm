@@ -1,11 +1,14 @@
 import {
   createRequestRide,
-  detectYangoDefaultCostCenterId,
-  listYangoCostCenters,
+  listYangoClientUsers,
   resolveUserCostCenterIdByPhone,
   resolveRequestRideUserIdByPhone,
 } from "@/lib/yango-api";
 import { loadAuthStore, saveAuthStore } from "@/lib/auth-store";
+import {
+  discoverYangoTenantDefaultCostCenterId,
+  resolveDefaultCostCenterIdForYangoClient,
+} from "@/lib/tenant-yango-bootstrap";
 import { searchAddressSuggestions } from "@/lib/geocoding";
 import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 import type { RequestRidePayload } from "@/types/crm";
@@ -31,17 +34,21 @@ function normalizePhoneDigits(input: string): string {
   return input.replace(/\D/g, "");
 }
 
+/** Same discovery order as onboarding (`discoverYangoTenantDefaultCostCenterId`). */
 async function resolveCabinetDefaultCostCenterId(input: {
   tokenLabel: string;
   clientId: string;
 }): Promise<string> {
-  const centers = await listYangoCostCenters(input).catch(() => []);
-  if (centers.length === 1 && centers[0]?.id?.trim()) {
-    return centers[0].id.trim();
-  }
-  const fromUsers = await detectYangoDefaultCostCenterId(input).catch(() => null);
-  if (fromUsers) return fromUsers.trim();
-  return centers[0]?.id?.trim() ?? "";
+  const yangoUsers = await listYangoClientUsers({
+    tokenLabel: input.tokenLabel,
+    clientId: input.clientId,
+    limit: 1200,
+  }).catch(() => []);
+  return discoverYangoTenantDefaultCostCenterId({
+    tokenLabel: input.tokenLabel,
+    apiClientId: input.clientId,
+    yangoUsers,
+  });
 }
 
 type WaypointPayload = { address: string; lat?: number; lon?: number };
@@ -166,6 +173,13 @@ export async function POST(request: Request) {
       scope?.tenantId != null
         ? (store.tenantAccounts ?? []).find((tenant) => tenant.id === scope.tenantId) ?? null
         : null;
+    const tenantRow =
+      (store.tenantAccounts ?? []).find(
+        (tenant) =>
+          tenant.tokenLabel === payload.tokenLabel &&
+          tenant.apiClientId === payload.clientId &&
+          tenant.enabled !== false,
+      ) ?? null;
     const candidateByScope = scope?.tenantId
       ? store.users.find(
           (user) =>
@@ -194,38 +208,59 @@ export async function POST(request: Request) {
             user.apiClientId === payload.clientId &&
             Boolean((user.costCenterId ?? "").trim()),
         );
-    let tenantDefault = (scopedTenant?.defaultCostCenterId ?? "").trim();
+    let tenantDefault =
+      (scopedTenant?.defaultCostCenterId ?? "").trim() ||
+      (tenantRow?.defaultCostCenterId ?? "").trim() ||
+      (tenantRow?.pinnedDefaultCostCenterId ?? "").trim();
     costCenterDebug.candidates.push({
       source: "tenant.default_cost_center",
       value: tenantDefault || null,
     });
-    if (!tenantDefault && scope?.tenantId) {
-      tenantDefault = await resolveCabinetDefaultCostCenterId({
-        tokenLabel: payload.tokenLabel,
-        clientId: payload.clientId,
-      });
-      if (tenantDefault) {
-        const nextStore = {
-          ...store,
-          tenantAccounts: (store.tenantAccounts ?? []).map((tenant) =>
-            tenant.id === scope.tenantId ? { ...tenant, defaultCostCenterId: tenantDefault } : tenant,
-          ),
-          users: store.users.map((user) =>
-            user.accountType === "client" &&
-            user.tenantId === scope.tenantId &&
-            (user.costCenterId == null || user.costCenterId.trim() === "")
-              ? { ...user, costCenterId: tenantDefault }
-              : user,
-          ),
-        };
-        await saveAuthStore(nextStore);
-      }
+    if (!tenantDefault) {
+      tenantDefault = apiSingleCostCenter;
     }
     payload.costCenterId =
       (candidateByScope?.costCenterId ?? "").trim() ||
       (anyClientUserWithCostCenter?.costCenterId ?? "").trim() ||
       tenantDefault ||
       null;
+    if (!payload.costCenterId) {
+      const envOrPin = await resolveDefaultCostCenterIdForYangoClient({
+        tokenLabel: payload.tokenLabel,
+        apiClientId: payload.clientId,
+        pinnedCostCenterId: tenantRow?.pinnedDefaultCostCenterId ?? null,
+      });
+      costCenterDebug.candidates.push({
+        source: "env_pin_or_yango_resolve",
+        value: envOrPin || null,
+      });
+      if (envOrPin) {
+        payload.costCenterId = envOrPin;
+        costCenterDebug.selectedCostCenterId = envOrPin;
+        costCenterDebug.source = "env_pin_or_yango_resolve";
+      }
+    }
+    if (
+      payload.costCenterId &&
+      tenantRow &&
+      !(tenantRow.defaultCostCenterId ?? "").trim()
+    ) {
+      const tid = tenantRow.id;
+      const cc = payload.costCenterId.trim();
+      await saveAuthStore({
+        ...store,
+        tenantAccounts: (store.tenantAccounts ?? []).map((tenant) =>
+          tenant.id === tid ? { ...tenant, defaultCostCenterId: cc } : tenant,
+        ),
+        users: store.users.map((user) =>
+          user.accountType === "client" &&
+          user.tenantId === tid &&
+          (user.costCenterId == null || user.costCenterId.trim() === "")
+            ? { ...user, costCenterId: cc }
+            : user,
+        ),
+      });
+    }
     costCenterDebug.candidates.push({
       source: "user.same_phone",
       value: (candidateByScope?.costCenterId ?? "").trim() || null,
@@ -286,6 +321,24 @@ export async function POST(request: Request) {
         );
       }
     }
+  }
+
+  if (!(payload.costCenterId ?? "").trim()) {
+    return Response.json(
+      {
+        ok: false,
+        error:
+          "Не удалось определить центр затрат для этого клиента (CORP). Задайте cost centers в Yango, онбординг в Notes, синхронизацию сотрудников в Access или YANGO_PINNED_COST_CENTER_JSON / defaultCostCenterId в KV.",
+        debug: {
+          tenantId: scope?.tenantId ?? null,
+          tokenLabel: payload.tokenLabel,
+          clientId: payload.clientId,
+          userId: payload.userId ?? null,
+          costCenter: costCenterDebug,
+        },
+      },
+      { status: 400 },
+    );
   }
 
   try {

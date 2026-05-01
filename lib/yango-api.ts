@@ -24,7 +24,10 @@ import {
   listPreOrderFallbackSnapshotsByScope,
   tryStartPreOrderFallbackAttempt,
 } from "@/lib/preorder-fallback-store";
-import { loadYangoTokenRegistry } from "@/lib/yango-token-registry";
+import {
+  loadYangoTokenRegistry,
+  normalizeYangoTokenRegistryLabel,
+} from "@/lib/yango-token-registry";
 import { loadAuthStore } from "@/lib/auth-store";
 import { unstable_cache } from "next/cache";
 
@@ -56,6 +59,16 @@ function readToken(...candidates: Array<string | undefined>): string {
     if (normalized) return normalized;
   }
   return "";
+}
+
+/**
+ * How static `YANGO_TOKEN_*` env and KV `appli:yango:token-registry:v1` combine for the same cabinet
+ * (after `normalizeYangoTokenRegistryLabel`). Default `registry` matches historical prod: registry row wins when both exist.
+ * Set `YANGO_TOKEN_REGISTRY_PRECEDENCE=env` locally if you reuse prod KV but keep different tokens only in `.env.local`.
+ */
+function yangoTokenRegistryPrecedence(): "registry" | "env" {
+  const raw = (process.env.YANGO_TOKEN_REGISTRY_PRECEDENCE ?? "registry").trim().toLowerCase();
+  return raw === "env" ? "env" : "registry";
 }
 
 type YangoClient = {
@@ -230,19 +243,28 @@ async function getTokenConfigs(): Promise<TokenConfig[]> {
     return staticEntries;
   }
 
-  const byLabel = new Map<string, TokenConfig>();
+  /** Dedupe static vs KV by normalized label (e.g. `Star Taxi Point` and `STAR_TAXI_POINT` → one cabinet). */
+  const precedence = yangoTokenRegistryPrecedence();
+  const byNormKey = new Map<string, TokenConfig>();
   for (const row of staticEntries) {
-    byLabel.set(row.label, row);
+    byNormKey.set(normalizeYangoTokenRegistryLabel(row.label), { ...row });
   }
   for (const row of dynamicEntries) {
-    byLabel.set(row.label, {
-      label: row.label,
-      crmClientName: row.crmClientName,
-      token: row.token,
+    const key = normalizeYangoTokenRegistryLabel(row.label);
+    const prev = byNormKey.get(key);
+    const fromRegistry = (row.token ?? "").trim();
+    const envToken = (prev?.token ?? "").trim();
+    const token =
+      precedence === "env" ? envToken || fromRegistry : fromRegistry || envToken;
+    byNormKey.set(key, {
+      label: (prev?.label ?? "").trim() || row.label,
+      crmClientName:
+        (prev?.crmClientName ?? "").trim() || (row.crmClientName ?? "").trim() || row.crmClientName,
+      token,
     });
   }
 
-  return [...byLabel.values()];
+  return [...byNormKey.values()];
 }
 
 let dashboardInMemoryCache:

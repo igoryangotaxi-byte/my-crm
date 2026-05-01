@@ -208,20 +208,32 @@ async function loadYangoSupabaseOrderMetrics(corpClientId?: string): Promise<Yan
 
 export async function getYangoSupabaseOrderMetrics(corpClientId?: string): Promise<YangoSupabaseOrderMetric[]> {
   if (corpClientId) {
-    return loadYangoSupabaseOrderMetrics(corpClientId);
+    try {
+      return await loadYangoSupabaseOrderMetrics(corpClientId);
+    } catch {
+      return [];
+    }
   }
-  const supabase = getSupabaseAdminClient();
-  const corpClientMap = await loadCorpClientMap(supabase);
-  const now = Date.now();
-  if (inMemoryCache && now - inMemoryCache.updatedAt < LOCAL_CACHE_TTL_MS) {
-    return applyCorpClientMap(inMemoryCache.rows, corpClientMap);
+  if (!isSupabaseConfigured()) {
+    return [];
   }
+  try {
+    const supabase = getSupabaseAdminClient();
+    const corpClientMap = await loadCorpClientMap(supabase);
+    const now = Date.now();
+    if (inMemoryCache && now - inMemoryCache.updatedAt < LOCAL_CACHE_TTL_MS) {
+      return applyCorpClientMap(inMemoryCache.rows, corpClientMap);
+    }
 
-  const rows = await loadYangoSupabaseOrderMetrics();
-  const mappedRows = applyCorpClientMap(rows, corpClientMap);
-  inMemoryCache = {
-    updatedAt: now,
-    rows: mappedRows,
-  };
-  return mappedRows;
+    const rows = await loadYangoSupabaseOrderMetrics();
+    const mappedRows = applyCorpClientMap(rows, corpClientMap);
+    inMemoryCache = {
+      updatedAt: now,
+      rows: mappedRows,
+    };
+    return mappedRows;
+  } catch {
+    inMemoryCache = null;
+    return [];
+  }
 }

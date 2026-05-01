@@ -22,6 +22,7 @@ import {
   type RoleAreaAccess,
   type RoleDashboardBlockAccess,
   type RolePermissions,
+  type TenantAccount,
   type UserStatus,
 } from "@/types/auth";
 
@@ -63,6 +64,7 @@ type AuthContextValue = {
   canAccess: (page: AppPageKey) => boolean;
   canAccessArea: (area: BusinessArea) => boolean;
   canAccessDashboardBlock: (block: DashboardBlockKey) => boolean;
+  tenantAccounts: TenantAccount[];
   lastLoginEmail: string;
 };
 
@@ -147,6 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return localStorage.getItem(LAST_LOGIN_EMAIL_STORAGE_KEY) ?? "";
   });
   const [loading, setLoading] = useState(true);
+  const [tenantAccounts, setTenantAccounts] = useState<TenantAccount[]>([]);
 
   useEffect(() => {
     if (sessionUserId) {
@@ -212,6 +215,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRolePermissions(mergePermissions(data.rolePermissions));
     setRoleAreaAccess(mergeAreaAccess(data.roleAreaAccess));
     setRoleDashboardBlockAccess(mergeDashboardBlockAccess(data.roleDashboardBlockAccess));
+    setTenantAccounts(data.tenantAccounts ?? []);
   }, []);
 
   const fetchState = useCallback(async () => {
@@ -405,9 +409,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!currentUser || currentUser.status !== "approved") {
         return false;
       }
+      if (currentUser.accountType === "client" && currentUser.tenantId) {
+        const tenant = tenantAccounts.find((item) => item.id === currentUser.tenantId);
+        if (page === "communications" && tenant?.clientPortalCommunicationsEnabled === false) {
+          return false;
+        }
+        if (page === "financialCenter" && tenant?.clientPortalFinancialCenterEnabled === false) {
+          return false;
+        }
+      }
       return rolePermissions[currentUser.role][page];
     },
-    [currentUser, rolePermissions],
+    [currentUser, rolePermissions, tenantAccounts],
   );
 
   const canAccessDashboardBlock = useCallback(
@@ -444,6 +457,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       canAccess,
       canAccessArea,
       canAccessDashboardBlock,
+      tenantAccounts,
       lastLoginEmail,
     }),
     [
@@ -469,6 +483,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       canAccess,
       canAccessArea,
       canAccessDashboardBlock,
+      tenantAccounts,
       lastLoginEmail,
     ],
   );

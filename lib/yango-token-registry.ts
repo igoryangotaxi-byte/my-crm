@@ -27,7 +27,8 @@ function canUseKv() {
   return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
 }
 
-function normalizeLabel(value: string): string {
+/** One key for static labels ("Star Taxi Point") and registry labels ("STAR_TAXI_POINT"). */
+export function normalizeYangoTokenRegistryLabel(value: string): string {
   return value
     .trim()
     .replace(/\s+/g, "_")
@@ -50,7 +51,7 @@ function normalizeStore(input: unknown): YangoTokenRegistryStore {
   const entries = rawEntries
     .filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object"))
     .map((row) => {
-      const label = normalizeLabel(typeof row.label === "string" ? row.label : "");
+      const label = normalizeYangoTokenRegistryLabel(typeof row.label === "string" ? row.label : "");
       const crmClientName = normalizeClientName(
         typeof row.crmClientName === "string" ? row.crmClientName : "",
       );
@@ -111,7 +112,7 @@ export async function upsertYangoTokenRegistryEntry(input: {
   crmClientName: string;
   token: string;
 }): Promise<YangoTokenRegistryEntry> {
-  const label = normalizeLabel(input.label);
+  const label = normalizeYangoTokenRegistryLabel(input.label);
   const crmClientName = normalizeClientName(input.crmClientName);
   const token = input.token.trim();
   if (!label || !crmClientName || !token) {
@@ -167,7 +168,7 @@ export async function findExistingYangoToken(token: string): Promise<ExistingYan
     const suffix = key.replace(/^YANGO_TOKEN_/, "");
     return {
       source: "env",
-      label: normalizeLabel(suffix || key),
+      label: normalizeYangoTokenRegistryLabel(suffix || key),
       clientName: null,
       envKey: key,
     };

@@ -1,5 +1,6 @@
 "use client";
 
+import { ClientPortalSectionGate } from "@/components/client/ClientPortalSectionGate";
 import { useEffect, useMemo, useState } from "react";
 
 type TopBucket = {
@@ -37,7 +38,7 @@ function toDateInput(iso: string): string {
   return date.toISOString().slice(0, 10);
 }
 
-export default function ClientFinancialCenterPage() {
+function ClientFinancialCenterInner() {
   const now = useMemo(() => new Date(), []);
   const [fromDate, setFromDate] = useState(() => {
     const d = new Date();
@@ -209,5 +210,13 @@ export default function ClientFinancialCenterPage() {
         ) : null}
       </article>
     </section>
+  );
+}
+
+export default function ClientFinancialCenterPage() {
+  return (
+    <ClientPortalSectionGate section="financialCenter">
+      <ClientFinancialCenterInner />
+    </ClientPortalSectionGate>
   );
 }

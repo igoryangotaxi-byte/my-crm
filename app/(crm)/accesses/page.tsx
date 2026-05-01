@@ -97,13 +97,6 @@ export default function AccessesPage() {
 
   const isAdmin = currentUser?.role === "Admin";
   const [selectedRole, setSelectedRole] = useState<AppRole>("Admin");
-  const [tenantName, setTenantName] = useState("");
-  const [corpClientId, setCorpClientId] = useState("");
-  const [tokenLabel, setTokenLabel] = useState("");
-  const [apiClientId, setApiClientId] = useState("");
-  const [adminName, setAdminName] = useState("");
-  const [adminEmail, setAdminEmail] = useState("");
-  const [adminPassword, setAdminPassword] = useState("");
   const [onboardingMessage, setOnboardingMessage] = useState<string | null>(null);
   const [tenantAccounts, setTenantAccounts] = useState<TenantAccount[]>([]);
   const [tenantRoles, setTenantRoles] = useState<Record<string, ClientRoleDefinition[]>>({});
@@ -307,48 +300,6 @@ export default function AccessesPage() {
         >
           Save global B2C account
         </button>
-      </div>
-
-      <div className="glass-surface mb-4 rounded-3xl border border-white/70 bg-white/75 p-4 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur-md">
-        <h2 className="crm-section-title">Client onboarding bridge</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Bind tenant to `corp_client_id`, `tokenLabel`, `clientId` and create the primary client admin.
-        </p>
-        <div className="mt-3 grid gap-2 md:grid-cols-4">
-          <input className="crm-input h-10 px-3 text-sm" placeholder="Tenant name" value={tenantName} onChange={(e) => setTenantName(e.target.value)} />
-          <input className="crm-input h-10 px-3 text-sm" placeholder="corp_client_id" value={corpClientId} onChange={(e) => setCorpClientId(e.target.value)} />
-          <input className="crm-input h-10 px-3 text-sm" placeholder="tokenLabel" value={tokenLabel} onChange={(e) => setTokenLabel(e.target.value)} />
-          <input className="crm-input h-10 px-3 text-sm" placeholder="clientId" value={apiClientId} onChange={(e) => setApiClientId(e.target.value)} />
-          <input className="crm-input h-10 px-3 text-sm" placeholder="Primary admin name" value={adminName} onChange={(e) => setAdminName(e.target.value)} />
-          <input className="crm-input h-10 px-3 text-sm" placeholder="Primary admin email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} />
-          <input className="crm-input h-10 px-3 text-sm" placeholder="Primary admin password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} />
-        </div>
-        <button
-          type="button"
-          disabled={!isAdmin}
-          onClick={async () => {
-            const response = await fetch("/api/auth", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "upsertTenantAccount",
-                name: tenantName,
-                corpClientId,
-                tokenLabel,
-                apiClientId,
-                primaryAdminName: adminName,
-                primaryAdminEmail: adminEmail,
-                primaryAdminPassword: adminPassword,
-              }),
-            });
-            const payload = (await response.json().catch(() => null)) as { ok?: boolean; message?: string } | null;
-            setOnboardingMessage(response.ok && payload?.ok ? "Tenant onboarding saved." : payload?.message ?? `HTTP ${response.status}`);
-          }}
-          className="crm-button-primary mt-3 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
-        >
-          Save onboarding
-        </button>
-        {onboardingMessage ? <p className="mt-2 text-sm text-slate-600">{onboardingMessage}</p> : null}
       </div>
 
       <div className="glass-surface mb-4 overflow-hidden rounded-3xl border border-white/70 bg-white/75 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur-md">
@@ -625,12 +576,8 @@ export default function AccessesPage() {
                   roleId: commRoleId,
                   name: `${baseRole.name} + Communications`,
                   permissions: {
-                    requestRides: baseRole.permissions.requestRides,
-                    orders: baseRole.permissions.orders,
-                    preOrders: baseRole.permissions.preOrders,
+                    ...baseRole.permissions,
                     communications: true,
-                    driversMap: baseRole.permissions.driversMap,
-                    employees: baseRole.permissions.employees,
                   },
                 });
                 await fetchTenantData();
@@ -729,6 +676,65 @@ export default function AccessesPage() {
                     </button>
                   </div>
                   <div className="rounded-2xl border border-border bg-white p-3">
+                    <p className="text-sm font-semibold text-slate-900">Client cabinet menu</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Turn off sections for everyone in this cabinet (sidebar and direct links). Changes apply
+                      immediately.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-4">
+                      <label className="flex items-center gap-2 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={selectedTenant.clientPortalCommunicationsEnabled !== false}
+                          disabled={!isAdmin}
+                          onChange={async (event) => {
+                            try {
+                              await callAuthAction({
+                                action: "updateTenantPortalSections",
+                                tenantId: selectedTenant.id,
+                                clientPortalCommunicationsEnabled: event.target.checked,
+                                clientPortalFinancialCenterEnabled:
+                                  selectedTenant.clientPortalFinancialCenterEnabled !== false,
+                              });
+                              setCabinetMessage("Communications section updated.");
+                            } catch (error) {
+                              setCabinetMessage(
+                                error instanceof Error ? error.message : "Failed to update Communications.",
+                              );
+                            }
+                          }}
+                          className="h-4 w-4 rounded border-border accent-accent disabled:opacity-50"
+                        />
+                        Communications
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={selectedTenant.clientPortalFinancialCenterEnabled !== false}
+                          disabled={!isAdmin}
+                          onChange={async (event) => {
+                            try {
+                              await callAuthAction({
+                                action: "updateTenantPortalSections",
+                                tenantId: selectedTenant.id,
+                                clientPortalCommunicationsEnabled:
+                                  selectedTenant.clientPortalCommunicationsEnabled !== false,
+                                clientPortalFinancialCenterEnabled: event.target.checked,
+                              });
+                              setCabinetMessage("Financial Center section updated.");
+                            } catch (error) {
+                              setCabinetMessage(
+                                error instanceof Error ? error.message : "Failed to update Financial Center.",
+                              );
+                            }
+                          }}
+                          className="h-4 w-4 rounded border-border accent-accent disabled:opacity-50"
+                        />
+                        Financial Center
+                      </label>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-white p-3">
                     <button
                       type="button"
                       onClick={() => {
@@ -804,37 +810,39 @@ export default function AccessesPage() {
                                         </option>
                                       ))}
                                     </select>
-                                    <label className="ml-2 inline-flex items-center gap-1.5 text-xs text-slate-600">
-                                      <input
-                                        type="checkbox"
-                                        disabled={!isAdmin}
-                                        checked={Boolean(
-                                          roles.find((role) => role.id === (user.clientRoleId ?? "employee"))
-                                            ?.permissions?.communications,
-                                        )}
-                                        onChange={async (event) => {
-                                          try {
-                                            const baseRoleId = getBaseRoleId(user.clientRoleId ?? "employee");
-                                            const targetRoleId = event.target.checked
-                                              ? await ensureCommunicationsRoleId(baseRoleId)
-                                              : baseRoleId;
-                                            await callAuthAction({
-                                              action: "updateTenantEmployee",
-                                              userId: user.id,
-                                              clientRoleId: targetRoleId,
-                                            });
-                                            setCabinetMessage("Communications access updated.");
-                                          } catch (error) {
-                                            setCabinetMessage(
-                                              error instanceof Error
-                                                ? error.message
-                                                : "Failed to update communications access.",
-                                            );
-                                          }
-                                        }}
-                                      />
-                                      Communications
-                                    </label>
+                                    {selectedTenant.clientPortalCommunicationsEnabled === false ? null : (
+                                      <label className="ml-2 inline-flex items-center gap-1.5 text-xs text-slate-600">
+                                        <input
+                                          type="checkbox"
+                                          disabled={!isAdmin}
+                                          checked={Boolean(
+                                            roles.find((role) => role.id === (user.clientRoleId ?? "employee"))
+                                              ?.permissions?.communications,
+                                          )}
+                                          onChange={async (event) => {
+                                            try {
+                                              const baseRoleId = getBaseRoleId(user.clientRoleId ?? "employee");
+                                              const targetRoleId = event.target.checked
+                                                ? await ensureCommunicationsRoleId(baseRoleId)
+                                                : baseRoleId;
+                                              await callAuthAction({
+                                                action: "updateTenantEmployee",
+                                                userId: user.id,
+                                                clientRoleId: targetRoleId,
+                                              });
+                                              setCabinetMessage("Communications access updated.");
+                                            } catch (error) {
+                                              setCabinetMessage(
+                                                error instanceof Error
+                                                  ? error.message
+                                                  : "Failed to update communications access.",
+                                              );
+                                            }
+                                          }}
+                                        />
+                                        Communications
+                                      </label>
+                                    )}
                                   </td>
                                   <td className="px-2 py-1.5 text-sm text-slate-700">
                                     <button

@@ -22,7 +22,11 @@
     "sync:datagrip:run:b2b:2026": "node scripts/datagrip-sync-b2b-2026-by-created-date.js",
     "import:b2b:csv": "node scripts/import-b2b-csv-to-supabase.js",
     "import:corp-client-map:csv": "node scripts/import-corp-client-map-to-supabase.js",
-    "import:request-rides-user-map:csv": "node scripts/import-request-rides-user-map.js"
+    "import:request-rides-user-map:csv": "node scripts/import-request-rides-user-map.js",
+    "env:pull:production": "vercel env pull .env.local --environment production --yes",
+    "env:pull:preview": "vercel env pull .env.local --environment preview --yes",
+    "env:pull:development": "vercel env pull .env.local --environment development --yes",
+    "env:merge-from-backup": "node scripts/merge-env-local-from-backup.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.104.0",

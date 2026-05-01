@@ -11,6 +11,7 @@ export type AppPageKey =
   | "preOrders"
   | "requestRides"
   | "communications"
+  | "financialCenter"
   | "driversMap"
   | "priceCalculator"
   | "accesses"
@@ -39,6 +40,7 @@ export type ClientPortalPageKey =
   | "orders"
   | "preOrders"
   | "communications"
+  | "financialCenter"
   | "driversMap"
   | "employees";
 export type ClientRoleDefinition = {
@@ -54,11 +56,17 @@ export type TenantAccount = {
   tokenLabel: string;
   apiClientId: string;
   defaultCostCenterId?: string | null;
+  /** Rare manual override when resolving cost center for employees / Yango API (stored in KV). */
+  pinnedDefaultCostCenterId?: string | null;
   b2cEnabled?: boolean;
   b2cToken?: string | null;
   b2cClientId?: string | null;
   b2cRideClass?: string | null;
   b2cCreateEndpoint?: string | null;
+  /** When false, hide Communications in the client cabinet (sidebar + routes). Default: enabled. */
+  clientPortalCommunicationsEnabled?: boolean;
+  /** When false, hide Financial Center in the client cabinet. Default: enabled. */
+  clientPortalFinancialCenterEnabled?: boolean;
   enabled: boolean;
   createdAt: string;
 };
@@ -94,6 +102,7 @@ export const defaultRolePermissions: RolePermissions = {
     preOrders: true,
     requestRides: true,
     communications: true,
+    financialCenter: true,
     driversMap: true,
     priceCalculator: true,
     accesses: true,
@@ -106,6 +115,7 @@ export const defaultRolePermissions: RolePermissions = {
     preOrders: true,
     requestRides: true,
     communications: true,
+    financialCenter: true,
     driversMap: false,
     priceCalculator: true,
     accesses: false,
@@ -118,6 +128,7 @@ export const defaultRolePermissions: RolePermissions = {
     preOrders: true,
     requestRides: true,
     communications: true,
+    financialCenter: true,
     driversMap: false,
     priceCalculator: true,
     accesses: false,
@@ -264,6 +275,12 @@ export type AuthApiActionRequest =
       createEndpoint?: string;
     }
   | {
+      action: "updateTenantPortalSections";
+      tenantId: string;
+      clientPortalCommunicationsEnabled: boolean;
+      clientPortalFinancialCenterEnabled: boolean;
+    }
+  | {
       action: "syncTenantEmployees";
       tenantId: string;
     };
@@ -273,6 +290,7 @@ export const defaultClientPortalPermissions: Record<ClientPortalPageKey, boolean
   orders: true,
   preOrders: true,
   communications: true,
+  financialCenter: true,
   driversMap: true,
   employees: false,
 };

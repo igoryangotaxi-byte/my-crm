@@ -67,8 +67,24 @@ function ensureDefaultAdmin(users: AuthUser[]): AuthUser[] {
   ];
 }
 
-/** v2 first migration; v3 fixes stores that already had meta v2 but User.orders/preOrders stayed false. */
-const CURRENT_PERMISSIONS_VERSION = 5;
+/** v2 first migration; v3 fixes stores that already had meta v2 but User.orders/preOrders stayed false. v6 drops legacy ZHAK / Star Taxi Point client cabinets from KV. */
+const CURRENT_PERMISSIONS_VERSION = 6;
+
+/** Yango corp_client_id values for one-off cabinets removed from Clients Cabinets (Access management). */
+const LEGACY_REMOVED_CLIENT_CABINET_CORP_IDS = new Set([
+  "8234b0f928a348e19cf8ccf2df6d4fd7",
+  "1151f896bd8248ed977d4abcf1df4929",
+]);
+
+const LEGACY_REMOVED_CLIENT_CABINET_NAMES = new Set(["zhak", "star taxi point"]);
+
+function isLegacyRemovedClientCabinetTenant(tenant: TenantAccount): boolean {
+  const corp = tenant.corpClientId.trim().toLowerCase();
+  if (LEGACY_REMOVED_CLIENT_CABINET_CORP_IDS.has(corp)) return true;
+  const label = tenant.name.trim().toLowerCase();
+  if (LEGACY_REMOVED_CLIENT_CABINET_NAMES.has(label)) return true;
+  return false;
+}
 
 function defaultTenantRoleSet(): ClientRoleDefinition[] {
   return [
@@ -152,6 +168,14 @@ function normalizeTenantAccounts(input: unknown): TenantAccount[] {
       b2cRideClass: typeof item.b2cRideClass === "string" ? item.b2cRideClass : "comfortplus",
       b2cCreateEndpoint:
         typeof item.b2cCreateEndpoint === "string" ? item.b2cCreateEndpoint : null,
+      clientPortalCommunicationsEnabled:
+        typeof item.clientPortalCommunicationsEnabled === "boolean"
+          ? item.clientPortalCommunicationsEnabled
+          : true,
+      clientPortalFinancialCenterEnabled:
+        typeof item.clientPortalFinancialCenterEnabled === "boolean"
+          ? item.clientPortalFinancialCenterEnabled
+          : true,
       enabled: item.enabled !== false,
       createdAt:
         typeof item.createdAt === "string" && item.createdAt
@@ -190,23 +214,35 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
     return base;
   }
 
+  const allNormalizedTenants = normalizeTenantAccounts(data.tenantAccounts);
+  const removedTenantIds = new Set(
+    allNormalizedTenants.filter(isLegacyRemovedClientCabinetTenant).map((t) => t.id),
+  );
+  const tenantAccounts = allNormalizedTenants.filter((t) => !isLegacyRemovedClientCabinetTenant(t));
+
   const users =
     Array.isArray(data.users) && data.users.length > 0
       ? ensureDefaultAdmin(
-          data.users.filter(isAuthUser).map((item) => ({
-            ...item,
-            phoneNumber: typeof item.phoneNumber === "string" ? item.phoneNumber : null,
-            costCenterId: typeof item.costCenterId === "string" ? item.costCenterId : null,
-            accountType: normalizeAccountType(item.accountType),
-            tenantId: item.tenantId ?? null,
-            corpClientId: item.corpClientId ?? null,
-            tokenLabel: item.tokenLabel ?? null,
-            apiClientId: item.apiClientId ?? null,
-            clientRoleId: item.clientRoleId ?? null,
-          })),
+          data.users
+            .filter(isAuthUser)
+            .filter((item) => {
+              if (!item.tenantId || removedTenantIds.size === 0) return true;
+              if (normalizeAccountType(item.accountType) !== "client") return true;
+              return !removedTenantIds.has(item.tenantId);
+            })
+            .map((item) => ({
+              ...item,
+              phoneNumber: typeof item.phoneNumber === "string" ? item.phoneNumber : null,
+              costCenterId: typeof item.costCenterId === "string" ? item.costCenterId : null,
+              accountType: normalizeAccountType(item.accountType),
+              tenantId: item.tenantId ?? null,
+              corpClientId: item.corpClientId ?? null,
+              tokenLabel: item.tokenLabel ?? null,
+              apiClientId: item.apiClientId ?? null,
+              clientRoleId: item.clientRoleId ?? null,
+            })),
         )
       : base.users;
-  const tenantAccounts = normalizeTenantAccounts(data.tenantAccounts);
   const tenantRoles = normalizeTenantRoles(data.tenantRoles, tenantAccounts);
 
   const storedVersion = data.storeMeta?.permissionsVersion ?? 0;
@@ -217,7 +253,13 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
   /** Older KV had User.orders/preOrders false; v3 re-applies after some stores hit meta v2 without fixing User. */
   const userPerms =
     storedVersion < CURRENT_PERMISSIONS_VERSION
-      ? { ...mergedUserPerms, orders: true, preOrders: true, communications: true }
+      ? {
+          ...mergedUserPerms,
+          orders: true,
+          preOrders: true,
+          communications: true,
+          financialCenter: true,
+        }
       : mergedUserPerms;
 
   return {

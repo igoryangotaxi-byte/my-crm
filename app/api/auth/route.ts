@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { loadAuthStore, saveAuthStore } from "@/lib/auth-store";
 import {
-  detectYangoDefaultCostCenterId,
-  ensureRequestRideUserByPhone,
-  listYangoClientUsers,
-  listYangoCostCenters,
-} from "@/lib/yango-api";
+  discoverYangoTenantDefaultCostCenterId,
+  resolveDefaultCostCenterIdForYangoClient,
+} from "@/lib/tenant-yango-bootstrap";
+import { ensureRequestRideUserByPhone, listYangoClientUsers } from "@/lib/yango-api";
 import { removeMappedUserId, upsertMappedUserId } from "@/lib/request-rides-user-map";
 import { getRequestUser } from "@/lib/server-auth";
 import { createSessionToken, SESSION_COOKIE_NAME } from "@/lib/server-session";
@@ -21,11 +20,6 @@ type AuthActionResponse = {
   message?: string;
   userId?: string;
   data?: AuthStoreData;
-};
-
-const HARD_CODED_COST_CENTER_BY_CLIENT_ID: Record<string, string> = {
-  // TEST CABINET: discovered from existing active employees in Yango.
-  "1beae7f94af44ee596c2ca86ae0a3551": "0e65ab747fd849beac2c6ee22baff2ba",
 };
 
 function sanitizeStore(data: AuthStoreData): AuthStoreData {
@@ -70,14 +64,16 @@ function clearSessionCookie(response: NextResponse) {
   });
 }
 
-async function resolveTenantCostCenterId(tokenLabel: string, clientId: string) {
-  const pinned = HARD_CODED_COST_CENTER_BY_CLIENT_ID[clientId]?.trim();
-  if (pinned) return pinned;
-  const fromUsers = await detectYangoDefaultCostCenterId({ tokenLabel, clientId }).catch(() => null);
-  if (fromUsers) return fromUsers;
-  const centers = await listYangoCostCenters({ tokenLabel, clientId }).catch(() => []);
-  if (!Array.isArray(centers) || centers.length === 0) return "";
-  return centers[0]?.id?.trim() || "";
+async function resolveTenantCostCenterId(
+  tokenLabel: string,
+  clientId: string,
+  tenant?: { pinnedDefaultCostCenterId?: string | null },
+) {
+  return resolveDefaultCostCenterIdForYangoClient({
+    tokenLabel,
+    apiClientId: clientId,
+    pinnedCostCenterId: tenant?.pinnedDefaultCostCenterId ?? null,
+  });
 }
 
 function resolveTenantSharedCostCenterId(store: AuthStoreData, tenantId: string): string {
@@ -131,14 +127,12 @@ async function syncTenantEmployeesFromYango(params: {
   }).catch(() => []);
   let added = 0;
   let updated = 0;
-  let tenantDefaultCostCenterId = "";
   const phoneToCostCenter = new Map<string, string>();
   for (const remoteUser of remoteUsers) {
     const phoneDigits = (remoteUser.phone ?? "").replace(/\D/g, "");
     const cc = (remoteUser.costCenterId ?? "").trim();
     if (phoneDigits && cc) {
       phoneToCostCenter.set(phoneDigits, cc);
-      if (!tenantDefaultCostCenterId) tenantDefaultCostCenterId = cc;
     }
   }
   for (const remoteUser of remoteUsers) {
@@ -198,24 +192,12 @@ async function syncTenantEmployeesFromYango(params: {
     if (!cc) continue;
     users[i] = { ...user, costCenterId: cc };
     updated += 1;
-    if (!tenantDefaultCostCenterId) tenantDefaultCostCenterId = cc;
   }
-  if (!tenantDefaultCostCenterId) {
-    tenantDefaultCostCenterId =
-      (await detectYangoDefaultCostCenterId({
-        tokenLabel: tenant.tokenLabel,
-        clientId: tenant.apiClientId,
-      }).catch(() => null))?.trim() || "";
-  }
-  if (!tenantDefaultCostCenterId) {
-    const centers = await listYangoCostCenters({
-      tokenLabel: tenant.tokenLabel,
-      clientId: tenant.apiClientId,
-    }).catch(() => []);
-    if (centers.length > 0) {
-      tenantDefaultCostCenterId = centers[0]?.id?.trim() || "";
-    }
-  }
+  const tenantDefaultCostCenterId = await discoverYangoTenantDefaultCostCenterId({
+    tokenLabel: tenant.tokenLabel,
+    apiClientId: tenant.apiClientId,
+    yangoUsers: remoteUsers,
+  });
   if (tenantDefaultCostCenterId) {
     for (let i = 0; i < users.length; i += 1) {
       const user = users[i];
@@ -433,6 +415,8 @@ export async function POST(request: Request) {
             orders: payload.value,
             preOrders: payload.value,
             requestRides: payload.value,
+            communications: payload.value,
+            financialCenter: payload.value,
             driversMap: payload.value,
             priceCalculator: payload.value,
             accesses: payload.value,
@@ -465,6 +449,7 @@ export async function POST(request: Request) {
       await saveAuthStore(nextStore);
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
+    // Programmatic tenant bootstrap (API/scripts). Primary onboarding UX is Notes → "Add client by API token".
     case "upsertTenantAccount": {
       if (!isInternalAdmin(sessionUser)) {
         return NextResponse.json<AuthActionResponse>(
@@ -485,16 +470,17 @@ export async function POST(request: Request) {
       const tenantId = payload.tenantId?.trim() || `tenant-${crypto.randomUUID()}`;
       const tenantAccounts = [...(store.tenantAccounts ?? [])];
       const accountIndex = tenantAccounts.findIndex((item) => item.id === tenantId);
+      const prev = accountIndex >= 0 ? tenantAccounts[accountIndex] : null;
       const account = {
+        ...(prev ?? {}),
         id: tenantId,
         name: payload.name.trim() || payload.primaryAdminName.trim() || corpClientId,
         corpClientId,
         tokenLabel,
         apiClientId,
-        defaultCostCenterId:
-          accountIndex >= 0 ? (tenantAccounts[accountIndex].defaultCostCenterId ?? null) : null,
+        defaultCostCenterId: prev?.defaultCostCenterId ?? null,
         enabled: true,
-        createdAt: accountIndex >= 0 ? tenantAccounts[accountIndex].createdAt : new Date().toISOString(),
+        createdAt: prev?.createdAt ?? new Date().toISOString(),
       };
       if (accountIndex >= 0) tenantAccounts[accountIndex] = account;
       else tenantAccounts.push(account);
@@ -662,6 +648,34 @@ export async function POST(request: Request) {
         data: sanitizeStore(nextStore),
       });
     }
+    case "updateTenantPortalSections": {
+      if (!isInternalAdmin(sessionUser)) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Forbidden" },
+          { status: 403 },
+        );
+      }
+      const tenantId = payload.tenantId.trim();
+      const nextAccounts = (store.tenantAccounts ?? []).map((tenant) =>
+        tenant.id === tenantId
+          ? {
+              ...tenant,
+              clientPortalCommunicationsEnabled: payload.clientPortalCommunicationsEnabled,
+              clientPortalFinancialCenterEnabled: payload.clientPortalFinancialCenterEnabled,
+            }
+          : tenant,
+      );
+      const nextStore: AuthStoreData = {
+        ...store,
+        tenantAccounts: nextAccounts,
+      };
+      await saveAuthStore(nextStore);
+      return NextResponse.json<AuthActionResponse>({
+        ok: true,
+        message: "Client portal sections updated.",
+        data: sanitizeStore(nextStore),
+      });
+    }
     case "createTenantEmployee": {
       if (!hasTenantEmployeesPermission(sessionUser, store) && !isInternalAdmin(sessionUser)) {
         return NextResponse.json<AuthActionResponse>(
@@ -723,7 +737,17 @@ export async function POST(request: Request) {
         (payload.costCenterId ?? "").trim() ||
         (tenant.defaultCostCenterId ?? "").trim() ||
         resolveTenantSharedCostCenterId(store, tenant.id) ||
-        (await resolveTenantCostCenterId(tenant.tokenLabel, tenant.apiClientId));
+        (await resolveTenantCostCenterId(tenant.tokenLabel, tenant.apiClientId, tenant));
+      if (!(costCenterId ?? "").trim()) {
+        return NextResponse.json<AuthActionResponse>(
+          {
+            ok: false,
+            message:
+              "No cost center is configured for this cabinet. Ensure cost centers exist in Yango for this park client, sync employees from Access, or set a default cost center on the tenant.",
+          },
+          { status: 400 },
+        );
+      }
       if (phoneNumber) {
         let ensure = await ensureRequestRideUserByPhone({
           tokenLabel: tenant.tokenLabel,
@@ -743,10 +767,16 @@ export async function POST(request: Request) {
               apiClientId: tenant.apiClientId,
             },
           });
-          if (synced.added > 0) {
-            workingStore = { ...workingStore, users: synced.users };
-            await saveAuthStore(workingStore);
-          }
+          workingStore = {
+            ...workingStore,
+            users: synced.users,
+            tenantAccounts: (workingStore.tenantAccounts ?? []).map((item) =>
+              item.id === tenant.id && synced.tenantDefaultCostCenterId
+                ? { ...item, defaultCostCenterId: synced.tenantDefaultCostCenterId }
+                : item,
+            ),
+          };
+          await saveAuthStore(workingStore);
           ensure = await ensureRequestRideUserByPhone({
             tokenLabel: tenant.tokenLabel,
             clientId: tenant.apiClientId,
@@ -866,12 +896,26 @@ export async function POST(request: Request) {
         }
         if (updated?.accountType === "client" && updated.tokenLabel && updated.apiClientId) {
           const phoneNumber = nextPhone;
+          const tenantRow =
+            updated.tenantId != null
+              ? (store.tenantAccounts ?? []).find((item) => item.id === updated.tenantId)
+              : undefined;
           const costCenterId =
             (typeof payload.costCenterId === "string" ? payload.costCenterId : "").trim() ||
             (updated.costCenterId ?? "").trim() ||
-            (store.tenantAccounts ?? []).find((item) => item.id === updated.tenantId)?.defaultCostCenterId ||
+            tenantRow?.defaultCostCenterId?.trim() ||
             (updated.tenantId ? resolveTenantSharedCostCenterId(store, updated.tenantId) : "") ||
-            (await resolveTenantCostCenterId(updated.tokenLabel, updated.apiClientId));
+            (await resolveTenantCostCenterId(updated.tokenLabel, updated.apiClientId, tenantRow));
+          if (phoneNumber && !(costCenterId ?? "").trim()) {
+            return NextResponse.json<AuthActionResponse>(
+              {
+                ok: false,
+                message:
+                  "No cost center is configured for this cabinet. Sync employees from Access or set a cost center before assigning a phone.",
+              },
+              { status: 400 },
+            );
+          }
           if (phoneNumber) {
             const ensure = await ensureRequestRideUserByPhone({
               tokenLabel: updated.tokenLabel,

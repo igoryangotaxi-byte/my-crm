@@ -26,7 +26,12 @@ type ApiResponse<T> = {
   result?: T;
   existing?: ExistingTokenInfo | null;
   entry?: { label: string; clientName: string; updatedAt: string };
-  tenantAdmin?: { tenantId: string; adminEmail: string } | null;
+  tenantAdmin?: {
+    tenantId: string;
+    adminEmail: string;
+    defaultCostCenterId?: string | null;
+  } | null;
+  onboardingWarnings?: string[];
 };
 
 type CorpLookupResult = {
@@ -50,6 +55,7 @@ export function TokenOnboardingPanel() {
   const [success, setSuccess] = useState<string | null>(null);
   const [existingTokenInfo, setExistingTokenInfo] = useState<ExistingTokenInfo | null>(null);
   const [lookupResult, setLookupResult] = useState<CorpLookupResult | null>(null);
+  const [onboardingWarnings, setOnboardingWarnings] = useState<string[]>([]);
 
   const canValidate = useMemo(() => apiToken.trim().length > 8, [apiToken]);
   const canSave = useMemo(
@@ -127,6 +133,7 @@ export function TokenOnboardingPanel() {
     setIsSaving(true);
     setError(null);
     setSuccess(null);
+    setOnboardingWarnings([]);
     try {
       const response = await fetch("/api/yango-token-onboarding/register", {
         method: "POST",
@@ -144,6 +151,9 @@ export function TokenOnboardingPanel() {
       const payload = (await response.json()) as ApiResponse<ValidationResult>;
       if (!response.ok || !payload.ok || !payload.entry) {
         throw new Error(payload.error || "Failed to register token.");
+      }
+      if (payload.onboardingWarnings && payload.onboardingWarnings.length > 0) {
+        setOnboardingWarnings(payload.onboardingWarnings);
       }
       const adminPart = payload.tenantAdmin
         ? ` Admin login created: ${payload.tenantAdmin.adminEmail}.`
@@ -320,6 +330,16 @@ export function TokenOnboardingPanel() {
       ) : null}
 
       {error ? <p className="mt-3 text-xs font-semibold text-rose-700">{error}</p> : null}
+      {onboardingWarnings.length > 0 ? (
+        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+          <p className="mb-1 font-semibold">Onboarding notice</p>
+          <ul className="list-inside list-disc space-y-1">
+            {onboardingWarnings.map((line, index) => (
+              <li key={`${index}-${line.slice(0, 48)}`}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {success ? <p className="mt-3 text-xs font-semibold text-emerald-700">{success}</p> : null}
     </section>
   );

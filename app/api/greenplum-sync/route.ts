@@ -93,6 +93,11 @@ async function normalizeWindow(request: Request): Promise<SyncRequestOptions> {
 }
 
 async function enqueueRemoteSyncRequest(options: SyncRequestOptions) {
+  if (!isSupabaseConfigured()) {
+    throw new Error(
+      "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY.",
+    );
+  }
   const supabase = getSupabaseAdminClient();
   const requestedBy = process.env.GREENPLUM_SYNC_REQUESTED_BY ?? "notes-dashboard";
   const windowText =
@@ -211,6 +216,17 @@ export async function POST(request: Request) {
     process.env.DATAGRIP_SYNC_COMMAND ?? process.env.GREENPLUM_SYNC_COMMAND;
   const connectionCheckCommand = process.env.DATAGRIP_CONNECTION_CHECK_COMMAND;
   const supabaseConfigured = isSupabaseConfigured();
+
+  if (!syncEnabled && remoteQueueEnabled && !supabaseConfigured) {
+    return Response.json(
+      {
+        ok: false,
+        message:
+          "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY to queue remote sync.",
+      },
+      { status: 500 },
+    );
+  }
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
