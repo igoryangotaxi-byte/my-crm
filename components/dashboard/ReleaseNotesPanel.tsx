@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-05-02",
+    title: "Yango user-list: prefer cost_centers_id UUID over display name",
+    notes:
+      "739da1f — App version 0.2.2. Per Yandex Business user-list API, cost_centers_id (UUID) is parsed before cost_center (name); directory mapping uses user _id for /2.0/users resolution so DEFAULT_CORP / CRM flows match cabinet CC assignment.",
+  },
+  {
+    date: "2026-05-02",
     title: "Cost center discovery parity + KV ops (all cabinets)",
     notes:
       "9c5590c — App version 0.2.1. Fixed KV dropping pinnedDefaultCostCenterId on load; npm run sync:tenant-cost-centers for prod backfill (dry-run, overrides); Request Rides + auth now use resolveCostCenterWithFullYangoDiscovery — same parallel users + cost_centers API path as onboarding for every client id, not only TEST.",
