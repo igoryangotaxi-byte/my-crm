@@ -2063,7 +2063,11 @@ export async function listYangoClientUsers(input: {
         if (!raw || typeof raw !== "object") continue;
         const row = raw as Record<string, unknown>;
         if (isYangoUserListRowDeleted(row)) continue;
-        const userId = asString(row.user_id) || asString(row.userId) || asString(row.id);
+        const userId =
+          asString(row.user_id) ||
+          asString(row.userId) ||
+          asString(row._id) ||
+          asString(row.id);
         if (!userId || out.has(userId)) continue;
         const firstName = asString(row.first_name) || asString(row.firstName);
         const lastName = asString(row.last_name) || asString(row.lastName);
@@ -2078,7 +2082,6 @@ export async function listYangoClientUsers(input: {
           asString(row.department) ||
           asString(row.department_name) ||
           asString(row.division) ||
-          asString(row.cost_center) ||
           null;
         out.set(userId, {
           userId,
@@ -2185,42 +2188,43 @@ export async function listYangoCostCenters(input: {
   return [...out.values()];
 }
 
+/**
+ * B2B GET /2.0/users items: `cost_centers_id` is the cost-center settings id (UUID); `cost_center` is the display name.
+ * Do not prefer `cost_center` over id fields — otherwise CORP bodies get a label instead of an id.
+ * @see https://taxi__business-api.docs-viewer.yandex.ru/en/concepts/api20/user-list
+ */
 function extractCostCenterIdFromUserRow(row: Record<string, unknown>): string | null {
-  const direct =
-    asString(row.cost_center_id) ||
-    asString(row.costCenterId) ||
-    asString(row.cost_centerid) ||
-    asString(row.cost_center) ||
-    asString(row.costCenter);
-  if (direct) return direct;
+  const singleId =
+    asString(row.cost_centers_id).trim() ||
+    asString(row.cost_centers_ids).trim() ||
+    asString(row.cost_center_id).trim() ||
+    asString(row.costCenterId).trim() ||
+    asString(row.cost_centerid).trim() ||
+    asString(row.costCentersId).trim();
+  if (singleId) return singleId;
+
   const list =
     (Array.isArray(row.cost_centers_id) ? row.cost_centers_id : null) ||
     (Array.isArray(row.cost_centers_ids) ? row.cost_centers_ids : null) ||
     (Array.isArray(row.costCentersId) ? row.costCentersId : null) ||
     (Array.isArray(row.cost_centers) ? row.cost_centers : null) ||
     (Array.isArray(row.costCenters) ? row.costCenters : null);
-  if (!list) return null;
-  for (const item of list) {
-    if (typeof item === "string" && item.trim()) return item.trim();
-    if (item && typeof item === "object") {
-      const id =
-        asString((item as Record<string, unknown>).id) ||
-        asString((item as Record<string, unknown>).cost_center_id);
-      if (id) return id;
+  if (Array.isArray(list)) {
+    for (const item of list) {
+      if (typeof item === "string" && item.trim()) return item.trim();
+      if (item && typeof item === "object") {
+        const id =
+          asString((item as Record<string, unknown>).id) ||
+          asString((item as Record<string, unknown>).cost_center_id);
+        if (id) return id;
+      }
     }
   }
-  const listString =
-    asString(row.cost_centers_id) ||
-    asString(row.cost_centers_ids) ||
-    asString(row.costCentersId) ||
-    asString(row.costCenters);
-  if (listString) {
-    const candidate = listString
-      .split(/[,\s;]+/)
-      .map((part) => part.trim())
-      .find(Boolean);
-    if (candidate) return candidate;
-  }
+
+  const legacyName =
+    asString(row.cost_center).trim() || asString(row.costCenter).trim();
+  if (legacyName) return legacyName;
+
   return null;
 }
 
