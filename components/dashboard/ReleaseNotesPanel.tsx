@@ -9,7 +9,7 @@ const releaseItems: ReleaseItem[] = [
     date: "2026-05-01",
     title: "Client cabinet cost centers + CRM Request Rides parity",
     notes:
-      "74ba55d — Unified Yango tenant cost-center bootstrap (lib/tenant-yango-bootstrap): onboarding requests cost centers API in parallel with employee directory, fills CC on each imported employee, removes hardcoded TEST pin in favor of YANGO_PINNED_COST_CENTER_JSON / KV pinnedDefaultCostCenterId. Auth sync aligned; onboarding warnings in Notes. Request Rides from main CRM resolves tenant defaults from KV by tokenLabel+clientId and returns 400 if CORP cannot get a cost center. Client portal section gate and related Notes/access README updates.",
+      "74ba55d — App version 0.2.0. Unified Yango tenant cost-center bootstrap (lib/tenant-yango-bootstrap): onboarding requests cost centers API in parallel with employee directory, fills CC on each imported employee, removes hardcoded TEST pin in favor of YANGO_PINNED_COST_CENTER_JSON / KV pinnedDefaultCostCenterId. Auth sync aligned; onboarding warnings in Notes. Request Rides from main CRM resolves tenant defaults from KV by tokenLabel+clientId and returns 400 if CORP cannot get a cost center. Client portal section gate and related Notes/access README updates.",
   },
   {
     date: "2026-04-29",
