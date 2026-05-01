@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-05-02",
+    title: "Cost center discovery parity + KV ops (all cabinets)",
+    notes:
+      "9c5590c — App version 0.2.1. Fixed KV dropping pinnedDefaultCostCenterId on load; npm run sync:tenant-cost-centers for prod backfill (dry-run, overrides); Request Rides + auth now use resolveCostCenterWithFullYangoDiscovery — same parallel users + cost_centers API path as onboarding for every client id, not only TEST.",
+  },
+  {
     date: "2026-05-01",
     title: "Client cabinet cost centers + CRM Request Rides parity",
     notes:
