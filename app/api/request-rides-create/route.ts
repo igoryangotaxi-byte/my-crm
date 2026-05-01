@@ -1,12 +1,11 @@
 import {
   createRequestRide,
-  listYangoClientUsers,
   resolveUserCostCenterIdByPhone,
   resolveRequestRideUserIdByPhone,
 } from "@/lib/yango-api";
 import { loadAuthStore, saveAuthStore } from "@/lib/auth-store";
 import {
-  discoverYangoTenantDefaultCostCenterId,
+  resolveCostCenterWithFullYangoDiscovery,
   resolveDefaultCostCenterIdForYangoClient,
 } from "@/lib/tenant-yango-bootstrap";
 import { searchAddressSuggestions } from "@/lib/geocoding";
@@ -32,23 +31,6 @@ function toFiniteNumber(input: unknown): number | null {
 
 function normalizePhoneDigits(input: string): string {
   return input.replace(/\D/g, "");
-}
-
-/** Same discovery order as onboarding (`discoverYangoTenantDefaultCostCenterId`). */
-async function resolveCabinetDefaultCostCenterId(input: {
-  tokenLabel: string;
-  clientId: string;
-}): Promise<string> {
-  const yangoUsers = await listYangoClientUsers({
-    tokenLabel: input.tokenLabel,
-    clientId: input.clientId,
-    limit: 1200,
-  }).catch(() => []);
-  return discoverYangoTenantDefaultCostCenterId({
-    tokenLabel: input.tokenLabel,
-    apiClientId: input.clientId,
-    yangoUsers,
-  });
 }
 
 type WaypointPayload = { address: string; lat?: number; lon?: number };
@@ -153,9 +135,9 @@ export async function POST(request: Request) {
     costCenterDebug.selectedCostCenterId = payload.costCenterId;
     costCenterDebug.source = "api.user.by_phone";
   }
-  const apiSingleCostCenter = await resolveCabinetDefaultCostCenterId({
+  const apiSingleCostCenter = await resolveCostCenterWithFullYangoDiscovery({
     tokenLabel: payload.tokenLabel,
-    clientId: payload.clientId,
+    apiClientId: payload.clientId,
   });
   costCenterDebug.candidates.push({
     source: "api.client.default_or_single",

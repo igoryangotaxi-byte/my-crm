@@ -1,5 +1,6 @@
 import {
   detectYangoDefaultCostCenterId,
+  listYangoClientUsers,
   listYangoCostCenters,
 } from "@/lib/yango-api";
 
@@ -71,8 +72,36 @@ export async function discoverYangoTenantDefaultCostCenterId(input: {
 }
 
 /**
- * Resolve a default cost center when KV has no tenant default yet: optional tenant pin,
- * optional deploy env map (`YANGO_PINNED_COST_CENTER_JSON`), then Yango discovery without prefetch.
+ * Same inputs as onboarding/register: parallel `/2.0/users` + cost_centers list, then
+ * {@link discoverYangoTenantDefaultCostCenterId}. Use this everywhere we need a default CC
+ * from Yango (not only KV/env pins).
+ */
+export async function resolveCostCenterWithFullYangoDiscovery(input: {
+  tokenLabel: string;
+  apiClientId: string;
+}): Promise<string> {
+  const [yangoUsers, centers] = await Promise.all([
+    listYangoClientUsers({
+      tokenLabel: input.tokenLabel,
+      clientId: input.apiClientId,
+      limit: 1200,
+    }).catch(() => []),
+    listYangoCostCenters({
+      tokenLabel: input.tokenLabel,
+      clientId: input.apiClientId,
+    }).catch(() => []),
+  ]);
+  return discoverYangoTenantDefaultCostCenterId({
+    tokenLabel: input.tokenLabel,
+    apiClientId: input.apiClientId,
+    yangoUsers,
+    prefetchedCostCenters: centers,
+  });
+}
+
+/**
+ * Resolve a default cost center: KV tenant pin → deploy env map (`YANGO_PINNED_COST_CENTER_JSON`)
+ * → full Yango discovery (same strength as token onboarding — users + cost_centers APIs).
  */
 export async function resolveDefaultCostCenterIdForYangoClient(input: {
   tokenLabel: string;
@@ -84,7 +113,7 @@ export async function resolveDefaultCostCenterIdForYangoClient(input: {
   const envMap = parseYangoPinnedCostCenterByClientIdFromEnv();
   const fromEnv = envMap[input.apiClientId]?.trim();
   if (fromEnv) return fromEnv;
-  return discoverYangoTenantDefaultCostCenterId({
+  return resolveCostCenterWithFullYangoDiscovery({
     tokenLabel: input.tokenLabel,
     apiClientId: input.apiClientId,
   });
