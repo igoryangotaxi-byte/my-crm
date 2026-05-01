@@ -19,7 +19,10 @@ config({ path: ".env.local" });
 config({ path: ".env" });
 
 import { loadAuthStore, saveAuthStore } from "../lib/auth-store";
-import { discoverYangoTenantDefaultCostCenterId } from "../lib/tenant-yango-bootstrap";
+import {
+  discoverYangoTenantDefaultCostCenterId,
+  parseYangoPinnedCostCenterByClientIdFromEnv,
+} from "../lib/tenant-yango-bootstrap";
 import { listYangoClientUsers, listYangoCostCenters } from "../lib/yango-api";
 import type { AuthStoreData } from "../types/auth";
 
@@ -107,6 +110,18 @@ async function main() {
       yangoUsers,
       prefetchedCostCenters: centersFromApi,
     });
+
+    if (!(discovered ?? "").trim()) {
+      const pinnedKv = (tenant.pinnedDefaultCostCenterId ?? "").trim();
+      const fromEnv = parseYangoPinnedCostCenterByClientIdFromEnv()[tenant.apiClientId]?.trim();
+      if (pinnedKv) {
+        discovered = pinnedKv;
+        console.log("    Using tenant KV pinnedDefaultCostCenterId:", pinnedKv);
+      } else if (fromEnv) {
+        discovered = fromEnv;
+        console.log("    Using YANGO_PINNED_COST_CENTER_JSON for this apiClientId:", fromEnv);
+      }
+    }
 
     const fromOverride =
       overrides[tenant.id]?.trim() ||
