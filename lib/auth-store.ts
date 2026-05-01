@@ -162,6 +162,8 @@ function normalizeTenantAccounts(input: unknown): TenantAccount[] {
       apiClientId: typeof item.apiClientId === "string" ? item.apiClientId : "",
       defaultCostCenterId:
         typeof item.defaultCostCenterId === "string" ? item.defaultCostCenterId : null,
+      pinnedDefaultCostCenterId:
+        typeof item.pinnedDefaultCostCenterId === "string" ? item.pinnedDefaultCostCenterId : null,
       b2cEnabled: item.b2cEnabled === true,
       b2cToken: typeof item.b2cToken === "string" ? item.b2cToken : null,
       b2cClientId: typeof item.b2cClientId === "string" ? item.b2cClientId : null,

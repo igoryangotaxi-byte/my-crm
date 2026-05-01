@@ -104,6 +104,17 @@ New client cabinets are created from CRM **Notes → Add client by API token**: 
 2. New cabinet after full onboarding: repeat the same three flows.
 3. Negative: no cost centers in Yango — onboarding shows a warning in Notes; cabinet employee creation returns a clear error instead of opaque failures.
 
+### Backfill cost centers in KV (when cabinets fail only outside TEST / known-good tokens)
+
+Requires production-parity `.env.local` (`KV_REST_*`, `YANGO_TOKEN_*` / registry). Same discovery as onboarding (`listYangoClientUsers`, `listYangoCostCenters`, `discoverYangoTenantDefaultCostCenterId`).
+
+```bash
+npm run sync:tenant-cost-centers -- --dry-run
+npm run sync:tenant-cost-centers
+```
+
+Optional: `--tenant-id=<kv-tenant-id>`; `--overrides=./cc.json` with `{ "<tenant-id-or-apiClientId-or-corpClientId>": "<cost-center-uuid>" }` when Yango returns no centers until fixed in the park admin.
+
 ## Drivers Map persistence (important for production)
 
 `/api/drivers-map` stores last known coordinates and status observations in Vercel KV.
