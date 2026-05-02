@@ -43,7 +43,7 @@ type CabinetRow = {
 
 /** Mirrors `getStaticTokenConfigs()` in `lib/yango-api.ts` (env → token string). */
 const CABINETS: CabinetRow[] = [
-  { label: "COFIX", crmClientName: "COFIX", token: () => readToken(process.env.YANGO_TOKEN_COFIX, process.env.YANGO_TOKEN_SAMELET) },
+  { label: "COFIX", crmClientName: "COFIX", token: () => readToken(process.env.YANGO_TOKEN_COFIX) },
   { label: "SHUFERSAL", crmClientName: "SHUFERSAL", token: () => readToken(process.env.YANGO_TOKEN_SHUFERSAL) },
   {
     label: "TEST CABINET",
