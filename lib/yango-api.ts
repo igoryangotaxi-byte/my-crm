@@ -64,11 +64,18 @@ function readToken(...candidates: Array<string | undefined>): string {
 /**
  * How static `YANGO_TOKEN_*` env and KV `appli:yango:token-registry:v1` combine for the same cabinet
  * (after `normalizeYangoTokenRegistryLabel`). Default `registry` matches historical prod: registry row wins when both exist.
- * Set `YANGO_TOKEN_REGISTRY_PRECEDENCE=env` locally if you reuse prod KV but keep different tokens only in `.env.local`.
+ * Set `YANGO_TOKEN_REGISTRY_PRECEDENCE=env` globally if env must win everywhere (including Vercel).
+ * For **local `next dev` only** (when `VERCEL` is unset): `YANGO_TOKEN_LOCAL_PREFER_ENV=true` makes a non-empty env token
+ * win over KV so stale registry rows do not break Star / OPTICITY / ZHAK while you run `npm run sync:yango-tokens-to-kv`.
  */
 function yangoTokenRegistryPrecedence(): "registry" | "env" {
   const raw = (process.env.YANGO_TOKEN_REGISTRY_PRECEDENCE ?? "registry").trim().toLowerCase();
   return raw === "env" ? "env" : "registry";
+}
+
+function yangoLocalPreferEnvOverRegistry(): boolean {
+  const raw = (process.env.YANGO_TOKEN_LOCAL_PREFER_ENV ?? "").trim().toLowerCase();
+  return raw === "true" || raw === "1" || raw === "yes";
 }
 
 type YangoClient = {
@@ -177,7 +184,7 @@ function getStaticTokenConfigs(): TokenConfig[] {
   return [
     {
       label: "COFIX",
-      token: readToken(process.env.YANGO_TOKEN_COFIX, process.env.YANGO_TOKEN_SAMELET),
+      token: readToken(process.env.YANGO_TOKEN_COFIX),
     },
     {
       label: "SHUFERSAL",
@@ -240,11 +247,15 @@ async function getTokenConfigs(): Promise<TokenConfig[]> {
   const staticEntries = getStaticTokenConfigs();
   const dynamicEntries = await loadYangoTokenRegistry();
   if (dynamicEntries.length === 0) {
-    return staticEntries;
+    return dedupeTokenConfigsByTokenValue(staticEntries);
   }
 
   /** Dedupe static vs KV by normalized label (e.g. `Star Taxi Point` and `STAR_TAXI_POINT` → one cabinet). */
   const precedence = yangoTokenRegistryPrecedence();
+  const onVercel = Boolean((process.env.VERCEL ?? "").trim());
+  const localEnvFirst =
+    !onVercel && yangoLocalPreferEnvOverRegistry() && precedence !== "env";
+
   const byNormKey = new Map<string, TokenConfig>();
   for (const row of staticEntries) {
     byNormKey.set(normalizeYangoTokenRegistryLabel(row.label), { ...row });
@@ -255,7 +266,11 @@ async function getTokenConfigs(): Promise<TokenConfig[]> {
     const fromRegistry = (row.token ?? "").trim();
     const envToken = (prev?.token ?? "").trim();
     const token =
-      precedence === "env" ? envToken || fromRegistry : fromRegistry || envToken;
+      precedence === "env"
+        ? envToken || fromRegistry
+        : localEnvFirst && envToken
+          ? envToken || fromRegistry
+          : fromRegistry || envToken;
     byNormKey.set(key, {
       label: (prev?.label ?? "").trim() || row.label,
       crmClientName:
@@ -264,7 +279,43 @@ async function getTokenConfigs(): Promise<TokenConfig[]> {
     });
   }
 
-  return [...byNormKey.values()];
+  return dedupeTokenConfigsByTokenValue([...byNormKey.values()]);
+}
+
+/**
+ * One string-equal API token ⇒ one Yango `auth/list` identity. Without this, the same token can appear
+ * under several labels (static fallbacks, KV `SAMELET` + `COFIX`, `TELAVIVMUNICIPALITY` + `TEL_AVIV_MUNICIPALITY`, etc.)
+ * and Token diagnostics would show duplicate client_id cards.
+ */
+function dedupeTokenConfigsByTokenValue(entries: TokenConfig[]): TokenConfig[] {
+  const staticOrder = getStaticTokenConfigs().map((r) =>
+    normalizeYangoTokenRegistryLabel(r.label),
+  );
+  const rank = (label: string): number => {
+    const n = normalizeYangoTokenRegistryLabel(label);
+    const i = staticOrder.indexOf(n);
+    return i === -1 ? 10_000 : i;
+  };
+  const sorted = [...entries].sort((a, b) => {
+    const d = rank(a.label) - rank(b.label);
+    if (d !== 0) return d;
+    return normalizeYangoTokenRegistryLabel(a.label).localeCompare(
+      normalizeYangoTokenRegistryLabel(b.label),
+    );
+  });
+  const seenNonEmpty = new Set<string>();
+  const out: TokenConfig[] = [];
+  for (const row of sorted) {
+    const t = row.token.trim();
+    if (!t) {
+      out.push(row);
+      continue;
+    }
+    if (seenNonEmpty.has(t)) continue;
+    seenNonEmpty.add(t);
+    out.push(row);
+  }
+  return out;
 }
 
 let dashboardInMemoryCache:

@@ -5,12 +5,20 @@ type TokenDiagnosticsPanelProps = {
 };
 
 export function TokenDiagnosticsPanel({ diagnostics }: TokenDiagnosticsPanelProps) {
+  const tokenCount = new Set(diagnostics.map((d) => d.tokenLabel)).size;
+  const entryCount = diagnostics.length;
+  const yangoClientRows = diagnostics.filter((d) => Boolean(d.clientId)).length;
+  const allRowsAreClients = entryCount > 0 && yangoClientRows === entryCount;
+  const titleDetail = allRowsAreClients
+    ? `${tokenCount} token${tokenCount === 1 ? "" : "s"} · ${yangoClientRows} Yango client${yangoClientRows === 1 ? "" : "s"}`
+    : `${tokenCount} token${tokenCount === 1 ? "" : "s"} · ${entryCount} row${entryCount === 1 ? "" : "s"}${
+        yangoClientRows > 0 ? ` (${yangoClientRows} with client id)` : ""
+      }`;
+
   return (
     <section className="glass-surface mb-4 rounded-3xl p-4">
       <div className="mb-3">
-        <h3 className="crm-section-title">
-          Token diagnostics ({diagnostics.length} clients)
-        </h3>
+        <h3 className="crm-section-title">Token diagnostics ({titleDetail})</h3>
         <p className="crm-subtitle">Live auth/orders status from API tokens</p>
         <a
           href="/api/client-mapping-export"
