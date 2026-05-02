@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-05-02",
+    title: "Token diagnostics: one card per Yango API token (prod dedupe)",
+    notes:
+      "dedf741 — Merged static + KV Yango token lists are deduplicated by equal API secret (same token no longer appears as COFIX+SAMELET, Tel Aviv, Yango Deli, TEST+APLI duplicates). COFIX uses only YANGO_TOKEN_COFIX. Notes panel title shows token vs client row counts. Unblocks correct client_id↔token mapping in production.",
+  },
+  {
+    date: "2026-05-02",
     title: "Yango user-list: prefer cost_centers_id UUID over display name",
     notes:
       "739da1f — App version 0.2.2. Per Yandex Business user-list API, cost_centers_id (UUID) is parsed before cost_center (name); directory mapping uses user _id for /2.0/users resolution so DEFAULT_CORP / CRM flows match cabinet CC assignment.",
