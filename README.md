@@ -26,6 +26,8 @@ npm run env:merge-from-backup
 
 Optional: `node scripts/merge-env-local-from-backup.mjs path/to/backup` — default is `.env.local.bak.20260501` if present, else the script errors. The merge fills only **empty** keys in `.env.local` from the backup and drops `YANGO_TOKEN_REGISTRY_PRECEDENCE=env` for prod parity.
 
+**Single place for Yango API tokens (same KV as Notes onboarding / TEST CABINET):** tokens are stored in KV key `appli:yango:token-registry:v1`. To copy every non-empty `YANGO_TOKEN_*` from `.env.local` into that registry (use the same `KV_REST_*` as production): `npm run sync:yango-tokens-to-kv` (preview with `npx tsx scripts/sync-yango-env-tokens-to-kv.ts --dry-run`). Requires `KV_REST_API_URL` and `KV_REST_API_TOKEN`.
+
 `npm run env:pull:preview` pulls Preview env instead. Requires `vercel login` and access to the team/project.
 
 3. **Or** create `.env.local` from the template and fill values by hand:
