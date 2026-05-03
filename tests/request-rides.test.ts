@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 
 import {
   buildRequestRideBody,
+  canonicalCorpCostCenterSettingsUuid,
   extractDriverDetailsFromYangoShapes,
+  isCorpCostCenterSettingsUuid,
   normalizeRideLifecycleStatus,
   shouldRunPreOrderFallbackByTime,
 } from "../lib/yango-api";
@@ -40,6 +42,90 @@ test("buildRequestRideBody maps fields and includes due_date when scheduled", ()
     comment: "Call on arrival",
     due_date: "2026-04-24T10:00:00.000Z",
   });
+});
+
+test("buildRequestRideBody sets only cost_centers_id fields for CORP UUID (no cost_center mirror)", () => {
+  const cc = "1beae7f9-4af4-4ee5-96c2-ca86ae0a3551";
+  const body = buildRequestRideBody({
+    tokenLabel: "ZHAK",
+    clientId: "1151f896-bd82-48ed-977d-4abcf1df4929",
+    rideClass: "comfortplus_b2b",
+    userId: "user-1",
+    costCenterId: cc,
+    sourceAddress: "A",
+    destinationAddress: "B",
+    sourceLat: 32.0,
+    sourceLon: 34.0,
+    destinationLat: 32.1,
+    destinationLon: 34.1,
+    phoneNumber: "+972500000000",
+    comment: null,
+    scheduleAtIso: null,
+  });
+  assert.equal(body.cost_centers_id, cc);
+  assert.deepEqual(body.cost_centers_ids, [cc]);
+  assert.equal(body.cost_center_id, cc);
+  assert.equal("cost_center" in body, false);
+});
+
+test("buildRequestRideBody adds cost_center display name when provided (CORP)", () => {
+  const cc = "1beae7f9-4af4-4ee5-96c2-ca86ae0a3551";
+  const body = buildRequestRideBody({
+    tokenLabel: "ZHAK",
+    clientId: "1151f896-bd82-48ed-977d-4abcf1df4929",
+    rideClass: "comfortplus_b2b",
+    userId: "user-1",
+    costCenterId: cc,
+    costCenterDisplayName: "HQ",
+    sourceAddress: "A",
+    destinationAddress: "B",
+    sourceLat: 32.0,
+    sourceLon: 34.0,
+    destinationLat: 32.1,
+    destinationLon: 34.1,
+    phoneNumber: "+972500000000",
+    comment: null,
+    scheduleAtIso: null,
+  });
+  assert.equal(body.cost_centers_id, cc);
+  assert.equal(body.cost_center, "HQ");
+});
+
+test("buildRequestRideBody omits cost_center for synthetic directory-fallback labels (Yango registry check)", () => {
+  const cc = "2655e983-56bd-49e9-8831-68d3d6823fe0";
+  const body = buildRequestRideBody({
+    tokenLabel: "ZHAK",
+    clientId: "cl-1",
+    rideClass: "comfortplus_b2b",
+    userId: "user-1",
+    costCenterId: cc,
+    costCenterDisplayName: "Cost center 2655e983…",
+    sourceAddress: "A",
+    destinationAddress: "B",
+    sourceLat: 32.0,
+    sourceLon: 34.0,
+    destinationLat: 32.1,
+    destinationLon: 34.1,
+    phoneNumber: "+972500000000",
+    comment: null,
+    scheduleAtIso: null,
+  });
+  assert.equal(body.cost_centers_id, cc);
+  assert.equal("cost_center" in body, false);
+});
+
+test("isCorpCostCenterSettingsUuid accepts standard lowercase UUID", () => {
+  assert.equal(isCorpCostCenterSettingsUuid("a1b2c3d4-e5f6-4789-a012-3456789abcde"), true);
+  assert.equal(isCorpCostCenterSettingsUuid("not-a-uuid"), false);
+});
+
+test("canonicalCorpCostCenterSettingsUuid inserts dashes for 32-char hex (Yango often omits them)", () => {
+  const undashed = "2655e98356bd49e9883168d3d6823fe0";
+  assert.equal(
+    canonicalCorpCostCenterSettingsUuid(undashed),
+    "2655e983-56bd-49e9-8831-68d3d6823fe0",
+  );
+  assert.equal(isCorpCostCenterSettingsUuid(undashed), true);
 });
 
 test("buildRequestRideBody includes stops between pickup and destination", () => {

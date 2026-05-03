@@ -75,21 +75,29 @@ export async function discoverYangoTenantDefaultCostCenterId(input: {
  * Same inputs as onboarding/register: parallel `/2.0/users` + cost_centers list, then
  * {@link discoverYangoTenantDefaultCostCenterId}. Use this everywhere we need a default CC
  * from Yango (not only KV/env pins).
+ * Pass {@link prefetchedUsers} / {@link prefetchedCostCenters} when the caller already fetched
+ * those APIs (e.g. onboarding) to avoid duplicate requests.
  */
 export async function resolveCostCenterWithFullYangoDiscovery(input: {
   tokenLabel: string;
   apiClientId: string;
+  prefetchedUsers?: Awaited<ReturnType<typeof listYangoClientUsers>>;
+  prefetchedCostCenters?: Awaited<ReturnType<typeof listYangoCostCenters>>;
 }): Promise<string> {
   const [yangoUsers, centers] = await Promise.all([
-    listYangoClientUsers({
-      tokenLabel: input.tokenLabel,
-      clientId: input.apiClientId,
-      limit: 1200,
-    }).catch(() => []),
-    listYangoCostCenters({
-      tokenLabel: input.tokenLabel,
-      clientId: input.apiClientId,
-    }).catch(() => []),
+    input.prefetchedUsers != null
+      ? Promise.resolve(input.prefetchedUsers)
+      : listYangoClientUsers({
+          tokenLabel: input.tokenLabel,
+          clientId: input.apiClientId,
+          limit: 1200,
+        }).catch(() => []),
+    input.prefetchedCostCenters != null
+      ? Promise.resolve(input.prefetchedCostCenters)
+      : listYangoCostCenters({
+          tokenLabel: input.tokenLabel,
+          clientId: input.apiClientId,
+        }).catch(() => []),
   ]);
   return discoverYangoTenantDefaultCostCenterId({
     tokenLabel: input.tokenLabel,

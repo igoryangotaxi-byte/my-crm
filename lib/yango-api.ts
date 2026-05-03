@@ -1395,6 +1395,107 @@ export function normalizeRideLifecycleStatus(rawStatus: string): RequestRideLife
   return "unknown";
 }
 
+/** Yango CORP `/2.0/orders/create` expects cost center **settings** id (UUID), not display `cost_center` text from `/2.0/users`. */
+const CORP_COST_CENTER_SETTINGS_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Canonical dashed UUID for CORP cost centers. Accepts standard dashed UUIDs and 32-char hex
+ * without hyphens (Yango UI / some APIs omit dashes, which broke regex + list matching).
+ */
+export function canonicalCorpCostCenterSettingsUuid(value: string): string | null {
+  const t = value.trim();
+  if (!t) return null;
+  if (CORP_COST_CENTER_SETTINGS_UUID_RE.test(t)) return t;
+  const hexOnly = t.replace(/[^0-9a-f]/gi, "");
+  if (hexOnly.length !== 32) return null;
+  const dashed = `${hexOnly.slice(0, 8)}-${hexOnly.slice(8, 12)}-${hexOnly.slice(12, 16)}-${hexOnly.slice(16, 20)}-${hexOnly.slice(20, 32)}`;
+  return CORP_COST_CENTER_SETTINGS_UUID_RE.test(dashed) ? dashed : null;
+}
+
+export function isCorpCostCenterSettingsUuid(value: string): boolean {
+  return canonicalCorpCostCenterSettingsUuid(value) != null;
+}
+
+/**
+ * Map a raw value (UUID, or legacy display name / wrong field from user row) to the cost center
+ * settings UUID used in order bodies. Prevents HTTP 406 CORP_CANNOT_ORDER when only a Hebrew
+ * label was stored in CRM or resolved from `cost_center` instead of `cost_centers_id`.
+ */
+async function resolveCostCenterIdToCorpSettingsUuid(input: {
+  tokenLabel: string;
+  clientId: string;
+  costCenterId: string;
+  userId?: string | null;
+}): Promise<string> {
+  const raw = input.costCenterId.trim();
+  if (!raw) return "";
+  const canonId = canonicalCorpCostCenterSettingsUuid(raw);
+  if (canonId) return canonId;
+
+  const centers = await listYangoCostCenters({
+    tokenLabel: input.tokenLabel,
+    clientId: input.clientId,
+  }).catch(() => []);
+
+  const byId = centers.find((c) => {
+    const cid = (c.id ?? "").trim();
+    const a = canonicalCorpCostCenterSettingsUuid(cid);
+    const b = canonicalCorpCostCenterSettingsUuid(raw);
+    return a && b && a.toLowerCase() === b.toLowerCase();
+  });
+  if (byId?.id) return byId.id.trim();
+
+  const norm = raw.trim().toLowerCase();
+  const byName = centers.find((c) => (c.name ?? "").trim().toLowerCase() === norm);
+  if (byName?.id) return byName.id.trim();
+
+  if (centers.length === 1 && (centers[0]?.id ?? "").trim()) {
+    return centers[0].id.trim();
+  }
+
+  const uid = (input.userId ?? "").trim();
+  if (uid) {
+    const dir = await listYangoClientUsers({
+      tokenLabel: input.tokenLabel,
+      clientId: input.clientId,
+      limit: 1200,
+    }).catch(() => []);
+    const row = dir.find((u) => u.userId === uid);
+    const alt = (row?.costCenterId ?? "").trim();
+    const altCanon = alt ? canonicalCorpCostCenterSettingsUuid(alt) : null;
+    if (altCanon) return altCanon;
+    if (alt) {
+      const byAltId = centers.find((c) => {
+        const cid = (c.id ?? "").trim();
+        const a = canonicalCorpCostCenterSettingsUuid(cid);
+        const b = canonicalCorpCostCenterSettingsUuid(alt);
+        return a && b && a.toLowerCase() === b.toLowerCase();
+      });
+      if (byAltId?.id) return byAltId.id.trim();
+      const byAltName = centers.find(
+        (c) => (c.name ?? "").trim().toLowerCase() === alt.toLowerCase(),
+      );
+      if (byAltName?.id) return byAltName.id.trim();
+    }
+  }
+
+  return "";
+}
+
+/**
+ * Only send `cost_center` when it is a real cabinet label from Yango. CRM placeholders such as
+ * `Cost center 2655e983…` (directory fallback) must not be sent — the API validates the string and
+ * may reject the order with CORP_CANNOT_ORDER even when cost_centers_id is valid.
+ */
+function isTrustedYangoCostCenterDisplayLabel(label: string): boolean {
+  const t = label.trim();
+  if (!t) return false;
+  if (/^Cost center\s+[0-9a-f]{8}/i.test(t)) return false;
+  if (/directory\s+assignment/i.test(t)) return false;
+  return true;
+}
+
 export function buildRequestRideBody(payload: RequestRidePayload): Record<string, unknown> {
   const sourceFullname = payload.sourceAddress.trim();
   const destinationFullname = payload.destinationAddress.trim();
@@ -1440,12 +1541,18 @@ export function buildRequestRideBody(payload: RequestRidePayload): Record<string
     comment: payload.comment?.trim() || undefined,
   };
   const costCenterId = payload.costCenterId?.trim();
+  const costCenterDisplayName = payload.costCenterDisplayName?.trim();
   if (costCenterId) {
-    body.cost_center = costCenterId;
-    body.cost_center_id = costCenterId;
+    // CORP: UUID belongs in id fields; optional `cost_center` is the directory display name (not the UUID).
     body.cost_centers_id = costCenterId;
     body.cost_centers_ids = [costCenterId];
-    body.cost_centers = [costCenterId];
+    // Some corp gateways read singular `cost_center_id` only (same settings UUID as plural fields).
+    body.cost_center_id = costCenterId;
+    // Never send CRM placeholder labels as `cost_center` — Yango validates the string against the registry
+    // and may return CORP_CANNOT_ORDER even when cost_centers_id is correct (e.g. ZHAK + directory fallback UI).
+    if (costCenterDisplayName && isTrustedYangoCostCenterDisplayLabel(costCenterDisplayName)) {
+      body.cost_center = costCenterDisplayName;
+    }
   }
   const scheduleAt = payload.scheduleAtIso?.trim();
   if (scheduleAt) {
@@ -1836,74 +1943,85 @@ export async function ensureRequestRideUserByPhone(input: {
 
   const tokenConfig = await resolveTokenConfig(input.tokenLabel);
   const trimmedName = input.fullName?.trim() || "";
-  const costCenterId = input.costCenterId?.trim() || "";
+  let effectiveCostCenter = (input.costCenterId ?? "").trim();
+  if (!effectiveCostCenter) {
+    const { resolveCostCenterWithFullYangoDiscovery } = await import("@/lib/tenant-yango-bootstrap");
+    effectiveCostCenter = (
+      await resolveCostCenterWithFullYangoDiscovery({
+        tokenLabel: input.tokenLabel,
+        apiClientId: input.clientId,
+      })
+    ).trim();
+  }
+  const cc = effectiveCostCenter || undefined;
   const [firstName, ...rest] = trimmedName.split(/\s+/).filter(Boolean);
   const lastName = rest.join(" ").trim();
+  /** All shapes that can carry cost center — tried before bare fallbacks so Yango prefers CC when available. */
   const bodyCandidates: Array<Record<string, unknown>> = [
     {
       phone: input.phoneNumber,
       fullname: trimmedName || undefined,
       is_active: true,
-      cost_center_id: costCenterId || undefined,
-      cost_center: costCenterId || undefined,
-      cost_centers_id: costCenterId || undefined,
+      cost_center_id: cc,
+      cost_center: cc,
+      cost_centers_id: cc,
     },
     {
       phone: input.phoneNumber,
       fullname: trimmedName || undefined,
       is_active: true,
-      cost_center_id: costCenterId || undefined,
-      cost_center: costCenterId || undefined,
-      cost_centers_id: costCenterId ? [costCenterId] : undefined,
+      cost_center_id: cc,
+      cost_center: cc,
+      cost_centers_id: effectiveCostCenter ? [effectiveCostCenter] : undefined,
     },
     {
       phone_number: input.phoneNumber,
       fullname: trimmedName || undefined,
       is_active: true,
-      cost_center_id: costCenterId || undefined,
-      cost_center: costCenterId || undefined,
-      cost_centers_id: costCenterId || undefined,
+      cost_center_id: cc,
+      cost_center: cc,
+      cost_centers_id: cc,
     },
     {
       phone_number: input.phoneNumber,
       fullname: trimmedName || undefined,
       is_active: true,
-      cost_center_id: costCenterId || undefined,
-      cost_center: costCenterId || undefined,
-      cost_centers_id: costCenterId ? [costCenterId] : undefined,
+      cost_center_id: cc,
+      cost_center: cc,
+      cost_centers_id: effectiveCostCenter ? [effectiveCostCenter] : undefined,
     },
     {
       phone: input.phoneNumber,
       fullname: trimmedName || undefined,
       is_active: true,
-      cost_centers: costCenterId ? [costCenterId] : undefined,
+      cost_centers: effectiveCostCenter ? [effectiveCostCenter] : undefined,
     },
     {
       phone_number: input.phoneNumber,
       fullname: trimmedName || undefined,
       is_active: true,
-      cost_centers: costCenterId ? [costCenterId] : undefined,
+      cost_centers: effectiveCostCenter ? [effectiveCostCenter] : undefined,
+    },
+    {
+      phone: input.phoneNumber,
+      name: trimmedName || undefined,
+      fullname: trimmedName || undefined,
+      is_active: true,
+      cost_center_id: cc,
+      cost_center: cc,
+      cost_centers_id: cc,
+    },
+    {
+      phone: input.phoneNumber,
+      name: trimmedName || undefined,
+      fullname: trimmedName || undefined,
+      is_active: true,
+      cost_center_id: cc,
+      cost_center: cc,
+      cost_centers_id: effectiveCostCenter ? [effectiveCostCenter] : undefined,
     },
     { phone: input.phoneNumber, full_name: trimmedName || undefined },
     { phone_number: input.phoneNumber, full_name: trimmedName || undefined },
-    {
-      phone: input.phoneNumber,
-      name: trimmedName || undefined,
-      fullname: trimmedName || undefined,
-      is_active: true,
-      cost_center_id: costCenterId || undefined,
-      cost_center: costCenterId || undefined,
-      cost_centers_id: costCenterId || undefined,
-    },
-    {
-      phone: input.phoneNumber,
-      name: trimmedName || undefined,
-      fullname: trimmedName || undefined,
-      is_active: true,
-      cost_center_id: costCenterId || undefined,
-      cost_center: costCenterId || undefined,
-      cost_centers_id: costCenterId ? [costCenterId] : undefined,
-    },
     {
       phone: input.phoneNumber,
       first_name: firstName || undefined,
@@ -2018,38 +2136,10 @@ export async function searchRequestRideUsers(input: {
     tokenConfig = null;
   }
 
-  if (tokenConfig && byId.size < limit) {
-    const maxPages = readPositiveIntEnv("YANGO_USER_LIST_MAX_PAGES_SEARCH", 25);
-    const pageSize = readPositiveIntEnv("YANGO_USER_LIST_PAGE_SIZE", 100);
-    await forEachYangoUserListPage(
-      tokenConfig.token,
-      input.clientId,
-      maxPages,
-      pageSize,
-      (page) => {
-        for (const raw of page.items ?? []) {
-          if (byId.size >= limit) return false;
-          if (!raw || typeof raw !== "object") continue;
-          const row = raw as Record<string, unknown>;
-          if (isYangoUserListRowDeleted(row)) continue;
-          const suggestion = rowToSuggestion(row);
-          if (!suggestion) continue;
-          if (!suggestionMatchesQuery(suggestion, query)) continue;
-          if (suggestion.phone) {
-            upsertMappedUserId({
-              tokenLabel: input.tokenLabel,
-              clientId: input.clientId,
-              phoneNumber: suggestion.phone,
-              userId: suggestion.userId,
-            });
-          }
-          push(suggestion);
-        }
-        return byId.size < limit;
-      },
-    );
-  }
-
+  /**
+   * Prefer targeted list/info queries first. On Vercel, scanning many full /2.0/users pages before these
+   * calls often hits the function time limit and returns zero suggestions (prod looked “broken”).
+   */
   const attempts = [
     `${YANGO_BASE_URL}/2.0/users/list?query=${encodeURIComponent(query)}`,
     `${YANGO_BASE_URL}/2.0/users/list?search=${encodeURIComponent(query)}`,
@@ -2087,6 +2177,38 @@ export async function searchRequestRideUsers(input: {
     } catch {
       // Ignore unsupported query shapes and continue.
     }
+  }
+
+  if (tokenConfig && byId.size < limit) {
+    const maxPages = readPositiveIntEnv("YANGO_USER_LIST_MAX_PAGES_SEARCH", 25);
+    const pageSize = readPositiveIntEnv("YANGO_USER_LIST_PAGE_SIZE", 100);
+    await forEachYangoUserListPage(
+      tokenConfig.token,
+      input.clientId,
+      maxPages,
+      pageSize,
+      (page) => {
+        for (const raw of page.items ?? []) {
+          if (byId.size >= limit) return false;
+          if (!raw || typeof raw !== "object") continue;
+          const row = raw as Record<string, unknown>;
+          if (isYangoUserListRowDeleted(row)) continue;
+          const suggestion = rowToSuggestion(row);
+          if (!suggestion) continue;
+          if (!suggestionMatchesQuery(suggestion, query)) continue;
+          if (suggestion.phone) {
+            upsertMappedUserId({
+              tokenLabel: input.tokenLabel,
+              clientId: input.clientId,
+              phoneNumber: suggestion.phone,
+              userId: suggestion.userId,
+            });
+          }
+          push(suggestion);
+        }
+        return byId.size < limit;
+      },
+    );
   }
 
   return [...byId.values()].slice(0, limit);
@@ -2192,6 +2314,7 @@ function extractCostCentersFromPayload(payload: unknown): YangoCostCenter[] {
     const row = raw as Record<string, unknown>;
     const id =
       asString(row.id) ||
+      asString(row._id) ||
       asString(row.cost_center_id) ||
       asString(row.costCenterId) ||
       asString(row.cost_centerid) ||
@@ -2209,6 +2332,36 @@ function extractCostCentersFromPayload(payload: unknown): YangoCostCenter[] {
   return [...out.values()];
 }
 
+/**
+ * When GET /2.0/cost_centers returns nothing (permissions/sandbox/shape), derive selectable CORP
+ * cost centers from `/2.0/users` rows — employees usually carry `cost_centers_id` (settings UUID).
+ */
+async function costCentersFromUserDirectory(input: {
+  tokenLabel: string;
+  clientId: string;
+}): Promise<YangoCostCenter[]> {
+  const users = await listYangoClientUsers({
+    tokenLabel: input.tokenLabel,
+    clientId: input.clientId,
+    limit: 1200,
+  }).catch(() => []);
+  const map = new Map<string, YangoCostCenter>();
+  for (const u of users) {
+    const raw = (u.costCenterId ?? "").trim();
+    if (!raw) continue;
+    const canon = canonicalCorpCostCenterSettingsUuid(raw);
+    if (!canon) continue;
+    const dedupeKey = canon.toLowerCase();
+    if (map.has(dedupeKey)) continue;
+    const compact = canon.replace(/-/g, "").slice(0, 8);
+    map.set(dedupeKey, {
+      id: canon,
+      name: compact ? `Cost center ${compact}…` : canon,
+    });
+  }
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export async function listYangoCostCenters(input: {
   tokenLabel: string;
   clientId: string;
@@ -2216,6 +2369,7 @@ export async function listYangoCostCenters(input: {
   const tokenConfig = await resolveTokenConfig(input.tokenLabel);
   const candidates = [
     `${YANGO_BASE_URL}/2.0/cost_centers`,
+    `${YANGO_BASE_URL}/2.0/cost_centers?limit=500`,
     `${YANGO_BASE_URL}/2.0/cost-centers`,
     `${YANGO_BASE_URL}/2.0/costcenters`,
     `${YANGO_BASE_URL}/2.0/users/cost_centers`,
@@ -2229,14 +2383,18 @@ export async function listYangoCostCenters(input: {
         input.clientId,
       );
       for (const item of extractCostCentersFromPayload(payload)) {
-        out.set(item.id, item);
+        const cid = canonicalCorpCostCenterSettingsUuid(item.id.trim()) ?? item.id.trim();
+        const key = cid.toLowerCase();
+        if (!out.has(key)) out.set(key, { ...item, id: cid });
       }
       if (out.size > 0) break;
     } catch {
       // continue probing
     }
   }
-  return [...out.values()];
+  const primary = [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
+  if (primary.length > 0) return primary;
+  return costCentersFromUserDirectory(input);
 }
 
 /**
@@ -2443,6 +2601,47 @@ async function createRequestRideInternal(
       userId: payload.userId,
     });
   }
+
+  let orderPayload = payload;
+  const ccRaw = (payload.costCenterId ?? "").trim();
+  if (ccRaw) {
+    const mapped = await resolveCostCenterIdToCorpSettingsUuid({
+      tokenLabel: payload.tokenLabel,
+      clientId: targetClientId,
+      costCenterId: ccRaw,
+      userId: payload.userId ?? null,
+    });
+    if (mapped) {
+      orderPayload = { ...payload, costCenterId: mapped };
+    } else if (!isCorpCostCenterSettingsUuid(ccRaw)) {
+      throw new Error(
+        `CORP cost center must be a cost-center settings UUID for ${payload.tokenLabel}. ` +
+          `Got "${ccRaw.slice(0, 48)}${ccRaw.length > 48 ? "…" : ""}" which does not match /2.0/cost_centers ids.`,
+      );
+    }
+  }
+
+  const ccForOrder = (orderPayload.costCenterId ?? "").trim();
+  if (ccForOrder && !(orderPayload.costCenterDisplayName ?? "").trim()) {
+    try {
+      const centers = await listYangoCostCenters({
+        tokenLabel: payload.tokenLabel,
+        clientId: targetClientId,
+      });
+      const canon = canonicalCorpCostCenterSettingsUuid(ccForOrder);
+      const match = centers.find((c) => {
+        const id = canonicalCorpCostCenterSettingsUuid((c.id ?? "").trim());
+        return canon && id && canon.toLowerCase() === id.toLowerCase();
+      });
+      const label = (match?.name ?? "").trim();
+      if (label) {
+        orderPayload = { ...orderPayload, costCenterDisplayName: label };
+      }
+    } catch {
+      // optional enrichment
+    }
+  }
+
   const endpoint =
     options?.endpointOverride?.trim() ||
     process.env.YANGO_CREATE_ORDER_ENDPOINT ||
@@ -2456,7 +2655,7 @@ async function createRequestRideInternal(
       headers: {
         "X-Idempotency-Token": options?.idempotencyToken || globalThis.crypto.randomUUID(),
       },
-      body: JSON.stringify(buildRequestRideBody(payload)),
+      body: JSON.stringify(buildRequestRideBody(orderPayload)),
     },
   );
 

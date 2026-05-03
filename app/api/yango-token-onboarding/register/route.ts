@@ -3,7 +3,7 @@ import { loadAuthStore, saveAuthStore } from "@/lib/auth-store";
 import { relabelGoogleVendorForDisplay } from "@/lib/public-error-message";
 import { upsertMappedUserId } from "@/lib/request-rides-user-map";
 import { requireAdminUser } from "@/lib/server-auth";
-import { discoverYangoTenantDefaultCostCenterId } from "@/lib/tenant-yango-bootstrap";
+import { resolveCostCenterWithFullYangoDiscovery } from "@/lib/tenant-yango-bootstrap";
 import { getRequestRideApiClients, listYangoClientUsers, listYangoCostCenters } from "@/lib/yango-api";
 import { validateYangoApiToken } from "@/lib/yango-token-onboarding";
 import { upsertYangoTokenRegistryEntry } from "@/lib/yango-token-registry";
@@ -160,16 +160,25 @@ async function upsertTenantAdmin(input: {
       .filter(Boolean),
   );
 
-  const yangoUsers = await listYangoClientUsers({
-    tokenLabel: input.tokenLabel,
-    clientId: input.apiClientId,
-    limit: 1200,
-  }).catch(() => []);
-  const discoveredDefaultCostCenterId = await discoverYangoTenantDefaultCostCenterId({
-    tokenLabel: input.tokenLabel,
-    apiClientId: input.apiClientId,
-    yangoUsers,
-  });
+  const [yangoUsers, prefetchedCostCenters] = await Promise.all([
+    listYangoClientUsers({
+      tokenLabel: input.tokenLabel,
+      clientId: input.apiClientId,
+      limit: 1200,
+    }).catch(() => []),
+    listYangoCostCenters({
+      tokenLabel: input.tokenLabel,
+      clientId: input.apiClientId,
+    }).catch(() => []),
+  ]);
+  const discoveredDefaultCostCenterId = (
+    await resolveCostCenterWithFullYangoDiscovery({
+      tokenLabel: input.tokenLabel,
+      apiClientId: input.apiClientId,
+      prefetchedUsers: yangoUsers,
+      prefetchedCostCenters,
+    })
+  ).trim();
 
   for (const yangoUser of yangoUsers) {
     const phoneRaw = (yangoUser.phone ?? "").trim();

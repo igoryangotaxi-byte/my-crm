@@ -6,6 +6,8 @@ import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/** Yango user search can paginate; avoid killing prod suggestions with the default 10s ceiling. */
+export const maxDuration = 60;
 
 type SuggestPayload = {
   tokenLabel?: string;

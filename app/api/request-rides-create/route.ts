@@ -53,6 +53,7 @@ export async function POST(request: Request) {
     rideClass: normalizeString(body?.rideClass) || "comfortplus_b2b",
     userId: undefined,
     costCenterId: normalizeString(body?.costCenterId) || null,
+    costCenterDisplayName: normalizeString(body?.costCenterDisplayName) || null,
     sourceAddress: normalizeString(body?.sourceAddress),
     destinationAddress: normalizeString(body?.destinationAddress),
     sourceLat: toFiniteNumber(body?.sourceLat) ?? undefined,
@@ -130,7 +131,9 @@ export async function POST(request: Request) {
     source: "api.user.by_phone",
     value: apiUserCostCenter?.trim() || null,
   });
-  if (apiUserCostCenter?.trim()) {
+  // Never overwrite an explicit cost center from the client (dropdown / manual). Directory rows can be stale
+  // or carry display names; TEST CABINET often "works" because user CC matches — other tenants then get 406.
+  if (!(payload.costCenterId ?? "").trim() && apiUserCostCenter?.trim()) {
     payload.costCenterId = apiUserCostCenter.trim();
     costCenterDebug.selectedCostCenterId = payload.costCenterId;
     costCenterDebug.source = "api.user.by_phone";
@@ -305,24 +308,6 @@ export async function POST(request: Request) {
     }
   }
 
-  if (!(payload.costCenterId ?? "").trim()) {
-    return Response.json(
-      {
-        ok: false,
-        error:
-          "Не удалось определить центр затрат для этого клиента (CORP). Задайте cost centers в Yango, онбординг в Notes, синхронизацию сотрудников в Access или YANGO_PINNED_COST_CENTER_JSON / defaultCostCenterId в KV.",
-        debug: {
-          tenantId: scope?.tenantId ?? null,
-          tokenLabel: payload.tokenLabel,
-          clientId: payload.clientId,
-          userId: payload.userId ?? null,
-          costCenter: costCenterDebug,
-        },
-      },
-      { status: 400 },
-    );
-  }
-
   try {
     const result = await createRequestRide(payload);
     return Response.json(
@@ -341,9 +326,17 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create ride.";
-    const userHint = message.includes("User not found")
-      ? " User not found in selected client context. Verify phone->user_id mapping and client context."
-      : "";
+    let userHint = "";
+    if (message.includes("User not found")) {
+      userHint =
+        " User not found in selected client context. Verify phone->user_id mapping and client context.";
+    } else if (
+      message.includes("CORP_CANNOT_ORDER") ||
+      message.includes("Необходимо задать центр затрат")
+    ) {
+      userHint =
+        " Этот кабинет в Yango на стороне компании требует центр затрат (в отличие от Star Taxi Point / TEST). Выберите Cost center в форме, либо настройте дефолт в Yango, онбординге в Notes, YANGO_PINNED_COST_CENTER_JSON или defaultCostCenterId в tenant — иначе CRM не сможет подставить UUID автоматически.";
+    }
     return Response.json(
       {
         ok: false,

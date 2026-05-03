@@ -119,6 +119,8 @@ export type RequestRidePayload = {
   rideClass: string;
   userId?: string;
   costCenterId?: string | null;
+  /** Display name from `/2.0/cost_centers` — some CORP builds validate `cost_center` together with ids. */
+  costCenterDisplayName?: string | null;
   sourceAddress: string;
   destinationAddress: string;
   waypoints?: Array<{

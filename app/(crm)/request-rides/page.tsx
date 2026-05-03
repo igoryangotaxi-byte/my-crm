@@ -522,7 +522,7 @@ export default function RequestRidesPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isClientScopedUser]);
 
   useEffect(() => {
     return () => {
@@ -1116,6 +1116,10 @@ export default function RequestRidesPage() {
     event.preventDefault();
     if (!selectedClient) {
       setFormError("Select a client first.");
+      return;
+    }
+    if (!phoneNumber.trim()) {
+      setFormError("Rider phone is required.");
       return;
     }
     if (!pickup.text.trim() || !destination.text.trim()) {
@@ -2453,7 +2457,14 @@ export default function RequestRidesPage() {
               <div className={rideCard}>
                 <button
                   type="submit"
-                  disabled={submitting || clientsLoading || !selectedClient}
+                  disabled={
+                    submitting ||
+                    clientsLoading ||
+                    !selectedClient ||
+                    !phoneNumber.trim() ||
+                    !pickup.text.trim() ||
+                    !destination.text.trim()
+                  }
                   className="crm-button-primary h-12 w-full rounded-2xl text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {submitting ? "Requesting ride..." : "Request ride"}
