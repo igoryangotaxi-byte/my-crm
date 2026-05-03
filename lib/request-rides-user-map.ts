@@ -31,11 +31,15 @@ export type MappedUserCandidate = {
 };
 
 function writeUserMap(next: UserMapRoot) {
-  const dir = path.dirname(DEFAULT_MAP_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  try {
+    const dir = path.dirname(DEFAULT_MAP_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(DEFAULT_MAP_PATH, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  } catch {
+    // Vercel/serverless: cwd is read-only — persist fails; callers must keep working (e.g. Request Rides suggests).
   }
-  fs.writeFileSync(DEFAULT_MAP_PATH, `${JSON.stringify(next, null, 2)}\n`, "utf8");
 }
 
 export function resolveMappedUserId(params: {
