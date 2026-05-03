@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-05-02",
+    title: "Request Rides: Rider Phone suggests work on production (0.2.4)",
+    notes:
+      "f30736c — App version 0.2.4. Local dev used gitignored request-rides-user-map.json; Vercel prod had no map so CRM operators got empty suggests. /api/request-rides-user-suggest now resolves Yango user_id by phone when the map file is absent; default-select first client for internal CRM so Rider Phone queries always have tokenLabel/clientId.",
+  },
+  {
     date: "2026-05-01",
     title: "Request Rides: cost center from server only (0.2.3)",
     notes:
