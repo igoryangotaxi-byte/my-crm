@@ -13,6 +13,24 @@ type PreOrdersBoardProps = {
 
 type FilterMode = "all" | "today" | "tomorrow" | "range";
 
+function IconCalendar({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+  );
+}
+
 function getScheduledDate(preOrder: PreOrder) {
   if (!preOrder.scheduledAt) {
     return null;
@@ -294,9 +312,9 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
         </div>
       ) : null}
 
-      <div className="mb-0.5 glass-surface overflow-hidden rounded-3xl p-4">
-        <div className="flex w-full min-w-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between xl:gap-6">
-          <div className="flex min-w-0 flex-wrap items-center justify-center gap-2 sm:justify-start">
+      <div className="mb-0.5 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+        <div className="flex w-full min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between lg:gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             {([
               { mode: "all", label: "All" },
               { mode: "today", label: "Today" },
@@ -307,10 +325,10 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                 key={item.mode}
                 type="button"
                 onClick={() => setFilterMode(item.mode)}
-                className={`crm-hover-lift rounded-xl px-3 py-1.5 text-sm font-medium transition ${
+                className={`inline-flex h-9 shrink-0 items-center justify-center rounded-lg border px-3 text-sm font-medium transition ${
                   filterMode === item.mode
-                    ? "crm-button-primary text-white shadow-[0_8px_20px_rgba(220,38,38,0.25)]"
-                    : "text-slate-600 hover:bg-white/80 hover:text-slate-900"
+                    ? "crm-button-primary border-transparent text-white shadow-sm"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                 }`}
               >
                 {item.label}
@@ -318,41 +336,52 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
             ))}
           </div>
 
-          <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:min-w-0 xl:max-w-2xl xl:flex-1">
-            <label className="flex min-w-0 flex-col items-center text-center text-xs font-semibold uppercase tracking-wide text-muted">
-              From
+          <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 lg:w-auto lg:flex-1 lg:justify-center">
+            <div className="relative min-w-0 flex-1 sm:max-w-[11rem]">
+              <IconCalendar className="pointer-events-none absolute left-2.5 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="date"
                 value={fromDate}
+                aria-label="From date"
                 onChange={(event) => {
                   setFilterMode("range");
                   setFromDate(event.target.value);
                 }}
-                className="crm-input mt-1.5 block h-10 min-h-10 w-full min-w-0 px-2.5 text-center text-sm text-slate-800"
+                className="crm-input h-9 w-full min-w-0 rounded-lg border-slate-200 bg-white pl-9 pr-2 text-sm text-slate-800"
               />
-            </label>
-            <label className="flex min-w-0 flex-col items-center text-center text-xs font-semibold uppercase tracking-wide text-muted">
-              To
+            </div>
+            <div className="relative min-w-0 flex-1 sm:max-w-[11rem]">
+              <IconCalendar className="pointer-events-none absolute left-2.5 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="date"
                 value={toDate}
+                aria-label="To date"
                 onChange={(event) => {
                   setFilterMode("range");
                   setToDate(event.target.value);
                 }}
-                className="crm-input mt-1.5 block h-10 min-h-10 w-full min-w-0 px-2.5 text-center text-sm text-slate-800"
+                className="crm-input h-9 w-full min-w-0 rounded-lg border-slate-200 bg-white pl-9 pr-2 text-sm text-slate-800"
               />
-            </label>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-2 xl:shrink-0 xl:justify-end">
-            <span className="inline-flex items-center justify-center gap-1 rounded-xl border border-white/80 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_6px_14px_rgba(15,23,42,0.08)]">
-              Assigned:{" "}
-              <span className="tabular-nums text-slate-900">{preOrdersCounts.assigned}</span>
+          <div
+            className="inline-flex h-9 w-full min-w-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 lg:w-auto lg:shrink-0 lg:justify-end"
+            title="Assignment counts for the current filter"
+          >
+            <span className="flex -space-x-1 pr-0.5" aria-hidden>
+              <span className="relative z-10 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white" />
+              <span className="relative z-[2] h-2 w-2 rounded-full bg-amber-400 ring-2 ring-white" />
+              <span className="relative z-[3] h-2 w-2 rounded-full bg-slate-400 ring-2 ring-white" />
             </span>
-            <span className="inline-flex items-center justify-center gap-1 rounded-xl border border-white/80 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_6px_14px_rgba(15,23,42,0.08)]">
-              Unassigned:{" "}
-              <span className="tabular-nums text-slate-900">{preOrdersCounts.unassigned}</span>
+            <span className="whitespace-nowrap">
+              Assigned{" "}
+              <strong className="tabular-nums font-semibold text-slate-900">{preOrdersCounts.assigned}</strong>
+            </span>
+            <span className="text-slate-300">·</span>
+            <span className="whitespace-nowrap">
+              Unassigned{" "}
+              <strong className="tabular-nums font-semibold text-slate-900">{preOrdersCounts.unassigned}</strong>
             </span>
           </div>
         </div>

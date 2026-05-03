@@ -43,6 +43,41 @@ function hasValidPhone(phone: string | null | undefined) {
   return digits.length >= 9;
 }
 
+function IconSearch({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  );
+}
+
+function IconChevronDown({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
 export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
   const { currentUser } = useAuth();
   const [apiClients, setApiClients] = useState<YangoApiClientRef[]>([]);
@@ -214,89 +249,101 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
       </div>
 
       <div className="glass-surface space-y-5 rounded-3xl p-4 lg:p-5">
-        {mode === "main" ? (
-          <label className="block">
-            <span className="crm-label mb-1 block">Client</span>
-            <select
-              value={selectedClientRef ? `${selectedClientRef.tokenLabel}:${selectedClientRef.clientId}` : ""}
-              onChange={(event) => {
-                const [tokenLabel, clientId] = event.target.value.split(":");
-                const next =
-                  apiClients.find(
-                    (item) => item.tokenLabel === tokenLabel && item.clientId === clientId,
-                  ) ?? null;
-                setSelectedClientRef(next);
-                setSelectedRecipients([]);
-                setPhoneQuery("");
-                setPhoneSuggestions([]);
-                setShowPhoneSuggestions(false);
-                setStatusError(null);
-              }}
-              className="crm-input h-10 w-full px-3 text-sm"
-            >
-              <option value="">Select a client</option>
-              {apiClients.map((client) => (
-                <option
-                  key={`${client.tokenLabel}:${client.clientId}`}
-                  value={`${client.tokenLabel}:${client.clientId}`}
-                >
-                  {client.clientName} ({client.tokenLabel})
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : (
-          <p className="text-sm text-slate-700">
-            Client cabinet: <span className="font-semibold">{currentUser?.corpClientId ?? "n/a"}</span>
-          </p>
-        )}
+        <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-2">
+            {mode === "main" ? (
+              <label className="relative min-w-0 flex-1 lg:max-w-sm">
+                <span className="crm-label mb-1 block">Client</span>
+                <div className="relative">
+                  <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <select
+                    value={selectedClientRef ? `${selectedClientRef.tokenLabel}:${selectedClientRef.clientId}` : ""}
+                    onChange={(event) => {
+                      const [tokenLabel, clientId] = event.target.value.split(":");
+                      const next =
+                        apiClients.find(
+                          (item) => item.tokenLabel === tokenLabel && item.clientId === clientId,
+                        ) ?? null;
+                      setSelectedClientRef(next);
+                      setSelectedRecipients([]);
+                      setPhoneQuery("");
+                      setPhoneSuggestions([]);
+                      setShowPhoneSuggestions(false);
+                      setStatusError(null);
+                    }}
+                    className="crm-input h-9 w-full appearance-none rounded-lg border-slate-200 bg-white pl-9 pr-9 text-sm"
+                  >
+                    <option value="">Select a client</option>
+                    {apiClients.map((client) => (
+                      <option
+                        key={`${client.tokenLabel}:${client.clientId}`}
+                        value={`${client.tokenLabel}:${client.clientId}`}
+                      >
+                        {client.clientName} ({client.tokenLabel})
+                      </option>
+                    ))}
+                  </select>
+                  <IconChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                </div>
+              </label>
+            ) : (
+              <p className="text-sm text-slate-700 lg:flex lg:min-w-0 lg:flex-1 lg:items-center lg:self-center lg:pb-2">
+                Client cabinet: <span className="font-semibold">{currentUser?.corpClientId ?? "n/a"}</span>
+              </p>
+            )}
+
+            <label className="relative min-w-0 flex-1 lg:min-w-[280px]">
+              <span className="crm-label mb-1 block">Find employee by phone</span>
+              <div className="relative">
+                <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={phoneQuery}
+                  onChange={(event) => {
+                    setPhoneQuery(event.target.value);
+                    setShowPhoneSuggestions(true);
+                    setStatusError(null);
+                  }}
+                  onFocus={() => setShowPhoneSuggestions(true)}
+                  onBlur={() => {
+                    window.setTimeout(() => setShowPhoneSuggestions(false), 120);
+                  }}
+                  disabled={!hasTargetScope}
+                  className="crm-input h-9 w-full rounded-lg border-slate-200 bg-white pl-9 pr-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                  placeholder={hasTargetScope ? "+972..." : "Select client first"}
+                />
+                {showPhoneSuggestions && hasTargetScope && phoneQuery.trim() ? (
+                  <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                    {suggestionsLoading ? (
+                      <p className="px-3 py-2 text-xs text-slate-500">Searching users...</p>
+                    ) : phoneSuggestions.length > 0 ? (
+                      phoneSuggestions.map((item) => (
+                        <button
+                          key={`${item.userId}:${item.phone ?? "none"}`}
+                          type="button"
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            addRecipient(item);
+                          }}
+                          className="block w-full border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-slate-50"
+                        >
+                          <p className="text-sm font-semibold text-slate-900">
+                            {item.fullName || item.phone || "Employee"}
+                          </p>
+                          <p className="text-xs text-slate-500">{item.phone}</p>
+                        </button>
+                      ))
+                    ) : (
+                      <p className="px-3 py-2 text-xs text-slate-500">No matching users found.</p>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            </label>
+          </div>
+        </div>
 
         <div className="make-glass-card-static rounded-2xl p-4">
-          <p className="crm-section-title mb-3">Find employee by phone</p>
-          <div className="relative">
-            <input
-              value={phoneQuery}
-              onChange={(event) => {
-                setPhoneQuery(event.target.value);
-                setShowPhoneSuggestions(true);
-                setStatusError(null);
-              }}
-              onFocus={() => setShowPhoneSuggestions(true)}
-              onBlur={() => {
-                window.setTimeout(() => setShowPhoneSuggestions(false), 120);
-              }}
-              disabled={!hasTargetScope}
-              className="crm-input h-10 w-full px-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-              placeholder={hasTargetScope ? "+972..." : "Select client first"}
-            />
-            {showPhoneSuggestions && hasTargetScope && phoneQuery.trim() ? (
-              <div className="glass-surface absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl shadow-lg">
-                {suggestionsLoading ? (
-                  <p className="px-3 py-2 text-xs text-slate-500">Searching users...</p>
-                ) : phoneSuggestions.length > 0 ? (
-                  phoneSuggestions.map((item) => (
-                    <button
-                      key={`${item.userId}:${item.phone ?? "none"}`}
-                      type="button"
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        addRecipient(item);
-                      }}
-                      className="block w-full border-b border-white/40 px-3 py-2 text-left last:border-b-0 hover:bg-white/60"
-                    >
-                      <p className="text-sm font-semibold text-slate-900">
-                        {item.fullName || item.phone || "Employee"}
-                      </p>
-                      <p className="text-xs text-slate-500">{item.phone}</p>
-                    </button>
-                  ))
-                ) : (
-                  <p className="px-3 py-2 text-xs text-slate-500">No matching users found.</p>
-                )}
-              </div>
-            ) : null}
-          </div>
-          <div className="mt-4">
+          <div>
             <p className="crm-label mb-1">Selected recipients</p>
             {selectedRecipients.length === 0 ? (
               <p className="mt-1 text-xs text-slate-500">No recipients selected yet.</p>
@@ -305,7 +352,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
                 {selectedRecipients.map((item) => (
                   <span
                     key={`${item.userId}:${item.phone ?? "none"}`}
-                    className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/55 px-2.5 py-1 text-xs text-slate-700 backdrop-blur-sm"
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700"
                   >
                     {item.fullName || item.phone || "Employee"} · {item.phone}
                     <button
@@ -326,7 +373,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className="crm-button-primary rounded-xl px-3 py-2 text-sm font-semibold"
+              className="crm-button-primary inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold"
               onClick={() => setIsConfirmOpen(true)}
               disabled={!canSend}
             >
@@ -335,14 +382,14 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
             <button
               type="button"
               disabled
-              className="rounded-xl border border-white/60 bg-white/35 px-3 py-2 text-sm font-semibold text-slate-400 backdrop-blur-sm"
+              className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-400"
             >
               WhatsApp (soon)
             </button>
             <button
               type="button"
               disabled
-              className="rounded-xl border border-white/60 bg-white/35 px-3 py-2 text-sm font-semibold text-slate-400 backdrop-blur-sm"
+              className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-400"
             >
               Telegram (soon)
             </button>

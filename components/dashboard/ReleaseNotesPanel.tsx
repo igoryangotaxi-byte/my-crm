@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-05-03",
+    title: "Pre-Orders & Communications: compact filter toolbars (0.2.7)",
+    notes:
+      "9dec3b39 — App version 0.2.7. Pre-Orders filter strip uses a flat white toolbar (slate borders, h-9 controls) with calendar icons on From/To dates and a single status pill with colored dots for Assigned vs Unassigned counts. Communications: client select and phone search share the same bordered toolbar row (search + chevron affordances, aligned dropdown), slate-styled suggestion list and recipient chips, consistent channel button height.",
+  },
+  {
+    date: "2026-05-03",
     title: "CRM UI: glass surfaces, layout, Communications & Pre-Orders (0.2.6)",
     notes:
       "7831ab58 — App version 0.2.6. Unified Make-style CRM chrome: AppShell/main spacing, glass sidebar and header, Request Rides full-viewport map padding; Pre-Orders filter strip and Orders/B2B tables aligned to glass cards; Communications panel glass + nested panels; Access management and client portal sections use shared spacing; globals.css glass/Make helpers. Restored my-crm package.json and stopped tracking node_modules accidentally committed on develop. Follow-up 9d19412d removes erroneous Vite-oriented vercel.json so Vercel builds Next correctly.",
