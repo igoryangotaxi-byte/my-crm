@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-05-01",
+    title: "Request Rides: cost center from server only (0.2.3)",
+    notes:
+      "e8ec286 — App version 0.2.3. CRM Request Rides no longer shows a cost center field; /api/request-rides-create assigns the default via resolveCostCenterWithFullYangoDiscovery (phone, users/cost-centers API, tenant KV, pins). Yango API and onboarding aligned with CORP UUID handling; tenant-yango-bootstrap tests added.",
+  },
+  {
     date: "2026-05-02",
     title: "Token diagnostics: one card per Yango API token (prod dedupe)",
     notes:
