@@ -1,0 +1,26 @@
+---
+description: Production release governance and release-notes discipline
+alwaysApply: true
+---
+
+# Production Release Governance
+
+- Deploy to production only when the user explicitly requests it in this chat.
+- For every production release, create a git commit with the release changes before deploy.
+- For every production release, record the release in release notes.
+
+## Required Release Flow
+
+1. Confirm the user asked to deploy to production.
+2. Ensure release changes are committed to git (no uncommitted release edits).
+3. Deploy to production.
+4. Add a release-notes entry in `components/dashboard/ReleaseNotesPanel.tsx` that includes:
+   - short release title,
+   - what changed,
+   - commit hash.
+
+## Guardrails
+
+- Do not perform production deploys proactively.
+- If a deploy is requested but there are no committed changes, ask for confirmation before deploying.
+- If release notes were not updated yet, update them in the same release task.
