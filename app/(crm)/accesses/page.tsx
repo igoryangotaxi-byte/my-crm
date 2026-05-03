@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type {
   AppPageKey,
@@ -79,6 +79,16 @@ function DeleteIcon() {
   );
 }
 
+function AccessBlockChevron() {
+  return (
+    <span className="inline-flex shrink-0 text-slate-500 transition-transform duration-300 group-open:rotate-180">
+      <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.8">
+        <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
+  );
+}
+
 export default function AccessesPage() {
   const {
     currentUser,
@@ -90,12 +100,14 @@ export default function AccessesPage() {
     updateUserStatus,
     updateUserRole,
     deleteUser,
+    deleteTenantAccount,
     toggleRolePageAccess,
     toggleRoleAreaAccess,
     toggleRoleDashboardBlockAccess,
   } = useAuth();
 
   const isAdmin = currentUser?.role === "Admin";
+  const canRemoveCabinet = isAdmin && currentUser?.accountType !== "client";
   const [selectedRole, setSelectedRole] = useState<AppRole>("Admin");
   const [onboardingMessage, setOnboardingMessage] = useState<string | null>(null);
   const [tenantAccounts, setTenantAccounts] = useState<TenantAccount[]>([]);
@@ -171,6 +183,42 @@ export default function AccessesPage() {
     [fetchTenantData],
   );
 
+  const handleRemoveCabinet = async (tenant: TenantAccount, event?: MouseEvent) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (!canRemoveCabinet) return;
+    if (
+      !window.confirm(
+        `Удалить кабинет «${tenant.name}» (${tenant.corpClientId})? Будут удалены все пользователи этого клиентского кабинета. Действие необратимо.`,
+      )
+    ) {
+      return;
+    }
+    setCabinetMessage(null);
+    try {
+      await deleteTenantAccount(tenant.id);
+      if (selectedTenantId === tenant.id) {
+        setSelectedTenantId(null);
+      }
+      setB2cDrafts((prev) => {
+        const next = { ...prev };
+        delete next[tenant.id];
+        return next;
+      });
+      setNewUserDrafts((prev) => {
+        const next = { ...prev };
+        delete next[tenant.id];
+        return next;
+      });
+      await fetchTenantData();
+      setCabinetMessage(`Кабинет «${tenant.name}» удалён.`);
+    } catch (error) {
+      setCabinetMessage(
+        error instanceof Error ? error.message : "Не удалось удалить кабинет.",
+      );
+    }
+  };
+
   useEffect(() => {
     const timerId = window.setTimeout(() => {
       void fetchTenantData();
@@ -229,9 +277,13 @@ export default function AccessesPage() {
 
   return (
     <section className="crm-page">
-      <div className="glass-surface mb-4 rounded-3xl border border-white/70 bg-white/75 p-4 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur-md">
-        <h2 className="crm-section-title">Global B2C fallback (main CRM)</h2>
-        <p className="mt-1 text-sm text-slate-600">
+      <details className="group make-glass-card-static mb-4 overflow-hidden rounded-3xl">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <span className="crm-section-title mb-0">Global B2C fallback (main CRM)</span>
+          <AccessBlockChevron />
+        </summary>
+        <div className="border-t border-border px-5 pb-5 pt-3">
+        <p className="text-sm text-slate-600">
           This single B2C account is used for `Order B2C` actions triggered from the main CRM.
         </p>
         <div className="mt-3 grid gap-2 md:grid-cols-5">
@@ -300,9 +352,15 @@ export default function AccessesPage() {
         >
           Save global B2C account
         </button>
-      </div>
+        </div>
+      </details>
 
-      <div className="glass-surface mb-4 overflow-hidden rounded-3xl border border-white/70 bg-white/75 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur-md">
+      <details className="group make-glass-card-static mb-4 overflow-hidden rounded-3xl">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <span className="crm-section-title mb-0">Permissions (role · section · actions)</span>
+          <AccessBlockChevron />
+        </summary>
+        <div className="border-t border-border !p-0">
         <div className="grid min-h-[380px] grid-cols-1 divide-y divide-border lg:grid-cols-3 lg:divide-x lg:divide-y-0">
           <div className="p-4">
             <p className="crm-label mb-3">Role</p>
@@ -397,11 +455,18 @@ export default function AccessesPage() {
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </details>
 
-      <div className="mb-4 grid gap-3 md:grid-cols-3">
+      <details className="group make-glass-card-static mb-4 overflow-hidden rounded-3xl">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <span className="crm-section-title mb-0">Summary by role</span>
+          <AccessBlockChevron />
+        </summary>
+        <div className="border-t border-border px-5 pb-5 pt-4">
+      <div className="grid gap-3 md:grid-cols-3">
         {roleStats.map((item) => (
-          <article key={item.role} className="glass-surface crm-hover-lift rounded-3xl border border-white/70 bg-white/75 px-4 py-3 shadow-[0_12px_28px_rgba(15,23,42,0.08)] backdrop-blur-md">
+          <article key={item.role} className="make-glass-card crm-hover-lift rounded-3xl !p-3">
             <p className="crm-subtitle">{item.role}</p>
             <p className="mt-1 text-2xl font-semibold text-slate-900">
               {item.allowedCount}/{accessSections.flatMap((section) => section.actions).length}
@@ -410,11 +475,17 @@ export default function AccessesPage() {
           </article>
         ))}
       </div>
+        </div>
+      </details>
 
-      <div className="glass-surface mb-4 rounded-3xl border border-white/70 bg-white/75 p-4 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur-md">
-        <h2 className="crm-section-title">Pending registrations</h2>
+      <details className="group make-glass-card-static mb-4 overflow-hidden rounded-3xl">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <span className="crm-section-title mb-0">Pending registrations</span>
+          <AccessBlockChevron />
+        </summary>
+        <div className="border-t border-border px-5 pb-5 pt-3">
         {pendingUsers.length === 0 ? (
-          <p className="mt-2 text-sm text-muted">No users are waiting for approval.</p>
+          <p className="text-sm text-muted">No users are waiting for approval.</p>
         ) : (
           <div className="mt-3 space-y-2">
             {pendingUsers.map((user) => (
@@ -470,13 +541,16 @@ export default function AccessesPage() {
             ))}
           </div>
         )}
-      </div>
+        </div>
+      </details>
 
-      <details className="glass-surface mt-4 rounded-3xl border border-white/70 bg-white/75 p-4 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur-md">
-        <summary className="crm-section-title cursor-pointer">
-          Clients Cabinet ({tenantAccounts.length})
+      <details className="group make-glass-card-static mb-4 overflow-hidden rounded-3xl">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <span className="crm-section-title mb-0">Clients Cabinet ({tenantAccounts.length})</span>
+          <AccessBlockChevron />
         </summary>
-        <div className="mt-3 space-y-3">
+        <div className="border-t border-border px-5 pb-5 pt-3">
+        <div className="space-y-3">
           <button
             type="button"
             onClick={() => void fetchTenantData()}
@@ -490,25 +564,39 @@ export default function AccessesPage() {
           {tenantAccounts.map((tenant) => {
             const tenantUsers = tenantUsersById.get(tenant.id) ?? [];
             return (
-              <button
+              <div
                 key={tenant.id}
-                type="button"
-                onClick={() => setSelectedTenantId(tenant.id)}
-                className="w-full rounded-2xl border border-border bg-white p-3 text-left transition hover:bg-slate-50"
+                className="flex items-stretch gap-2 rounded-2xl border border-border bg-white p-2 transition hover:bg-slate-50"
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">{tenant.name}</p>
-                    <p className="text-xs text-slate-500">
-                      corp_client_id: {tenant.corpClientId} | token: {tenant.tokenLabel}
-                    </p>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTenantId(tenant.id)}
+                  className="min-w-0 flex-1 rounded-xl p-2 text-left"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{tenant.name}</p>
+                      <p className="text-xs text-slate-500">
+                        corp_client_id: {tenant.corpClientId} | token: {tenant.tokenLabel}
+                      </p>
+                    </div>
+                    <span className="text-xs text-slate-500">Users: {tenantUsers.length}</span>
                   </div>
-                  <span className="text-xs text-slate-500">Users: {tenantUsers.length}</span>
-                </div>
-              </button>
+                </button>
+                <button
+                  type="button"
+                  title="Удалить кабинет"
+                  disabled={!canRemoveCabinet}
+                  onClick={(event) => void handleRemoveCabinet(tenant, event)}
+                  className="crm-hover-lift inline-flex shrink-0 items-center justify-center self-center rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Удалить
+                </button>
+              </div>
             );
           })}
           {cabinetMessage ? <p className="text-sm text-slate-600">{cabinetMessage}</p> : null}
+        </div>
         </div>
       </details>
       {selectedTenant ? (
@@ -520,21 +608,32 @@ export default function AccessesPage() {
             className="crm-modal-surface w-full max-w-5xl rounded-3xl p-4"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="text-xl font-semibold text-slate-900">{selectedTenant.name}</h3>
                 <p className="text-xs text-slate-500">
                   corp_client_id: {selectedTenant.corpClientId} | token: {selectedTenant.tokenLabel}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedTenantId(null)}
-                className="crm-hover-lift inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-lg font-semibold leading-none text-slate-700"
-                aria-label="Close modal"
-              >
-                ×
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {canRemoveCabinet ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveCabinet(selectedTenant)}
+                    className="crm-hover-lift rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-800 transition hover:bg-rose-100"
+                  >
+                    Удалить кабинет
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setSelectedTenantId(null)}
+                  className="crm-hover-lift inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-lg font-semibold leading-none text-slate-700"
+                  aria-label="Close modal"
+                >
+                  ×
+                </button>
+              </div>
             </div>
             {(() => {
               const tenantUsers = tenantUsersById.get(selectedTenant.id) ?? [];
@@ -962,11 +1061,13 @@ export default function AccessesPage() {
         </div>
       ) : null}
 
-      <details className="glass-surface mt-4 rounded-3xl border border-white/70 bg-white/75 p-4 shadow-[0_16px_34px_rgba(15,23,42,0.08)] backdrop-blur-md">
-        <summary className="crm-section-title cursor-pointer">
-          Main CRM Users ({mainCrmUsers.length})
+      <details className="group make-glass-card-static mb-4 overflow-hidden rounded-3xl">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <span className="crm-section-title mb-0">Main CRM Users ({mainCrmUsers.length})</span>
+          <AccessBlockChevron />
         </summary>
-        <div className="mt-3 overflow-x-auto">
+        <div className="border-t border-border px-5 pb-5 pt-3">
+        <div className="overflow-x-auto">
           <table className="min-w-full">
             <thead className="bg-white/60">
               <tr>
@@ -1027,6 +1128,7 @@ export default function AccessesPage() {
               ))}
             </tbody>
           </table>
+        </div>
         </div>
       </details>
     </section>

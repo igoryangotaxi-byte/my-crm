@@ -194,7 +194,7 @@ export default function ClientEmployeesPage() {
   }
 
   return (
-    <section className="crm-page mx-3 space-y-4">
+    <section className="crm-page space-y-4">
       <div className="rounded-2xl border border-white/70 bg-white/85 p-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>

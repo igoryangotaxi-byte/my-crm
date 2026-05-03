@@ -155,32 +155,43 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
     }
   };
 
+  const fallbackPillClass =
+    "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_4px_10px_rgba(15,23,42,0.08)]";
+
   const fallbackStatusBadge = (preOrder: PreOrder) => {
     const status = preOrder.fallback?.status;
     if (!status || status === "idle") return null;
     if (status === "completed") {
       return (
-        <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+        <span
+          className={`${fallbackPillClass} border-sky-200/90 bg-[linear-gradient(180deg,#e0f2fe_0%,#7dd3fc_100%)] text-sky-900`}
+        >
           Fallback to B2C
         </span>
       );
     }
     if (status === "failed") {
       return (
-        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+        <span
+          className={`${fallbackPillClass} border-amber-200/90 bg-[linear-gradient(180deg,#fffbeb_0%,#fcd34d_100%)] text-amber-900`}
+        >
           Fallback failed
         </span>
       );
     }
     if (status === "in_progress") {
       return (
-        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+        <span
+          className={`${fallbackPillClass} border-slate-200/90 bg-[linear-gradient(180deg,#f8fafc_0%,#cbd5e1_100%)] text-slate-800`}
+        >
           Fallback running
         </span>
       );
     }
     return (
-      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+      <span
+        className={`${fallbackPillClass} border-slate-200/90 bg-[linear-gradient(180deg,#f8fafc_0%,#e2e8f0_100%)] text-slate-800`}
+      >
         Fallback skipped
       </span>
     );
@@ -256,7 +267,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
   }, [filteredPreOrders]);
 
   return (
-    <section className="crm-page mx-3">
+    <section className="crm-page">
       {errors.length > 0 ? (
         <div className="mb-0.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <p className="font-semibold">Some clients are unavailable</p>
@@ -283,9 +294,9 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
         </div>
       ) : null}
 
-      <div className="mb-0.5 rounded-2xl border border-border bg-panel p-3">
-        <div className="flex flex-wrap items-end justify-center gap-3 lg:justify-between">
-          <div className="flex flex-wrap gap-2">
+      <div className="mb-0.5 glass-surface overflow-hidden rounded-3xl p-4">
+        <div className="flex w-full min-w-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between xl:gap-6">
+          <div className="flex min-w-0 flex-wrap items-center justify-center gap-2 sm:justify-start">
             {([
               { mode: "all", label: "All" },
               { mode: "today", label: "Today" },
@@ -298,8 +309,8 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                 onClick={() => setFilterMode(item.mode)}
                 className={`crm-hover-lift rounded-xl px-3 py-1.5 text-sm font-medium transition ${
                   filterMode === item.mode
-                    ? "crm-button-primary text-white"
-                    : "bg-white/70 text-slate-700 hover:bg-white"
+                    ? "crm-button-primary text-white shadow-[0_8px_20px_rgba(220,38,38,0.25)]"
+                    : "text-slate-600 hover:bg-white/80 hover:text-slate-900"
                 }`}
               >
                 {item.label}
@@ -307,8 +318,8 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
             ))}
           </div>
 
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="text-xs text-muted">
+          <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:min-w-0 xl:max-w-2xl xl:flex-1">
+            <label className="flex min-w-0 flex-col items-center text-center text-xs font-semibold uppercase tracking-wide text-muted">
               From
               <input
                 type="date"
@@ -317,10 +328,10 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                   setFilterMode("range");
                   setFromDate(event.target.value);
                 }}
-                className="crm-input mt-1 block h-9 px-2.5 text-sm text-slate-700"
+                className="crm-input mt-1.5 block h-10 min-h-10 w-full min-w-0 px-2.5 text-center text-sm text-slate-800"
               />
             </label>
-            <label className="text-xs text-muted">
+            <label className="flex min-w-0 flex-col items-center text-center text-xs font-semibold uppercase tracking-wide text-muted">
               To
               <input
                 type="date"
@@ -329,17 +340,19 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                   setFilterMode("range");
                   setToDate(event.target.value);
                 }}
-                className="crm-input mt-1 block h-9 px-2.5 text-sm text-slate-700"
+                className="crm-input mt-1.5 block h-10 min-h-10 w-full min-w-0 px-2.5 text-center text-sm text-slate-800"
               />
             </label>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f1f5f9_100%)] px-3 py-1 text-xs font-semibold text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_6px_14px_rgba(15,23,42,0.12)]">
-              Assigned: {preOrdersCounts.assigned}
+          <div className="flex flex-wrap items-center justify-center gap-2 xl:shrink-0 xl:justify-end">
+            <span className="inline-flex items-center justify-center gap-1 rounded-xl border border-white/80 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_6px_14px_rgba(15,23,42,0.08)]">
+              Assigned:{" "}
+              <span className="tabular-nums text-slate-900">{preOrdersCounts.assigned}</span>
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f1f5f9_100%)] px-3 py-1 text-xs font-semibold text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_6px_14px_rgba(15,23,42,0.12)]">
-              Unassigned: {preOrdersCounts.unassigned}
+            <span className="inline-flex items-center justify-center gap-1 rounded-xl border border-white/80 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_6px_14px_rgba(15,23,42,0.08)]">
+              Unassigned:{" "}
+              <span className="tabular-nums text-slate-900">{preOrdersCounts.unassigned}</span>
             </span>
           </div>
         </div>
@@ -352,52 +365,59 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
       ) : (
         <section className="glass-surface mt-0.5 overflow-hidden rounded-3xl">
           <div className="overflow-x-auto">
-            <table className="min-w-full">
+            <table className="min-w-full border-separate border-spacing-y-2">
               <thead className="bg-[#f6f6f8]">
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
                     Pre-order
                   </th>
                   {!isClientScopedUser ? (
-                    <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                    <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
                       Client
                     </th>
                   ) : null}
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
                     Status
                   </th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
                     Scheduled for
                   </th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
                     Route
                   </th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
                     Adminka
                   </th>
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
                     Action
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody>
                 {filteredPreOrders.map((preOrder) => {
                   const assigned = isDriverAssigned(preOrder);
+                  const rowTint = assigned ? "[&>td]:bg-emerald-50/45" : "[&>td]:bg-rose-50/45";
                   return (
                     <tr
                       key={preOrder.id}
-                      className={`crm-hover-lift cursor-pointer hover:bg-white/70 ${assigned ? "bg-emerald-50/45" : "bg-rose-50/45"}`}
+                      className={`group cursor-pointer transition-all duration-200 ease-out hover:-translate-y-0.5 hover:drop-shadow-[0_14px_36px_rgba(15,23,42,0.14)] ${rowTint} hover:[&>td]:bg-white/95`}
                       onClick={() => setSelectedPreOrder(preOrder)}
                     >
-                      <td className="px-3 py-2 text-sm font-medium text-slate-900">{preOrder.orderId}</td>
+                      <td className="rounded-l-xl border border-transparent px-3 py-2.5 text-center text-sm font-medium text-slate-900 transition-colors duration-200">
+                        {preOrder.orderId}
+                      </td>
                       {!isClientScopedUser ? (
-                        <td className="px-3 py-2 text-sm text-slate-700">{preOrder.clientName}</td>
+                        <td className="border border-transparent px-3 py-2.5 text-center text-sm text-slate-700 transition-colors duration-200">
+                          {preOrder.clientName}
+                        </td>
                       ) : null}
-                      <td className="px-3 py-2 text-sm">
-                        <div className="flex flex-wrap items-center gap-1.5">
+                      <td className="border border-transparent px-3 py-2.5 text-center text-sm transition-colors duration-200">
+                        <div className="flex flex-wrap items-center justify-center gap-1.5">
                           <span
-                            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                              assigned ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.88),0_5px_14px_rgba(15,23,42,0.1)] ${
+                              assigned
+                                ? "border-emerald-200/90 bg-[linear-gradient(180deg,#ecfdf5_0%,#a7f3d0_55%,#6ee7b7_100%)] text-emerald-900"
+                                : "border-rose-200/90 bg-[linear-gradient(180deg,#fff1f2_0%,#fecdd3_55%,#fda4af_100%)] text-rose-900"
                             }`}
                           >
                             {assigned ? "Assigned" : "Unassigned"}
@@ -405,13 +425,15 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                           {fallbackStatusBadge(preOrder)}
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-sm text-slate-700">{preOrder.scheduledFor}</td>
-                      <td className="px-3 py-2 text-sm text-slate-700">
-                        <span className="block max-w-[22rem] truncate">
+                      <td className="border border-transparent px-3 py-2.5 text-center text-sm text-slate-700 transition-colors duration-200">
+                        {preOrder.scheduledFor}
+                      </td>
+                      <td className="border border-transparent px-3 py-2.5 text-center text-sm text-slate-700 transition-colors duration-200">
+                        <span className="mx-auto block max-w-[22rem] truncate">
                           {preOrder.pointA} {"->"} {preOrder.pointB}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-sm">
+                      <td className="border border-transparent px-3 py-2.5 text-center text-sm transition-colors duration-200">
                         <Link
                           href={`https://go-admin-frontend.taxi.yandex-team.ru/orders/${preOrder.orderId}`}
                           className="inline-flex items-center rounded-lg border border-slate-200 bg-white/85 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-white"
@@ -422,8 +444,8 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                           Order in Adminka
                         </Link>
                       </td>
-                      <td className="px-3 py-2 text-sm">
-                        <div className="flex flex-wrap items-center gap-1.5">
+                      <td className="rounded-r-xl border border-transparent px-3 py-2.5 text-center text-sm transition-colors duration-200">
+                        <div className="flex flex-wrap items-center justify-center gap-1.5">
                           <button
                             type="button"
                             disabled={cancellingOrderId === preOrder.orderId}

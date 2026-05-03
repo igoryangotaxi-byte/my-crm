@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   RequestRidesMap,
   type RequestRidesMapFitPadding,
@@ -367,6 +368,19 @@ export default function RequestRidesPage() {
   const [uploadParsing, setUploadParsing] = useState(false);
   const [uploadSubmitting, setUploadSubmitting] = useState(false);
   const xlsxInputRef = useRef<HTMLInputElement>(null);
+  const clientPickerButtonRef = useRef<HTMLButtonElement>(null);
+  const phoneSuggestAnchorRef = useRef<HTMLDivElement>(null);
+  const rideFormScrollRef = useRef<HTMLDivElement>(null);
+  const [clientMenuRect, setClientMenuRect] = useState<{
+    left: number;
+    top: number;
+    width: number;
+  } | null>(null);
+  const [phoneSuggestRect, setPhoneSuggestRect] = useState<{
+    left: number;
+    top: number;
+    width: number;
+  } | null>(null);
 
   useEffect(() => {
     const mqLg = window.matchMedia("(min-width: 1024px)");
@@ -385,10 +399,11 @@ export default function RequestRidesPage() {
   }, []);
 
   const mapFitPadding = useMemo((): RequestRidesMapFitPadding => {
+    /** Map is `fixed inset-0`; pad for sidebar + form column (aligned with header title). */
     if (overlayWideLayout) {
-      return { top: 56, bottom: 56, left: 404, right: rightOverlayVisible ? 288 : 56 };
+      return { top: 56, bottom: 56, left: 532, right: rightOverlayVisible ? 288 : 56 };
     }
-    return { top: 88, bottom: 40, left: 20, right: 20 };
+    return { top: 88, bottom: 40, left: 148, right: 20 };
   }, [overlayWideLayout, rightOverlayVisible]);
 
   const pollAttemptRef = useRef(0);
@@ -401,6 +416,54 @@ export default function RequestRidesPage() {
         : clients.find((c) => `${c.tokenLabel}:${c.clientId}` === selectedClientKey) ?? null,
     [clients, isClientScopedUser, selectedClientKey],
   );
+
+  useLayoutEffect(() => {
+    const syncOverlayRects = () => {
+      if (showClientDropdown && clientPickerButtonRef.current) {
+        const r = clientPickerButtonRef.current.getBoundingClientRect();
+        setClientMenuRect({ left: r.left, top: r.bottom + 4, width: r.width });
+      } else {
+        setClientMenuRect(null);
+      }
+      if (
+        showPhoneSuggestions &&
+        selectedClient &&
+        phoneNumber.trim() &&
+        phoneSuggestAnchorRef.current
+      ) {
+        const r = phoneSuggestAnchorRef.current.getBoundingClientRect();
+        setPhoneSuggestRect({ left: r.left, top: r.bottom + 4, width: r.width });
+      } else {
+        setPhoneSuggestRect(null);
+      }
+    };
+
+    syncOverlayRects();
+
+    const overlaysActive =
+      showClientDropdown ||
+      Boolean(showPhoneSuggestions && selectedClient && phoneNumber.trim());
+    if (!overlaysActive) return;
+
+    const scrollEl = rideFormScrollRef.current;
+    window.addEventListener("scroll", syncOverlayRects, true);
+    window.addEventListener("resize", syncOverlayRects);
+    scrollEl?.addEventListener("scroll", syncOverlayRects);
+    return () => {
+      window.removeEventListener("scroll", syncOverlayRects, true);
+      window.removeEventListener("resize", syncOverlayRects);
+      scrollEl?.removeEventListener("scroll", syncOverlayRects);
+    };
+  }, [
+    showClientDropdown,
+    showPhoneSuggestions,
+    selectedClient,
+    phoneNumber,
+    clients.length,
+    phoneSuggestions.length,
+    suggestionsLoading,
+  ]);
+
   const tenantEmployeeNameByPhone = useMemo(() => {
     const tokenLabel = selectedClient?.tokenLabel?.trim();
     const apiClientId = selectedClient?.clientId?.trim();
@@ -523,16 +586,6 @@ export default function RequestRidesPage() {
       cancelled = true;
     };
   }, [isClientScopedUser]);
-
-  /** CRM admins need a cabinet for Yango user search; default first client so Rider Phone suggests work without an extra click. */
-  useEffect(() => {
-    if (isClientScopedUser) return;
-    if (clientsLoading) return;
-    if (clients.length === 0) return;
-    if (selectedClientKey) return;
-    const first = clients[0];
-    setSelectedClientKey(`${first.tokenLabel}:${first.clientId}`);
-  }, [isClientScopedUser, clientsLoading, clients, selectedClientKey]);
 
   useEffect(() => {
     return () => {
@@ -1232,10 +1285,6 @@ export default function RequestRidesPage() {
             ),
           );
         }
-      } else {
-        setSmsWarning(
-          "Passenger notifications were skipped: add at least one phone on stop/destination points. Rider Phone is not used for SMS delivery.",
-        );
       }
       await requestStatus(createdRide, { withRetry: true });
     } catch (error) {
@@ -1882,7 +1931,7 @@ export default function RequestRidesPage() {
     const loading = Boolean(addressSuggestLoading[params.fieldId]);
     return (
       <label className="block">
-        <span className="crm-label mb-1 block">{params.label}</span>
+        <span className="crm-label block">{params.label}</span>
         <div className="relative">
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
             <MapPinIcon />
@@ -1909,7 +1958,7 @@ export default function RequestRidesPage() {
                 void tryGeocodeFieldFromText(fid, snap);
               }, 400);
             }}
-            className="crm-input h-11 w-full px-10 text-sm"
+            className="crm-input rr-input-volumetric h-11 w-full px-10 text-sm"
             required={params.required}
           />
           {activeAddressFieldId === params.fieldId && params.value.text.trim() ? (
@@ -1941,21 +1990,24 @@ export default function RequestRidesPage() {
     );
   };
 
-  const rideCard =
-    "pointer-events-auto rounded-2xl border border-white/70 bg-white/78 p-4 shadow-[0_20px_44px_rgba(15,23,42,0.16)] backdrop-blur-md";
-  const collapsibleCardClass =
-    "group pointer-events-auto rounded-2xl border border-white/80 bg-white/88 p-4 shadow-[0_18px_40px_rgba(15,23,42,0.18)] backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(15,23,42,0.22)]";
-  const collapsibleSummaryClass =
-    "flex cursor-pointer list-none items-center justify-between rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2.5 select-none text-sm font-semibold text-slate-900 transition-colors duration-200 hover:bg-white [&::-webkit-details-marker]:hidden";
+  const rideCard = "rr-glass-card p-4";
+  const rideCardStatic = "rr-glass-card-static p-4";
+  /** Figma Make — accordion shells */
+  const makePanelClass = "group rr-make-panel relative";
+  const makeSummaryClass = "rr-make-panel-summary";
+  const collapsibleCardClass = `${makePanelClass} p-0`;
+  const collapsibleSummaryClass = makeSummaryClass;
   const dropdownPanelClass =
-    "absolute z-[90] mt-1 max-h-56 w-full overflow-auto rounded-2xl border border-white/70 bg-white/90 p-1 shadow-[0_20px_45px_rgba(15,23,42,0.18)] backdrop-blur-md";
-  const dropdownOptionClass = "crm-hover-lift w-full rounded-xl px-3 py-2 text-left hover:bg-white/95";
+    "absolute left-0 right-0 top-full z-[200] mt-1 max-h-56 w-full overflow-auto rr-dropdown-panel";
+  /** Body portaled menus — `position: fixed` + coords from getBoundingClientRect. */
+  const portalDropdownShellClass =
+    "fixed z-[7000] max-h-56 min-w-[12rem] overflow-y-auto rr-dropdown-panel";
+  const dropdownOptionClass = "rr-dropdown-option";
 
   return (
-    <section className="crm-page min-h-0">
-      <div className="glass-surface flex w-full min-w-0 flex-col overflow-hidden rounded-3xl border border-white/70 bg-white/80">
-        <div className="relative h-[calc(100dvh-6.5rem)] min-h-[620px] w-full overflow-hidden sm:h-[calc(100dvh-7rem)] lg:h-[calc(100dvh-8rem)]">
-          <div className="absolute inset-0 z-0 bg-slate-100">
+    <section className="relative flex min-h-0 flex-1 flex-col gap-0 overflow-visible">
+      <div className="relative min-h-0 flex-1 w-full overflow-visible">
+          <div className="fixed inset-0 z-0 bg-gradient-to-br from-gray-100 via-gray-50 to-gray-100">
             <RequestRidesMap
               points={effectiveMapPoints}
               routeCoordinates={mapRouteCoordinates}
@@ -1966,19 +2018,44 @@ export default function RequestRidesPage() {
             />
           </div>
 
-          <div className="pointer-events-none absolute inset-0 z-10 p-4">
-            <div className="pointer-events-auto h-full max-w-[24.5rem] overflow-y-auto overflow-x-hidden pr-1">
+          <div className="pointer-events-none absolute inset-0 z-10 pb-4 pl-[calc(0.75rem+4rem+1.25rem)] pr-3 pt-[39px] lg:pl-[calc(0.75rem+4rem+1.5rem)] lg:pr-4">
+            <div className="rr-glass-column-shell pointer-events-auto flex h-full max-w-[24rem] flex-col overflow-x-hidden pr-1">
               <form
                 onSubmit={handleSubmit}
-                className="flex flex-col gap-4 pb-6 pointer-events-auto"
+                className="flex min-h-0 flex-1 flex-col pointer-events-auto"
               >
-              <div className={`${rideCard} relative z-40 space-y-3`}>
+              <div
+                ref={rideFormScrollRef}
+                className="relative z-10 min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden pb-6 pr-1"
+              >
+              <details
+                className={`${collapsibleCardClass} relative z-30`}
+                open={false}
+              >
+                <summary className={collapsibleSummaryClass}>
+                  <span className="rr-make-panel-summary-title-md min-w-0 flex-1 truncate">
+                    {isClientScopedUser
+                      ? "Client context"
+                      : clientsLoading
+                        ? "Loading clients…"
+                        : selectedClient
+                          ? `${selectedClient.clientName} (${selectedClient.tokenLabel})`
+                          : "Select Client"}
+                  </span>
+                  <span className="inline-flex shrink-0 text-slate-600 transition-transform duration-300 group-open:rotate-180">
+                    <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.9">
+                      <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </summary>
+                <div className="rr-make-panel-body-clip">
+                <div className="rr-make-panel-body space-y-3">
                 <label className="block">
-                  <span className="crm-label mb-1 block">
-                    {isClientScopedUser ? "Client context" : "Select the client"}
+                  <span className="crm-label block">
+                    {isClientScopedUser ? "Cabinet" : "Client"}
                   </span>
                   {isClientScopedUser ? (
-                    <div className="crm-input flex h-11 w-full items-center px-3 text-left text-sm font-semibold text-slate-900">
+                    <div className="rr-make-panel-dropdown-trigger min-h-[2.75rem] cursor-default font-semibold">
                       {selectedClient
                         ? `${selectedClient.clientName} (${selectedClient.tokenLabel})`
                         : "Client from your cabinet"}
@@ -1986,6 +2063,7 @@ export default function RequestRidesPage() {
                   ) : (
                     <div className="relative">
                       <button
+                        ref={clientPickerButtonRef}
                         type="button"
                         disabled={clientsLoading || isClientScopedUser}
                         onClick={() => {
@@ -1995,59 +2073,35 @@ export default function RequestRidesPage() {
                         onBlur={() => {
                           window.setTimeout(() => setShowClientDropdown(false), 120);
                         }}
-                        className="crm-input flex h-11 w-full items-center justify-between px-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rr-make-panel-dropdown-trigger text-left text-sm font-semibold outline-none focus:outline-none focus-visible:ring-0"
                       >
-                        <span className="truncate text-slate-900">
+                        <span
+                          className={`min-w-0 flex-1 truncate ${selectedClient ? "text-slate-900" : "text-slate-500"}`}
+                        >
                           {clientsLoading
-                            ? "Loading clients..."
+                            ? "Loading clients…"
                             : selectedClient
                               ? `${selectedClient.clientName} (${selectedClient.tokenLabel})`
-                              : "Select Client"}
+                              : "Choose client…"}
                         </span>
-                        <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5 text-slate-700" stroke="currentColor" strokeWidth="1.7">
-                          <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
+                        <span className="inline-flex shrink-0 text-slate-600">
+                          <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.9">
+                            <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </span>
                       </button>
-                      {showClientDropdown ? (
-                        <div className={dropdownPanelClass}>
-                          {!clientsLoading && clients.length === 0 ? (
-                            <p className="px-3 py-2 text-xs text-slate-500">No clients available</p>
-                          ) : (
-                            clients.map((client) => {
-                              const key = `${client.tokenLabel}:${client.clientId}`;
-                              const active = selectedClientKey === key;
-                              return (
-                                <button
-                                  key={key}
-                                  type="button"
-                                  onMouseDown={(event) => {
-                                    event.preventDefault();
-                                    setSelectedClientKey(key);
-                                    setPhoneSuggestions([]);
-                                    setPhoneLookupOk(null);
-                                    setPhoneLookupMessage(null);
-                                    setShowClientDropdown(false);
-                                  }}
-                                  className={`${dropdownOptionClass} ${active ? "bg-white" : ""}`}
-                                >
-                                  <p className="text-sm font-semibold text-slate-800">
-                                    {client.clientName} ({client.tokenLabel})
-                                  </p>
-                                </button>
-                              );
-                            })
-                          )}
-                        </div>
-                      ) : null}
                     </div>
                   )}
                 </label>
 
-                <label className="block">
-                  <span className="crm-label mb-1 block">Rider phone</span>
-                  <div className="relative">
+                <label
+                  className={`block ${!selectedClient ? "cursor-not-allowed" : ""}`}
+                >
+                  <span className="crm-label block">Rider phone</span>
+                  <div ref={phoneSuggestAnchorRef} className="relative">
                     <input
                       value={phoneNumber}
+                      disabled={!selectedClient}
                       onChange={(event) => {
                         setPhoneNumber(event.target.value);
                         if (!event.target.value.trim()) {
@@ -2057,63 +2111,24 @@ export default function RequestRidesPage() {
                         setPhoneLookupOk(null);
                         setPhoneLookupMessage(null);
                       }}
-                      onFocus={() => setShowPhoneSuggestions(true)}
+                      onFocus={() => selectedClient && setShowPhoneSuggestions(true)}
                       onBlur={() => {
                         window.setTimeout(() => setShowPhoneSuggestions(false), 120);
                       }}
-                      className="crm-input h-11 w-full px-3 text-sm"
-                      placeholder="+972..."
-                      required
+                      className="crm-input rr-input-volumetric h-11 w-full px-3 text-sm disabled:cursor-not-allowed disabled:opacity-55"
+                      placeholder={
+                        selectedClient
+                          ? "+972..."
+                          : isClientScopedUser && clientsLoading
+                            ? "Loading…"
+                            : "Select a client first"
+                      }
+                      required={Boolean(selectedClient)}
                     />
-                    {showPhoneSuggestions && selectedClient && phoneNumber.trim() ? (
-                      <div className={dropdownPanelClass}>
-                        {suggestionsLoading ? (
-                          <p className="px-3 py-2 text-xs text-slate-500">Searching users...</p>
-                        ) : phoneSuggestions.length > 0 ? (
-                          phoneSuggestions.map((item) => (
-                            (() => {
-                              const phoneKey = normalizePhoneLookupKey(item.phone ?? "");
-                              const resolvedName =
-                                (phoneKey ? tenantEmployeeNameByPhone.get(phoneKey) : null) ||
-                                item.fullName?.trim() ||
-                                null;
-                              return (
-                                <button
-                                  key={`${item.userId}:${item.phone ?? "none"}`}
-                                  type="button"
-                                  onMouseDown={(event) => {
-                                    event.preventDefault();
-                                    const displayName = resolvedName || item.phone?.trim() || "employee";
-                                    if (item.phone) {
-                                      setPhoneNumber(item.phone);
-                                    }
-                                    setPhoneLookupOk(true);
-                                    setPhoneLookupMessage(
-                                      `Selected ${displayName}${item.phone ? ` (${item.phone})` : ""}.`,
-                                    );
-                                    setShowPhoneSuggestions(false);
-                                  }}
-                                  className={dropdownOptionClass}
-                                >
-                                  <p className="text-sm font-semibold text-slate-800">
-                                    {resolvedName || item.phone || "Employee"}
-                                  </p>
-                                  <p className="text-xs text-slate-600">
-                                    {item.phone ?? "Phone n/a"} • {item.source}
-                                  </p>
-                                </button>
-                              );
-                            })()
-                          ))
-                        ) : (
-                          <p className="px-3 py-2 text-xs text-slate-500">No matching users found.</p>
-                        )}
-                      </div>
-                    ) : null}
                   </div>
                 </label>
                 {selectedClient ? (
-                  <div className="space-y-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+                  <div className="space-y-2 rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-sm">
                     <p className="text-xs text-slate-600">
                       Bulk orders use this client:{" "}
                       <span className="font-semibold text-slate-800">
@@ -2148,18 +2163,21 @@ export default function RequestRidesPage() {
                     {uploadError ? <p className="text-xs text-rose-700">{uploadError}</p> : null}
                   </div>
                 ) : null}
-              </div>
+                </div>
+                </div>
+              </details>
 
               <details className={`${collapsibleCardClass} relative z-30`} open={false}>
                 <summary className={collapsibleSummaryClass}>
-                  <span>Route & stops</span>
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-transform duration-200 group-open:rotate-180">
-                    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.9">
+                  <span className="rr-make-panel-summary-title-md">Route & stops</span>
+                  <span className="inline-flex shrink-0 text-slate-600 transition-transform duration-300 group-open:rotate-180">
+                    <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.9">
                       <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </span>
                 </summary>
-                <div className="mt-3 space-y-3">
+                <div className="rr-make-panel-body-clip">
+                <div className="rr-make-panel-body space-y-3">
                   {renderAddressInput({
                     fieldId: "pickup",
                     label: "Pickup location",
@@ -2168,40 +2186,55 @@ export default function RequestRidesPage() {
                     onChange: setPickup,
                   })}
                   {stops.map((stop) => (
-                    <div key={stop.id} className="rounded-xl border border-slate-100 bg-slate-50/80 p-2">
-                      {renderAddressInput({
-                        fieldId: `stop:${stop.id}`,
-                        label: "Stop along the way",
-                        value: stop,
-                        onChange: (next) =>
-                          setStops((prev) =>
-                            prev.map((item) => (item.id === stop.id ? { ...item, ...next } : item)),
-                          ),
-                      })}
-                      <label className="mt-2 block">
-                        <span className="crm-label mb-1 block">Passenger phone (SMS)</span>
-                        <input
-                          type="tel"
-                          inputMode="tel"
-                          value={stop.phone}
-                          onChange={(event) =>
-                            setStops((prev) =>
-                              prev.map((item) =>
-                                item.id === stop.id ? { ...item, phone: event.target.value } : item,
+                    <div
+                      key={stop.id}
+                      className="rounded-2xl border border-slate-200/70 bg-white/70 p-3 shadow-sm"
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className="min-w-0 flex-1 space-y-2">
+                          {renderAddressInput({
+                            fieldId: `stop:${stop.id}`,
+                            label: "Stop along the way",
+                            value: stop,
+                            onChange: (next) =>
+                              setStops((prev) =>
+                                prev.map((item) => (item.id === stop.id ? { ...item, ...next } : item)),
                               ),
-                            )
-                          }
-                          className="crm-input h-10 w-full px-3 text-sm"
-                          placeholder="+972..."
-                        />
-                      </label>
-                      <div className="mt-1 flex justify-end">
+                          })}
+                          <label className="block">
+                            <span className="crm-label block">Passenger phone (SMS)</span>
+                            <input
+                              type="tel"
+                              inputMode="tel"
+                              value={stop.phone}
+                              onChange={(event) =>
+                                setStops((prev) =>
+                                  prev.map((item) =>
+                                    item.id === stop.id ? { ...item, phone: event.target.value } : item,
+                                  ),
+                                )
+                              }
+                              className="crm-input rr-input-volumetric h-10 w-full px-3 text-sm"
+                              placeholder="+972..."
+                            />
+                          </label>
+                        </div>
                         <button
                           type="button"
+                          aria-label="Remove stop"
                           onClick={() => setStops((prev) => prev.filter((item) => item.id !== stop.id))}
-                          className="crm-hover-lift rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"
+                          className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-rose-100 bg-rose-50 text-rose-600 shadow-sm transition hover:bg-rose-100"
                         >
-                          Remove stop
+                          <svg
+                            viewBox="0 0 20 20"
+                            fill="none"
+                            className="h-5 w-5"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            aria-hidden
+                          >
+                            <path d="M5 5l10 10M15 5l-10 10" strokeLinecap="round" />
+                          </svg>
                         </button>
                       </div>
                     </div>
@@ -2214,41 +2247,58 @@ export default function RequestRidesPage() {
                     onChange: setDestination,
                   })}
                   <label className="block">
-                    <span className="crm-label mb-1 block">Passenger phone at destination (SMS)</span>
+                    <span className="crm-label block">Passenger phone at destination (SMS)</span>
                     <input
                       type="tel"
                       inputMode="tel"
                       value={destinationPhone}
                       onChange={(event) => setDestinationPhone(event.target.value)}
-                      className="crm-input h-10 w-full px-3 text-sm"
+                      className="crm-input rr-input-volumetric h-10 w-full px-3 text-sm"
                       placeholder="+972..."
                     />
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-2">
                     <button
                       type="button"
                       onClick={() => setStops((prev) => [...prev, createEmptyStopField()])}
-                      className="crm-hover-lift rounded-lg border border-border/80 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                      className="crm-hover-lift flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-sm font-medium text-slate-900 shadow-md transition hover:bg-white"
                     >
+                      <svg
+                        viewBox="0 0 20 20"
+                        fill="none"
+                        className="h-4 w-4"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        aria-hidden
+                      >
+                        <path d="M10 4v12M4 10h12" strokeLinecap="round" />
+                      </svg>
                       Add Stop
                     </button>
                     <button
                       type="button"
                       onClick={clearRouteSelection}
-                      className="crm-hover-lift rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:bg-white"
+                      className="crm-hover-lift w-full rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-sm font-medium text-slate-900 shadow-md transition hover:bg-white"
                     >
                       Clear route
                     </button>
                   </div>
                 </div>
+                </div>
               </details>
 
               {effectiveMapPoints.length >= 2 ? (
-                <details className={`${rideCard} text-xs text-slate-800`}>
-                  <summary className="cursor-pointer select-none text-sm font-semibold text-slate-800">
-                    Route preview
+                <details className={`${makePanelClass} text-xs text-slate-800`}>
+                  <summary className={makeSummaryClass}>
+                    <span className="rr-make-panel-summary-title-md">Route preview</span>
+                    <span className="inline-flex shrink-0 text-slate-600 transition-transform duration-300 group-open:rotate-180">
+                      <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.9">
+                        <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </span>
                   </summary>
-                  <div className="mt-2 space-y-0.5">
+                  <div className="rr-make-panel-body-clip">
+                  <div className="rr-make-panel-body space-y-0.5">
                     <p>
                       Est km: <span className="font-semibold text-slate-900">{routeDistanceKm ?? "n/a"}</span>
                     </p>
@@ -2262,22 +2312,26 @@ export default function RequestRidesPage() {
                       <p className="text-[11px] text-rose-700">{routePreviewError}</p>
                     ) : null}
                   </div>
+                  </div>
                 </details>
               ) : null}
 
               {mapPoints.length >= 3 ? (
                 <details className={`${collapsibleCardClass} text-sm text-slate-800`} open={false}>
                   <summary className={collapsibleSummaryClass}>
-                    <span>Route optimization</span>
-                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-transform duration-200 group-open:rotate-180">
-                      <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.9">
+                    <span className="rr-make-panel-summary-title-md">Route optimization</span>
+                    <span className="inline-flex shrink-0 text-slate-600 transition-transform duration-300 group-open:rotate-180">
+                      <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.9">
                         <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </span>
                   </summary>
-                  <div className="mt-3 space-y-2">
+                  <div className="rr-make-panel-body-clip">
+                  <div className="rr-make-panel-body space-y-2">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="crm-label">Optimize order (traffic-aware)</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        Optimize order (traffic-aware)
+                      </p>
                       <button
                         type="button"
                         onClick={() => void optimizeCurrentRoute()}
@@ -2400,40 +2454,42 @@ export default function RequestRidesPage() {
                     <p className="text-xs text-rose-700">{optimizationError}</p>
                   ) : null}
                   </div>
+                  </div>
                 </details>
               ) : null}
 
               <details className={collapsibleCardClass} open={false}>
                 <summary className={collapsibleSummaryClass}>
-                  <span>Ride settings</span>
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-transform duration-200 group-open:rotate-180">
-                    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.9">
+                  <span className="rr-make-panel-summary-title-md">Ride settings</span>
+                  <span className="inline-flex shrink-0 text-slate-600 transition-transform duration-300 group-open:rotate-180">
+                    <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.9">
                       <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </span>
                 </summary>
-                <div className="mt-3 space-y-3">
+                <div className="rr-make-panel-body-clip">
+                <div className="rr-make-panel-body space-y-3">
                   <label className="block">
-                    <span className="crm-label mb-1 block">Tariff class</span>
+                    <span className="crm-label block">Tariff class</span>
                     <input
                       value={rideClass}
                       onChange={(event) => setRideClass(event.target.value)}
-                      className="crm-input h-11 w-full px-3 text-sm"
+                      className="crm-input rr-input-volumetric h-11 w-full px-3 text-sm"
                       placeholder="comfortplus_b2b"
                     />
                   </label>
 
                 <label className="block">
-                  <span className="crm-label mb-1 block">Driver instructions...</span>
+                  <span className="crm-label block">Driver instructions...</span>
                   <textarea
                     value={comment}
                     onChange={(event) => setComment(event.target.value)}
-                    className="crm-input min-h-20 w-full resize-y px-3 py-2 text-sm"
+                    className="crm-input rr-input-volumetric min-h-20 w-full resize-y px-3 py-2 text-sm"
                     placeholder="Main cost center"
                   />
                 </label>
 
-                <label className="flex items-center gap-2 text-sm text-slate-700">
+                <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-slate-900">
                   <input
                     type="checkbox"
                     checked={scheduleEnabled}
@@ -2446,39 +2502,42 @@ export default function RequestRidesPage() {
                         );
                       }
                     }}
-                    className="h-4 w-4 rounded border-border accent-accent"
+                    className="h-5 w-5 cursor-pointer rounded-md border-2 border-slate-400 bg-white accent-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/40"
                   />
                   Schedule ride
                 </label>
                   {scheduleEnabled ? (
                     <label className="block">
-                      <span className="crm-label mb-1 block">Schedule datetime</span>
+                      <span className="crm-label block">Schedule datetime</span>
                       <input
                         type="datetime-local"
                         value={scheduleAtInput}
                         onChange={(event) => setScheduleAtInput(event.target.value)}
-                        className="crm-input h-11 w-full px-3 text-sm"
+                        className="crm-input rr-input-volumetric h-11 w-full px-3 text-sm"
                       />
                     </label>
                   ) : null}
                 </div>
+                </div>
               </details>
 
-              <div className={rideCard}>
-                <button
-                  type="submit"
-                  disabled={
-                    submitting ||
-                    clientsLoading ||
-                    !selectedClient ||
-                    !phoneNumber.trim() ||
-                    !pickup.text.trim() ||
-                    !destination.text.trim()
-                  }
-                  className="crm-button-primary h-12 w-full rounded-2xl text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {submitting ? "Requesting ride..." : "Request ride"}
-                </button>
+              <div className={rideCardStatic}>
+                <div className="rr-primary-submit-wrap rounded-2xl">
+                  <button
+                    type="submit"
+                    disabled={
+                      submitting ||
+                      clientsLoading ||
+                      !selectedClient ||
+                      !phoneNumber.trim() ||
+                      !pickup.text.trim() ||
+                      !destination.text.trim()
+                    }
+                    className="h-12 w-full rounded-2xl border border-red-700/25 bg-gradient-to-br from-red-400 via-red-500 to-red-600 text-base font-medium text-white shadow-[0_10px_30px_rgba(239,68,68,0.3),inset_0_1px_0_rgba(255,255,255,0.3)] transition hover:brightness-[1.03] disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:brightness-100"
+                  >
+                    {submitting ? "Requesting ride..." : "Request ride"}
+                  </button>
+                </div>
                 <div className="mt-3 space-y-2">
                   <button
                     type="button"
@@ -2488,7 +2547,7 @@ export default function RequestRidesPage() {
                       (!selectedClient && !isClientScopedUser) ||
                       !phoneNumber.trim()
                     }
-                    className="crm-hover-lift w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-55"
+                    className="crm-hover-lift w-full rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-sm font-semibold text-slate-800 shadow-md backdrop-blur-sm disabled:cursor-not-allowed disabled:opacity-55"
                   >
                     {phoneChecking ? "Checking phone..." : "Check phone registration"}
                   </button>
@@ -2507,17 +2566,19 @@ export default function RequestRidesPage() {
               {mapClickPoint ? (
                 <details className={`${collapsibleCardClass} text-sm`} open={false}>
                   <summary className={collapsibleSummaryClass}>
-                    <span>Map point actions</span>
-                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-transform duration-200 group-open:rotate-180">
-                      <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.9">
+                    <span className="rr-make-panel-summary-title-md">Map point actions</span>
+                    <span className="inline-flex shrink-0 text-slate-600 transition-transform duration-300 group-open:rotate-180">
+                      <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.9">
                         <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </span>
                   </summary>
-                  <p className="mt-3 text-slate-700">
+                  <div className="rr-make-panel-body-clip">
+                  <div className="rr-make-panel-body space-y-3">
+                  <p className="text-slate-700">
                     {mapClickLoading ? "Resolving address..." : mapClickLabel || "Address not resolved"}
                   </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() =>
@@ -2527,7 +2588,7 @@ export default function RequestRidesPage() {
                           lon: mapClickPoint.lon,
                         })
                       }
-                      className="crm-hover-lift rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"
+                      className="crm-hover-lift rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm"
                     >
                       Set as Pickup location
                     </button>
@@ -2540,7 +2601,7 @@ export default function RequestRidesPage() {
                           lon: mapClickPoint.lon,
                         })
                       }
-                      className="crm-hover-lift rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"
+                      className="crm-hover-lift rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm"
                     >
                       Set as Destination
                     </button>
@@ -2559,10 +2620,12 @@ export default function RequestRidesPage() {
                           },
                         ])
                       }
-                      className="crm-hover-lift rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"
+                      className="crm-hover-lift w-full rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm"
                     >
                       Add as Stop along the way
                     </button>
+                  </div>
+                  </div>
                   </div>
                 </details>
               ) : null}
@@ -2577,17 +2640,22 @@ export default function RequestRidesPage() {
                     setFocusedPendingUploadId((prev) => (prev === id ? null : id))
                   }
                   onOptimizeItem={(id) => void optimizePendingUploadRoute(id)}
-                  cardClassName={rideCard}
+                  cardClassName={`pointer-events-auto ${rideCardStatic}`}
                   onConfirmAll={() => void handleConfirmPendingUploads()}
                   onClearAll={clearPendingUploads}
                   onRemove={removePendingUpload}
                 />
-                <article className={rideCard}>
-                  <p className="crm-label">Requested rides</p>
-                  {requestedRides.length === 0 ? (
-                    <p className="mt-2 text-sm text-muted">No rides requested yet.</p>
-                  ) : (
-                    <div className="mt-2 max-h-[32dvh] space-y-2 overflow-y-auto pr-1">
+                <div className="rounded-2xl border border-white/80 bg-white/85 p-3 shadow-lg backdrop-blur-xl">
+                  <p className="rr-make-panel-summary-title-sm">Requested rides</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {requestedRides.length === 0
+                      ? "No rides requested yet"
+                      : `${requestedRides.length} ride${requestedRides.length === 1 ? "" : "s"} in progress`}
+                  </p>
+                </div>
+                {requestedRides.length > 0 ? (
+                  <article className={`pointer-events-auto ${rideCardStatic}`}>
+                    <div className="max-h-[32dvh] space-y-2 overflow-y-auto pr-1">
                       {requestedRides.map((ride) => (
                         <details
                           key={ride.orderId}
@@ -2639,9 +2707,112 @@ export default function RequestRidesPage() {
                         </details>
                       ))}
                     </div>
-                  )}
-                </article>
+                  </article>
+                ) : null}
               </div>
+
+              </div>
+
+              {typeof document !== "undefined"
+                ? createPortal(
+                    <>
+                      {showClientDropdown && clientMenuRect ? (
+                        <div
+                          role="listbox"
+                          className={portalDropdownShellClass}
+                          style={{
+                            left: clientMenuRect.left,
+                            top: clientMenuRect.top,
+                            width: clientMenuRect.width,
+                          }}
+                        >
+                          {!clientsLoading && clients.length === 0 ? (
+                            <p className="px-3 py-2 text-xs text-slate-500">No clients available</p>
+                          ) : (
+                            clients.map((client) => {
+                              const key = `${client.tokenLabel}:${client.clientId}`;
+                              const active = selectedClientKey === key;
+                              return (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    setSelectedClientKey(key);
+                                    setPhoneSuggestions([]);
+                                    setPhoneLookupOk(null);
+                                    setPhoneLookupMessage(null);
+                                    setShowClientDropdown(false);
+                                  }}
+                                  className={`${dropdownOptionClass} ${active ? "bg-white" : ""}`}
+                                >
+                                  <p className="text-sm font-semibold text-slate-800">
+                                    {client.clientName} ({client.tokenLabel})
+                                  </p>
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      ) : null}
+                      {showPhoneSuggestions &&
+                      selectedClient &&
+                      phoneNumber.trim() &&
+                      phoneSuggestRect ? (
+                        <div
+                          role="listbox"
+                          className={portalDropdownShellClass}
+                          style={{
+                            left: phoneSuggestRect.left,
+                            top: phoneSuggestRect.top,
+                            width: phoneSuggestRect.width,
+                          }}
+                        >
+                          {suggestionsLoading ? (
+                            <p className="px-3 py-2 text-xs text-slate-500">Searching users...</p>
+                          ) : phoneSuggestions.length > 0 ? (
+                            phoneSuggestions.map((item) => {
+                              const phoneKey = normalizePhoneLookupKey(item.phone ?? "");
+                              const resolvedName =
+                                (phoneKey ? tenantEmployeeNameByPhone.get(phoneKey) : null) ||
+                                item.fullName?.trim() ||
+                                null;
+                              return (
+                                <button
+                                  key={`${item.userId}:${item.phone ?? "none"}`}
+                                  type="button"
+                                  onMouseDown={(event) => {
+                                    event.preventDefault();
+                                    const displayName = resolvedName || item.phone?.trim() || "employee";
+                                    if (item.phone) {
+                                      setPhoneNumber(item.phone);
+                                    }
+                                    setPhoneLookupOk(true);
+                                    setPhoneLookupMessage(
+                                      `Selected ${displayName}${item.phone ? ` (${item.phone})` : ""}.`,
+                                    );
+                                    setShowPhoneSuggestions(false);
+                                  }}
+                                  className={dropdownOptionClass}
+                                >
+                                  <p className="text-sm font-semibold text-slate-800">
+                                    {resolvedName || item.phone || "Employee"}
+                                  </p>
+                                  <p className="text-xs text-slate-600">
+                                    {item.phone ?? "Phone n/a"} • {item.source}
+                                  </p>
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <p className="px-3 py-2 text-xs text-slate-500">No matching users found.</p>
+                          )}
+                        </div>
+                      ) : null}
+                    </>,
+                    document.body,
+                  )
+                : null}
 
               </form>
             </div>
@@ -2657,17 +2828,22 @@ export default function RequestRidesPage() {
                 setFocusedPendingUploadId((prev) => (prev === id ? null : id))
               }
               onOptimizeItem={(id) => void optimizePendingUploadRoute(id)}
-              cardClassName={rideCard}
+              cardClassName={`pointer-events-auto ${rideCardStatic}`}
               onConfirmAll={() => void handleConfirmPendingUploads()}
               onClearAll={clearPendingUploads}
               onRemove={removePendingUpload}
             />
-            <article className={rideCard}>
-              <p className="crm-label">Requested rides</p>
-              {requestedRides.length === 0 ? (
-                <p className="mt-2 text-sm text-muted">No rides requested yet.</p>
-              ) : (
-                <div className="mt-2 max-h-[42dvh] space-y-2 overflow-y-auto pr-1">
+            <div className="pointer-events-auto rounded-2xl border border-white/80 bg-white/85 p-3 shadow-lg backdrop-blur-xl">
+              <p className="rr-make-panel-summary-title-sm">Requested rides</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {requestedRides.length === 0
+                  ? "No rides requested yet"
+                  : `${requestedRides.length} ride${requestedRides.length === 1 ? "" : "s"} in progress`}
+              </p>
+            </div>
+            {requestedRides.length > 0 ? (
+              <article className={`pointer-events-auto ${rideCardStatic}`}>
+                <div className="max-h-[42dvh] space-y-2 overflow-y-auto pr-1">
                   {requestedRides.map((ride) => (
                     <details
                       key={ride.orderId}
@@ -2719,11 +2895,10 @@ export default function RequestRidesPage() {
                     </details>
                   ))}
                 </div>
-              )}
-            </article>
+              </article>
+            ) : null}
           </aside>
         </div>
-      </div>
     </section>
   );
 }

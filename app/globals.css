@@ -155,6 +155,612 @@ body {
   gap: 1rem;
 }
 
+/*
+ * Make-style glass cards (documented in figma-integration; used on Access management).
+ * Semi-transparent frosted panels + hover — pairs with rounded-3xl on the element.
+ */
+.make-glass-card {
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.88),
+    rgba(250, 252, 255, 0.65)
+  );
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 18px 42px rgba(15, 23, 42, 0.12),
+    0 2px 8px rgba(15, 23, 42, 0.04);
+  backdrop-filter: blur(18px) saturate(145%);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  transition:
+    border-color 220ms var(--ease-ui),
+    box-shadow 220ms var(--ease-ui),
+    background 220ms var(--ease-ui);
+}
+
+/* Motion comes from .crm-hover-lift when both classes are used (e.g. stat tiles). */
+
+.make-glass-card-static {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: linear-gradient(
+    155deg,
+    rgba(255, 255, 255, 0.58),
+    rgba(248, 250, 252, 0.38)
+  );
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.55) inset,
+    0 14px 38px rgba(15, 23, 42, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px) saturate(155%);
+  -webkit-backdrop-filter: blur(20px) saturate(155%);
+  transition:
+    transform 220ms var(--ease-ui),
+    box-shadow 220ms var(--ease-ui),
+    border-color 220ms var(--ease-ui),
+    background 220ms var(--ease-ui);
+}
+
+.make-glass-card-static:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255, 255, 255, 0.92);
+  background: linear-gradient(
+    155deg,
+    rgba(255, 255, 255, 0.76),
+    rgba(248, 250, 252, 0.54)
+  );
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.75) inset,
+    0 24px 54px rgba(15, 23, 42, 0.14),
+    0 0 0 1px rgba(255, 45, 45, 0.14);
+}
+
+.make-glass-card-static[open] {
+  border-color: rgba(255, 255, 255, 0.88);
+  background: linear-gradient(
+    155deg,
+    rgba(255, 255, 255, 0.7),
+    rgba(248, 250, 252, 0.5)
+  );
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.65) inset,
+    0 18px 44px rgba(15, 23, 42, 0.12),
+    0 0 0 1px rgba(255, 59, 48, 0.1);
+}
+
+.make-glass-card-static[open]:hover {
+  transform: translateY(-2px);
+}
+
+.make-glass-card-static:focus-within {
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 20px 48px rgba(15, 23, 42, 0.13),
+    0 0 0 2px rgba(255, 45, 45, 0.22);
+}
+
+.make-glass-card-static summary:focus {
+  outline: none;
+}
+
+.make-glass-card-static summary:focus-visible {
+  outline: none;
+}
+
+.make-glass-card-static summary {
+  transition: background-color 220ms var(--ease-ui);
+  border-radius: 1.5rem 1.5rem 0 0;
+}
+
+.make-glass-card-static:not([open]) summary {
+  border-radius: 1.5rem;
+}
+
+.make-glass-card-static:hover summary {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+/* —— Glass “Make” shell: ambient gradients + page entrance from the left —— */
+@keyframes make-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.crm-make-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.crm-make-shell::before,
+.crm-make-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.crm-make-shell::before {
+  background: radial-gradient(
+    920px 520px at 14% 8%,
+    rgba(255, 45, 45, 0.15),
+    transparent 64%
+  );
+}
+
+.crm-make-shell::after {
+  background: radial-gradient(
+    800px 480px at 88% 10%,
+    rgba(255, 120, 140, 0.1),
+    transparent 60%
+  );
+  mix-blend-mode: multiply;
+  opacity: 0.9;
+}
+
+.make-shell-inner > header {
+  animation: make-slide-in 0.55s var(--ease-ui) backwards;
+  animation-delay: 0.04s;
+}
+
+.make-shell-main .crm-page > * {
+  animation: make-slide-in 0.58s var(--ease-ui) backwards;
+}
+
+.make-shell-main .crm-page > *:nth-child(1) {
+  animation-delay: 0.08s;
+}
+.make-shell-main .crm-page > *:nth-child(2) {
+  animation-delay: 0.13s;
+}
+.make-shell-main .crm-page > *:nth-child(3) {
+  animation-delay: 0.18s;
+}
+.make-shell-main .crm-page > *:nth-child(4) {
+  animation-delay: 0.23s;
+}
+.make-shell-main .crm-page > *:nth-child(5) {
+  animation-delay: 0.28s;
+}
+.make-shell-main .crm-page > *:nth-child(6) {
+  animation-delay: 0.33s;
+}
+.make-shell-main .crm-page > *:nth-child(7) {
+  animation-delay: 0.38s;
+}
+.make-shell-main .crm-page > *:nth-child(8) {
+  animation-delay: 0.43s;
+}
+.make-shell-main .crm-page > *:nth-child(9) {
+  animation-delay: 0.48s;
+}
+.make-shell-main .crm-page > *:nth-child(10) {
+  animation-delay: 0.53s;
+}
+.make-shell-main .crm-page > *:nth-child(11) {
+  animation-delay: 0.58s;
+}
+.make-shell-main .crm-page > *:nth-child(12) {
+  animation-delay: 0.63s;
+}
+
+/* Single root when a page omits .crm-page */
+.make-shell-main > *:not(.crm-page) {
+  animation: make-slide-in 0.58s var(--ease-ui) backwards;
+  animation-delay: 0.1s;
+}
+
+/* Optional: stronger volumetric hover on content panels (use alongside crm-surface) */
+.crm-panel-hover {
+  transition:
+    transform 200ms var(--ease-ui),
+    box-shadow 200ms var(--ease-ui),
+    border-color 200ms var(--ease-ui);
+}
+
+.crm-panel-hover:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    var(--shadow-lift),
+    0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+
+/* Interactive status pills (tables, ride cards, etc.) */
+.crm-status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 0.15rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+  transition:
+    transform 160ms var(--ease-ui),
+    box-shadow 160ms var(--ease-ui),
+    filter 160ms var(--ease-ui);
+  cursor: default;
+}
+
+.crm-status-pill:hover {
+  transform: scale(1.04);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+}
+
+.crm-status-pill--waiting {
+  background: rgba(250, 204, 21, 0.28);
+  color: #92400e;
+  border: 1px solid rgba(217, 119, 6, 0.22);
+}
+
+.crm-status-pill--progress {
+  background: rgba(59, 130, 246, 0.2);
+  color: #1e3a8a;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+}
+
+.crm-status-pill--success {
+  background: rgba(34, 197, 94, 0.22);
+  color: #14532d;
+  border: 1px solid rgba(22, 163, 74, 0.22);
+}
+
+.crm-status-pill--danger {
+  background: rgba(248, 113, 113, 0.22);
+  color: #7f1d1d;
+  border: 1px solid rgba(220, 38, 38, 0.22);
+}
+
+.crm-status-pill--muted {
+  background: rgba(148, 163, 184, 0.2);
+  color: #334155;
+  border: 1px solid rgba(100, 116, 139, 0.22);
+}
+
+.crm-status-pill--completed {
+  background: rgba(34, 197, 94, 0.22);
+  color: #14532d;
+  border: 1px solid rgba(22, 163, 74, 0.22);
+}
+
+/* —— Request Rides / Figma Make (classes referenced in request-rides/page.tsx) —— */
+.rr-map-chrome {
+  border-radius: 1.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.28),
+    rgba(248, 250, 252, 0.14)
+  );
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.65) inset,
+    0 24px 56px rgba(15, 23, 42, 0.14),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px) saturate(145%);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+}
+
+/* Column wrapper over the map: layout only; no panel chrome (cards provide visuals). */
+.rr-glass-column-shell {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.rr-glass-card {
+  border-radius: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.9),
+    rgba(250, 252, 255, 0.72)
+  );
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 20px 46px rgba(15, 23, 42, 0.13),
+    0 2px 8px rgba(15, 23, 42, 0.05);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  transition:
+    transform 220ms var(--ease-ui),
+    box-shadow 220ms var(--ease-ui),
+    border-color 220ms var(--ease-ui);
+}
+
+.rr-glass-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 1) inset,
+    0 26px 54px rgba(15, 23, 42, 0.17),
+    0 0 0 1px rgba(255, 59, 48, 0.12);
+}
+
+.rr-glass-card-static {
+  border-radius: 1.5rem;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow:
+    0 1px 0 #ffffff inset,
+    0 14px 36px rgba(15, 23, 42, 0.07);
+  transition:
+    transform 220ms var(--ease-ui),
+    box-shadow 220ms var(--ease-ui),
+    border-color 220ms var(--ease-ui);
+}
+
+.rr-glass-card-static:hover {
+  transform: translateY(-2px);
+  border-color: #cbd5e1;
+  box-shadow:
+    0 1px 0 #ffffff inset,
+    0 20px 46px rgba(15, 23, 42, 0.1),
+    0 0 0 1px rgba(255, 59, 48, 0.06);
+}
+
+.rr-make-panel {
+  border-radius: 1.5rem;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow:
+    0 1px 0 #ffffff inset,
+    0 16px 40px rgba(15, 23, 42, 0.08);
+  transition:
+    transform 200ms var(--ease-ui),
+    box-shadow 200ms var(--ease-ui),
+    border-color 200ms var(--ease-ui);
+}
+
+.rr-make-panel:hover {
+  transform: translateY(-2px);
+  border-color: #cbd5e1;
+  box-shadow:
+    0 1px 0 #ffffff inset,
+    0 22px 52px rgba(15, 23, 42, 0.11),
+    0 0 0 1px rgba(255, 59, 48, 0.06);
+}
+
+.rr-make-panel-summary {
+  display: flex;
+  cursor: pointer;
+  list-style: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  font-weight: 700;
+  color: #0f172a;
+  user-select: none;
+  transition: background-color 180ms var(--ease-ui);
+}
+
+.rr-make-panel-summary:hover {
+  background: #f8fafc;
+}
+
+.rr-make-panel-summary::-webkit-details-marker {
+  display: none;
+}
+
+/* In-panel combobox: opaque capsule (matches accordion chrome without glass translucency). */
+.rr-make-panel-dropdown-trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 1.5rem;
+  cursor: pointer;
+  list-style: none;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow:
+    0 1px 0 #ffffff inset,
+    0 10px 28px rgba(15, 23, 42, 0.06);
+  color: #0f172a;
+  user-select: none;
+  transition:
+    background-color 180ms var(--ease-ui),
+    box-shadow 180ms var(--ease-ui),
+    border-color 180ms var(--ease-ui);
+}
+
+.rr-make-panel-dropdown-trigger:hover:not(:disabled) {
+  border-color: #cbd5e1;
+  background: #fafafa;
+  box-shadow:
+    0 1px 0 #ffffff inset,
+    0 14px 36px rgba(15, 23, 42, 0.09);
+}
+
+.rr-make-panel-dropdown-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.rr-make-panel-dropdown-trigger:focus,
+.rr-make-panel-dropdown-trigger:focus-visible {
+  outline: none;
+}
+
+.rr-make-panel-dropdown-trigger:focus-visible:not(:disabled) {
+  box-shadow:
+    0 1px 0 #ffffff inset,
+    0 10px 28px rgba(15, 23, 42, 0.06),
+    0 0 0 2px rgba(148, 163, 184, 0.45);
+}
+
+.rr-make-panel-body {
+  padding: 1rem 1rem 1.15rem;
+}
+
+/* Smooth expand for Request Rides accordions (grid 0fr → 1fr). */
+details.rr-make-panel > .rr-make-panel-body-clip {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.42s var(--ease-ui);
+}
+
+details.rr-make-panel[open] > .rr-make-panel-body-clip {
+  grid-template-rows: 1fr;
+}
+
+@starting-style {
+  details.rr-make-panel[open] > .rr-make-panel-body-clip {
+    grid-template-rows: 0fr;
+  }
+}
+
+.rr-make-panel-body-clip > .rr-make-panel-body {
+  overflow: hidden;
+  min-height: 0;
+}
+
+details.rr-make-panel[open] > .rr-make-panel-body-clip > .rr-make-panel-body {
+  animation: rr-make-panel-body-soft-in 0.38s var(--ease-ui) both;
+}
+
+@keyframes rr-make-panel-body-soft-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rr-make-panel-summary-title-sm {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.rr-make-panel-summary-title-md {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+  transition: color 180ms var(--ease-ui);
+}
+
+.rr-make-panel:hover .rr-make-panel-summary-title-md {
+  color: #020617;
+}
+
+.rr-input-volumetric {
+  box-shadow:
+    inset 0 2px 5px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+}
+
+.rr-dropdown-panel {
+  margin-top: 0.25rem;
+  border-radius: 1rem;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 0.25rem;
+  box-shadow:
+    0 18px 46px rgba(15, 23, 42, 0.14),
+    0 1px 0 #ffffff inset;
+}
+
+.rr-dropdown-option {
+  width: 100%;
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.65rem;
+  text-align: left;
+  font-size: 0.875rem;
+  border: 1px solid transparent;
+  transition:
+    background-color 180ms var(--ease-ui),
+    transform 180ms var(--ease-ui),
+    border-color 180ms var(--ease-ui),
+    box-shadow 180ms var(--ease-ui);
+}
+
+.rr-dropdown-option:hover {
+  background: linear-gradient(180deg, #fff5f5 0%, #ffffff 100%);
+  border-color: rgba(255, 59, 48, 0.18);
+  transform: translateX(3px);
+  box-shadow:
+    0 4px 14px rgba(239, 68, 68, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.rr-primary-submit-wrap {
+  padding: 3px;
+  border-radius: 1.15rem;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 59, 48, 0.35),
+    rgba(255, 255, 255, 0.25)
+  );
+  box-shadow:
+    0 0 0 1px rgba(255, 59, 48, 0.18),
+    0 12px 32px rgba(239, 68, 68, 0.22);
+  transition:
+    box-shadow 200ms var(--ease-ui),
+    filter 200ms var(--ease-ui),
+    transform 200ms var(--ease-ui);
+}
+
+.rr-primary-submit-wrap:hover {
+  filter: brightness(1.03);
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 1px rgba(255, 59, 48, 0.28),
+    0 18px 42px rgba(239, 68, 68, 0.32);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .make-glass-card-static:hover,
+  .make-glass-card-static[open]:hover {
+    transform: none;
+  }
+
+  .rr-glass-card-static,
+  .rr-make-panel,
+  .rr-make-panel > .rr-make-panel-body-clip,
+  .rr-dropdown-option,
+  .rr-primary-submit-wrap {
+    transition-duration: 0.01ms !important;
+    animation: none !important;
+  }
+
+  details.rr-make-panel > .rr-make-panel-body-clip {
+    transition-duration: 0.01ms !important;
+  }
+
+  details.rr-make-panel[open] > .rr-make-panel-body-clip > .rr-make-panel-body {
+    animation: none !important;
+  }
+
+  .rr-glass-card-static:hover,
+  .rr-make-panel:hover,
+  .rr-dropdown-option:hover {
+    transform: none;
+  }
+
+  .rr-primary-submit-wrap:hover {
+    transform: none;
+  }
+}
+
 /* Keep MapLibre markers/popups above map canvas and interactive overlays */
 .maplibregl-canvas-container,
 .maplibregl-canvas {

@@ -960,6 +960,44 @@ export async function POST(request: Request) {
       await saveAuthStore(nextStore);
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
+    case "deleteTenantAccount": {
+      if (!isInternalAdmin(sessionUser)) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Forbidden" },
+          { status: 403 },
+        );
+      }
+      const tenantId = (payload.tenantId ?? "").trim();
+      if (!tenantId) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Missing tenant id." },
+          { status: 400 },
+        );
+      }
+      const accounts = store.tenantAccounts ?? [];
+      if (!accounts.some((item) => item.id === tenantId)) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Cabinet not found." },
+          { status: 404 },
+        );
+      }
+      const tenantRoles = { ...(store.tenantRoles ?? {}) };
+      delete tenantRoles[tenantId];
+      const nextStore: AuthStoreData = {
+        ...store,
+        tenantAccounts: accounts.filter((item) => item.id !== tenantId),
+        tenantRoles,
+        users: store.users.filter(
+          (user) => !(user.accountType === "client" && user.tenantId === tenantId),
+        ),
+      };
+      await saveAuthStore(nextStore);
+      return NextResponse.json<AuthActionResponse>({
+        ok: true,
+        message: "Client cabinet removed.",
+        data: sanitizeStore(nextStore),
+      });
+    }
     case "syncTenantEmployees": {
       if (!isInternalAdmin(sessionUser)) {
         return NextResponse.json<AuthActionResponse>(

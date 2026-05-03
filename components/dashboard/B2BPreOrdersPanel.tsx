@@ -2298,41 +2298,46 @@ export function B2BPreOrdersPanel({
       ) : null}
 
       {view !== "dashboard" || dashboardSection !== "yango" ? (
-      <div className="mb-0.5 rounded-2xl border border-border bg-panel p-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="grid w-full gap-2 sm:w-auto sm:grid-flow-col sm:auto-cols-max sm:items-end">
-          <label className="text-xs text-muted">
+      <div
+        className={
+          view === "orders"
+            ? "mb-0.5 glass-surface overflow-hidden rounded-3xl p-4"
+            : "mb-0.5 rounded-2xl border border-border bg-panel p-3"
+        }
+      >
+        <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
+          <label className="flex min-w-0 flex-col items-center text-center text-xs font-semibold uppercase tracking-wide text-muted">
             From
             <input
               type="date"
               value={fromDate}
               onChange={(event) => setFromDate(event.target.value)}
-              className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700 sm:w-auto"
+              className="crm-input mt-1.5 block h-10 min-h-10 w-full min-w-0 px-2.5 text-center text-sm text-slate-800"
             />
           </label>
-          <label className="text-xs text-muted">
+          <label className="flex min-w-0 flex-col items-center text-center text-xs font-semibold uppercase tracking-wide text-muted">
             To
             <input
               type="date"
               value={toDate}
               onChange={(event) => setToDate(event.target.value)}
-              className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700 sm:w-auto"
+              className="crm-input mt-1.5 block h-10 min-h-10 w-full min-w-0 px-2.5 text-center text-sm text-slate-800"
             />
           </label>
           {isClientScopedUser ? (
-            <label className="text-xs text-muted">
+            <label className="flex min-w-0 flex-col items-center text-center text-xs font-semibold uppercase tracking-wide text-muted">
               Client
-              <div className="crm-input mt-1 flex h-9 w-full items-center px-2.5 text-sm font-semibold text-slate-800 sm:w-auto">
+              <div className="crm-input mt-1.5 flex h-10 min-h-10 w-full min-w-0 items-center justify-center px-2.5 text-center text-sm font-semibold text-slate-800">
                 {fixedClientName ?? "Client from your cabinet"}
               </div>
             </label>
           ) : (
-            <label className="text-xs text-muted">
+            <label className="flex min-w-0 flex-col items-center text-center text-xs font-semibold uppercase tracking-wide text-muted">
               Client
               <select
                 value={clientFilter}
                 onChange={(event) => setClientFilter(event.target.value)}
-                className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700 sm:w-auto"
+                className="crm-input mt-1.5 block h-10 min-h-10 w-full min-w-0 px-2.5 text-center text-sm text-slate-800"
               >
                 {clientOptions.map((option) => (
                   <option key={option} value={option}>
@@ -2342,12 +2347,12 @@ export function B2BPreOrdersPanel({
               </select>
             </label>
           )}
-          <label className="text-xs text-muted">
+          <label className="flex min-w-0 flex-col items-center text-center text-xs font-semibold uppercase tracking-wide text-muted">
             Status
             <select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-              className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700 sm:w-auto"
+              className="crm-input mt-1.5 block h-10 min-h-10 w-full min-w-0 px-2.5 text-center text-sm text-slate-800"
             >
               <option value="all">All statuses</option>
               <option value="completed">Completed</option>
@@ -2356,12 +2361,12 @@ export function B2BPreOrdersPanel({
               {view === "dashboard" ? <option value="pending">Pending</option> : null}
             </select>
           </label>
-          <label className="text-xs text-muted">
+          <label className="flex min-w-0 flex-col items-center text-center text-xs font-semibold uppercase tracking-wide text-muted">
             Sort
             <select
               value={sortMode}
               onChange={(event) => setSortMode(event.target.value as SortMode)}
-              className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700 sm:w-auto"
+              className="crm-input mt-1.5 block h-10 min-h-10 w-full min-w-0 px-2.5 text-center text-sm text-slate-800"
             >
               <option value="date_desc">Date desc</option>
               <option value="date_asc">Date asc</option>
@@ -2369,7 +2374,6 @@ export function B2BPreOrdersPanel({
               <option value="client_desc">Client Z-A</option>
             </select>
           </label>
-          </div>
         </div>
       </div>
       ) : null}
@@ -2381,7 +2385,7 @@ export function B2BPreOrdersPanel({
             onClick={() =>
               setStatusFilter((prev) => (prev === "completed" ? "all" : "completed"))
             }
-            className={`rounded-2xl border border-emerald-200/70 bg-[linear-gradient(180deg,#ffffff_0%,#ecfdf5_100%)] p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_10px_22px_rgba(16,185,129,0.12)] transition hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_14px_28px_rgba(16,185,129,0.18)] ${
+            className={`rounded-2xl border border-emerald-200/70 bg-[linear-gradient(180deg,#ffffff_0%,#ecfdf5_100%)] p-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_10px_22px_rgba(16,185,129,0.12)] transition hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_14px_28px_rgba(16,185,129,0.18)] ${
               statusFilter === "completed" ? "ring-2 ring-emerald-300" : ""
             }`}
           >
@@ -2393,7 +2397,7 @@ export function B2BPreOrdersPanel({
             onClick={() =>
               setStatusFilter((prev) => (prev === "cancelled" ? "all" : "cancelled"))
             }
-            className={`rounded-2xl border border-rose-200/70 bg-[linear-gradient(180deg,#ffffff_0%,#fff1f2_100%)] p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_10px_22px_rgba(244,63,94,0.12)] transition hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_14px_28px_rgba(244,63,94,0.18)] ${
+            className={`rounded-2xl border border-rose-200/70 bg-[linear-gradient(180deg,#ffffff_0%,#fff1f2_100%)] p-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_10px_22px_rgba(244,63,94,0.12)] transition hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_14px_28px_rgba(244,63,94,0.18)] ${
               statusFilter === "cancelled" ? "ring-2 ring-rose-300" : ""
             }`}
           >
@@ -2405,7 +2409,7 @@ export function B2BPreOrdersPanel({
             onClick={() =>
               setStatusFilter((prev) => (prev === "in_progress" ? "all" : "in_progress"))
             }
-            className={`rounded-2xl border border-amber-200/70 bg-[linear-gradient(180deg,#ffffff_0%,#fffbeb_100%)] p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_10px_22px_rgba(245,158,11,0.12)] transition hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_14px_28px_rgba(245,158,11,0.18)] ${
+            className={`rounded-2xl border border-amber-200/70 bg-[linear-gradient(180deg,#ffffff_0%,#fffbeb_100%)] p-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_10px_22px_rgba(245,158,11,0.12)] transition hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_14px_28px_rgba(245,158,11,0.18)] ${
               statusFilter === "in_progress" ? "ring-2 ring-amber-300" : ""
             }`}
           >
@@ -2777,73 +2781,83 @@ export function B2BPreOrdersPanel({
           </button>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full">
+          <table className="min-w-full border-separate border-spacing-y-2">
             <thead className="bg-[#f6f6f8]">
               <tr>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
                   Order
                 </th>
                 {!isClientScopedUser ? (
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
                     Client
                   </th>
                 ) : null}
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
                   Status
                 </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                  Scheduled for
-                  <span className="ml-1 normal-case text-[11px] font-normal text-slate-500">
+                <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                  Scheduled for{" "}
+                  <span className="normal-case text-[11px] font-normal text-slate-500">
                     (ride time)
                   </span>
                 </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
                   Client paid
                 </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
                   Adminka
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody>
               {filteredRows.map((row) => {
                 const displayStatus = getOrderStatusDisplay(row);
+                const rowTint =
+                  displayStatus.tone === "completed"
+                    ? "[&>td]:bg-emerald-50/45"
+                    : displayStatus.tone === "cancelled"
+                      ? "[&>td]:bg-rose-50/45"
+                      : displayStatus.tone === "in_progress"
+                        ? "[&>td]:bg-sky-50/45"
+                        : "[&>td]:bg-slate-50/45";
                 return (
                   <tr
                     key={`${row.tokenLabel}:${row.orderId}`}
-                    className={`crm-hover-lift cursor-pointer hover:bg-white/80 ${
-                      displayStatus.tone === "completed"
-                        ? "bg-emerald-50/45"
-                        : displayStatus.tone === "cancelled"
-                          ? "bg-rose-50/45"
-                          : displayStatus.tone === "in_progress"
-                            ? "bg-sky-50/45"
-                            : "bg-slate-50/45"
-                    }`}
+                    className={`group cursor-pointer transition-all duration-200 ease-out hover:-translate-y-0.5 hover:drop-shadow-[0_14px_36px_rgba(15,23,42,0.14)] ${rowTint} hover:[&>td]:bg-white/95`}
                     onClick={() => openOrderModal(row)}
                   >
-                    <td className="px-3 py-2 text-sm font-medium text-slate-900">{row.orderId}</td>
-                    {!isClientScopedUser ? (
-                      <td className="px-3 py-2 text-sm text-slate-700">{row.clientName}</td>
-                    ) : null}
-                    <td className="px-3 py-2 text-sm">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                          displayStatus.tone === "completed"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : displayStatus.tone === "cancelled"
-                              ? "bg-rose-100 text-rose-700"
-                              : displayStatus.tone === "in_progress"
-                                ? "bg-sky-100 text-sky-700"
-                                : "bg-slate-100 text-slate-700"
-                        }`}
-                      >
-                        {displayStatus.label}
-                      </span>
+                    <td className="rounded-l-xl border border-transparent px-3 py-2.5 text-center text-sm font-medium text-slate-900 transition-colors duration-200">
+                      {row.orderId}
                     </td>
-                    <td className="px-3 py-2 text-sm text-slate-700">{row.scheduledAt}</td>
-                    <td className="px-3 py-2 text-sm text-slate-700">{formatMoney(row.clientPaid)}</td>
-                    <td className="px-3 py-2 text-sm">
+                    {!isClientScopedUser ? (
+                      <td className="border border-transparent px-3 py-2.5 text-center text-sm text-slate-700 transition-colors duration-200">
+                        {row.clientName}
+                      </td>
+                    ) : null}
+                    <td className="border border-transparent px-3 py-2.5 text-center text-sm transition-colors duration-200">
+                      <div className="flex flex-wrap items-center justify-center gap-1.5">
+                        <span
+                          className={`crm-status-pill ${
+                            displayStatus.tone === "completed"
+                              ? "crm-status-pill--completed"
+                              : displayStatus.tone === "cancelled"
+                                ? "crm-status-pill--danger"
+                                : displayStatus.tone === "in_progress"
+                                  ? "crm-status-pill--progress"
+                                  : "crm-status-pill--muted"
+                          }`}
+                        >
+                          {displayStatus.label}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="border border-transparent px-3 py-2.5 text-center text-sm text-slate-700 transition-colors duration-200">
+                      {row.scheduledAt}
+                    </td>
+                    <td className="border border-transparent px-3 py-2.5 text-center text-sm text-slate-700 transition-colors duration-200">
+                      {formatMoney(row.clientPaid)}
+                    </td>
+                    <td className="rounded-r-xl border border-transparent px-3 py-2.5 text-center text-sm transition-colors duration-200">
                       <Link
                         href={`https://go-admin-frontend.taxi.yandex-team.ru/orders/${row.orderId}`}
                         className="inline-flex items-center rounded-lg border border-slate-200 bg-white/85 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-white"

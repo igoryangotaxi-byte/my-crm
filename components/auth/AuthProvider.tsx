@@ -65,6 +65,8 @@ type AuthContextValue = {
   canAccessArea: (area: BusinessArea) => boolean;
   canAccessDashboardBlock: (block: DashboardBlockKey) => boolean;
   tenantAccounts: TenantAccount[];
+  /** Remove a client cabinet and all its client-portal users (main CRM internal admins only). */
+  deleteTenantAccount: (tenantId: string) => Promise<void>;
   lastLoginEmail: string;
 };
 
@@ -394,6 +396,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [runAction],
   );
 
+  const deleteTenantAccount = useCallback(
+    async (tenantId: string) => {
+      const result = await runAction({ action: "deleteTenantAccount", tenantId });
+      if (!result.ok) {
+        throw new Error(result.message ?? "Could not remove cabinet");
+      }
+    },
+    [runAction],
+  );
+
   const canAccessArea = useCallback(
     (area: BusinessArea) => {
       if (!currentUser || currentUser.status !== "approved") {
@@ -458,6 +470,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       canAccessArea,
       canAccessDashboardBlock,
       tenantAccounts,
+      deleteTenantAccount,
       lastLoginEmail,
     }),
     [
@@ -484,6 +497,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       canAccessArea,
       canAccessDashboardBlock,
       tenantAccounts,
+      deleteTenantAccount,
       lastLoginEmail,
     ],
   );

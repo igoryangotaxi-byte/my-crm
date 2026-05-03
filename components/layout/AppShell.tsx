@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import {
   RouteLoadingBar,
@@ -8,16 +9,35 @@ import {
 import { Sidebar } from "@/components/layout/Sidebar";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const mapFullBleed =
+    pathname === "/request-rides" || pathname.startsWith("/client/request-rides");
+
   return (
     <RouteLoadingProvider>
       <RouteLoadingBar />
-      <div className="relative flex min-h-screen bg-background">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(800px_460px_at_20%_6%,rgba(255,45,45,0.18),transparent_70%)]" />
+      <div
+        className={`crm-make-shell relative flex overflow-x-hidden bg-background ${
+          mapFullBleed ? "min-h-dvh" : "min-h-screen"
+        }`}
+      >
         <Sidebar />
 
-        <div className="relative z-[1] flex min-h-screen flex-1 flex-col">
+        <div
+          className={`make-shell-inner relative z-[1] flex flex-1 flex-col ${
+            mapFullBleed ? "h-dvh min-h-0 pl-0" : "min-h-screen pl-16"
+          }`}
+        >
           <Header />
-          <main className="flex-1 px-0.5 py-5 lg:px-0.5 lg:py-6">{children}</main>
+          <main
+            className={
+              mapFullBleed
+                ? "make-shell-main flex min-h-0 flex-1 flex-col overflow-visible p-0"
+                : "make-shell-main flex-1 mx-3 px-5 py-5 lg:py-6"
+            }
+          >
+            {children}
+          </main>
         </div>
       </div>
     </RouteLoadingProvider>

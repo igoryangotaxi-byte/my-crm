@@ -283,6 +283,10 @@ export type AuthApiActionRequest =
   | {
       action: "syncTenantEmployees";
       tenantId: string;
+    }
+  | {
+      action: "deleteTenantAccount";
+      tenantId: string;
     };
 
 export const defaultClientPortalPermissions: Record<ClientPortalPageKey, boolean> = {

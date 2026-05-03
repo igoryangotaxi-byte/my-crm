@@ -37,6 +37,10 @@
     "**/*.tsx"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "docs/design-reference",
+    "__figma__entrypoint__.ts",
+    "vite.config.ts",
+    "src"
   ]
 }

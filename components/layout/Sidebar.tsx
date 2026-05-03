@@ -104,14 +104,6 @@ function CommunicationsIcon({ className = "h-4 w-4" }: IconProps) {
   );
 }
 
-function ChevronRightIcon({ className = "h-3.5 w-3.5" }: IconProps) {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" className={className} stroke="currentColor" strokeWidth="2">
-      <path d="M7 4l6 6-6 6" />
-    </svg>
-  );
-}
-
 const navItems = [
   {
     href: "/request-rides",
@@ -192,60 +184,72 @@ export function Sidebar() {
     ? []
     : footerNavItems.filter((item) => canAccess(item.page));
 
+  const navIconWellActive =
+    "border border-white/25 bg-gradient-to-br from-red-500 to-red-700 text-white shadow-[0_10px_28px_rgba(239,68,68,0.45)]";
+  const navIconWellInactive =
+    "border border-white/70 bg-white/95 text-slate-700 shadow-[0_6px_18px_rgba(15,23,42,0.1)]";
+
+  const navLabelReveal =
+    "min-w-0 overflow-hidden text-sm font-medium transition-[max-width,opacity,transform] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] max-w-0 -translate-x-1 opacity-0 group-hover:max-w-[13rem] group-hover:translate-x-0 group-hover:opacity-100 motion-reduce:transition-none";
+
   return (
-    <div className="relative z-20 ml-3 mr-0.5 my-3 h-[calc(100vh-1.5rem)] w-20 shrink-0">
-      <aside className="group crm-surface absolute left-0 top-0 h-full w-20 overflow-hidden rounded-3xl p-4 transition-[width] duration-200 ease-out hover:w-64">
-        <div className="mb-6 border-b border-white/60 pb-4">
-          <div className="flex justify-center group-hover:hidden">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/75 text-accent shadow-[0_8px_16px_rgba(15,23,42,0.12)]">
-              <DashboardIcon className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="hidden group-hover:block">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-              Appli Taxi Oz
-            </p>
-            <p className="mt-1 text-base font-semibold text-slate-900">
-              {currentUser?.accountType === "client" ? "Client Cabinet" : "Operations"}
-            </p>
-          </div>
+    <aside
+      className="group fixed left-0 top-0 z-[70] flex h-screen w-16 max-w-[min(16rem,calc(100vw-0.5rem))] origin-top-left translate-y-0 scale-100 flex-col overflow-y-auto overflow-x-hidden rounded-r-3xl border-r border-white/40 bg-white/35 p-4 shadow-2xl shadow-black/10 backdrop-blur-3xl transition-[width,transform,box-shadow] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] [scrollbar-width:thin] motion-reduce:transition-none hover:w-64 hover:-translate-y-1 hover:scale-[1.012] hover:shadow-[0_28px_64px_rgba(15,23,42,0.22)] motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100"
+      aria-label="Main navigation"
+    >
+      <div className="mb-7 flex min-w-0 items-center gap-3 px-0.5">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-red-700 text-white shadow-[0_10px_26px_rgba(239,68,68,0.5)]">
+          <DashboardIcon className="h-5 w-5" />
         </div>
+        <div className="min-w-0 flex-1 overflow-hidden transition-[max-width,opacity] duration-300 ease-out max-w-0 opacity-0 group-hover:max-w-[11rem] group-hover:opacity-100 motion-reduce:transition-none">
+          <p className="truncate text-lg font-semibold text-slate-900">Appli Taxi Oz</p>
+          <p className="truncate text-xs text-slate-600">
+            {currentUser?.accountType === "client" ? "Client Cabinet" : "Operations"}
+          </p>
+        </div>
+      </div>
 
-        <nav className="space-y-1">
-          {filteredNavItems.map((item) => {
-            const isActive = pathname.startsWith(item.href);
-            const Icon = item.icon;
+      <nav className="flex flex-col gap-2.5">
+        {filteredNavItems.map((item) => {
+          const isActive = pathname.startsWith(item.href);
+          const Icon = item.icon;
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                title={item.label}
-                onClick={() => {
-                  if (!pathname.startsWith(item.href)) {
-                    startRouteLoading();
-                  }
-                }}
-                className={`crm-hover-lift flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                  isActive
-                    ? "crm-button-primary text-white"
-                    : "bg-white/50 text-slate-700 hover:bg-white/80"
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              title={item.label}
+              onClick={() => {
+                if (!pathname.startsWith(item.href)) {
+                  startRouteLoading();
+                }
+              }}
+              className={`group/nav flex w-full items-center justify-center gap-0 rounded-2xl py-1.5 pl-1.5 pr-1.5 transition-all duration-300 ease-out group-hover:justify-start group-hover:gap-3 group-hover:py-2 group-hover:pr-3 ${
+                isActive
+                  ? "group-hover:bg-gradient-to-r group-hover:from-red-500 group-hover:to-red-600 group-hover:shadow-lg group-hover:shadow-red-500/45"
+                  : "hover:bg-white/45"
+              }`}
+            >
+              <span
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-transform duration-200 ease-out group-hover/nav:translate-x-0.5 ${isActive ? navIconWellActive : navIconWellInactive}`}
+              >
+                <Icon className="h-5 w-5" />
+              </span>
+              <span
+                className={`truncate whitespace-nowrap ${navLabelReveal} ${
+                  isActive ? "text-white group-hover:text-white" : "text-slate-800"
                 }`}
               >
-                <span className="flex min-w-0 flex-1 items-center justify-center gap-2.5 group-hover:justify-start">
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span className="hidden truncate group-hover:block">{item.label}</span>
-                </span>
-                <ChevronRightIcon
-                  className={`hidden h-3.5 w-3.5 shrink-0 group-hover:block ${isActive ? "text-white/85" : "text-slate-400"}`}
-                />
-              </Link>
-            );
-          })}
-        </nav>
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
 
-        <div className="mt-6 border-t border-white/60 pt-4">
-          <nav className="space-y-1">
+      {filteredFooterNavItems.length > 0 ? (
+        <div className="mt-4 border-t border-white/35 pt-4">
+          <nav className="flex flex-col gap-2.5">
             {filteredFooterNavItems.map((item) => {
               const isActive = pathname.startsWith(item.href);
               const Icon = item.icon;
@@ -260,25 +264,30 @@ export function Sidebar() {
                       startRouteLoading();
                     }
                   }}
-                  className={`crm-hover-lift flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                  className={`group/nav flex w-full items-center justify-center gap-0 rounded-2xl py-1.5 pl-1.5 pr-1.5 transition-all duration-300 ease-out group-hover:justify-start group-hover:gap-3 group-hover:py-2 group-hover:pr-3 ${
                     isActive
-                      ? "crm-button-primary text-white"
-                      : "bg-white/50 text-slate-700 hover:bg-white/80"
+                      ? "group-hover:bg-gradient-to-r group-hover:from-red-500 group-hover:to-red-600 group-hover:shadow-lg group-hover:shadow-red-500/45"
+                      : "hover:bg-white/45"
                   }`}
                 >
-                  <span className="flex min-w-0 flex-1 items-center justify-center gap-2.5 group-hover:justify-start">
-                    <Icon className="h-4 w-4 shrink-0" />
-                    <span className="hidden truncate group-hover:block">{item.label}</span>
+                  <span
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-transform duration-200 ease-out group-hover/nav:translate-x-0.5 ${isActive ? navIconWellActive : navIconWellInactive}`}
+                  >
+                    <Icon className="h-5 w-5" />
                   </span>
-                  <ChevronRightIcon
-                    className={`hidden h-3.5 w-3.5 shrink-0 group-hover:block ${isActive ? "text-white/85" : "text-slate-400"}`}
-                  />
+                  <span
+                    className={`truncate whitespace-nowrap ${navLabelReveal} ${
+                      isActive ? "text-white group-hover:text-white" : "text-slate-800"
+                    }`}
+                  >
+                    {item.label}
+                  </span>
                 </Link>
               );
             })}
           </nav>
         </div>
-      </aside>
-    </div>
+      ) : null}
+    </aside>
   );
 }

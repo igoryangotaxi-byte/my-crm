@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-05-03",
+    title: "CRM UI: glass surfaces, layout, Communications & Pre-Orders (0.2.6)",
+    notes:
+      "f49cea85 — App version 0.2.6. Unified Make-style CRM chrome: AppShell/main spacing, glass sidebar and header, Request Rides full-viewport map padding; Pre-Orders filter strip and Orders/B2B tables aligned to glass cards; Communications panel glass + nested panels; Access management and client portal sections use shared spacing; globals.css glass/Make helpers. Restored my-crm package.json and stopped tracking node_modules accidentally committed on develop.",
+  },
+  {
+    date: "2026-05-03",
     title: "Request Rides: suggests fixed on Vercel (read-only FS) (0.2.5)",
     notes:
       "b1ceec2 — App version 0.2.5. Yango user search called upsertMappedUserId to persist phone→user_id in data/request-rides-user-map.json; on Vercel the filesystem is read-only, the write threw, and the whole searchRequestRideUsers call failed → empty Rider Phone dropdown. writeUserMap errors are now swallowed so suggests complete; local/dev unchanged where the file is writable.",

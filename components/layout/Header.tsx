@@ -110,15 +110,20 @@ export function Header() {
     return area === "b2c" ? `${prefix}/drivers-map` : `${prefix}/request-rides`;
   };
 
+  const mapFullBleed =
+    pathname === "/request-rides" || pathname.startsWith("/client/request-rides");
+
   return (
-    <header className="crm-surface sticky top-3 z-10 mx-3 mb-2 flex h-16 items-center justify-between rounded-2xl border-white/70 px-5 lg:px-6">
-      <div className="flex min-w-0 items-center gap-3">
+    <header
+      className={`crm-surface sticky top-3 z-20 mb-2 flex min-h-16 shrink-0 items-center justify-between rounded-2xl border-white/70 px-5 py-3 lg:px-6 ${
+        mapFullBleed ? "ml-[calc(0.75rem+4rem)] mr-3" : "mx-3"
+      }`}
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-3">
         <div className="min-w-0">
-          <p className="text-sm text-muted">Appli Taxi Oz</p>
-          <p className="truncate text-base font-semibold text-foreground">
-            {currentPage.title}{" "}
-            <span className="font-medium text-muted">{currentPage.subtitle}</span>
-          </p>
+          <p className="crm-label mb-0.5 text-[0.62rem] tracking-[0.14em] text-muted">Appli Taxi Oz</p>
+          <h1 className="truncate text-lg font-bold tracking-tight text-foreground sm:text-xl">{currentPage.title}</h1>
+          <p className="crm-subtitle mt-0.5 line-clamp-2 max-sm:text-[0.8rem]">{currentPage.subtitle}</p>
         </div>
       </div>
 

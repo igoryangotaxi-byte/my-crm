@@ -203,17 +203,17 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
   };
 
   return (
-    <section className="crm-page mx-3 space-y-4">
-      <div className="rounded-2xl border border-white/70 bg-white/85 p-4">
-        <h1 className="text-lg font-semibold text-slate-900">Communications</h1>
-        <p className="text-sm text-slate-600">
+    <section className="crm-page">
+      <div className="glass-surface rounded-3xl p-4 lg:p-5">
+        <h1 className="crm-title-xl">Communications</h1>
+        <p className="crm-subtitle mt-2 max-w-2xl">
           {mode === "main"
             ? "Choose a client and send bulk communication to its registered employees."
             : "Send communication to employees registered in your cabinet."}
         </p>
       </div>
 
-      <div className="rounded-2xl border border-white/70 bg-white/85 p-4">
+      <div className="glass-surface space-y-5 rounded-3xl p-4 lg:p-5">
         {mode === "main" ? (
           <label className="block">
             <span className="crm-label mb-1 block">Client</span>
@@ -251,8 +251,8 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
           </p>
         )}
 
-        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
-          <p className="mb-2 text-sm font-semibold text-slate-900">Find employee by phone</p>
+        <div className="make-glass-card-static rounded-2xl p-4">
+          <p className="crm-section-title mb-3">Find employee by phone</p>
           <div className="relative">
             <input
               value={phoneQuery}
@@ -270,7 +270,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
               placeholder={hasTargetScope ? "+972..." : "Select client first"}
             />
             {showPhoneSuggestions && hasTargetScope && phoneQuery.trim() ? (
-              <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+              <div className="glass-surface absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl shadow-lg">
                 {suggestionsLoading ? (
                   <p className="px-3 py-2 text-xs text-slate-500">Searching users...</p>
                 ) : phoneSuggestions.length > 0 ? (
@@ -282,7 +282,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
                         event.preventDefault();
                         addRecipient(item);
                       }}
-                      className="block w-full border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-slate-50"
+                      className="block w-full border-b border-white/40 px-3 py-2 text-left last:border-b-0 hover:bg-white/60"
                     >
                       <p className="text-sm font-semibold text-slate-900">
                         {item.fullName || item.phone || "Employee"}
@@ -296,8 +296,8 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
               </div>
             ) : null}
           </div>
-          <div className="mt-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Selected recipients</p>
+          <div className="mt-4">
+            <p className="crm-label mb-1">Selected recipients</p>
             {selectedRecipients.length === 0 ? (
               <p className="mt-1 text-xs text-slate-500">No recipients selected yet.</p>
             ) : (
@@ -305,13 +305,13 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
                 {selectedRecipients.map((item) => (
                   <span
                     key={`${item.userId}:${item.phone ?? "none"}`}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-700"
+                    className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/55 px-2.5 py-1 text-xs text-slate-700 backdrop-blur-sm"
                   >
                     {item.fullName || item.phone || "Employee"} · {item.phone}
                     <button
                       type="button"
                       onClick={() => removeRecipient(item.userId)}
-                      className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-300"
+                      className="rounded-full bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 shadow-sm hover:bg-white"
                     >
                       ×
                     </button>
@@ -322,7 +322,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
           </div>
         </div>
 
-        <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-white p-3">
+        <div className="space-y-3 make-glass-card-static rounded-2xl p-4">
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -335,14 +335,14 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
             <button
               type="button"
               disabled
-              className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-400"
+              className="rounded-xl border border-white/60 bg-white/35 px-3 py-2 text-sm font-semibold text-slate-400 backdrop-blur-sm"
             >
               WhatsApp (soon)
             </button>
             <button
               type="button"
               disabled
-              className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-400"
+              className="rounded-xl border border-white/60 bg-white/35 px-3 py-2 text-sm font-semibold text-slate-400 backdrop-blur-sm"
             >
               Telegram (soon)
             </button>
@@ -353,8 +353,9 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
             className="crm-input min-h-28 w-full px-3 py-2 text-sm"
             placeholder="Type message text..."
           />
-          <p className="text-xs text-slate-500">
-            Selected recipients: {selectedPhones.length}. SMS is sent only to selected employees.
+          <p className="crm-subtitle">
+            Selected recipients: <span className="font-semibold tabular-nums text-slate-700">{selectedPhones.length}</span>.
+            SMS is sent only to selected employees.
           </p>
           {statusMessage ? <p className="text-sm text-emerald-700">{statusMessage}</p> : null}
           {statusError ? <p className="text-sm text-rose-700">{statusError}</p> : null}
@@ -370,7 +371,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
             onClick={(event) => event.stopPropagation()}
           >
             <h3 className="text-lg font-semibold text-slate-900">Confirm SMS sending</h3>
-            <div className="mt-3 space-y-1 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+            <div className="mt-3 space-y-1 make-glass-card-static rounded-xl p-3 text-sm text-slate-700">
               <p>
                 <span className="font-semibold text-slate-900">Channel:</span> SMS
               </p>
@@ -386,7 +387,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
               <p className="pt-1">
                 <span className="font-semibold text-slate-900">Message:</span>
               </p>
-              <p className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm whitespace-pre-wrap">
+              <p className="rounded-lg border border-white/50 bg-white/45 p-2 text-sm whitespace-pre-wrap backdrop-blur-sm">
                 {messageText.trim()}
               </p>
             </div>
@@ -394,7 +395,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
               <button
                 type="button"
                 onClick={() => setIsConfirmOpen(false)}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                className="rounded-xl border border-white/70 bg-white/70 px-3 py-2 text-sm font-semibold text-slate-700 backdrop-blur-sm transition hover:bg-white"
               >
                 Cancel
               </button>

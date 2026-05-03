@@ -30,7 +30,7 @@ export default async function ClientOrdersPage() {
       : undefined;
   if (!scope) {
     return (
-      <section className="crm-page relative mx-3">
+      <section className="crm-page relative">
         <B2BPreOrdersPanel rows={[]} view="orders" />
       </section>
     );
@@ -46,7 +46,7 @@ export default async function ClientOrdersPage() {
   });
 
   return (
-    <section className="crm-page relative mx-3">
+    <section className="crm-page relative">
       <B2BPreOrdersPanel
         rows={newRows}
         view="orders"
