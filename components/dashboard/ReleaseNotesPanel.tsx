@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-05-03",
+    title: "Sidebar: logo squircle aligned with nav icons (0.2.10)",
+    notes:
+      "RELEASE_HASH — App version 0.2.10. Branding row matches nav Link layout: same horizontal padding (pl-1.5 pr-1.5), justify-center when the rail is narrow, and the same group-hover spacing so the top dashboard icon lines up with the squircles below.",
+  },
+  {
+    date: "2026-05-03",
     title: "Request Rides: wider column, requested-ride cards UX (0.2.9)",
     notes:
       "6f6d7acd — App version 0.2.9. Request Rides left column wider (36rem), lighter frosted shell over map; map fit padding updated. Requested rides cards: staggered entrance, smooth accordion expand, hover lift; closed cards translucent with blur, solid opaque panel when opened. PostCSS Tailwind plugin restore remains from earlier commit.",
