@@ -110,18 +110,23 @@ export async function POST(request: Request) {
       }
       enriched = enriched.slice(0, 8);
     } else {
+      /** CRM operators (no tenant scope): local JSON map is gitignored and absent on Vercel — resolve Yango user_id by phone like tenant suggestions do. */
       const store = await loadAuthStore();
       const digitsQuery = query.replace(/\D/g, "");
       const normalizedQuery = query.trim().toLowerCase();
+      const tLabel = tokenLabel.trim();
+      const cId = clientId.trim();
       const localCandidates = store.users
         .filter(
           (user) =>
             user.accountType === "client" &&
-            user.tokenLabel === tokenLabel &&
-            user.apiClientId === clientId,
+            (user.tokenLabel ?? "").trim() === tLabel &&
+            (user.apiClientId ?? "").trim() === cId,
         )
         .slice(0, 400);
       const existingByPhone = new Set(enriched.map((item) => normalizePhoneKey(item.phone ?? "")));
+      let phoneProbes = 0;
+      const maxPhoneProbes = 8;
       for (const user of localCandidates) {
         if (enriched.length >= 8) break;
         const phone = user.phoneNumber?.trim() ?? "";
@@ -132,11 +137,24 @@ export async function POST(request: Request) {
           normalizedQuery.length > 0 && name.length > 0 && name.toLowerCase().includes(normalizedQuery);
         const phoneMatched = digitsQuery.length > 0 && key.includes(digitsQuery);
         if (!nameMatched && !phoneMatched) continue;
-        const mappedUserId = resolveMappedUserId({
-          tokenLabel,
-          clientId,
+        let mappedUserId = resolveMappedUserId({
+          tokenLabel: tLabel,
+          clientId: cId,
           phoneNumber: phone,
         });
+        if (!mappedUserId && phoneProbes < maxPhoneProbes) {
+          phoneProbes += 1;
+          try {
+            const probe = await resolveRequestRideUserByPhone({
+              tokenLabel: tLabel,
+              clientId: cId,
+              phoneNumber: phone,
+            });
+            mappedUserId = probe?.userId ?? null;
+          } catch {
+            mappedUserId = null;
+          }
+        }
         if (!mappedUserId) continue;
         existingByPhone.add(key);
         enriched.unshift({

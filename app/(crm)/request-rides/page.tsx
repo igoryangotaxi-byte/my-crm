@@ -524,6 +524,16 @@ export default function RequestRidesPage() {
     };
   }, [isClientScopedUser]);
 
+  /** CRM admins need a cabinet for Yango user search; default first client so Rider Phone suggests work without an extra click. */
+  useEffect(() => {
+    if (isClientScopedUser) return;
+    if (clientsLoading) return;
+    if (clients.length === 0) return;
+    if (selectedClientKey) return;
+    const first = clients[0];
+    setSelectedClientKey(`${first.tokenLabel}:${first.clientId}`);
+  }, [isClientScopedUser, clientsLoading, clients, selectedClientKey]);
+
   useEffect(() => {
     return () => {
       if (pollTimerRef.current) {
