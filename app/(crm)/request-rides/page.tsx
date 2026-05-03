@@ -285,6 +285,78 @@ function CarIcon() {
   );
 }
 
+function RequestedRideAccordionCard({
+  ride,
+  index,
+  deletingOrderId,
+  onRemove,
+}: {
+  ride: RequestedRideItem;
+  index: number;
+  deletingOrderId: string | null;
+  onRemove: (orderId: string) => void | Promise<void>;
+}) {
+  return (
+    <details
+      className="rr-requested-ride-card"
+      style={{ animationDelay: `${Math.min(index, 14) * 45}ms` }}
+    >
+      <summary className="rr-requested-ride-card-summary">
+        <div className="flex items-start gap-2">
+          <span className="rr-requested-ride-icon-wrap mt-0.5 rounded-lg bg-slate-100 p-1 text-slate-700">
+            <CarIcon />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-slate-900">Scheduled ride</p>
+            <p className="text-xs text-slate-600">
+              {new Date(ride.scheduledAtIso ?? ride.createdAtIso).toLocaleString()} local time
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              We&apos;ll start looking for a car in advance and notify you when it&apos;s ready
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <span className="text-xs text-slate-500">{getRideStatusLabel(ride.status)}</span>
+            <span className="rr-requested-ride-chevron text-slate-400">
+              <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.9">
+                <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+          </div>
+        </div>
+        <div className="mt-2 flex items-center gap-2 border-t border-slate-100/90 pt-2 text-sm text-slate-700">
+          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-400 text-[10px]">
+            o
+          </span>
+          <span className="truncate">
+            {ride.sourceAddress} {"->"} {ride.destinationAddress}
+          </span>
+        </div>
+      </summary>
+      <div className="rr-requested-ride-body-clip">
+        <div className="rr-requested-ride-body">
+          <div className="space-y-1 border-t border-slate-100 bg-white/95 px-3 py-2.5 text-sm text-slate-700">
+            <p>Order: {ride.orderId}</p>
+            <p>Phone: {ride.riderPhone}</p>
+            <p>Class: {ride.rideClass}</p>
+            <p>Client: {ride.tokenLabel}</p>
+            <div className="pt-1">
+              <button
+                type="button"
+                disabled={deletingOrderId === ride.orderId}
+                onClick={() => void onRemove(ride.orderId)}
+                className="crm-hover-lift rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deletingOrderId === ride.orderId ? "Cancelling…" : "Remove (cancel trip)"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </details>
+  );
+}
+
 export default function RequestRidesPage() {
   const { currentUser, users } = useAuth();
   const isClientScopedUser = currentUser?.accountType === "client";
@@ -401,7 +473,8 @@ export default function RequestRidesPage() {
   const mapFitPadding = useMemo((): RequestRidesMapFitPadding => {
     /** Map is `fixed inset-0`; pad for sidebar + form column (aligned with header title). */
     if (overlayWideLayout) {
-      return { top: 56, bottom: 56, left: 532, right: rightOverlayVisible ? 288 : 56 };
+      /** Left pad matches sidebar + glass column (≈36rem form + outer shell padding). */
+      return { top: 56, bottom: 56, left: 724, right: rightOverlayVisible ? 288 : 56 };
     }
     return { top: 88, bottom: 40, left: 148, right: 20 };
   }, [overlayWideLayout, rightOverlayVisible]);
@@ -2019,14 +2092,14 @@ export default function RequestRidesPage() {
           </div>
 
           <div className="pointer-events-none absolute inset-0 z-10 pb-4 pl-[calc(0.75rem+4rem+1.25rem)] pr-3 pt-[39px] lg:pl-[calc(0.75rem+4rem+1.5rem)] lg:pr-4">
-            <div className="rr-glass-column-shell pointer-events-auto flex h-full max-w-[24rem] flex-col overflow-x-hidden pr-1">
+            <div className="rr-glass-column-shell pointer-events-auto flex h-full w-full max-w-[min(36rem,calc(100vw-1.5rem))] flex-col overflow-x-hidden rounded-3xl p-3 lg:p-4">
               <form
                 onSubmit={handleSubmit}
                 className="flex min-h-0 flex-1 flex-col pointer-events-auto"
               >
               <div
                 ref={rideFormScrollRef}
-                className="relative z-10 min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden pb-6 pr-1"
+                className="relative z-10 min-h-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden pb-6 pr-0.5"
               >
               <details
                 className={`${collapsibleCardClass} relative z-30`}
@@ -2655,56 +2728,15 @@ export default function RequestRidesPage() {
                 </div>
                 {requestedRides.length > 0 ? (
                   <article className={`pointer-events-auto ${rideCardStatic}`}>
-                    <div className="max-h-[32dvh] space-y-2 overflow-y-auto pr-1">
-                      {requestedRides.map((ride) => (
-                        <details
+                    <div className="rr-requested-ride-list max-h-[32dvh] space-y-3 overflow-y-auto pr-1">
+                      {requestedRides.map((ride, index) => (
+                        <RequestedRideAccordionCard
                           key={ride.orderId}
-                          className="overflow-hidden rounded-xl border border-slate-100 bg-slate-50/90 shadow-sm"
-                        >
-                          <summary className="cursor-pointer list-none p-3 text-sm text-slate-800">
-                            <div className="flex items-start gap-2">
-                              <span className="mt-0.5 rounded-lg bg-slate-100 p-1 text-slate-700">
-                                <CarIcon />
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <p className="font-semibold text-slate-900">Scheduled ride</p>
-                                <p className="text-xs text-slate-600">
-                                  {new Date(ride.scheduledAtIso ?? ride.createdAtIso).toLocaleString()} local time
-                                </p>
-                                <p className="mt-1 text-xs text-slate-500">
-                                  We&apos;ll start looking for a car in advance and notify you when it&apos;s ready
-                                </p>
-                              </div>
-                              <span className="text-xs text-slate-500">
-                                {getRideStatusLabel(ride.status)}
-                              </span>
-                            </div>
-                            <div className="mt-2 flex items-center gap-2 border-t border-slate-100 pt-2 text-sm text-slate-700">
-                              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-400 text-[10px]">
-                                o
-                              </span>
-                              <span className="truncate">
-                                {ride.sourceAddress} {"->"} {ride.destinationAddress}
-                              </span>
-                            </div>
-                          </summary>
-                          <div className="space-y-1 border-t border-slate-100 bg-white/90 px-3 py-2 text-sm text-slate-700">
-                            <p>Order: {ride.orderId}</p>
-                            <p>Phone: {ride.riderPhone}</p>
-                            <p>Class: {ride.rideClass}</p>
-                            <p>Client: {ride.tokenLabel}</p>
-                            <div className="pt-1">
-                              <button
-                                type="button"
-                                disabled={deletingOrderId === ride.orderId}
-                                onClick={() => void removeRequestedRide(ride.orderId)}
-                                className="crm-hover-lift rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                {deletingOrderId === ride.orderId ? "Cancelling…" : "Remove (cancel trip)"}
-                              </button>
-                            </div>
-                          </div>
-                        </details>
+                          ride={ride}
+                          index={index}
+                          deletingOrderId={deletingOrderId}
+                          onRemove={removeRequestedRide}
+                        />
                       ))}
                     </div>
                   </article>
@@ -2843,56 +2875,15 @@ export default function RequestRidesPage() {
             </div>
             {requestedRides.length > 0 ? (
               <article className={`pointer-events-auto ${rideCardStatic}`}>
-                <div className="max-h-[42dvh] space-y-2 overflow-y-auto pr-1">
-                  {requestedRides.map((ride) => (
-                    <details
+                <div className="rr-requested-ride-list max-h-[42dvh] space-y-3 overflow-y-auto pr-1">
+                  {requestedRides.map((ride, index) => (
+                    <RequestedRideAccordionCard
                       key={ride.orderId}
-                      className="overflow-hidden rounded-xl border border-slate-100 bg-slate-50/90 shadow-sm"
-                    >
-                      <summary className="cursor-pointer list-none p-3 text-sm text-slate-800">
-                        <div className="flex items-start gap-2">
-                          <span className="mt-0.5 rounded-lg bg-slate-100 p-1 text-slate-700">
-                            <CarIcon />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-slate-900">Scheduled ride</p>
-                            <p className="text-xs text-slate-600">
-                              {new Date(ride.scheduledAtIso ?? ride.createdAtIso).toLocaleString()} local time
-                            </p>
-                            <p className="mt-1 text-xs text-slate-500">
-                              We&apos;ll start looking for a car in advance and notify you when it&apos;s ready
-                            </p>
-                          </div>
-                          <span className="text-xs text-slate-500">
-                            {getRideStatusLabel(ride.status)}
-                          </span>
-                        </div>
-                        <div className="mt-2 flex items-center gap-2 border-t border-slate-100 pt-2 text-sm text-slate-700">
-                          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-400 text-[10px]">
-                            o
-                          </span>
-                          <span className="truncate">
-                            {ride.sourceAddress} {"->"} {ride.destinationAddress}
-                          </span>
-                        </div>
-                      </summary>
-                      <div className="space-y-1 border-t border-slate-100 bg-white/90 px-3 py-2 text-sm text-slate-700">
-                        <p>Order: {ride.orderId}</p>
-                        <p>Phone: {ride.riderPhone}</p>
-                        <p>Class: {ride.rideClass}</p>
-                        <p>Client: {ride.tokenLabel}</p>
-                        <div className="pt-1">
-                          <button
-                            type="button"
-                            disabled={deletingOrderId === ride.orderId}
-                            onClick={() => void removeRequestedRide(ride.orderId)}
-                            className="crm-hover-lift rounded-lg border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {deletingOrderId === ride.orderId ? "Cancelling…" : "Remove (cancel trip)"}
-                          </button>
-                        </div>
-                      </div>
-                    </details>
+                      ride={ride}
+                      index={index}
+                      deletingOrderId={deletingOrderId}
+                      onRemove={removeRequestedRide}
+                    />
                   ))}
                 </div>
               </article>
