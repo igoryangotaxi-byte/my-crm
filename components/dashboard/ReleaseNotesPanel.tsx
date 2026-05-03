@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-05-03",
+    title: "Vercel: force npm install (drop stray pnpm locks) (0.2.8)",
+    notes:
+      "b8679194 — App version 0.2.8. Removed committed pnpm-lock.yaml and pnpm-workspace.yaml from the Figma merge so Vercel no longer runs pnpm against an incompatible lockfile. Added vercel.json with installCommand npm ci and buildCommand npm run build; package.json engines.node >=20.9.0 for consistent Node on Vercel.",
+  },
+  {
+    date: "2026-05-03",
     title: "Pre-Orders & Communications: compact filter toolbars (0.2.7)",
     notes:
       "a2696dbb — App version 0.2.7. Pre-Orders filter strip uses a flat white toolbar (slate borders, h-9 controls) with calendar icons on From/To dates and a single status pill with colored dots for Assigned vs Unassigned counts. Communications: client select and phone search share the same bordered toolbar row (search + chevron affordances, aligned dropdown), slate-styled suggestion list and recipient chips, consistent channel button height.",

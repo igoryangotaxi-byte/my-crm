@@ -2,6 +2,9 @@
 
 # dependencies
 /node_modules
+# Project standard is npm; accidental pnpm files make Vercel pick the wrong package manager
+/pnpm-lock.yaml
+/pnpm-workspace.yaml
 /.pnp
 .pnp.*
 .yarn/*
