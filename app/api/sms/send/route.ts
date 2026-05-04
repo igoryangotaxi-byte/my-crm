@@ -70,7 +70,7 @@ export async function POST(request: Request) {
         ok: true,
         skipped: true,
         reason:
-          "SMS outbound is disabled until INFORU_SMS_ENABLED=true (Inforu KYC / API send must be cleared first).",
+          "SMS outbound is disabled until INFORU_SMS_ENABLED=true in environment variables (e.g. Vercel → Settings → Environment Variables, or .env.local), then redeploy or restart the dev server. Turn this on only after Inforu has approved API send for your account (KYC).",
       },
       { headers: { "Cache-Control": "no-store" } },
     );

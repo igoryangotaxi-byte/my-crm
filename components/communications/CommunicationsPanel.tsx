@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { OrderUpdatesTab } from "@/components/communications/OrderUpdatesTab";
 import type { YangoApiClientRef } from "@/types/crm";
 
 type CommunicationsPanelMode = "main" | "client";
@@ -78,8 +79,11 @@ function IconChevronDown({ className }: { className?: string }) {
   );
 }
 
+type CommunicationsMainTab = "bulk" | "orderUpdates";
+
 export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
   const { currentUser } = useAuth();
+  const [communicationsTab, setCommunicationsTab] = useState<CommunicationsMainTab>("bulk");
   const [apiClients, setApiClients] = useState<YangoApiClientRef[]>([]);
   const [selectedClientRef, setSelectedClientRef] = useState<YangoApiClientRef | null>(null);
   const [selectedRecipients, setSelectedRecipients] = useState<CommunicationUser[]>([]);
@@ -248,6 +252,33 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
         </p>
       </div>
 
+      {mode === "main" ? (
+        <div className="glass-surface mb-4 flex gap-1 rounded-2xl border border-slate-200/80 bg-white/70 p-1 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setCommunicationsTab("bulk")}
+            className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+              communicationsTab === "bulk"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            Bulk SMS
+          </button>
+          <button
+            type="button"
+            onClick={() => setCommunicationsTab("orderUpdates")}
+            className={`flex-1 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+              communicationsTab === "orderUpdates"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            Order Updates
+          </button>
+        </div>
+      ) : null}
+
       <div className="glass-surface space-y-5 rounded-3xl p-4 lg:p-5">
         <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-2">
@@ -292,121 +323,132 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
               </p>
             )}
 
-            <label className="relative min-w-0 flex-1 lg:min-w-[280px]">
-              <span className="crm-label mb-1 block">Find employee by phone</span>
-              <div className="relative">
-                <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  value={phoneQuery}
-                  onChange={(event) => {
-                    setPhoneQuery(event.target.value);
-                    setShowPhoneSuggestions(true);
-                    setStatusError(null);
-                  }}
-                  onFocus={() => setShowPhoneSuggestions(true)}
-                  onBlur={() => {
-                    window.setTimeout(() => setShowPhoneSuggestions(false), 120);
-                  }}
-                  disabled={!hasTargetScope}
-                  className="crm-input h-9 w-full rounded-lg border-slate-200 bg-white pl-9 pr-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-                  placeholder={hasTargetScope ? "+972..." : "Select client first"}
-                />
-                {showPhoneSuggestions && hasTargetScope && phoneQuery.trim() ? (
-                  <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
-                    {suggestionsLoading ? (
-                      <p className="px-3 py-2 text-xs text-slate-500">Searching users...</p>
-                    ) : phoneSuggestions.length > 0 ? (
-                      phoneSuggestions.map((item) => (
-                        <button
-                          key={`${item.userId}:${item.phone ?? "none"}`}
-                          type="button"
-                          onMouseDown={(event) => {
-                            event.preventDefault();
-                            addRecipient(item);
-                          }}
-                          className="block w-full border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-slate-50"
-                        >
-                          <p className="text-sm font-semibold text-slate-900">
-                            {item.fullName || item.phone || "Employee"}
-                          </p>
-                          <p className="text-xs text-slate-500">{item.phone}</p>
-                        </button>
-                      ))
-                    ) : (
-                      <p className="px-3 py-2 text-xs text-slate-500">No matching users found.</p>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            </label>
-          </div>
-        </div>
-
-        <div className="make-glass-card-static rounded-2xl p-4">
-          <div>
-            <p className="crm-label mb-1">Selected recipients</p>
-            {selectedRecipients.length === 0 ? (
-              <p className="mt-1 text-xs text-slate-500">No recipients selected yet.</p>
-            ) : (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {selectedRecipients.map((item) => (
-                  <span
-                    key={`${item.userId}:${item.phone ?? "none"}`}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700"
-                  >
-                    {item.fullName || item.phone || "Employee"} · {item.phone}
-                    <button
-                      type="button"
-                      onClick={() => removeRecipient(item.userId)}
-                      className="rounded-full bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 shadow-sm hover:bg-white"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
+            {(mode === "client" || (mode === "main" && communicationsTab === "bulk")) && (
+              <label className="relative min-w-0 flex-1 lg:min-w-[280px]">
+                <span className="crm-label mb-1 block">Find employee by phone</span>
+                <div className="relative">
+                  <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={phoneQuery}
+                    onChange={(event) => {
+                      setPhoneQuery(event.target.value);
+                      setShowPhoneSuggestions(true);
+                      setStatusError(null);
+                    }}
+                    onFocus={() => setShowPhoneSuggestions(true)}
+                    onBlur={() => {
+                      window.setTimeout(() => setShowPhoneSuggestions(false), 120);
+                    }}
+                    disabled={!hasTargetScope}
+                    className="crm-input h-9 w-full rounded-lg border-slate-200 bg-white pl-9 pr-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                    placeholder={hasTargetScope ? "+972..." : "Select client first"}
+                  />
+                  {showPhoneSuggestions && hasTargetScope && phoneQuery.trim() ? (
+                    <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                      {suggestionsLoading ? (
+                        <p className="px-3 py-2 text-xs text-slate-500">Searching users...</p>
+                      ) : phoneSuggestions.length > 0 ? (
+                        phoneSuggestions.map((item) => (
+                          <button
+                            key={`${item.userId}:${item.phone ?? "none"}`}
+                            type="button"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              addRecipient(item);
+                            }}
+                            className="block w-full border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-slate-50"
+                          >
+                            <p className="text-sm font-semibold text-slate-900">
+                              {item.fullName || item.phone || "Employee"}
+                            </p>
+                            <p className="text-xs text-slate-500">{item.phone}</p>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="px-3 py-2 text-xs text-slate-500">No matching users found.</p>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              </label>
             )}
           </div>
         </div>
 
-        <div className="space-y-3 make-glass-card-static rounded-2xl p-4">
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="crm-button-primary inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold"
-              onClick={() => setIsConfirmOpen(true)}
-              disabled={!canSend}
-            >
-              {sending ? "Sending SMS..." : "Send SMS"}
-            </button>
-            <button
-              type="button"
-              disabled
-              className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-400"
-            >
-              WhatsApp (soon)
-            </button>
-            <button
-              type="button"
-              disabled
-              className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-400"
-            >
-              Telegram (soon)
-            </button>
-          </div>
-          <textarea
-            value={messageText}
-            onChange={(event) => setMessageText(event.target.value)}
-            className="crm-input min-h-28 w-full px-3 py-2 text-sm"
-            placeholder="Type message text..."
-          />
-          <p className="crm-subtitle">
-            Selected recipients: <span className="font-semibold tabular-nums text-slate-700">{selectedPhones.length}</span>.
-            SMS is sent only to selected employees.
-          </p>
-          {statusMessage ? <p className="text-sm text-emerald-700">{statusMessage}</p> : null}
-          {statusError ? <p className="text-sm text-rose-700">{statusError}</p> : null}
-        </div>
+        {mode === "main" && communicationsTab === "orderUpdates" ? (
+          <OrderUpdatesTab selectedClient={selectedClientRef} />
+        ) : null}
+
+        {(mode === "client" || (mode === "main" && communicationsTab === "bulk")) && (
+          <>
+            <div className="make-glass-card-static rounded-2xl p-4">
+              <div>
+                <p className="crm-label mb-1">Selected recipients</p>
+                {selectedRecipients.length === 0 ? (
+                  <p className="mt-1 text-xs text-slate-500">No recipients selected yet.</p>
+                ) : (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedRecipients.map((item) => (
+                      <span
+                        key={`${item.userId}:${item.phone ?? "none"}`}
+                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700"
+                      >
+                        {item.fullName || item.phone || "Employee"} · {item.phone}
+                        <button
+                          type="button"
+                          onClick={() => removeRecipient(item.userId)}
+                          className="rounded-full bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 shadow-sm hover:bg-white"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-3 make-glass-card-static rounded-2xl p-4">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="crm-button-primary inline-flex h-9 items-center rounded-lg px-3 text-sm font-semibold"
+                  onClick={() => setIsConfirmOpen(true)}
+                  disabled={!canSend}
+                >
+                  {sending ? "Sending SMS..." : "Send SMS"}
+                </button>
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-400"
+                >
+                  WhatsApp (soon)
+                </button>
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-400"
+                >
+                  Telegram (soon)
+                </button>
+              </div>
+              <textarea
+                value={messageText}
+                onChange={(event) => setMessageText(event.target.value)}
+                className="crm-input min-h-28 w-full px-3 py-2 text-sm"
+                placeholder="Type message text..."
+              />
+              <p className="crm-subtitle">
+                Selected recipients:{" "}
+                <span className="font-semibold tabular-nums text-slate-700">{selectedPhones.length}</span>. SMS is sent
+                only to selected employees.
+              </p>
+              {statusMessage ? <p className="text-sm text-emerald-700">{statusMessage}</p> : null}
+              {statusError ? <p className="text-sm text-rose-700">{statusError}</p> : null}
+            </div>
+          </>
+        )}
       </div>
       {isConfirmOpen ? (
         <div

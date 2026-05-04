@@ -13,6 +13,12 @@ import {
   type PendingUpload,
   type PendingUploadAddress,
 } from "@/components/request-rides/PendingUploadsPanel";
+import {
+  DEFAULT_ORDER_SMS_TEMPLATES,
+  type OrderSmsTemplateId,
+  buildDriverOnWaySmsText,
+  buildRequestedRideSmsText,
+} from "@/lib/order-sms-templates";
 import { dedupePhones, normalizePhone } from "@/lib/phone-utils";
 import { publicErrorMessage } from "@/lib/public-error-message";
 import { downloadBulkUploadSampleXlsx } from "@/lib/xlsx-bulk-upload-sample";
@@ -174,40 +180,6 @@ function createEmptyStopField(): StopField {
   return { id: globalThis.crypto.randomUUID(), text: "", lat: null, lon: null, phone: "" };
 }
 
-const SMS_REQUEST_TZ = "Asia/Jerusalem";
-
-function formatRideTimeForSms(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  try {
-    const formatter = new Intl.DateTimeFormat("en-GB", {
-      timeZone: SMS_REQUEST_TZ,
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-    return formatter.format(date).replace(",", "");
-  } catch {
-    return date.toISOString();
-  }
-}
-
-function buildRequestedRideSmsText(
-  scheduledAtIso: string | null,
-  createdAtIso: string,
-  meta?: { traceId?: string | null },
-): string {
-  const base = scheduledAtIso
-    ? `Hey, someone requested a pre-order on ${formatRideTimeForSms(scheduledAtIso)} with Yango. Be ready on time and have a nice trip.`
-    : `Hey, someone requested a ride for you ${formatRideTimeForSms(createdAtIso)}. Be ready on time and have a nice trip.`;
-  const tid = meta?.traceId?.trim();
-  if (!tid) return base;
-  return `${base} trace_id=${tid}`;
-}
-
 function appendYangoTraceIdsToErrorLine(
   base: string,
   traceId: string | null | undefined,
@@ -219,25 +191,6 @@ function appendYangoTraceIdsToErrorLine(
   if (tid && !s.includes("trace_id=")) s += ` trace_id=${tid}`;
   if (rid && !s.includes("request_id=")) s += ` request_id=${rid}`;
   return s;
-}
-
-function buildDriverOnWaySmsText(status: RequestRideStatus): string {
-  const fullName =
-    [status.driverFirstName ?? null, status.driverLastName ?? null].filter(Boolean).join(" ").trim() ||
-    (status.driverName ?? "").trim();
-  const carParts = [status.carModel?.trim(), status.carPlate?.trim()].filter(
-    (entry): entry is string => Boolean(entry && entry.length > 0),
-  );
-  if (carParts.length > 0 && fullName) {
-    return `Hey, your driver is on the way ${carParts.join(", ")}, ${fullName}.`;
-  }
-  if (carParts.length > 0) {
-    return `Hey, your driver is on the way ${carParts.join(", ")}.`;
-  }
-  if (fullName) {
-    return `Hey, your driver ${fullName} is on the way.`;
-  }
-  return "Hey, your driver is on the way.";
 }
 
 function detectInputLanguage(value: string): "he" | "ru" | "en" {
@@ -544,6 +497,46 @@ export default function RequestRidesPage() {
         : clients.find((c) => `${c.tokenLabel}:${c.clientId}` === selectedClientKey) ?? null,
     [clients, isClientScopedUser, selectedClientKey],
   );
+
+  const [orderSmsMerged, setOrderSmsMerged] = useState<Record<OrderSmsTemplateId, string>>(() => ({
+    ...DEFAULT_ORDER_SMS_TEMPLATES,
+  }));
+
+  useEffect(() => {
+    const tokenLabel = selectedClient?.tokenLabel?.trim();
+    const clientId = selectedClient?.clientId?.trim();
+    if (!tokenLabel || !clientId) {
+      setOrderSmsMerged({ ...DEFAULT_ORDER_SMS_TEMPLATES });
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const params = new URLSearchParams({ tokenLabel, clientId });
+        const response = await fetch(`/api/order-sms-templates?${params.toString()}`, {
+          cache: "no-store",
+        });
+        const payload = (await response.json().catch(() => null)) as {
+          ok?: boolean;
+          merged?: Record<OrderSmsTemplateId, string>;
+        } | null;
+        if (cancelled || !response.ok || !payload?.ok || !payload.merged) {
+          if (!cancelled) {
+            setOrderSmsMerged({ ...DEFAULT_ORDER_SMS_TEMPLATES });
+          }
+          return;
+        }
+        setOrderSmsMerged(payload.merged);
+      } catch {
+        if (!cancelled) {
+          setOrderSmsMerged({ ...DEFAULT_ORDER_SMS_TEMPLATES });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedClient?.tokenLabel, selectedClient?.clientId]);
 
   useEffect(() => {
     if (selectedClient) {
@@ -1158,7 +1151,7 @@ export default function RequestRidesPage() {
     if (previousLifecycle === "driver_assigned") return;
     if (driverOnWayDispatchRef.current.has(ride.orderId)) return;
     driverOnWayDispatchRef.current.add(ride.orderId);
-    const text = buildDriverOnWaySmsText(nextStatus);
+    const text = buildDriverOnWaySmsText(orderSmsMerged, nextStatus);
     const smsResult = await sendSms({
       phones: ride.addressPhones,
       text,
@@ -1382,7 +1375,7 @@ export default function RequestRidesPage() {
       setRequestedRides((prev) => [createdRide, ...prev.filter((item) => item.orderId !== created.orderId)]);
       setCreateResult(created);
       if (addressPhones.length > 0) {
-        const text = buildRequestedRideSmsText(scheduleAtIso, createdAtIso, {
+        const text = buildRequestedRideSmsText(orderSmsMerged, scheduleAtIso, createdAtIso, {
           traceId: created.traceId,
         });
         const smsResult = await sendSms({
@@ -1955,7 +1948,7 @@ export default function RequestRidesPage() {
           ),
         );
         if (bulkAddressPhones.length > 0) {
-          const text = buildRequestedRideSmsText(snapshot.scheduleAtIso, createdAtIso, {
+          const text = buildRequestedRideSmsText(orderSmsMerged, snapshot.scheduleAtIso, createdAtIso, {
             traceId: created.traceId,
           });
           const smsResult = await sendSms({
