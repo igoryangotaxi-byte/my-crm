@@ -9,7 +9,7 @@ const releaseItems: ReleaseItem[] = [
     date: "2026-05-04",
     title: "Communications: Order Updates SMS templates + test send (0.2.13)",
     notes:
-      "App version 0.2.13. Communications: new Order Updates tab (main CRM only)—per API client (tokenLabel + clientId) editable SMS for preorder, immediate ride, and driver-on-way; defaults match Request Rides; KV store appli:order-sms-templates:v1; GET/PUT /api/order-sms-templates with change history; Test modal sends preview via /api/sms/send (communications). Request Rides loads merged templates per client. SMS skip reason clarifies Vercel/.env.local and redeploy. .env.example comment for INFORU_SMS_ENABLED.",
+      "c976cfbb — App version 0.2.13. Communications: new Order Updates tab (main CRM only)—per API client (tokenLabel + clientId) editable SMS for preorder, immediate ride, and driver-on-way; defaults match Request Rides; KV store appli:order-sms-templates:v1; GET/PUT /api/order-sms-templates with change history; Test modal sends preview via /api/sms/send (communications). Request Rides loads merged templates per client. SMS skip reason clarifies Vercel/.env.local and redeploy. .env.example comment for INFORU_SMS_ENABLED.",
   },
   {
     date: "2026-05-04",
