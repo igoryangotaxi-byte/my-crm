@@ -9,7 +9,7 @@ const releaseItems: ReleaseItem[] = [
     date: "2026-05-04",
     title: "Request Rides: create rider in Yango + corp CC pairing (0.2.12)",
     notes:
-      "App version 0.2.12. Rider phone suggest: optional Create in Yango cabinet with Full name; POST /api/request-rides-user-ensure. Yango user create uses Israeli 972 phone normalization, POST /2.0/users only, cost center IDs from listYangoCostCenters resolved per same corp client id as header (fixes cost_centers_id validation); yangoCorpClientIdProbeOrder across suggest/resolve/ensure. Suggest popover ref keeps panel open when focusing Full name. Parser-safe cc helpers. Commit on main: see git log -1 after deploy.",
+      "d1916b15 — App version 0.2.12. Rider phone suggest: optional Create in Yango cabinet with Full name; POST /api/request-rides-user-ensure. Yango user create uses Israeli 972 phone normalization, POST /2.0/users only, cost center IDs from listYangoCostCenters resolved per same corp client id as header (fixes cost_centers_id validation); yangoCorpClientIdProbeOrder across suggest/resolve/ensure. Suggest popover ref keeps panel open when focusing Full name. Parser-safe cc helpers. Commit on main: see git log -1 after deploy.",
   },
   {
     date: "2026-05-04",
