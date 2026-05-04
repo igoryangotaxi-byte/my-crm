@@ -58,3 +58,25 @@ export function dedupePhones(values: Array<string | null | undefined>): string[]
   }
   return out;
 }
+
+/**
+ * Yango B2B `POST /2.0/users` validation expects Israeli mobile as digits only, `^972…`,
+ * length 11–12 (see VALIDATION_ERROR from integration API).
+ */
+export function normalizePhoneForYangoCorpUserCreate(value: string): string {
+  const d = value.replace(/\D/g, "");
+  if (!d) return "";
+  if (d.startsWith("972")) {
+    return d.length > 12 ? d.slice(0, 12) : d;
+  }
+  if (d.startsWith("0") && d.length >= 9) {
+    return `972${d.slice(1)}`.slice(0, 12);
+  }
+  if (d.length === 9 && d.startsWith("5")) {
+    return `972${d}`;
+  }
+  if (d.length === 10 && d.startsWith("5")) {
+    return `972${d}`.slice(0, 12);
+  }
+  return d;
+}

@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-05-04",
+    title: "Request Rides: create rider in Yango + corp CC pairing (0.2.12)",
+    notes:
+      "App version 0.2.12. Rider phone suggest: optional Create in Yango cabinet with Full name; POST /api/request-rides-user-ensure. Yango user create uses Israeli 972 phone normalization, POST /2.0/users only, cost center IDs from listYangoCostCenters resolved per same corp client id as header (fixes cost_centers_id validation); yangoCorpClientIdProbeOrder across suggest/resolve/ensure. Suggest popover ref keeps panel open when focusing Full name. Parser-safe cc helpers. Commit on main: see git log -1 after deploy.",
+  },
+  {
+    date: "2026-05-04",
     title: "Request Rides Yango + VIPLuxTravel & IFA cabinets (0.2.11)",
     notes:
       "0d4016dd — App version 0.2.11. Request Rides: CORP cost center fields on orders/create when UUID resolves; client id for Yango matches lookup (no forced dashed header); phone→user_id map accepts dashed/undashed client_id keys; optional REQUEST_RIDES_CC_DEBUG; invalid CC labels cleared instead of blocking create. Static cabinets VIPLuxTravel (YANGO_TOKEN_VIP_LUX_TRAVEL) and IFA (YANGO_TOKEN_IFA), sync-yango-env-tokens-to-kv + Vercel env scripts. suggest route normalizes client id scope. UI updates on Request Rides page; trace fields on create errors.",

@@ -33,6 +33,8 @@ export async function POST(request: Request) {
   const clientId = scope?.apiClientId ?? normalizeString(body?.clientId);
   const query = normalizeString(body?.query);
   const clientIdKey = clientId ? normalizeYangoClientIdKey(clientId) : "";
+  /** Pass raw scope `apiClientId` into Yango (not only dashed key) so corp header matches the cabinet token. */
+  const clientIdForYango = clientId.trim();
 
   if (!tokenLabel || !clientId || !query) {
     return Response.json(
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
   try {
     let users: Awaited<ReturnType<typeof searchRequestRideUsers>> = [];
     try {
-      users = await searchRequestRideUsers({ tokenLabel, clientId: clientIdKey, query, limit: 8 });
+      users = await searchRequestRideUsers({ tokenLabel, clientId: clientIdForYango, query, limit: 8 });
     } catch {
       users = [];
     }
@@ -80,7 +82,7 @@ export async function POST(request: Request) {
             try {
               const probe = await resolveRequestRideUserByPhone({
                 tokenLabel,
-                clientId: clientIdKey,
+                clientId: clientIdForYango,
                 phoneNumber: phone,
               });
               resolvedRemoteUserId = probe?.userId ?? "";
@@ -152,7 +154,7 @@ export async function POST(request: Request) {
           try {
             const probe = await resolveRequestRideUserByPhone({
               tokenLabel: tLabel,
-              clientId: cId,
+              clientId: clientIdForYango,
               phoneNumber: phone,
             });
             mappedUserId = probe?.userId ?? null;

@@ -60,6 +60,13 @@ type UserSuggestResponse = {
   error?: string;
 };
 
+type UserEnsureResponse = {
+  ok: boolean;
+  created?: boolean;
+  user?: { userId: string; phone: string | null; fullName: string | null; source: string };
+  error?: string;
+};
+
 type AddressSuggestion = {
   label: string;
   displayName: string;
@@ -247,6 +254,23 @@ function normalizePhoneLookupKey(value: string): string {
   return digits;
 }
 
+/** Enough digits to treat input as a phone (not a name search) for “create in cabinet”. */
+function isPhoneLikeForCreateRider(value: string): boolean {
+  return value.replace(/\D/g, "").length >= 8;
+}
+
+function phoneMatchesSuggestionInList(
+  query: string,
+  suggestions: RequestRideUserSuggestion[],
+): boolean {
+  const key = normalizePhoneLookupKey(query);
+  if (!key) return false;
+  return suggestions.some((s) => {
+    const sk = normalizePhoneLookupKey(s.phone ?? "");
+    return sk.length > 0 && sk === key;
+  });
+}
+
 function toLocalDateTimeInput(isoDate: string) {
   const date = new Date(isoDate);
   if (Number.isNaN(date.getTime())) return "";
@@ -426,6 +450,8 @@ export default function RequestRidesPage() {
   const [phoneSuggestions, setPhoneSuggestions] = useState<RequestRideUserSuggestion[]>([]);
   const [phoneLookupMessage, setPhoneLookupMessage] = useState<string | null>(null);
   const [phoneLookupOk, setPhoneLookupOk] = useState<boolean | null>(null);
+  const [newRiderDisplayName, setNewRiderDisplayName] = useState("");
+  const [creatingRider, setCreatingRider] = useState(false);
   const [createResult, setCreateResult] = useState<RequestRideResult | null>(null);
   const [status, setStatus] = useState<RequestRideStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -469,6 +495,8 @@ export default function RequestRidesPage() {
   const xlsxInputRef = useRef<HTMLInputElement>(null);
   const clientPickerButtonRef = useRef<HTMLButtonElement>(null);
   const phoneSuggestAnchorRef = useRef<HTMLDivElement>(null);
+  /** Portal dropdown for rider phone — keep open when focus moves here (e.g. Full name). */
+  const phoneSuggestPopoverRef = useRef<HTMLDivElement>(null);
   const rideFormScrollRef = useRef<HTMLDivElement>(null);
   const [clientMenuRect, setClientMenuRect] = useState<{
     left: number;
@@ -1393,6 +1421,52 @@ export default function RequestRidesPage() {
     }
   };
 
+  const ensureRiderEmployeeInYango = async () => {
+    if (!selectedClient || !phoneNumber.trim()) {
+      setPhoneLookupOk(false);
+      setPhoneLookupMessage("Select a client and enter a phone number.");
+      return;
+    }
+    if (!isPhoneLikeForCreateRider(phoneNumber)) {
+      setPhoneLookupOk(false);
+      setPhoneLookupMessage("Enter a full phone number (at least 8 digits) before creating an employee.");
+      return;
+    }
+    setCreatingRider(true);
+    setPhoneLookupMessage(null);
+    setPhoneLookupOk(null);
+    try {
+      const response = await fetch("/api/request-rides-user-ensure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tokenLabel: selectedClient.tokenLabel,
+          clientId: selectedClient.clientId,
+          phoneNumber: phoneNumber.trim(),
+          fullName: newRiderDisplayName.trim() || undefined,
+        }),
+      });
+      const data = (await response.json()) as UserEnsureResponse;
+      if (!response.ok || !data.ok || !data.user?.userId) {
+        throw new Error(data.error ?? "Could not create employee in Yango.");
+      }
+      setPhoneLookupOk(true);
+      const label = data.user.fullName?.trim() || newRiderDisplayName.trim() || data.user.phone?.trim();
+      setPhoneLookupMessage(
+        data.created
+          ? `Created in Yango${label ? `: ${label}` : ""}. Phone is registered — you can request a ride.`
+          : `Employee found in Yango${label ? `: ${label}` : ""}. You can request a ride.`,
+      );
+      setShowPhoneSuggestions(false);
+      setNewRiderDisplayName("");
+    } catch (error) {
+      setPhoneLookupOk(false);
+      setPhoneLookupMessage(publicErrorMessage(error, "Could not create employee in Yango. Try the corporate cabinet or check API permissions."));
+    } finally {
+      setCreatingRider(false);
+    }
+  };
+
   const checkPhoneRegistration = async () => {
     if (!selectedClient && !isClientScopedUser) {
       setPhoneLookupOk(false);
@@ -1432,7 +1506,9 @@ export default function RequestRidesPage() {
         );
       } else {
         setPhoneLookupOk(false);
-        setPhoneLookupMessage("This phone isn’t registered for the selected client.");
+        setPhoneLookupMessage(
+          "This phone isn’t registered for the selected client. Open the rider phone suggestions and use Create in Yango cabinet if your token can add employees.",
+        );
       }
     } catch (error) {
       setPhoneLookupOk(false);
@@ -2208,6 +2284,7 @@ export default function RequestRidesPage() {
                       disabled={!selectedClient}
                       onChange={(event) => {
                         setPhoneNumber(event.target.value);
+                        setNewRiderDisplayName("");
                         if (!event.target.value.trim()) {
                           setPhoneSuggestions([]);
                         }
@@ -2217,7 +2294,12 @@ export default function RequestRidesPage() {
                       }}
                       onFocus={() => selectedClient && setShowPhoneSuggestions(true)}
                       onBlur={() => {
-                        window.setTimeout(() => setShowPhoneSuggestions(false), 120);
+                        window.setTimeout(() => {
+                          const pop = phoneSuggestPopoverRef.current;
+                          const active = document.activeElement;
+                          if (pop && active && pop.contains(active)) return;
+                          setShowPhoneSuggestions(false);
+                        }, 120);
                       }}
                       className="crm-input rr-input-volumetric h-11 w-full px-3 text-sm disabled:cursor-not-allowed disabled:opacity-55"
                       placeholder={
@@ -2813,6 +2895,7 @@ export default function RequestRidesPage() {
                       phoneNumber.trim() &&
                       phoneSuggestRect ? (
                         <div
+                          ref={phoneSuggestPopoverRef}
                           role="listbox"
                           className={portalDropdownShellClass}
                           style={{
@@ -2823,42 +2906,79 @@ export default function RequestRidesPage() {
                         >
                           {suggestionsLoading ? (
                             <p className="px-3 py-2 text-xs text-slate-500">Searching users...</p>
-                          ) : phoneSuggestions.length > 0 ? (
-                            phoneSuggestions.map((item) => {
-                              const phoneKey = normalizePhoneLookupKey(item.phone ?? "");
-                              const resolvedName =
-                                (phoneKey ? tenantEmployeeNameByPhone.get(phoneKey) : null) ||
-                                item.fullName?.trim() ||
-                                null;
-                              return (
-                                <button
-                                  key={`${item.userId}:${item.phone ?? "none"}`}
-                                  type="button"
-                                  onMouseDown={(event) => {
-                                    event.preventDefault();
-                                    const displayName = resolvedName || item.phone?.trim() || "employee";
-                                    if (item.phone) {
-                                      setPhoneNumber(item.phone);
-                                    }
-                                    setPhoneLookupOk(true);
-                                    setPhoneLookupMessage(
-                                      `Selected ${displayName}${item.phone ? ` (${item.phone})` : ""}.`,
-                                    );
-                                    setShowPhoneSuggestions(false);
-                                  }}
-                                  className={dropdownOptionClass}
-                                >
-                                  <p className="text-sm font-semibold text-slate-800">
-                                    {resolvedName || item.phone || "Employee"}
-                                  </p>
-                                  <p className="text-xs text-slate-600">
-                                    {item.phone ?? "Phone n/a"} • {item.source}
-                                  </p>
-                                </button>
-                              );
-                            })
                           ) : (
-                            <p className="px-3 py-2 text-xs text-slate-500">No matching users found.</p>
+                            <>
+                              {phoneSuggestions.length > 0 ? (
+                                phoneSuggestions.map((item) => {
+                                  const phoneKey = normalizePhoneLookupKey(item.phone ?? "");
+                                  const resolvedName =
+                                    (phoneKey ? tenantEmployeeNameByPhone.get(phoneKey) : null) ||
+                                    item.fullName?.trim() ||
+                                    null;
+                                  return (
+                                    <button
+                                      key={`${item.userId}:${item.phone ?? "none"}`}
+                                      type="button"
+                                      onMouseDown={(event) => {
+                                        event.preventDefault();
+                                        const displayName = resolvedName || item.phone?.trim() || "employee";
+                                        if (item.phone) {
+                                          setPhoneNumber(item.phone);
+                                        }
+                                        setPhoneLookupOk(true);
+                                        setPhoneLookupMessage(
+                                          `Selected ${displayName}${item.phone ? ` (${item.phone})` : ""}.`,
+                                        );
+                                        setShowPhoneSuggestions(false);
+                                      }}
+                                      className={dropdownOptionClass}
+                                    >
+                                      <p className="text-sm font-semibold text-slate-800">
+                                        {resolvedName || item.phone || "Employee"}
+                                      </p>
+                                      <p className="text-xs text-slate-600">
+                                        {item.phone ?? "Phone n/a"} • {item.source}
+                                      </p>
+                                    </button>
+                                  );
+                                })
+                              ) : (
+                                <p className="px-3 py-2 text-xs text-slate-500">No matching users found.</p>
+                              )}
+                              {!suggestionsLoading &&
+                              isPhoneLikeForCreateRider(phoneNumber) &&
+                              !phoneMatchesSuggestionInList(phoneNumber, phoneSuggestions) ? (
+                                <div className="border-t border-slate-200/80 px-3 py-2.5">
+                                  <p className="text-xs font-medium text-slate-700">
+                                    No employee with this number
+                                  </p>
+                                  <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+                                    Create them in the client cabinet so orders pass Yango validation.
+                                  </p>
+                                  <label className="mt-2 block">
+                                    <span className="crm-label block text-[11px]">Full name</span>
+                                    <input
+                                      type="text"
+                                      value={newRiderDisplayName}
+                                      onChange={(event) => setNewRiderDisplayName(event.target.value)}
+                                      placeholder="e.g. Dana Cohen"
+                                      className="crm-input rr-input-volumetric mt-0.5 h-9 w-full px-2.5 text-sm"
+                                    />
+                                  </label>
+                                  <button
+                                    type="button"
+                                    disabled={creatingRider}
+                                    onMouseDown={(event) => {
+                                      event.preventDefault();
+                                    }}
+                                    onClick={() => void ensureRiderEmployeeInYango()}
+                                    className="crm-hover-lift mt-2 flex w-full items-center justify-center rounded-lg border border-emerald-200/90 bg-emerald-50/90 px-3 py-2 text-xs font-semibold text-emerald-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    {creatingRider ? "Creating in Yango…" : "Create in Yango cabinet"}
+                                  </button>
+                                </div>
+                              ) : null}
+                            </>
                           )}
                         </div>
                       ) : null}

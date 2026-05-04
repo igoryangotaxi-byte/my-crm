@@ -21,6 +21,29 @@ export function normalizeYangoClientIdKey(clientId: string): string {
   return preferredClientIdMapKey(clientId);
 }
 
+/**
+ * Order for `X-YaTaxi-Selected-Corp-Client-Id` when probing Yango user APIs: exact CRM string first,
+ * then dashed UUID, then 32-char hex if distinct — matches request-rides-create “raw first” behavior.
+ */
+export function yangoCorpClientIdProbeOrder(clientId: string): string[] {
+  const t = clientId.trim();
+  if (!t) return [];
+  const dashed = preferredClientIdMapKey(clientId);
+  const hex = t.replace(/[^0-9a-f]/gi, "");
+  const bare32 = hex.length === 32 ? hex : null;
+  const out: string[] = [];
+  const add = (s: string | null | undefined) => {
+    if (!s) return;
+    const v = s.trim();
+    if (!v || out.includes(v)) return;
+    out.push(v);
+  };
+  add(t);
+  add(dashed !== t ? dashed : undefined);
+  add(bare32 && bare32 !== t ? bare32 : undefined);
+  return out;
+}
+
 function preferredClientIdMapKey(clientId: string): string {
   const t = clientId.trim();
   const hex = t.replace(/[^0-9a-f]/gi, "");

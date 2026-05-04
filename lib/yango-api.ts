@@ -10,6 +10,7 @@ import type {
   TokenDiagnostics,
   YangoApiClientRef,
 } from "@/types/crm";
+import { normalizePhoneForYangoCorpUserCreate } from "@/lib/phone-utils";
 import { b2bDashboardOrderKey, type B2BOrdersListCursors } from "@/lib/b2b-orders-keys";
 import {
   listMappedPhonesForClient,
@@ -17,6 +18,7 @@ import {
   resolveMappedUserId,
   searchMappedUsers,
   upsertMappedUserId,
+  yangoCorpClientIdProbeOrder,
 } from "@/lib/request-rides-user-map";
 import {
   finishPreOrderFallbackAttempt,
@@ -281,10 +283,12 @@ async function getTokenConfigs(): Promise<TokenConfig[]> {
         : localEnvFirst && envToken
           ? envToken || fromRegistry
           : fromRegistry || envToken;
+    const labelTrim = (prev?.label ?? "").trim();
+    const crmNamePrevTrim = (prev?.crmClientName ?? "").trim();
+    const crmNameRowTrim = (row.crmClientName ?? "").trim();
     byNormKey.set(key, {
-      label: (prev?.label ?? "").trim() || row.label,
-      crmClientName:
-        (prev?.crmClientName ?? "").trim() || (row.crmClientName ?? "").trim() || row.crmClientName,
+      label: labelTrim || row.label,
+      crmClientName: crmNamePrevTrim || crmNameRowTrim || row.crmClientName,
       token,
     });
   }
@@ -1894,102 +1898,106 @@ export async function resolveRequestRideUserByPhone(input: {
   const mapped = resolveMappedUserId(input);
 
   let permissionDenied = false;
-  for (const phone of variants) {
-    const attempts = [
-      `${YANGO_BASE_URL}/2.0/users/info?phone=${encodeURIComponent(phone)}`,
-      `${YANGO_BASE_URL}/2.0/users/info?phone_number=${encodeURIComponent(phone)}`,
-      `${YANGO_BASE_URL}/2.0/users/list?phone=${encodeURIComponent(phone)}`,
-      `${YANGO_BASE_URL}/2.0/users/list?phone_number=${encodeURIComponent(phone)}`,
-    ];
-    for (const url of attempts) {
-      try {
-        const response = await fetchJsonNoCache<Record<string, unknown>>(
-          url,
-          tokenConfig.token,
-          input.clientId,
-        );
-        persistUserMapFromApiPayload(
-          { tokenLabel: input.tokenLabel, clientId: input.clientId },
-          response,
-          phone,
-        );
-        const suggestions = extractUserSuggestionsFromPayload(response);
-        const exactPhone = suggestions.find((item) =>
-          variants.some((variant) => phoneKeysMatchYango(item.phone, variant)),
-        );
-        if (exactPhone) return exactPhone;
-        // Do not fallback by arbitrary user_id from payload: it may belong to another phone.
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (message.includes("permission_check_failed")) {
-          permissionDenied = true;
-          continue;
+  for (const corpClientId of yangoCorpClientIdProbeOrder(input.clientId)) {
+    for (const phone of variants) {
+      const attempts = [
+        `${YANGO_BASE_URL}/2.0/users/info?phone=${encodeURIComponent(phone)}`,
+        `${YANGO_BASE_URL}/2.0/users/info?phone_number=${encodeURIComponent(phone)}`,
+        `${YANGO_BASE_URL}/2.0/users/list?phone=${encodeURIComponent(phone)}`,
+        `${YANGO_BASE_URL}/2.0/users/list?phone_number=${encodeURIComponent(phone)}`,
+      ];
+      for (const url of attempts) {
+        try {
+          const response = await fetchJsonNoCache<Record<string, unknown>>(
+            url,
+            tokenConfig.token,
+            corpClientId,
+          );
+          persistUserMapFromApiPayload(
+            { tokenLabel: input.tokenLabel, clientId: corpClientId },
+            response,
+            phone,
+          );
+          const suggestions = extractUserSuggestionsFromPayload(response);
+          const exactPhone = suggestions.find((item) =>
+            variants.some((variant) => phoneKeysMatchYango(item.phone, variant)),
+          );
+          if (exactPhone) return exactPhone;
+          // Do not fallback by arbitrary user_id from payload: it may belong to another phone.
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (message.includes("permission_check_failed")) {
+            permissionDenied = true;
+            continue;
+          }
+          // continue probing with other query shapes
         }
-        // continue probing with other query shapes
       }
     }
-  }
 
-  const fromOfficialList = await findUserIdViaYangoUserList({
-    token: tokenConfig.token,
-    clientId: input.clientId,
-    phoneNumber: input.phoneNumber,
-  });
-  if (fromOfficialList) {
-    upsertMappedUserId({
-      tokenLabel: input.tokenLabel,
-      clientId: input.clientId,
+    const fromOfficialList = await findUserIdViaYangoUserList({
+      token: tokenConfig.token,
+      clientId: corpClientId,
       phoneNumber: input.phoneNumber,
-      userId: fromOfficialList,
     });
-    const directory = await listYangoClientUsers({
-      tokenLabel: input.tokenLabel,
-      clientId: input.clientId,
-      limit: 1000,
-    }).catch(() => []);
-    const match =
-      directory.find((item) => variants.some((variant) => phoneKeysMatchYango(item.phone, variant))) ??
-      directory.find((item) => item.userId === fromOfficialList);
-    if (match) {
-      return {
-        userId: match.userId,
-        phone: match.phone,
-        fullName: match.fullName,
-        source: "api",
-      };
+    if (fromOfficialList) {
+      upsertMappedUserId({
+        tokenLabel: input.tokenLabel,
+        clientId: corpClientId,
+        phoneNumber: input.phoneNumber,
+        userId: fromOfficialList,
+      });
+      const directory = await listYangoClientUsers({
+        tokenLabel: input.tokenLabel,
+        clientId: corpClientId,
+        limit: 1000,
+      }).catch(() => []);
+      const match =
+        directory.find((item) => variants.some((variant) => phoneKeysMatchYango(item.phone, variant))) ??
+        directory.find((item) => item.userId === fromOfficialList);
+      if (match) {
+        return {
+          userId: match.userId,
+          phone: match.phone,
+          fullName: match.fullName,
+          source: "api",
+        };
+      }
+      return { userId: fromOfficialList, phone: null, fullName: null, source: "api" };
     }
-    return { userId: fromOfficialList, phone: null, fullName: null, source: "api" };
   }
 
   const mappedAfterProbe = resolveMappedUserId(input) ?? mapped;
   if (mappedAfterProbe) {
-    const directory = await listYangoClientUsers({
-      tokenLabel: input.tokenLabel,
-      clientId: input.clientId,
-      limit: 1200,
-    }).catch(() => []);
-    const match =
-      directory.find((item) =>
-        variants.some((variant) => phoneKeysMatchYango(item.phone, variant)),
-      ) ?? directory.find((item) => item.userId === mappedAfterProbe);
-    if (
-      match &&
-      variants.some((variant) => phoneKeysMatchYango(match.phone, variant))
-    ) {
-      if (match.userId !== mappedAfterProbe) {
-        upsertMappedUserId({
-          tokenLabel: input.tokenLabel,
-          clientId: input.clientId,
-          phoneNumber: input.phoneNumber,
+    for (const corpClientId of yangoCorpClientIdProbeOrder(input.clientId)) {
+      const directory = await listYangoClientUsers({
+        tokenLabel: input.tokenLabel,
+        clientId: corpClientId,
+        limit: 1200,
+      }).catch(() => []);
+      const match =
+        directory.find((item) =>
+          variants.some((variant) => phoneKeysMatchYango(item.phone, variant)),
+        ) ?? directory.find((item) => item.userId === mappedAfterProbe);
+      if (
+        match &&
+        variants.some((variant) => phoneKeysMatchYango(match.phone, variant))
+      ) {
+        if (match.userId !== mappedAfterProbe) {
+          upsertMappedUserId({
+            tokenLabel: input.tokenLabel,
+            clientId: corpClientId,
+            phoneNumber: input.phoneNumber,
+            userId: match.userId,
+          });
+        }
+        return {
           userId: match.userId,
-        });
+          phone: match.phone,
+          fullName: match.fullName,
+          source: "api",
+        };
       }
-      return {
-        userId: match.userId,
-        phone: match.phone,
-        fullName: match.fullName,
-        source: "api",
-      };
     }
   }
   if (permissionDenied) {
@@ -1998,6 +2006,74 @@ export async function resolveRequestRideUserByPhone(input: {
     );
   }
   return null;
+}
+
+/**
+ * Cost center IDs valid for **this** `X-YaTaxi-Selected-Corp-Client-Id` only.
+ * Mixing IDs from `listYangoCostCenters` fetched with corp id A and POSTing with header B yields
+ * `client does not have such cost_centers_id`.
+ */
+async function collectCostCenterIdsForCorpClient(params: {
+  tokenLabel: string;
+  corpClientId: string;
+  explicitCostCenterId?: string | null;
+}): Promise<string[]> {
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+  const add = (raw: string) => {
+    const t = raw.trim();
+    if (!t) return;
+    const c = canonicalCorpCostCenterSettingsUuid(t) ?? t;
+    if (!c) return;
+    const k = c.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    ordered.push(c);
+  };
+
+  const explicit = (params.explicitCostCenterId ?? "").trim();
+  if (explicit) add(explicit);
+
+  const centers = await listYangoCostCenters({
+    tokenLabel: params.tokenLabel,
+    clientId: params.corpClientId,
+  }).catch(() => []);
+
+  for (const center of centers) add(center.id);
+
+  if (ordered.length === 0) {
+    const { resolveCostCenterWithFullYangoDiscovery } = await import("@/lib/tenant-yango-bootstrap");
+    const discovered = (
+      await resolveCostCenterWithFullYangoDiscovery({
+        tokenLabel: params.tokenLabel,
+        apiClientId: params.corpClientId,
+      }).catch(() => "")
+    ).trim();
+    if (discovered) add(discovered);
+  }
+
+  const out: string[] = [];
+  const seenOut = new Set<string>();
+  const pushVariant = (raw: string) => {
+    const t = raw.trim();
+    if (!t) return;
+    if (!seenOut.has(t.toLowerCase())) {
+      seenOut.add(t.toLowerCase());
+      out.push(t);
+    }
+    const hex = t.replace(/-/g, "");
+    if (hex.length === 32) {
+      const lowerHex = hex.toLowerCase();
+      if (!seenOut.has(lowerHex)) {
+        seenOut.add(lowerHex);
+        out.push(lowerHex);
+      }
+    }
+  };
+  for (const id of ordered) {
+    pushVariant(id);
+  }
+  return out;
 }
 
 export async function ensureRequestRideUserByPhone(input: {
@@ -2014,120 +2090,101 @@ export async function ensureRequestRideUserByPhone(input: {
 
   const tokenConfig = await resolveTokenConfig(input.tokenLabel);
   const trimmedName = input.fullName?.trim() || "";
-  let effectiveCostCenter = (input.costCenterId ?? "").trim();
-  if (!effectiveCostCenter) {
-    const { resolveCostCenterWithFullYangoDiscovery } = await import("@/lib/tenant-yango-bootstrap");
-    effectiveCostCenter = (
-      await resolveCostCenterWithFullYangoDiscovery({
-        tokenLabel: input.tokenLabel,
-        apiClientId: input.clientId,
-      })
-    ).trim();
+  const displayName = trimmedName || "Employee";
+
+  const yangoPhone = normalizePhoneForYangoCorpUserCreate(input.phoneNumber);
+  if (!yangoPhone.startsWith("972") || yangoPhone.length < 11 || yangoPhone.length > 12) {
+    return {
+      ok: false as const,
+      created: false as const,
+      error:
+        "Yango expects an Israeli mobile in digits-only form starting with 972 (length 11–12), e.g. 972501234567. Normalize your number or enter 05… / +972….",
+      attempts: [],
+    };
   }
-  const cc = effectiveCostCenter || undefined;
-  const [firstName, ...rest] = trimmedName.split(/\s+/).filter(Boolean);
-  const lastName = rest.join(" ").trim();
-  /** All shapes that can carry cost center — tried before bare fallbacks so Yango prefers CC when available. */
-  const bodyCandidates: Array<Record<string, unknown>> = [
-    {
-      phone: input.phoneNumber,
-      fullname: trimmedName || undefined,
-      is_active: true,
-      cost_center_id: cc,
-      cost_center: cc,
-      cost_centers_id: cc,
-    },
-    {
-      phone: input.phoneNumber,
-      fullname: trimmedName || undefined,
-      is_active: true,
-      cost_center_id: cc,
-      cost_center: cc,
-      cost_centers_id: effectiveCostCenter ? [effectiveCostCenter] : undefined,
-    },
-    {
-      phone_number: input.phoneNumber,
-      fullname: trimmedName || undefined,
-      is_active: true,
-      cost_center_id: cc,
-      cost_center: cc,
-      cost_centers_id: cc,
-    },
-    {
-      phone_number: input.phoneNumber,
-      fullname: trimmedName || undefined,
-      is_active: true,
-      cost_center_id: cc,
-      cost_center: cc,
-      cost_centers_id: effectiveCostCenter ? [effectiveCostCenter] : undefined,
-    },
-    {
-      phone: input.phoneNumber,
-      fullname: trimmedName || undefined,
-      is_active: true,
-      cost_centers: effectiveCostCenter ? [effectiveCostCenter] : undefined,
-    },
-    {
-      phone_number: input.phoneNumber,
-      fullname: trimmedName || undefined,
-      is_active: true,
-      cost_centers: effectiveCostCenter ? [effectiveCostCenter] : undefined,
-    },
-    {
-      phone: input.phoneNumber,
-      name: trimmedName || undefined,
-      fullname: trimmedName || undefined,
-      is_active: true,
-      cost_center_id: cc,
-      cost_center: cc,
-      cost_centers_id: cc,
-    },
-    {
-      phone: input.phoneNumber,
-      name: trimmedName || undefined,
-      fullname: trimmedName || undefined,
-      is_active: true,
-      cost_center_id: cc,
-      cost_center: cc,
-      cost_centers_id: effectiveCostCenter ? [effectiveCostCenter] : undefined,
-    },
-    { phone: input.phoneNumber, full_name: trimmedName || undefined },
-    { phone_number: input.phoneNumber, full_name: trimmedName || undefined },
-    {
-      phone: input.phoneNumber,
-      first_name: firstName || undefined,
-      last_name: lastName || undefined,
-    },
-  ];
-  const requestCandidates: Array<{ endpoint: string; method: "POST" | "PUT" }> = [
-    { endpoint: "/2.0/users/create", method: "POST" },
-    { endpoint: "/2.0/users", method: "POST" },
-    { endpoint: "/2.0/users", method: "PUT" },
-    { endpoint: "/2.0/users/add", method: "POST" },
-    { endpoint: "/2.0/users/register", method: "POST" },
-  ];
+
+  /**
+   * POST /2.0/users is the supported create path; `cost_centers_id` must be a string (not an array).
+   * Other URLs (/users/create, /add, /register) return 405 on current integration hosts.
+   */
+  const requestCandidates: Array<{ endpoint: string; method: "POST" }> = [{ endpoint: "/2.0/users", method: "POST" }];
   const errors: string[] = [];
 
-  for (const candidate of requestCandidates) {
-    for (const body of bodyCandidates) {
-      try {
-        await fetchJsonNoCache<Record<string, unknown>>(
-          `${YANGO_BASE_URL}${candidate.endpoint}`,
-          tokenConfig.token,
-          input.clientId,
-          { method: candidate.method, body: JSON.stringify(body) },
-          { allowEmptyBody: true },
-        );
-        const resolved = await resolveRequestRideUserByPhone(input);
-        if (resolved?.userId) {
-          return { ok: true as const, created: true as const, user: resolved };
+  function pickEnsureError(messages: string[]): string {
+    const preferred = messages.find(
+      (m) =>
+        !m.includes("405") &&
+        !m.includes("Method Not Allowed") &&
+        (m.includes("VALIDATION") ||
+          m.includes("fullname") ||
+          m.includes("phone") ||
+          m.includes("cost_center") ||
+          m.includes("403") ||
+          m.includes("ACCESS_DENIED")),
+    );
+    if (preferred !== undefined) return preferred;
+    const no405 = messages.find((m) => !m.includes("405"));
+    if (no405 !== undefined) return no405;
+    if (messages[0] !== undefined) return messages[0];
+    return "";
+  }
+
+  /** Resolve after create using E.164-ish +972… so list/info probes match Yango’s stored MSISDN. */
+  const resolveInput = { ...input, phoneNumber: `+${yangoPhone}` };
+
+  const baseUser = { phone: yangoPhone, fullname: displayName, is_active: true };
+
+  for (const corpClientId of yangoCorpClientIdProbeOrder(input.clientId)) {
+    const ccIds = await collectCostCenterIdsForCorpClient({
+      tokenLabel: input.tokenLabel,
+      corpClientId,
+      explicitCostCenterId: input.costCenterId,
+    });
+
+    const bodyCandidates: Array<Record<string, unknown>> = [];
+    for (const cc of ccIds) {
+      bodyCandidates.push({
+        ...baseUser,
+        cost_center_id: cc,
+        cost_centers_id: cc,
+      });
+      bodyCandidates.push({
+        ...baseUser,
+        cost_centers_id: cc,
+      });
+      bodyCandidates.push({
+        ...baseUser,
+        cost_center_id: cc,
+      });
+    }
+    if (ccIds.length === 0) {
+      bodyCandidates.push(baseUser);
+    }
+
+    for (const candidate of requestCandidates) {
+      for (const body of bodyCandidates) {
+        try {
+          await fetchJsonNoCache<Record<string, unknown>>(
+            `${YANGO_BASE_URL}${candidate.endpoint}`,
+            tokenConfig.token,
+            corpClientId,
+            { method: candidate.method, body: JSON.stringify(body) },
+            { allowEmptyBody: true },
+          );
+          const resolved = await resolveRequestRideUserByPhone({
+            ...resolveInput,
+            clientId: corpClientId,
+          });
+          if (resolved?.userId) {
+            return { ok: true as const, created: true as const, user: resolved };
+          }
+        } catch (error) {
+          errors.push(
+            `${corpClientId.slice(0, 8)}… ${candidate.method} ${candidate.endpoint}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
         }
-      } catch (error) {
-        errors.push(
-          `${candidate.method} ${candidate.endpoint}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
       }
     }
   }
@@ -2135,8 +2192,9 @@ export async function ensureRequestRideUserByPhone(input: {
   return {
     ok: false as const,
     created: false as const,
-    error: errors[0] ??
-      "Yango did not return a supported endpoint for employee creation; create employee in Yango corporate cabinet first.",
+    error:
+      pickEnsureError(errors) ||
+      "Yango did not accept user creation. Check phone format (972…), full name, cost center, and API token permissions.",
     attempts: errors,
   };
 }
@@ -2177,11 +2235,15 @@ export async function searchRequestRideUsers(input: {
   const directoryByPhoneKey = new Map<string, YangoClientUserDirectoryEntry>();
   const directoryByUserId = new Map<string, YangoClientUserDirectoryEntry>();
   if (mapped.length > 0) {
-    const directory = await listYangoClientUsers({
-      tokenLabel: input.tokenLabel,
-      clientId: input.clientId,
-      limit: 1200,
-    }).catch(() => []);
+    let directory: YangoClientUserDirectoryEntry[] = [];
+    for (const corpClientId of yangoCorpClientIdProbeOrder(input.clientId)) {
+      directory = await listYangoClientUsers({
+        tokenLabel: input.tokenLabel,
+        clientId: corpClientId,
+        limit: 1200,
+      }).catch(() => []);
+      if (directory.length > 0) break;
+    }
     for (const entry of directory) {
       directoryByUserId.set(entry.userId, entry);
       const key = normalizePhoneKey(entry.phone ?? "");
@@ -2221,65 +2283,69 @@ export async function searchRequestRideUsers(input: {
     `${YANGO_BASE_URL}/2.0/users/info?phone_number=${encodeURIComponent(query)}`,
   ];
 
-  for (const url of attempts) {
+  for (const corpClientId of yangoCorpClientIdProbeOrder(input.clientId)) {
     if (!tokenConfig) break;
     if (byId.size >= limit) break;
-    try {
-      const response = await fetchJsonNoCache<Record<string, unknown>>(
-        url,
-        tokenConfig.token,
-        input.clientId,
-      );
-      const suggestions = extractUserSuggestionsFromPayload(response).filter((s) =>
-        suggestionMatchesQuery(s, query),
-      );
-      for (const suggestion of suggestions) {
-        if (suggestion.phone) {
-          upsertMappedUserId({
-            tokenLabel: input.tokenLabel,
-            clientId: input.clientId,
-            phoneNumber: suggestion.phone,
-            userId: suggestion.userId,
-          });
-        }
-        push(suggestion);
-        if (byId.size >= limit) break;
-      }
-    } catch {
-      // Ignore unsupported query shapes and continue.
-    }
-  }
-
-  if (tokenConfig && byId.size < limit) {
-    const maxPages = readPositiveIntEnv("YANGO_USER_LIST_MAX_PAGES_SEARCH", 25);
-    const pageSize = readPositiveIntEnv("YANGO_USER_LIST_PAGE_SIZE", 100);
-    await forEachYangoUserListPage(
-      tokenConfig.token,
-      input.clientId,
-      maxPages,
-      pageSize,
-      (page) => {
-        for (const raw of page.items ?? []) {
-          if (byId.size >= limit) return false;
-          if (!raw || typeof raw !== "object") continue;
-          const row = raw as Record<string, unknown>;
-          if (isYangoUserListRowDeleted(row)) continue;
-          const suggestion = rowToSuggestion(row);
-          if (!suggestion) continue;
-          if (!suggestionMatchesQuery(suggestion, query)) continue;
+    for (const url of attempts) {
+      if (!tokenConfig) break;
+      if (byId.size >= limit) break;
+      try {
+        const response = await fetchJsonNoCache<Record<string, unknown>>(
+          url,
+          tokenConfig.token,
+          corpClientId,
+        );
+        const suggestions = extractUserSuggestionsFromPayload(response).filter((s) =>
+          suggestionMatchesQuery(s, query),
+        );
+        for (const suggestion of suggestions) {
           if (suggestion.phone) {
             upsertMappedUserId({
               tokenLabel: input.tokenLabel,
-              clientId: input.clientId,
+              clientId: corpClientId,
               phoneNumber: suggestion.phone,
               userId: suggestion.userId,
             });
           }
           push(suggestion);
+          if (byId.size >= limit) break;
         }
-        return byId.size < limit;
-      },
-    );
+      } catch {
+        // Ignore unsupported query shapes and continue.
+      }
+    }
+
+    if (tokenConfig && byId.size < limit) {
+      const maxPages = readPositiveIntEnv("YANGO_USER_LIST_MAX_PAGES_SEARCH", 25);
+      const pageSize = readPositiveIntEnv("YANGO_USER_LIST_PAGE_SIZE", 100);
+      await forEachYangoUserListPage(
+        tokenConfig.token,
+        corpClientId,
+        maxPages,
+        pageSize,
+        (page) => {
+          for (const raw of page.items ?? []) {
+            if (byId.size >= limit) return false;
+            if (!raw || typeof raw !== "object") continue;
+            const row = raw as Record<string, unknown>;
+            if (isYangoUserListRowDeleted(row)) continue;
+            const suggestion = rowToSuggestion(row);
+            if (!suggestion) continue;
+            if (!suggestionMatchesQuery(suggestion, query)) continue;
+            if (suggestion.phone) {
+              upsertMappedUserId({
+                tokenLabel: input.tokenLabel,
+                clientId: corpClientId,
+                phoneNumber: suggestion.phone,
+                userId: suggestion.userId,
+              });
+            }
+            push(suggestion);
+          }
+          return byId.size < limit;
+        },
+      );
+    }
   }
 
   return [...byId.values()].slice(0, limit);
