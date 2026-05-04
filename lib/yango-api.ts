@@ -2008,6 +2008,100 @@ export async function resolveRequestRideUserByPhone(input: {
   return null;
 }
 
+function extractUserRowByIdFromPayload(payload: unknown, userId: string): Record<string, unknown> | null {
+  const uid = userId.trim();
+  if (!uid) return null;
+  const walk = (row: Record<string, unknown>): Record<string, unknown> | null => {
+    const id =
+      asString(row.user_id) || asString(row.userId) || asString(row.id) || asString(row._id);
+    if (id === uid) return row;
+    return null;
+  };
+  if (!payload || typeof payload !== "object") return null;
+  const root = payload as Record<string, unknown>;
+  const direct = walk(root);
+  if (direct) return direct;
+  for (const key of ["items", "users"] as const) {
+    const value = root[key];
+    if (!Array.isArray(value)) continue;
+    for (const item of value) {
+      if (item && typeof item === "object") {
+        const hit = walk(item as Record<string, unknown>);
+        if (hit) return hit;
+      }
+    }
+  }
+  const userObj = root.user;
+  if (userObj && typeof userObj === "object") {
+    const hit = walk(userObj as Record<string, unknown>);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+async function fetchYangoCorpUserRecordById(input: {
+  token: string;
+  corpClientId: string;
+  userId: string;
+}): Promise<Record<string, unknown> | null> {
+  const uid = input.userId.trim();
+  const urls = [
+    `${YANGO_BASE_URL}/2.0/users?user_id=${encodeURIComponent(uid)}`,
+    `${YANGO_BASE_URL}/2.0/users/info?user_id=${encodeURIComponent(uid)}`,
+    `${YANGO_BASE_URL}/2.0/users/list?user_id=${encodeURIComponent(uid)}`,
+  ];
+  for (const url of urls) {
+    try {
+      const payload = await fetchJsonNoCache<Record<string, unknown>>(
+        url,
+        input.token,
+        input.corpClientId,
+      );
+      const row = extractUserRowByIdFromPayload(payload, uid);
+      if (row) return row;
+    } catch {
+      // continue
+    }
+  }
+  return null;
+}
+
+async function resolveRequestRideUserByUserId(input: {
+  tokenLabel: string;
+  clientId: string;
+  userId: string;
+}): Promise<RequestRideUserSuggestion | null> {
+  const uid = input.userId.trim();
+  if (!uid) return null;
+  const tokenConfig = await resolveTokenConfig(input.tokenLabel);
+  const endpoints = [
+    `${YANGO_BASE_URL}/2.0/users/info?user_id=${encodeURIComponent(uid)}`,
+    `${YANGO_BASE_URL}/2.0/users/list?user_id=${encodeURIComponent(uid)}`,
+    `${YANGO_BASE_URL}/2.0/users?user_id=${encodeURIComponent(uid)}`,
+  ];
+  for (const corpClientId of yangoCorpClientIdProbeOrder(input.clientId)) {
+    for (const url of endpoints) {
+      try {
+        const payload = await fetchJsonNoCache<Record<string, unknown>>(
+          url,
+          tokenConfig.token,
+          corpClientId,
+        );
+        const row = extractUserRowByIdFromPayload(payload, uid);
+        if (row && !isYangoUserListRowDeleted(row)) {
+          const suggestion = rowToSuggestion(row);
+          if (suggestion) return suggestion;
+        }
+        const fromList = extractUserSuggestionsFromPayload(payload).filter((s) => s.userId === uid);
+        if (fromList[0]) return fromList[0];
+      } catch {
+        // continue
+      }
+    }
+  }
+  return null;
+}
+
 function parseYangoApiErrorPayload(message: string): {
   code?: string;
   conflictUserId?: string;
@@ -2032,6 +2126,8 @@ function parseYangoApiErrorPayload(message: string): {
 
 /**
  * Yango may return USER_IS_DELETED_ERROR when the phone exists on a soft-deleted profile.
+ * Official Python SDK (`yandex_b2b_go.UserManager.update`) uses
+ * `PUT /2.0/users?user_id=…` with a full user JSON body — not `user_id` only in the body.
  */
 async function tryRestoreDeletedYangoCorpUser(input: {
   token: string;
@@ -2039,34 +2135,91 @@ async function tryRestoreDeletedYangoCorpUser(input: {
   userId: string;
   yangoPhone: string;
   displayName: string;
+  costCenterIds: string[];
 }): Promise<boolean> {
-  const bodies: Array<Record<string, unknown>> = [
-    { user_id: input.userId, is_deleted: false, is_active: true },
-    { user_id: input.userId, is_deleted: false },
-    { id: input.userId, is_deleted: false, is_active: true },
-    { user_id: input.userId, is_deleted: false, phone: input.yangoPhone, fullname: input.displayName },
-  ];
-  const paths = [
-    { path: "/2.0/users", method: "PUT" as const },
-    { path: "/2.0/users/restore", method: "POST" as const },
-    { path: "/2.0/users/undelete", method: "POST" as const },
-  ];
-  for (const route of paths) {
-    for (const body of bodies) {
-      try {
-        await fetchJsonNoCache<Record<string, unknown>>(
-          `${YANGO_BASE_URL}${route.path}`,
-          input.token,
-          input.corpClientId,
-          { method: route.method, body: JSON.stringify(body) },
-          { allowEmptyBody: true },
-        );
-        return true;
-      } catch {
-        // try next
-      }
+  const uid = input.userId.trim();
+  const updateUrl = `${YANGO_BASE_URL}/2.0/users?user_id=${encodeURIComponent(uid)}`;
+
+  const existing = await fetchYangoCorpUserRecordById({
+    token: input.token,
+    corpClientId: input.corpClientId,
+    userId: uid,
+  });
+
+  const fullname =
+    (existing && (asString(existing.fullname) || asString(existing.full_name))) || input.displayName;
+  const rawPhone = (existing && (asString(existing.phone) || asString(existing.phone_number))) || "";
+  const phoneDigits = normalizePhoneForYangoCorpUserCreate(
+    rawPhone.trim() ? rawPhone : input.yangoPhone,
+  );
+
+  const ccFromRow = existing ? extractCostCenterIdFromUserRow(existing) : null;
+
+  const base = {
+    fullname,
+    phone: phoneDigits,
+    is_active: true,
+    is_deleted: false,
+  };
+
+  const bodies: Array<Record<string, unknown>> = [];
+  const seenJson = new Set<string>();
+  const addBody = (b: Record<string, unknown>) => {
+    const key = JSON.stringify(b);
+    if (seenJson.has(key)) return;
+    seenJson.add(key);
+    bodies.push(b);
+  };
+
+  const ccSet = new Set<string>();
+  if (ccFromRow?.trim()) ccSet.add(ccFromRow.trim());
+  for (const c of input.costCenterIds) {
+    if (c.trim()) ccSet.add(c.trim());
+  }
+  for (const cc of ccSet) {
+    addBody({ ...base, cost_centers_id: cc });
+    addBody({ ...base, cost_centers_id: cc, cost_center_id: cc });
+  }
+  addBody({ ...base });
+  if (phoneDigits.startsWith("972")) {
+    addBody({ ...base, phone: `+${phoneDigits}` });
+  }
+
+  for (const body of bodies) {
+    try {
+      await fetchJsonNoCache<Record<string, unknown>>(
+        updateUrl,
+        input.token,
+        input.corpClientId,
+        { method: "PUT", body: JSON.stringify(body) },
+        { allowEmptyBody: true },
+      );
+      return true;
+    } catch {
+      // try next shape
     }
   }
+
+  const postAttempts = [
+    `${YANGO_BASE_URL}/2.0/users/unarchive?user_id=${encodeURIComponent(uid)}`,
+    `${YANGO_BASE_URL}/2.0/users/restore?user_id=${encodeURIComponent(uid)}`,
+    `${YANGO_BASE_URL}/2.0/users/undelete?user_id=${encodeURIComponent(uid)}`,
+  ];
+  for (const url of postAttempts) {
+    try {
+      await fetchJsonNoCache<Record<string, unknown>>(
+        url,
+        input.token,
+        input.corpClientId,
+        { method: "POST", body: "{}" },
+        { allowEmptyBody: true },
+      );
+      return true;
+    } catch {
+      // continue
+    }
+  }
+
   return false;
 }
 
@@ -2267,13 +2420,27 @@ export async function ensureRequestRideUserByPhone(input: {
               userId: parsed.conflictUserId,
               yangoPhone,
               displayName,
+              costCenterIds: ccIds,
             });
             if (restored) {
-              const resolved = await resolveRequestRideUserByPhone({
-                ...resolveInput,
+              const byId = await resolveRequestRideUserByUserId({
+                tokenLabel: input.tokenLabel,
                 clientId: corpClientId,
+                userId: parsed.conflictUserId,
               });
+              const resolved =
+                byId ??
+                (await resolveRequestRideUserByPhone({
+                  ...resolveInput,
+                  clientId: corpClientId,
+                }));
               if (resolved?.userId) {
+                upsertMappedUserId({
+                  tokenLabel: input.tokenLabel,
+                  clientId: corpClientId,
+                  phoneNumber: input.phoneNumber,
+                  userId: resolved.userId,
+                });
                 return {
                   ok: true as const,
                   created: false as const,
