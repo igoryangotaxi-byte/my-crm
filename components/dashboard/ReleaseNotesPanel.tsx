@@ -9,7 +9,7 @@ const releaseItems: ReleaseItem[] = [
     date: "2026-05-04",
     title: "Communications UI: RR-style client dropdown + segmented tabs (0.2.14)",
     notes:
-      "App version 0.2.14. Communications (main): Bulk SMS / Order Updates tabs use a neutral segmented control (light track, white selected pill, non-red hovers). Client combobox matches Request Rides—rr-make-panel-dropdown-trigger, portal-fixed menu with rr-dropdown-panel / rr-dropdown-option, scroll/resize sync. Default client remains Select Client; empty copy in Order Updates aligned.",
+      "d2a6f7d7 — App version 0.2.14. Communications (main): Bulk SMS / Order Updates tabs use a neutral segmented control (light track, white selected pill, non-red hovers). Client combobox matches Request Rides—rr-make-panel-dropdown-trigger, portal-fixed menu with rr-dropdown-panel / rr-dropdown-option, scroll/resize sync. Default client remains Select Client; empty copy in Order Updates aligned.",
   },
   {
     date: "2026-05-04",
