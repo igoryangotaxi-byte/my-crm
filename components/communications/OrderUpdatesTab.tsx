@@ -257,7 +257,7 @@ export function OrderUpdatesTab({ selectedClient }: OrderUpdatesTabProps) {
   if (!selectedClient) {
     return (
       <p className="rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-6 text-sm text-slate-600">
-        Select an API client above to edit order status SMS templates.
+        Select Client above to edit order status SMS templates.
       </p>
     );
   }
