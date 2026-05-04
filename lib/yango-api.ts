@@ -2008,6 +2008,68 @@ export async function resolveRequestRideUserByPhone(input: {
   return null;
 }
 
+function parseYangoApiErrorPayload(message: string): {
+  code?: string;
+  conflictUserId?: string;
+} {
+  const idx = message.indexOf("{");
+  if (idx === -1) return {};
+  try {
+    const j = JSON.parse(message.slice(idx)) as Record<string, unknown>;
+    const code = typeof j.code === "string" ? j.code : undefined;
+    const extra = j.extra as Record<string, unknown> | undefined;
+    const fromExtra =
+      extra && typeof extra.conflict_user_id === "string" ? extra.conflict_user_id : undefined;
+    const conflictUserId =
+      fromExtra ||
+      (typeof j.conflict_user_id === "string" ? j.conflict_user_id : undefined) ||
+      undefined;
+    return { code, conflictUserId };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Yango may return USER_IS_DELETED_ERROR when the phone exists on a soft-deleted profile.
+ */
+async function tryRestoreDeletedYangoCorpUser(input: {
+  token: string;
+  corpClientId: string;
+  userId: string;
+  yangoPhone: string;
+  displayName: string;
+}): Promise<boolean> {
+  const bodies: Array<Record<string, unknown>> = [
+    { user_id: input.userId, is_deleted: false, is_active: true },
+    { user_id: input.userId, is_deleted: false },
+    { id: input.userId, is_deleted: false, is_active: true },
+    { user_id: input.userId, is_deleted: false, phone: input.yangoPhone, fullname: input.displayName },
+  ];
+  const paths = [
+    { path: "/2.0/users", method: "PUT" as const },
+    { path: "/2.0/users/restore", method: "POST" as const },
+    { path: "/2.0/users/undelete", method: "POST" as const },
+  ];
+  for (const route of paths) {
+    for (const body of bodies) {
+      try {
+        await fetchJsonNoCache<Record<string, unknown>>(
+          `${YANGO_BASE_URL}${route.path}`,
+          input.token,
+          input.corpClientId,
+          { method: route.method, body: JSON.stringify(body) },
+          { allowEmptyBody: true },
+        );
+        return true;
+      } catch {
+        // try next
+      }
+    }
+  }
+  return false;
+}
+
 /**
  * Cost center IDs valid for **this** `X-YaTaxi-Selected-Corp-Client-Id` only.
  * Mixing IDs from `listYangoCostCenters` fetched with corp id A and POSTing with header B yields
@@ -2020,15 +2082,21 @@ async function collectCostCenterIdsForCorpClient(params: {
 }): Promise<string[]> {
   const ordered: string[] = [];
   const seen = new Set<string>();
+  /** Keep both dashed canonical and raw API string — POST /users may accept only one shape. */
   const add = (raw: string) => {
     const t = raw.trim();
     if (!t) return;
-    const c = canonicalCorpCostCenterSettingsUuid(t) ?? t;
-    if (!c) return;
-    const k = c.toLowerCase();
-    if (seen.has(k)) return;
-    seen.add(k);
-    ordered.push(c);
+    const canon = canonicalCorpCostCenterSettingsUuid(t);
+    const variants: string[] = [];
+    if (canon != null) variants.push(canon);
+    if (!canon || canon !== t) variants.push(t);
+    if (variants.length === 0) variants.push(t);
+    for (const v of variants) {
+      const k = v.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      ordered.push(v);
+    }
   };
 
   const explicit = (params.explicitCostCenterId ?? "").trim();
@@ -2040,6 +2108,12 @@ async function collectCostCenterIdsForCorpClient(params: {
   }).catch(() => []);
 
   for (const center of centers) add(center.id);
+
+  const fromActiveUsers = await detectYangoDefaultCostCenterId({
+    tokenLabel: params.tokenLabel,
+    clientId: params.corpClientId,
+  }).catch(() => null);
+  if (fromActiveUsers) add(fromActiveUsers);
 
   if (ordered.length === 0) {
     const { resolveCostCenterWithFullYangoDiscovery } = await import("@/lib/tenant-yango-bootstrap");
@@ -2111,6 +2185,10 @@ export async function ensureRequestRideUserByPhone(input: {
   const errors: string[] = [];
 
   function pickEnsureError(messages: string[]): string {
+    const deleted = messages.find((m) => m.includes("USER_IS_DELETED"));
+    if (deleted !== undefined) {
+      return `${deleted} If this persists, restore the employee in the Yango cabinet or use another phone.`;
+    }
     const preferred = messages.find(
       (m) =>
         !m.includes("405") &&
@@ -2179,11 +2257,31 @@ export async function ensureRequestRideUserByPhone(input: {
             return { ok: true as const, created: true as const, user: resolved };
           }
         } catch (error) {
-          errors.push(
-            `${corpClientId.slice(0, 8)}… ${candidate.method} ${candidate.endpoint}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
+          const msg = error instanceof Error ? error.message : String(error);
+          errors.push(`${corpClientId.slice(0, 8)}… ${candidate.method} ${candidate.endpoint}: ${msg}`);
+          const parsed = parseYangoApiErrorPayload(msg);
+          if (parsed.code === "USER_IS_DELETED_ERROR" && parsed.conflictUserId) {
+            const restored = await tryRestoreDeletedYangoCorpUser({
+              token: tokenConfig.token,
+              corpClientId,
+              userId: parsed.conflictUserId,
+              yangoPhone,
+              displayName,
+            });
+            if (restored) {
+              const resolved = await resolveRequestRideUserByPhone({
+                ...resolveInput,
+                clientId: corpClientId,
+              });
+              if (resolved?.userId) {
+                return {
+                  ok: true as const,
+                  created: false as const,
+                  user: resolved,
+                };
+              }
+            }
+          }
         }
       }
     }
