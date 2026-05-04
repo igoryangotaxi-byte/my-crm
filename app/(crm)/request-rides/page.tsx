@@ -35,6 +35,8 @@ type CreateResponse = {
   ok: boolean;
   result?: RequestRideResult;
   error?: string;
+  yangoTraceId?: string | null;
+  yangoRequestId?: string | null;
 };
 
 type StatusResponse = {
@@ -126,6 +128,9 @@ type AddressField = {
 
 type StopField = AddressField & { id: string; phone: string };
 
+/** Fixed Yango ride class for CRM Request Rides (no UI override). */
+const REQUEST_RIDES_RIDE_CLASS = "comfortplus_b2b" as const;
+
 type RideSmsState = {
   /** ISO timestamp when the per-stop "request_created" SMS finished sending. */
   requestedAtIso?: string;
@@ -183,11 +188,30 @@ function formatRideTimeForSms(iso: string): string {
   }
 }
 
-function buildRequestedRideSmsText(scheduledAtIso: string | null, createdAtIso: string): string {
-  if (scheduledAtIso) {
-    return `Hey, someone requested a pre-order on ${formatRideTimeForSms(scheduledAtIso)} with Yango. Be ready on time and have a nice trip.`;
-  }
-  return `Hey, someone requested a ride for you ${formatRideTimeForSms(createdAtIso)}. Be ready on time and have a nice trip.`;
+function buildRequestedRideSmsText(
+  scheduledAtIso: string | null,
+  createdAtIso: string,
+  meta?: { traceId?: string | null },
+): string {
+  const base = scheduledAtIso
+    ? `Hey, someone requested a pre-order on ${formatRideTimeForSms(scheduledAtIso)} with Yango. Be ready on time and have a nice trip.`
+    : `Hey, someone requested a ride for you ${formatRideTimeForSms(createdAtIso)}. Be ready on time and have a nice trip.`;
+  const tid = meta?.traceId?.trim();
+  if (!tid) return base;
+  return `${base} trace_id=${tid}`;
+}
+
+function appendYangoTraceIdsToErrorLine(
+  base: string,
+  traceId: string | null | undefined,
+  requestId: string | null | undefined,
+): string {
+  let s = base;
+  const tid = traceId?.trim();
+  const rid = requestId?.trim();
+  if (tid && !s.includes("trace_id=")) s += ` trace_id=${tid}`;
+  if (rid && !s.includes("request_id=")) s += ` request_id=${rid}`;
+  return s;
 }
 
 function buildDriverOnWaySmsText(status: RequestRideStatus): string {
@@ -389,7 +413,6 @@ export default function RequestRidesPage() {
   const [mapClickLabel, setMapClickLabel] = useState<string>("");
   const [mapClickLoading, setMapClickLoading] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [rideClass, setRideClass] = useState("comfortplus_b2b");
   const [comment, setComment] = useState("");
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduleAtInput, setScheduleAtInput] = useState("");
@@ -439,6 +462,10 @@ export default function RequestRidesPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadParsing, setUploadParsing] = useState(false);
   const [uploadSubmitting, setUploadSubmitting] = useState(false);
+  /** Keep Select Client expanded by default; user may collapse. */
+  const [selectClientPanelOpen, setSelectClientPanelOpen] = useState(true);
+  /** Expand Route & stops when a client is chosen (user may collapse afterward). */
+  const [routeStopsPanelOpen, setRouteStopsPanelOpen] = useState(false);
   const xlsxInputRef = useRef<HTMLInputElement>(null);
   const clientPickerButtonRef = useRef<HTMLButtonElement>(null);
   const phoneSuggestAnchorRef = useRef<HTMLDivElement>(null);
@@ -489,6 +516,12 @@ export default function RequestRidesPage() {
         : clients.find((c) => `${c.tokenLabel}:${c.clientId}` === selectedClientKey) ?? null,
     [clients, isClientScopedUser, selectedClientKey],
   );
+
+  useEffect(() => {
+    if (selectedClient) {
+      setRouteStopsPanelOpen(true);
+    }
+  }, [selectedClient]);
 
   useLayoutEffect(() => {
     const syncOverlayRects = () => {
@@ -1050,22 +1083,6 @@ export default function RequestRidesPage() {
     }
   };
 
-  const clearRouteSelection = () => {
-    setPickup(createEmptyAddressField());
-    setDestination(createEmptyAddressField());
-    setDestinationPhone("");
-    setStops([]);
-    setMapClickPoint(null);
-    setMapClickLabel("");
-    setMapRouteCoordinates([]);
-    setMapTrafficGeojson(null);
-    setRouteDistanceKm(null);
-    setRouteDurationMin(null);
-    setRoutePreviewError(null);
-    setAddressSuggestions({});
-    setActiveAddressFieldId(null);
-  };
-
   const sendSms = async (input: {
     phones: string[];
     text: string;
@@ -1284,7 +1301,7 @@ export default function RequestRidesPage() {
         body: JSON.stringify({
           tokenLabel: selectedClient.tokenLabel,
           clientId: selectedClient.clientId,
-          rideClass,
+          rideClass: REQUEST_RIDES_RIDE_CLASS,
           sourceAddress: pickup.text,
           destinationAddress: destination.text,
           sourceLat: pickup.lat ?? undefined,
@@ -1305,7 +1322,14 @@ export default function RequestRidesPage() {
       });
       const data = (await response.json()) as CreateResponse;
       if (!response.ok || !data.ok || !data.result) {
-        throw new Error(data.error ?? "Failed to create ride.");
+        const base = data.error ?? "Failed to create ride.";
+        setFormError(
+          publicErrorMessage(
+            appendYangoTraceIdsToErrorLine(base, data.yangoTraceId, data.yangoRequestId),
+            "Couldn’t create the ride. Try again later.",
+          ),
+        );
+        return;
       }
       const created = data.result;
       const createdAtIso = new Date().toISOString();
@@ -1323,14 +1347,16 @@ export default function RequestRidesPage() {
         destinationAddress: destination.text.trim(),
         riderPhone: phoneNumber.trim(),
         addressPhones,
-        rideClass: rideClass.trim() || "comfortplus_b2b",
+        rideClass: REQUEST_RIDES_RIDE_CLASS,
         status: null,
         smsState: {},
       };
       setRequestedRides((prev) => [createdRide, ...prev.filter((item) => item.orderId !== created.orderId)]);
       setCreateResult(created);
       if (addressPhones.length > 0) {
-        const text = buildRequestedRideSmsText(scheduleAtIso, createdAtIso);
+        const text = buildRequestedRideSmsText(scheduleAtIso, createdAtIso, {
+          traceId: created.traceId,
+        });
         const smsResult = await sendSms({
           phones: addressPhones,
           text,
@@ -1776,7 +1802,6 @@ export default function RequestRidesPage() {
     if (readyRows.length === 0) return;
     setUploadError(null);
     setUploadSubmitting(true);
-    const tariff = rideClass.trim() || "comfortplus_b2b";
 
     for (const snapshot of readyRows) {
       const rowId = snapshot.id;
@@ -1797,7 +1822,7 @@ export default function RequestRidesPage() {
           body: JSON.stringify({
             tokenLabel: selectedClient.tokenLabel,
             clientId: selectedClient.clientId,
-            rideClass: tariff,
+            rideClass: REQUEST_RIDES_RIDE_CLASS,
             sourceAddress: pickupAddress.text,
             destinationAddress: destinationAddress.text,
             sourceLat: pickupAddress.lat ?? undefined,
@@ -1818,7 +1843,10 @@ export default function RequestRidesPage() {
         });
         const data = (await response.json()) as CreateResponse;
         if (!response.ok || !data.ok || !data.result) {
-          throw new Error(data.error ?? "Failed to create ride.");
+          const base = data.error ?? "Failed to create ride.";
+          throw new Error(
+            appendYangoTraceIdsToErrorLine(base, data.yangoTraceId, data.yangoRequestId),
+          );
         }
         const created = data.result;
         const createdAtIso = new Date().toISOString();
@@ -1835,7 +1863,7 @@ export default function RequestRidesPage() {
           destinationAddress: destinationAddress.text,
           riderPhone: snapshot.phone,
           addressPhones: bulkAddressPhones,
-          rideClass: tariff,
+          rideClass: REQUEST_RIDES_RIDE_CLASS,
           status: null,
           smsState: {},
         };
@@ -1851,7 +1879,9 @@ export default function RequestRidesPage() {
           ),
         );
         if (bulkAddressPhones.length > 0) {
-          const text = buildRequestedRideSmsText(snapshot.scheduleAtIso, createdAtIso);
+          const text = buildRequestedRideSmsText(snapshot.scheduleAtIso, createdAtIso, {
+            traceId: created.traceId,
+          });
           const smsResult = await sendSms({
             phones: bulkAddressPhones,
             text,
@@ -2103,7 +2133,8 @@ export default function RequestRidesPage() {
               >
               <details
                 className={`${collapsibleCardClass} relative z-30`}
-                open={false}
+                open={selectClientPanelOpen}
+                onToggle={(event) => setSelectClientPanelOpen(event.currentTarget.open)}
               >
                 <summary className={collapsibleSummaryClass}>
                   <span className="rr-make-panel-summary-title-md min-w-0 flex-1 truncate">
@@ -2200,6 +2231,7 @@ export default function RequestRidesPage() {
                     />
                   </div>
                 </label>
+
                 {selectedClient ? (
                   <div className="space-y-2 rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-sm">
                     <p className="text-xs text-slate-600">
@@ -2240,7 +2272,11 @@ export default function RequestRidesPage() {
                 </div>
               </details>
 
-              <details className={`${collapsibleCardClass} relative z-30`} open={false}>
+              <details
+                className={`${collapsibleCardClass} relative z-30`}
+                open={routeStopsPanelOpen}
+                onToggle={(event) => setRouteStopsPanelOpen(event.currentTarget.open)}
+              >
                 <summary className={collapsibleSummaryClass}>
                   <span className="rr-make-panel-summary-title-md">Route & stops</span>
                   <span className="inline-flex shrink-0 text-slate-600 transition-transform duration-300 group-open:rotate-180">
@@ -2258,6 +2294,23 @@ export default function RequestRidesPage() {
                     required: true,
                     onChange: setPickup,
                   })}
+                  <button
+                    type="button"
+                    onClick={() => setStops((prev) => [...prev, createEmptyStopField()])}
+                    className="crm-hover-lift flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-sm font-medium text-slate-900 shadow-md transition hover:bg-white"
+                  >
+                    <svg
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      className="h-4 w-4"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      aria-hidden
+                    >
+                      <path d="M10 4v12M4 10h12" strokeLinecap="round" />
+                    </svg>
+                    Add Stop
+                  </button>
                   {stops.map((stop) => (
                     <div
                       key={stop.id}
@@ -2331,30 +2384,34 @@ export default function RequestRidesPage() {
                     />
                   </label>
                   <div className="flex flex-col gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setStops((prev) => [...prev, createEmptyStopField()])}
-                      className="crm-hover-lift flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-sm font-medium text-slate-900 shadow-md transition hover:bg-white"
-                    >
-                      <svg
-                        viewBox="0 0 20 20"
-                        fill="none"
-                        className="h-4 w-4"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        aria-hidden
-                      >
-                        <path d="M10 4v12M4 10h12" strokeLinecap="round" />
-                      </svg>
-                      Add Stop
-                    </button>
-                    <button
-                      type="button"
-                      onClick={clearRouteSelection}
-                      className="crm-hover-lift w-full rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-sm font-medium text-slate-900 shadow-md transition hover:bg-white"
-                    >
-                      Clear route
-                    </button>
+                    <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-slate-900">
+                      <input
+                        type="checkbox"
+                        checked={scheduleEnabled}
+                        onChange={(event) => {
+                          setScheduleEnabled(event.target.checked);
+                          if (!event.target.checked) setScheduleAtInput("");
+                          if (event.target.checked && !scheduleAtInput) {
+                            setScheduleAtInput(
+                              toLocalDateTimeInput(new Date(Date.now() + 15 * 60000).toISOString()),
+                            );
+                          }
+                        }}
+                        className="h-5 w-5 cursor-pointer rounded-md border-2 border-slate-400 bg-white accent-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/40"
+                      />
+                      Schedule ride
+                    </label>
+                    {scheduleEnabled ? (
+                      <label className="block">
+                        <span className="crm-label block">Schedule datetime</span>
+                        <input
+                          type="datetime-local"
+                          value={scheduleAtInput}
+                          onChange={(event) => setScheduleAtInput(event.target.value)}
+                          className="crm-input rr-input-volumetric h-11 w-full px-3 text-sm"
+                        />
+                      </label>
+                    ) : null}
                   </div>
                 </div>
                 </div>
@@ -2533,7 +2590,10 @@ export default function RequestRidesPage() {
 
               <details className={collapsibleCardClass} open={false}>
                 <summary className={collapsibleSummaryClass}>
-                  <span className="rr-make-panel-summary-title-md">Ride settings</span>
+                  <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span className="rr-make-panel-summary-title-md">Driver instructions</span>
+                    <span className="text-xs font-normal text-slate-500">Optional</span>
+                  </span>
                   <span className="inline-flex shrink-0 text-slate-600 transition-transform duration-300 group-open:rotate-180">
                     <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5" stroke="currentColor" strokeWidth="1.9">
                       <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
@@ -2541,56 +2601,17 @@ export default function RequestRidesPage() {
                   </span>
                 </summary>
                 <div className="rr-make-panel-body-clip">
-                <div className="rr-make-panel-body space-y-3">
-                  <label className="block">
-                    <span className="crm-label block">Tariff class</span>
-                    <input
-                      value={rideClass}
-                      onChange={(event) => setRideClass(event.target.value)}
-                      className="crm-input rr-input-volumetric h-11 w-full px-3 text-sm"
-                      placeholder="comfortplus_b2b"
-                    />
-                  </label>
-
-                <label className="block">
-                  <span className="crm-label block">Driver instructions...</span>
-                  <textarea
-                    value={comment}
-                    onChange={(event) => setComment(event.target.value)}
-                    className="crm-input rr-input-volumetric min-h-20 w-full resize-y px-3 py-2 text-sm"
-                    placeholder="Main cost center"
-                  />
-                </label>
-
-                <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-slate-900">
-                  <input
-                    type="checkbox"
-                    checked={scheduleEnabled}
-                    onChange={(event) => {
-                      setScheduleEnabled(event.target.checked);
-                      if (!event.target.checked) setScheduleAtInput("");
-                      if (event.target.checked && !scheduleAtInput) {
-                        setScheduleAtInput(
-                          toLocalDateTimeInput(new Date(Date.now() + 15 * 60000).toISOString()),
-                        );
-                      }
-                    }}
-                    className="h-5 w-5 cursor-pointer rounded-md border-2 border-slate-400 bg-white accent-red-600 focus:outline-none focus:ring-2 focus:ring-red-400/40"
-                  />
-                  Schedule ride
-                </label>
-                  {scheduleEnabled ? (
+                  <div className="rr-make-panel-body space-y-3">
                     <label className="block">
-                      <span className="crm-label block">Schedule datetime</span>
-                      <input
-                        type="datetime-local"
-                        value={scheduleAtInput}
-                        onChange={(event) => setScheduleAtInput(event.target.value)}
-                        className="crm-input rr-input-volumetric h-11 w-full px-3 text-sm"
+                      <span className="crm-label block">Notes for the driver</span>
+                      <textarea
+                        value={comment}
+                        onChange={(event) => setComment(event.target.value)}
+                        className="crm-input rr-input-volumetric min-h-20 w-full resize-y px-3 py-2 text-sm"
+                        placeholder="Sent with the order when filled"
                       />
                     </label>
-                  ) : null}
-                </div>
+                  </div>
                 </div>
               </details>
 

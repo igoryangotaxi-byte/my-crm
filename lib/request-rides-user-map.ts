@@ -13,6 +13,36 @@ export function normalizePhoneKey(raw: string): string {
   return digits;
 }
 
+/**
+ * Yango / CRM store `client_id` as dashed UUID or 32-char hex. Request-rides-create canonicalizes
+ * to dashed for API headers; the phone map must resolve both or lookups miss after normalization.
+ */
+export function normalizeYangoClientIdKey(clientId: string): string {
+  return preferredClientIdMapKey(clientId);
+}
+
+function preferredClientIdMapKey(clientId: string): string {
+  const t = clientId.trim();
+  const hex = t.replace(/[^0-9a-f]/gi, "");
+  if (hex.length === 32) {
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+  }
+  return t;
+}
+
+/** Prefer dashed UUID, then try other shapes so legacy JSON map keys still match. */
+function orderedClientIdVariants(clientId: string): string[] {
+  const t = clientId.trim();
+  if (!t) return [];
+  const preferred = preferredClientIdMapKey(clientId);
+  const hex = t.replace(/[^0-9a-f]/gi, "");
+  const set = new Set<string>();
+  set.add(preferred);
+  set.add(t);
+  if (hex.length === 32) set.add(hex);
+  return [...set];
+}
+
 function readUserMap(): UserMapRoot {
   if (!fs.existsSync(DEFAULT_MAP_PATH)) return {};
   try {
@@ -51,12 +81,14 @@ export function resolveMappedUserId(params: {
   if (!phoneKey) return null;
 
   const map = readUserMap();
-  const scopedKey = `${params.tokenLabel}:${params.clientId}`;
-  const scoped = map[scopedKey] ?? {};
-  if (scoped[phoneKey]) return scoped[phoneKey];
+  for (const cid of orderedClientIdVariants(params.clientId)) {
+    const scopedKey = `${params.tokenLabel}:${cid}`;
+    const scoped = map[scopedKey] ?? {};
+    if (scoped[phoneKey]) return scoped[phoneKey];
 
-  const byClientId = map[params.clientId] ?? {};
-  if (byClientId[phoneKey]) return byClientId[phoneKey];
+    const byClientId = map[cid] ?? {};
+    if (byClientId[phoneKey]) return byClientId[phoneKey];
+  }
 
   return null;
 }
@@ -72,9 +104,10 @@ export function upsertMappedUserId(params: {
   if (!phoneKey || !userId) return false;
 
   const map = readUserMap();
-  const scopedKey = `${params.tokenLabel}:${params.clientId}`;
+  const cid = preferredClientIdMapKey(params.clientId);
+  const scopedKey = `${params.tokenLabel}:${cid}`;
   const scoped = map[scopedKey] ?? {};
-  const byClientId = map[params.clientId] ?? {};
+  const byClientId = map[cid] ?? {};
 
   const prevScoped = scoped[phoneKey];
   const prevByClient = byClientId[phoneKey];
@@ -83,7 +116,7 @@ export function upsertMappedUserId(params: {
   byClientId[phoneKey] = userId;
 
   map[scopedKey] = scoped;
-  map[params.clientId] = byClientId;
+  map[cid] = byClientId;
 
   const changed = prevScoped !== userId || prevByClient !== userId;
   if (changed) {
@@ -100,21 +133,22 @@ export function removeMappedUserId(params: {
   const phoneKey = normalizePhoneKey(params.phoneNumber);
   if (!phoneKey) return false;
   const map = readUserMap();
-  const scopedKey = `${params.tokenLabel}:${params.clientId}`;
-  const scoped = map[scopedKey] ?? {};
-  const byClientId = map[params.clientId] ?? {};
-
   let changed = false;
-  if (phoneKey in scoped) {
-    delete scoped[phoneKey];
-    changed = true;
+  for (const cid of orderedClientIdVariants(params.clientId)) {
+    const scopedKey = `${params.tokenLabel}:${cid}`;
+    const scoped = map[scopedKey] ?? {};
+    const byClientId = map[cid] ?? {};
+    if (phoneKey in scoped) {
+      delete scoped[phoneKey];
+      changed = true;
+    }
+    if (phoneKey in byClientId) {
+      delete byClientId[phoneKey];
+      changed = true;
+    }
+    map[scopedKey] = scoped;
+    map[cid] = byClientId;
   }
-  if (phoneKey in byClientId) {
-    delete byClientId[phoneKey];
-    changed = true;
-  }
-  map[scopedKey] = scoped;
-  map[params.clientId] = byClientId;
   if (changed) writeUserMap(map);
   return changed;
 }
@@ -131,10 +165,16 @@ export function searchMappedUsers(params: {
   strictClientScope?: boolean;
 }): MappedUserCandidate[] {
   const map = readUserMap();
-  const scopedKey = `${params.tokenLabel}:${params.clientId}`;
-  const pools = params.strictClientScope
-    ? [map[scopedKey] ?? {}]
-    : [map[scopedKey] ?? {}, map[params.clientId] ?? {}, map.global ?? {}];
+  const pools: Record<string, string>[] = [];
+  for (const cid of orderedClientIdVariants(params.clientId)) {
+    pools.push(map[`${params.tokenLabel}:${cid}`] ?? {});
+    if (!params.strictClientScope) {
+      pools.push(map[cid] ?? {});
+    }
+  }
+  if (!params.strictClientScope) {
+    pools.push(map.global ?? {});
+  }
   const raw = params.query.trim();
   const digitsQuery = raw.replace(/\D/g, "");
   const limit = Math.max(1, Math.min(params.limit ?? 8, 20));
@@ -165,8 +205,11 @@ export function listMappedPhonesForClient(params: {
   limit?: number;
 }): string[] {
   const map = readUserMap();
-  const scopedKey = `${params.tokenLabel}:${params.clientId}`;
-  const pools = [map[scopedKey] ?? {}, map[params.clientId] ?? {}];
+  const pools: Record<string, string>[] = [];
+  for (const cid of orderedClientIdVariants(params.clientId)) {
+    pools.push(map[`${params.tokenLabel}:${cid}`] ?? {});
+    pools.push(map[cid] ?? {});
+  }
   const out: string[] = [];
   const seen = new Set<string>();
   const limit = Math.max(1, Math.min(params.limit ?? 50, 500));

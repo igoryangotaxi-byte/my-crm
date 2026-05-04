@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-05-04",
+    title: "Request Rides Yango + VIPLuxTravel & IFA cabinets (0.2.11)",
+    notes:
+      "cafb9fee — App version 0.2.11. Request Rides: CORP cost center fields on orders/create when UUID resolves; client id for Yango matches lookup (no forced dashed header); phone→user_id map accepts dashed/undashed client_id keys; optional REQUEST_RIDES_CC_DEBUG; invalid CC labels cleared instead of blocking create. Static cabinets VIPLuxTravel (YANGO_TOKEN_VIP_LUX_TRAVEL) and IFA (YANGO_TOKEN_IFA), sync-yango-env-tokens-to-kv + Vercel env scripts. suggest route normalizes client id scope. UI updates on Request Rides page; trace fields on create errors.",
+  },
+  {
     date: "2026-05-03",
     title: "Sidebar: logo squircle aligned with nav icons (0.2.10)",
     notes:

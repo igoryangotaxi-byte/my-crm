@@ -240,6 +240,16 @@ function getStaticTokenConfigs(): TokenConfig[] {
       crmClientName: "ZHAK",
       token: readToken(process.env.YANGO_TOKEN_ZHAK),
     },
+    {
+      label: "VIPLuxTravel",
+      crmClientName: "VIP Lux Travel",
+      token: readToken(process.env.YANGO_TOKEN_VIP_LUX_TRAVEL),
+    },
+    {
+      label: "IFA",
+      crmClientName: "IFA — Israel Football Association",
+      token: readToken(process.env.YANGO_TOKEN_IFA),
+    },
   ];
 }
 
@@ -326,28 +336,113 @@ let dashboardInMemoryCache:
   | null = null;
 let dashboardInFlight: Promise<{ rows: B2BDashboardOrder[]; errors: string[] }> | null = null;
 
+function yangoTraceIdsFromHeaders(response: Response): { traceId?: string; requestId?: string } {
+  const traceId =
+    response.headers.get("x-trace-id") ??
+    response.headers.get("x-traceid") ??
+    response.headers.get("trace-id");
+  const requestId =
+    response.headers.get("x-request-id") ??
+    response.headers.get("request-id") ??
+    response.headers.get("x-correlation-id");
+  return {
+    traceId: traceId?.trim() || undefined,
+    requestId: requestId?.trim() || undefined,
+  };
+}
+
+/** Parse Yango / gateway JSON error bodies for trace identifiers (e.g. CORP_CANNOT_ORDER). */
+function yangoTraceIdsFromErrorBody(raw: string): { traceId?: string; requestId?: string } {
+  const t = raw.trim();
+  if (!t.startsWith("{") && !t.startsWith("[")) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(t) as unknown;
+    const pick = (v: unknown): string | undefined =>
+      typeof v === "string" && v.trim() ? v.trim() : undefined;
+    const fromObject = (o: Record<string, unknown>): { traceId?: string; requestId?: string } => {
+      const traceId = pick(o.trace_id) ?? pick(o.traceId) ?? pick(o["trace-id"]);
+      const requestId =
+        pick(o.request_id) ?? pick(o.requestId) ?? pick(o["request-id"]) ?? pick(o.req_id);
+      return { traceId, requestId };
+    };
+
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const root = fromObject(parsed as Record<string, unknown>);
+      const diagnostics = (parsed as Record<string, unknown>).diagnostics;
+      const diag =
+        diagnostics && typeof diagnostics === "object" && diagnostics !== null
+          ? fromObject(diagnostics as Record<string, unknown>)
+          : {};
+      const errObj = (parsed as Record<string, unknown>).error;
+      const err =
+        errObj && typeof errObj === "object" && errObj !== null
+          ? fromObject(errObj as Record<string, unknown>)
+          : {};
+      const details = (parsed as Record<string, unknown>).details;
+      const det =
+        details && typeof details === "object" && details !== null
+          ? fromObject(details as Record<string, unknown>)
+          : {};
+      return {
+        traceId: root.traceId ?? diag.traceId ?? err.traceId ?? det.traceId,
+        requestId: root.requestId ?? diag.requestId ?? err.requestId ?? det.requestId,
+      };
+    }
+  } catch {
+    // ignore invalid JSON
+  }
+  return {};
+}
+
+/** Headers win when both exist; body fills gaps (some gateways only put trace_id in JSON). */
+function formatYangoTraceSuffix(response: Response, errorBodyRaw: string): string {
+  const fromHeaders = yangoTraceIdsFromHeaders(response);
+  const fromBody = yangoTraceIdsFromErrorBody(errorBodyRaw);
+  const traceId = fromHeaders.traceId ?? fromBody.traceId;
+  const requestId = fromHeaders.requestId ?? fromBody.requestId;
+  const parts = [
+    traceId ? `trace_id=${traceId}` : null,
+    requestId ? `request_id=${requestId}` : null,
+  ].filter(Boolean);
+  return parts.length ? ` [${parts.join(", ")}]` : "";
+}
+
+/**
+ * Parse trace / request ids from a thrown Yango fetch error message (bracket suffix from headers/body
+ * merge and/or JSON error body). Use in API routes so clients can copy ids without parsing `error` text.
+ */
+export function extractYangoTraceFromCompositeMessage(message: string): {
+  traceId?: string;
+  requestId?: string;
+} {
+  const traceBracket = message.match(/trace_id=([^,\]\s]+)/)?.[1]?.trim();
+  const requestBracket = message.match(/request_id=([^,\]\s]+)/)?.[1]?.trim();
+  if (traceBracket || requestBracket) {
+    return {
+      traceId: traceBracket || undefined,
+      requestId: requestBracket || undefined,
+    };
+  }
+  const stripped = message.replace(/^HTTP \d+:\s*/, "").trim();
+  const jsonSlice = stripped.split(/\s\[/)[0]?.trim() ?? stripped;
+  if (jsonSlice.startsWith("{")) {
+    const fromBody = yangoTraceIdsFromErrorBody(jsonSlice);
+    return {
+      traceId: fromBody.traceId,
+      requestId: fromBody.requestId,
+    };
+  }
+  return {};
+}
+
 async function fetchJson<T>(
   url: string,
   token: string,
   clientId?: string,
   init?: RequestInit,
 ) {
-  const buildTraceSuffix = (response: Response): string => {
-    const traceId =
-      response.headers.get("x-trace-id") ??
-      response.headers.get("x-traceid") ??
-      response.headers.get("trace-id");
-    const requestId =
-      response.headers.get("x-request-id") ??
-      response.headers.get("request-id") ??
-      response.headers.get("x-correlation-id");
-    const parts = [
-      traceId ? `trace_id=${traceId}` : null,
-      requestId ? `request_id=${requestId}` : null,
-    ].filter(Boolean);
-    return parts.length ? ` [${parts.join(", ")}]` : "";
-  };
-
   const extraHeaders = (init?.headers ?? {}) as HeadersInit;
   const response = await fetch(url, {
     method: init?.method ?? "GET",
@@ -363,7 +458,7 @@ async function fetchJson<T>(
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(`HTTP ${response.status}: ${message}${buildTraceSuffix(response)}`);
+    throw new Error(`HTTP ${response.status}: ${message}${formatYangoTraceSuffix(response, message)}`);
   }
 
   return (await response.json()) as T;
@@ -376,22 +471,6 @@ async function fetchJsonNoCache<T>(
   init?: RequestInit,
   options?: { allowEmptyBody?: boolean },
 ) {
-  const buildTraceSuffix = (response: Response): string => {
-    const traceId =
-      response.headers.get("x-trace-id") ??
-      response.headers.get("x-traceid") ??
-      response.headers.get("trace-id");
-    const requestId =
-      response.headers.get("x-request-id") ??
-      response.headers.get("request-id") ??
-      response.headers.get("x-correlation-id");
-    const parts = [
-      traceId ? `trace_id=${traceId}` : null,
-      requestId ? `request_id=${requestId}` : null,
-    ].filter(Boolean);
-    return parts.length ? ` [${parts.join(", ")}]` : "";
-  };
-
   const extraHeaders = (init?.headers ?? {}) as HeadersInit;
   const response = await fetch(url, {
     method: init?.method ?? "GET",
@@ -407,7 +486,7 @@ async function fetchJsonNoCache<T>(
 
   const raw = await response.text();
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${raw}${buildTraceSuffix(response)}`);
+    throw new Error(`HTTP ${response.status}: ${raw}${formatYangoTraceSuffix(response, raw)}`);
   }
 
   if (options?.allowEmptyBody && !raw.trim()) {
@@ -1483,17 +1562,13 @@ async function resolveCostCenterIdToCorpSettingsUuid(input: {
   return "";
 }
 
-/**
- * Only send `cost_center` when it is a real cabinet label from Yango. CRM placeholders such as
- * `Cost center 2655e983…` (directory fallback) must not be sent — the API validates the string and
- * may reject the order with CORP_CANNOT_ORDER even when cost_centers_id is valid.
- */
-function isTrustedYangoCostCenterDisplayLabel(label: string): boolean {
+/** Directory-only label `Cost center 2655e983…` is not a valid `cost_center` string on orders/create. */
+function isSyntheticDirectoryFallbackCostCenterLabel(label: string): boolean {
   const t = label.trim();
   if (!t) return false;
-  if (/^Cost center\s+[0-9a-f]{8}/i.test(t)) return false;
-  if (/directory\s+assignment/i.test(t)) return false;
-  return true;
+  if (/^cost center\s+[0-9a-f]{1,8}…\s*$/i.test(t)) return true;
+  if (/^cost center\s+[0-9a-f-]{4,}…\s*$/i.test(t)) return true;
+  return false;
 }
 
 export function buildRequestRideBody(payload: RequestRidePayload): Record<string, unknown> {
@@ -1540,18 +1615,14 @@ export function buildRequestRideBody(payload: RequestRidePayload): Record<string
     phone: payload.phoneNumber.trim(),
     comment: payload.comment?.trim() || undefined,
   };
-  const costCenterId = payload.costCenterId?.trim();
-  const costCenterDisplayName = payload.costCenterDisplayName?.trim();
-  if (costCenterId) {
-    // CORP: UUID belongs in id fields; optional `cost_center` is the directory display name (not the UUID).
-    body.cost_centers_id = costCenterId;
-    body.cost_centers_ids = [costCenterId];
-    // Some corp gateways read singular `cost_center_id` only (same settings UUID as plural fields).
-    body.cost_center_id = costCenterId;
-    // Never send CRM placeholder labels as `cost_center` — Yango validates the string against the registry
-    // and may return CORP_CANNOT_ORDER even when cost_centers_id is correct (e.g. ZHAK + directory fallback UI).
-    if (costCenterDisplayName && isTrustedYangoCostCenterDisplayLabel(costCenterDisplayName)) {
-      body.cost_center = costCenterDisplayName;
+  const ccCanon = canonicalCorpCostCenterSettingsUuid((payload.costCenterId ?? "").trim());
+  if (ccCanon) {
+    body.cost_centers_id = ccCanon;
+    body.cost_center_id = ccCanon;
+    body.cost_centers_ids = [ccCanon];
+    const display = (payload.costCenterDisplayName ?? "").trim();
+    if (display && !isSyntheticDirectoryFallbackCostCenterLabel(display)) {
+      body.cost_center = display;
     }
   }
   const scheduleAt = payload.scheduleAtIso?.trim();
@@ -2614,10 +2685,10 @@ async function createRequestRideInternal(
     if (mapped) {
       orderPayload = { ...payload, costCenterId: mapped };
     } else if (!isCorpCostCenterSettingsUuid(ccRaw)) {
-      throw new Error(
-        `CORP cost center must be a cost-center settings UUID for ${payload.tokenLabel}. ` +
-          `Got "${ccRaw.slice(0, 48)}${ccRaw.length > 48 ? "…" : ""}" which does not match /2.0/cost_centers ids.`,
-      );
+      // User/discovery may return a display name or legacy label (not a settings UUID). Hard-failing
+      // blocked TEST/sandbox and non-CORP cabinets; Yango will 406 with CORP_CANNOT_ORDER if a real CORP
+      // cabinet still needs a valid id — then operators fix data or we add an explicit UI CC.
+      orderPayload = { ...payload, costCenterId: null, costCenterDisplayName: null };
     }
   }
 
@@ -2671,6 +2742,11 @@ async function createRequestRideInternal(
     asString(createResponse.state) ||
     "created";
 
+  const traceId =
+    asString(createResponse.trace_id).trim() ||
+    asString(createResponse.traceId).trim() ||
+    null;
+
   return {
     orderId,
     status,
@@ -2682,6 +2758,7 @@ async function createRequestRideInternal(
       endpoint === "/2.0/orders/create"
         ? undefined
         : `Create endpoint overridden via YANGO_CREATE_ORDER_ENDPOINT=${endpoint}`,
+    traceId: traceId || null,
   };
 }
 

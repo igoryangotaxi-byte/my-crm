@@ -1,6 +1,6 @@
 {
   "name": "my-crm",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "private": true,
   "engines": {
     "node": ">=20.9.0"
@@ -17,6 +17,8 @@
     "vercel:sync-fleet-env": "node scripts/vercel-sync-fleet-env.mjs",
     "vercel:sync-google-maps-env": "node scripts/vercel-sync-google-maps-env.mjs",
     "vercel:sync-yango-opticity-env": "node scripts/vercel-sync-yango-opticity-env.mjs",
+    "vercel:sync-yango-vipluxtravel-env": "node scripts/vercel-sync-yango-vipluxtravel-env.mjs",
+    "vercel:sync-yango-ifa-env": "node scripts/vercel-sync-yango-ifa-env.mjs",
     "vercel:sync-yango-star-taxi-env": "node scripts/vercel-sync-yango-star-taxi-env.mjs",
     "sync:datagrip:check": "node scripts/datagrip-check.js",
     "sync:datagrip:run": "node scripts/datagrip-sync.js",

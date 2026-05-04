@@ -63,6 +63,16 @@ const CABINETS: CabinetRow[] = [
   { label: "Star Taxi Point", crmClientName: "Star Taxi Point", token: () => readToken(process.env.YANGO_TOKEN_STAR_TAXI_POINT) },
   { label: "OPTICITY", crmClientName: "Opticity", token: () => readToken(process.env.YANGO_TOKEN_OPTICITY) },
   { label: "ZHAK", crmClientName: "ZHAK", token: () => readToken(process.env.YANGO_TOKEN_ZHAK) },
+  {
+    label: "VIPLuxTravel",
+    crmClientName: "VIP Lux Travel",
+    token: () => readToken(process.env.YANGO_TOKEN_VIP_LUX_TRAVEL),
+  },
+  {
+    label: "IFA",
+    crmClientName: "IFA — Israel Football Association",
+    token: () => readToken(process.env.YANGO_TOKEN_IFA),
+  },
 ];
 
 function cabinetByNormKey(): Map<string, CabinetRow> {

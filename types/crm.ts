@@ -142,6 +142,8 @@ export type RequestRideResult = {
   status: string;
   etaMinutes: number | null;
   warning?: string;
+  /** From Yango order/create response when present (support / SMS reference). */
+  traceId?: string | null;
 };
 
 export type RequestRideLifecycleStatus =

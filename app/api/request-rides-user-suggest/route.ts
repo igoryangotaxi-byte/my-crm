@@ -1,7 +1,11 @@
 import { resolveRequestRideUserByPhone, searchRequestRideUsers } from "@/lib/yango-api";
 import { loadAuthStore } from "@/lib/auth-store";
 import { getTenantEmployeeLinks } from "@/lib/client-employee-links";
-import { normalizePhoneKey, resolveMappedUserId } from "@/lib/request-rides-user-map";
+import {
+  normalizePhoneKey,
+  normalizeYangoClientIdKey,
+  resolveMappedUserId,
+} from "@/lib/request-rides-user-map";
 import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
@@ -28,6 +32,7 @@ export async function POST(request: Request) {
   const tokenLabel = scope?.tokenLabel ?? normalizeString(body?.tokenLabel);
   const clientId = scope?.apiClientId ?? normalizeString(body?.clientId);
   const query = normalizeString(body?.query);
+  const clientIdKey = clientId ? normalizeYangoClientIdKey(clientId) : "";
 
   if (!tokenLabel || !clientId || !query) {
     return Response.json(
@@ -39,7 +44,7 @@ export async function POST(request: Request) {
   try {
     let users: Awaited<ReturnType<typeof searchRequestRideUsers>> = [];
     try {
-      users = await searchRequestRideUsers({ tokenLabel, clientId, query, limit: 8 });
+      users = await searchRequestRideUsers({ tokenLabel, clientId: clientIdKey, query, limit: 8 });
     } catch {
       users = [];
     }
@@ -75,7 +80,7 @@ export async function POST(request: Request) {
             try {
               const probe = await resolveRequestRideUserByPhone({
                 tokenLabel,
-                clientId,
+                clientId: clientIdKey,
                 phoneNumber: phone,
               });
               resolvedRemoteUserId = probe?.userId ?? "";
@@ -115,13 +120,13 @@ export async function POST(request: Request) {
       const digitsQuery = query.replace(/\D/g, "");
       const normalizedQuery = query.trim().toLowerCase();
       const tLabel = tokenLabel.trim();
-      const cId = clientId.trim();
+      const cId = clientIdKey;
       const localCandidates = store.users
         .filter(
           (user) =>
             user.accountType === "client" &&
             (user.tokenLabel ?? "").trim() === tLabel &&
-            (user.apiClientId ?? "").trim() === cId,
+            normalizeYangoClientIdKey((user.apiClientId ?? "").trim()) === cId,
         )
         .slice(0, 400);
       const existingByPhone = new Set(enriched.map((item) => normalizePhoneKey(item.phone ?? "")));

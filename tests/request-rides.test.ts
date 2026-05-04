@@ -44,35 +44,11 @@ test("buildRequestRideBody maps fields and includes due_date when scheduled", ()
   });
 });
 
-test("buildRequestRideBody sets only cost_centers_id fields for CORP UUID (no cost_center mirror)", () => {
-  const cc = "1beae7f9-4af4-4ee5-96c2-ca86ae0a3551";
+test("buildRequestRideBody includes CORP cost center id fields and display name when set", () => {
+  const cc = "2655e983-56bd-49e9-8831-68d3d6823fe0";
   const body = buildRequestRideBody({
     tokenLabel: "ZHAK",
-    clientId: "1151f896-bd82-48ed-977d-4abcf1df4929",
-    rideClass: "comfortplus_b2b",
-    userId: "user-1",
-    costCenterId: cc,
-    sourceAddress: "A",
-    destinationAddress: "B",
-    sourceLat: 32.0,
-    sourceLon: 34.0,
-    destinationLat: 32.1,
-    destinationLon: 34.1,
-    phoneNumber: "+972500000000",
-    comment: null,
-    scheduleAtIso: null,
-  });
-  assert.equal(body.cost_centers_id, cc);
-  assert.deepEqual(body.cost_centers_ids, [cc]);
-  assert.equal(body.cost_center_id, cc);
-  assert.equal("cost_center" in body, false);
-});
-
-test("buildRequestRideBody adds cost_center display name when provided (CORP)", () => {
-  const cc = "1beae7f9-4af4-4ee5-96c2-ca86ae0a3551";
-  const body = buildRequestRideBody({
-    tokenLabel: "ZHAK",
-    clientId: "1151f896-bd82-48ed-977d-4abcf1df4929",
+    clientId: "cl-1",
     rideClass: "comfortplus_b2b",
     userId: "user-1",
     costCenterId: cc,
@@ -88,10 +64,12 @@ test("buildRequestRideBody adds cost_center display name when provided (CORP)", 
     scheduleAtIso: null,
   });
   assert.equal(body.cost_centers_id, cc);
+  assert.equal(body.cost_center_id, cc);
+  assert.deepEqual(body.cost_centers_ids, [cc]);
   assert.equal(body.cost_center, "HQ");
 });
 
-test("buildRequestRideBody omits cost_center for synthetic directory-fallback labels (Yango registry check)", () => {
+test("buildRequestRideBody omits cost_center for synthetic directory-fallback label", () => {
   const cc = "2655e983-56bd-49e9-8831-68d3d6823fe0";
   const body = buildRequestRideBody({
     tokenLabel: "ZHAK",
@@ -112,6 +90,31 @@ test("buildRequestRideBody omits cost_center for synthetic directory-fallback la
   });
   assert.equal(body.cost_centers_id, cc);
   assert.equal("cost_center" in body, false);
+});
+
+test("buildRequestRideBody canonicalizes undashed CORP cost center uuid on orders/create body", () => {
+  const undashed = "2655e98356bd49e9883168d3d6823fe0";
+  const dashed = "2655e983-56bd-49e9-8831-68d3d6823fe0";
+  const body = buildRequestRideBody({
+    tokenLabel: "ZHAK",
+    clientId: "cl-1",
+    rideClass: "comfortplus_b2b",
+    userId: "user-1",
+    costCenterId: undashed,
+    costCenterDisplayName: null,
+    sourceAddress: "A",
+    destinationAddress: "B",
+    sourceLat: 32.0,
+    sourceLon: 34.0,
+    destinationLat: 32.1,
+    destinationLon: 34.1,
+    phoneNumber: "+972500000000",
+    comment: null,
+    scheduleAtIso: null,
+  });
+  assert.equal(body.cost_centers_id, dashed);
+  assert.equal(body.cost_center_id, dashed);
+  assert.deepEqual(body.cost_centers_ids, [dashed]);
 });
 
 test("isCorpCostCenterSettingsUuid accepts standard lowercase UUID", () => {

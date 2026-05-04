@@ -1,5 +1,7 @@
 import {
+  canonicalCorpCostCenterSettingsUuid,
   createRequestRide,
+  extractYangoTraceFromCompositeMessage,
   resolveUserCostCenterIdByPhone,
   resolveRequestRideUserIdByPhone,
 } from "@/lib/yango-api";
@@ -9,12 +11,19 @@ import {
   resolveDefaultCostCenterIdForYangoClient,
 } from "@/lib/tenant-yango-bootstrap";
 import { searchAddressSuggestions } from "@/lib/geocoding";
+import { normalizeYangoClientIdKey } from "@/lib/request-rides-user-map";
 import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 import type { RequestRidePayload } from "@/types/crm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
+
+/** Set `REQUEST_RIDES_CC_DEBUG=1` to include `costCenter` resolution in JSON (default: omit). */
+function includeRequestRidesCostCenterDebug(): boolean {
+  const v = (process.env.REQUEST_RIDES_CC_DEBUG ?? "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
 
 function normalizeString(input: unknown): string {
   return typeof input === "string" ? input.trim() : "";
@@ -94,6 +103,8 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  /** Trim only — Yango matches `X-YaTaxi-Selected-Corp-Client-Id` to token-allowed clients as an exact string; rewriting dashed↔undashed causes SELECTED_CLIENT_ACCESS_DENIED. */
+  const clientIdRaw = payload.clientId.trim();
   if (!payload.sourceAddress || !payload.destinationAddress) {
     return Response.json(
       { ok: false, error: "sourceAddress and destinationAddress are required." },
@@ -106,11 +117,24 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const resolvedUserId = await resolveRequestRideUserIdByPhone({
+  let clientIdForYango = clientIdRaw;
+  let resolvedUserId = await resolveRequestRideUserIdByPhone({
     tokenLabel: payload.tokenLabel,
-    clientId: payload.clientId,
+    clientId: clientIdRaw,
     phoneNumber: payload.phoneNumber,
   });
+  const clientIdCanonical = canonicalCorpCostCenterSettingsUuid(clientIdRaw);
+  if (!resolvedUserId && clientIdCanonical && clientIdCanonical !== clientIdRaw) {
+    const alt = await resolveRequestRideUserIdByPhone({
+      tokenLabel: payload.tokenLabel,
+      clientId: clientIdCanonical,
+      phoneNumber: payload.phoneNumber,
+    });
+    if (alt) {
+      resolvedUserId = alt;
+      clientIdForYango = clientIdCanonical;
+    }
+  }
   if (!resolvedUserId) {
     return Response.json(
       {
@@ -121,6 +145,8 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  payload.clientId = clientIdForYango;
+  const clientIdKey = normalizeYangoClientIdKey(payload.clientId);
   payload.userId = resolvedUserId;
   const apiUserCostCenter = await resolveUserCostCenterIdByPhone({
     tokenLabel: payload.tokenLabel,
@@ -162,7 +188,7 @@ export async function POST(request: Request) {
       (store.tenantAccounts ?? []).find(
         (tenant) =>
           tenant.tokenLabel === payload.tokenLabel &&
-          tenant.apiClientId === payload.clientId &&
+          normalizeYangoClientIdKey((tenant.apiClientId ?? "").trim()) === clientIdKey &&
           tenant.enabled !== false,
       ) ?? null;
     const candidateByScope = scope?.tenantId
@@ -176,7 +202,7 @@ export async function POST(request: Request) {
           (user) =>
             user.accountType === "client" &&
             user.tokenLabel === payload.tokenLabel &&
-            user.apiClientId === payload.clientId &&
+            normalizeYangoClientIdKey((user.apiClientId ?? "").trim()) === clientIdKey &&
             normalizePhoneDigits(user.phoneNumber ?? "") === phoneDigits,
         );
     const anyClientUserWithCostCenter = scope?.tenantId
@@ -190,7 +216,7 @@ export async function POST(request: Request) {
           (user) =>
             user.accountType === "client" &&
             user.tokenLabel === payload.tokenLabel &&
-            user.apiClientId === payload.clientId &&
+            normalizeYangoClientIdKey((user.apiClientId ?? "").trim()) === clientIdKey &&
             Boolean((user.costCenterId ?? "").trim()),
         );
     let tenantDefault =
@@ -265,6 +291,7 @@ export async function POST(request: Request) {
       costCenterDebug.selectedCostCenterId = payload.costCenterId;
     }
   }
+
   if (payload.sourceLat == null || payload.sourceLon == null) {
     const src = await geocodeAddress(payload.sourceAddress);
     if (src) {
@@ -319,7 +346,7 @@ export async function POST(request: Request) {
           tokenLabel: payload.tokenLabel,
           clientId: payload.clientId,
           userId: payload.userId ?? null,
-          costCenter: costCenterDebug,
+          ...(includeRequestRidesCostCenterDebug() ? { costCenter: costCenterDebug } : {}),
         },
       },
       { headers: { "Cache-Control": "no-store" } },
@@ -330,23 +357,38 @@ export async function POST(request: Request) {
     if (message.includes("User not found")) {
       userHint =
         " User not found in selected client context. Verify phone->user_id mapping and client context.";
-    } else if (
-      message.includes("CORP_CANNOT_ORDER") ||
-      message.includes("Необходимо задать центр затрат")
-    ) {
-      userHint =
-        " Этот кабинет в Yango на стороне компании требует центр затрат (в отличие от Star Taxi Point / TEST). Выберите Cost center в форме, либо настройте дефолт в Yango, онбординге в Notes, YANGO_PINNED_COST_CENTER_JSON или defaultCostCenterId в tenant — иначе CRM не сможет подставить UUID автоматически.";
     }
+    const yangoTrace = extractYangoTraceFromCompositeMessage(message);
+    const traceInError =
+      !message.includes("trace_id=") &&
+      (yangoTrace.traceId || yangoTrace.requestId)
+        ? ` [${[yangoTrace.traceId && `trace_id=${yangoTrace.traceId}`, yangoTrace.requestId && `request_id=${yangoTrace.requestId}`]
+            .filter(Boolean)
+            .join(", ")}]`
+        : "";
+    // Vercel Runtime / Functions log: open the failed request → Logs; "Messages" stays empty on edge-only view.
+    console.error(
+      JSON.stringify({
+        event: "request_rides_create_failed",
+        yangoTraceId: yangoTrace.traceId ?? null,
+        yangoRequestId: yangoTrace.requestId ?? null,
+        tokenLabel: payload.tokenLabel,
+        clientId: payload.clientId,
+        errorPreview: `${message}${userHint}`.slice(0, 1_200),
+      }),
+    );
     return Response.json(
       {
         ok: false,
-        error: `${message}${userHint}`,
+        error: `${message}${userHint}${traceInError}`,
+        yangoTraceId: yangoTrace.traceId ?? null,
+        yangoRequestId: yangoTrace.requestId ?? null,
         debug: {
           tenantId: scope?.tenantId ?? null,
           tokenLabel: payload.tokenLabel,
           clientId: payload.clientId,
           userId: payload.userId ?? null,
-          costCenter: costCenterDebug,
+          ...(includeRequestRidesCostCenterDebug() ? { costCenter: costCenterDebug } : {}),
         },
       },
       { status: 500 },
