@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-05-05",
+    title: "EN/HE language switch, RTL fixes, and IL phone normalization (0.2.17)",
+    notes:
+      "343fcbb0 — App version 0.2.17. Added next-intl runtime with EN/HE dictionaries and user language persisted server-side in auth profile. Header now supports language switching and layout mirrors for RTL, with Request Rides/communications/business-center/login coverage expanded for Hebrew. Request Rides also normalizes Israeli rider phone input (e.g., 534895012 or 0534895012) into 972 format for lookup/create/order flows.",
+  },
+  {
+    date: "2026-05-05",
     title: "Bussiness Center + Orders modal cancellation (0.2.16)",
     notes:
       "fa36ca3d — App version 0.2.16. Added main CRM Bussiness Center with client selector, summary/export APIs, and Supabase-backed cache layer (with in-memory fallback) so repeated filter ranges avoid hitting Yango every time. Client cabinet label and page copy switched from Financial Center to Bussiness Center while staying tenant-scoped. Orders modal now shows Cancel in Yango for cancellable statuses only and updates status in UI after successful cancel.",
