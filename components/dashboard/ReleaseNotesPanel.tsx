@@ -9,7 +9,7 @@ const releaseItems: ReleaseItem[] = [
     date: "2026-05-05",
     title: "Bussiness Center + Orders modal cancellation (0.2.16)",
     notes:
-      "App version 0.2.16. Added main CRM Bussiness Center with client selector, summary/export APIs, and Supabase-backed cache layer (with in-memory fallback) so repeated filter ranges avoid hitting Yango every time. Client cabinet label and page copy switched from Financial Center to Bussiness Center while staying tenant-scoped. Orders modal now shows Cancel in Yango for cancellable statuses only and updates status in UI after successful cancel.",
+      "fa36ca3d — App version 0.2.16. Added main CRM Bussiness Center with client selector, summary/export APIs, and Supabase-backed cache layer (with in-memory fallback) so repeated filter ranges avoid hitting Yango every time. Client cabinet label and page copy switched from Financial Center to Bussiness Center while staying tenant-scoped. Orders modal now shows Cancel in Yango for cancellable statuses only and updates status in UI after successful cancel.",
   },
   {
     date: "2026-05-05",
