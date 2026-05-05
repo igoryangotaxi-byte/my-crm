@@ -99,7 +99,48 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
     top: number;
     width: number;
   } | null>(null);
-  const { currentUser } = useAuth();
+  const { currentUser, language } = useAuth();
+  const copy = language === "he"
+    ? {
+        communications: "תקשורת",
+        mainSubtitle: "בחר לקוח ושלח תקשורת מרוכזת לעובדים הרשומים שלו.",
+        clientSubtitle: "שלח תקשורת לעובדים הרשומים בפורטל שלך.",
+        bulkSms: "SMS מרוכז",
+        orderUpdates: "עדכוני הזמנה",
+        client: "לקוח",
+        selectClient: "בחר לקוח",
+        cabinet: "פורטל לקוח",
+        findByPhone: "מצא עובד לפי טלפון",
+        selectClientFirst: "בחר קודם לקוח",
+        searching: "מחפש משתמשים...",
+        noUsers: "לא נמצאו משתמשים תואמים.",
+        selectedRecipients: "נמענים שנבחרו",
+        noRecipients: "עדיין לא נבחרו נמענים.",
+        sendSms: "שלח SMS",
+        sendingSms: "שולח SMS...",
+        typeMessage: "הקלד טקסט הודעה...",
+        recipientsCount: "נמענים שנבחרו",
+      }
+    : {
+        communications: "Communications",
+        mainSubtitle: "Choose a client and send bulk communication to its registered employees.",
+        clientSubtitle: "Send communication to employees registered in your cabinet.",
+        bulkSms: "Bulk SMS",
+        orderUpdates: "Order Updates",
+        client: "Client",
+        selectClient: "Select Client",
+        cabinet: "Client cabinet",
+        findByPhone: "Find employee by phone",
+        selectClientFirst: "Select Client first",
+        searching: "Searching users...",
+        noUsers: "No matching users found.",
+        selectedRecipients: "Selected recipients",
+        noRecipients: "No recipients selected yet.",
+        sendSms: "Send SMS",
+        sendingSms: "Sending SMS...",
+        typeMessage: "Type message text...",
+        recipientsCount: "Selected recipients",
+      };
   const [communicationsTab, setCommunicationsTab] = useState<CommunicationsMainTab>("bulk");
   const [apiClients, setApiClients] = useState<YangoApiClientRef[]>([]);
   const [selectedClientRef, setSelectedClientRef] = useState<YangoApiClientRef | null>(null);
@@ -291,11 +332,11 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
   return (
     <section className="crm-page">
       <div className="glass-surface rounded-3xl p-4 lg:p-5">
-        <h1 className="crm-title-xl">Communications</h1>
+        <h1 className="crm-title-xl">{copy.communications}</h1>
         <p className="crm-subtitle mt-2 max-w-2xl">
           {mode === "main"
-            ? "Choose a client and send bulk communication to its registered employees."
-            : "Send communication to employees registered in your cabinet."}
+            ? copy.mainSubtitle
+            : copy.clientSubtitle}
         </p>
       </div>
 
@@ -310,7 +351,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
               communicationsTab === "bulk" ? communicationsSelectedTabClass : communicationsInactiveTabClass
             }`}
           >
-            Bulk SMS
+            {copy.bulkSms}
           </button>
           <button
             type="button"
@@ -321,7 +362,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
               communicationsTab === "orderUpdates" ? communicationsSelectedTabClass : communicationsInactiveTabClass
             }`}
           >
-            Order Updates
+            {copy.orderUpdates}
           </button>
         </div>
       ) : null}
@@ -331,7 +372,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-2">
             {mode === "main" ? (
               <label className="relative min-w-0 flex-1 lg:max-w-sm">
-                <span className="crm-label mb-1 block">Client</span>
+                <span className="crm-label mb-1 block">{copy.client}</span>
                 <div className="relative">
                   <button
                     ref={clientPickerButtonRef}
@@ -351,7 +392,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
                     >
                       {selectedClientRef
                         ? `${selectedClientRef.clientName} (${selectedClientRef.tokenLabel})`
-                        : "Select Client"}
+                        : copy.selectClient}
                     </span>
                     <span className="inline-flex shrink-0 text-slate-600" aria-hidden>
                       <svg
@@ -369,13 +410,13 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
               </label>
             ) : (
               <p className="text-sm text-slate-700 lg:flex lg:min-w-0 lg:flex-1 lg:items-center lg:self-center lg:pb-2">
-                Client cabinet: <span className="font-semibold">{currentUser?.corpClientId ?? "n/a"}</span>
+                {copy.cabinet}: <span className="font-semibold">{currentUser?.corpClientId ?? "n/a"}</span>
               </p>
             )}
 
             {(mode === "client" || (mode === "main" && communicationsTab === "bulk")) && (
               <label className="relative min-w-0 flex-1 lg:min-w-[280px]">
-                <span className="crm-label mb-1 block">Find employee by phone</span>
+                <span className="crm-label mb-1 block">{copy.findByPhone}</span>
                 <div className="relative">
                   <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
@@ -391,12 +432,12 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
                     }}
                     disabled={!hasTargetScope}
                     className="crm-input h-9 w-full rounded-lg border-slate-200 bg-white pl-9 pr-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-                    placeholder={hasTargetScope ? "+972..." : "Select Client first"}
+                    placeholder={hasTargetScope ? "+972..." : copy.selectClientFirst}
                   />
                   {showPhoneSuggestions && hasTargetScope && phoneQuery.trim() ? (
                     <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
                       {suggestionsLoading ? (
-                        <p className="px-3 py-2 text-xs text-slate-500">Searching users...</p>
+                        <p className="px-3 py-2 text-xs text-slate-500">{copy.searching}</p>
                       ) : phoneSuggestions.length > 0 ? (
                         phoneSuggestions.map((item) => (
                           <button
@@ -415,7 +456,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
                           </button>
                         ))
                       ) : (
-                        <p className="px-3 py-2 text-xs text-slate-500">No matching users found.</p>
+                        <p className="px-3 py-2 text-xs text-slate-500">{copy.noUsers}</p>
                       )}
                     </div>
                   ) : null}
@@ -433,9 +474,9 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
           <>
             <div className="make-glass-card-static rounded-2xl p-4">
               <div>
-                <p className="crm-label mb-1">Selected recipients</p>
+                <p className="crm-label mb-1">{copy.selectedRecipients}</p>
                 {selectedRecipients.length === 0 ? (
-                  <p className="mt-1 text-xs text-slate-500">No recipients selected yet.</p>
+                  <p className="mt-1 text-xs text-slate-500">{copy.noRecipients}</p>
                 ) : (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {selectedRecipients.map((item) => (
@@ -466,7 +507,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
                   onClick={() => setIsConfirmOpen(true)}
                   disabled={!canSend}
                 >
-                  {sending ? "Sending SMS..." : "Send SMS"}
+                  {sending ? copy.sendingSms : copy.sendSms}
                 </button>
                 <button
                   type="button"
@@ -487,10 +528,10 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
                 value={messageText}
                 onChange={(event) => setMessageText(event.target.value)}
                 className="crm-input min-h-28 w-full px-3 py-2 text-sm"
-                placeholder="Type message text..."
+                placeholder={copy.typeMessage}
               />
               <p className="crm-subtitle">
-                Selected recipients:{" "}
+                {copy.recipientsCount}:{" "}
                 <span className="font-semibold tabular-nums text-slate-700">{selectedPhones.length}</span>. SMS is sent
                 only to selected employees.
               </p>
@@ -583,7 +624,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
                       }}
                       className={dropdownOptionClass}
                     >
-                      <p className="text-sm font-semibold text-slate-500">Select Client</p>
+                      <p className="text-sm font-semibold text-slate-500">{copy.selectClient}</p>
                     </button>
                     {apiClients.map((client) => {
                       const key = clientOptionKey(client);

@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { Header } from "@/components/layout/Header";
+import { useAuth } from "@/components/auth/AuthProvider";
 import {
   RouteLoadingBar,
   RouteLoadingProvider,
@@ -10,6 +11,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { language } = useAuth();
   const mapFullBleed =
     pathname === "/request-rides" || pathname.startsWith("/client/request-rides");
 
@@ -25,7 +27,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div
           className={`make-shell-inner relative z-[1] flex flex-1 flex-col ${
-            mapFullBleed ? "h-dvh min-h-0 pl-0" : "min-h-screen pl-16"
+            mapFullBleed
+              ? "h-dvh min-h-0 pl-0"
+              : language === "he"
+                ? "min-h-screen pr-16"
+                : "min-h-screen pl-16"
           }`}
         >
           <Header />

@@ -1,0 +1,34 @@
+{
+  "layout": {
+    "brand": "אפלי טקסי עוז",
+    "searchPlaceholder": "חיפוש...",
+    "signedInAs": "מחובר כ",
+    "role": "תפקיד",
+    "logout": "התנתקות",
+    "openUserMenu": "פתח תפריט משתמש",
+    "closeUserMenuOverlay": "סגור שכבת תפריט משתמש",
+    "unknownUser": "משתמש לא ידוע",
+    "na": "לא זמין",
+    "language": "שפה"
+  },
+  "language": {
+    "en": "English",
+    "he": "עברית"
+  },
+  "nav": {
+    "requestRides": "הזמנת נסיעות",
+    "preOrders": "הזמנות מוקדמות",
+    "orders": "הזמנות",
+    "communications": "תקשורת",
+    "bussinessCenter": "מרכז עסקי",
+    "priceCalculator": "מחשבון מחיר",
+    "dashboard": "לוח בקרה",
+    "driversMap": "נהגים על המפה",
+    "accesses": "ניהול הרשאות",
+    "notes": "הערות",
+    "employees": "עובדים",
+    "clientCabinet": "פורטל לקוח",
+    "operations": "תפעול",
+    "myEmployees": "העובדים שלי"
+  }
+}

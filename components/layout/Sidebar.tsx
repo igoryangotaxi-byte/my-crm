@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useRouteLoading } from "@/components/layout/RouteLoadingContext";
 import type { AppPageKey } from "@/types/auth";
+import { useTranslations } from "next-intl";
 
 type IconProps = { className?: string };
 
@@ -168,10 +169,29 @@ const footerNavItems = [
   { href: "/notes", label: "Notes", page: "notes" as AppPageKey, icon: NotesIcon },
 ];
 
+function translateNavLabel(label: string, tNav: (key: string) => string) {
+  const map: Record<string, string> = {
+    "Request Rides": tNav("requestRides"),
+    "Pre-Orders": tNav("preOrders"),
+    Orders: tNav("orders"),
+    Communications: tNav("communications"),
+    "Bussiness Center": tNav("bussinessCenter"),
+    "Price Calculator": tNav("priceCalculator"),
+    Dashboard: tNav("dashboard"),
+    "Drivers on the Map": tNav("driversMap"),
+    "Access managment": tNav("accesses"),
+    Notes: tNav("notes"),
+    Employees: tNav("employees"),
+  };
+  return map[label] ?? label;
+}
+
 export function Sidebar() {
+  const tLayout = useTranslations("layout");
+  const tNav = useTranslations("nav");
   const pathname = usePathname();
   const { startRouteLoading } = useRouteLoading();
-  const { canAccess, currentArea, currentUser } = useAuth();
+  const { canAccess, currentArea, currentUser, language } = useAuth();
   const isClientPortal = pathname.startsWith("/client");
   const mainNavItems = isClientPortal
     ? [
@@ -198,10 +218,15 @@ export function Sidebar() {
 
   const navLabelReveal =
     "min-w-0 overflow-hidden text-sm font-medium transition-[max-width,opacity,transform] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] max-w-0 -translate-x-1 opacity-0 group-hover:max-w-[13rem] group-hover:translate-x-0 group-hover:opacity-100 motion-reduce:transition-none";
+  const rtl = language === "he";
 
   return (
     <aside
-      className="group fixed left-0 top-0 z-[70] flex h-screen w-16 max-w-[min(16rem,calc(100vw-0.5rem))] origin-top-left translate-y-0 scale-100 flex-col overflow-y-auto overflow-x-hidden rounded-r-3xl border-r border-white/40 bg-white/35 p-4 shadow-2xl shadow-black/10 backdrop-blur-3xl transition-[width,transform,box-shadow] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] [scrollbar-width:thin] motion-reduce:transition-none hover:w-64 hover:-translate-y-1 hover:scale-[1.012] hover:shadow-[0_28px_64px_rgba(15,23,42,0.22)] motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100"
+      className={`group fixed top-0 z-[70] flex h-screen w-16 max-w-[min(16rem,calc(100vw-0.5rem))] translate-y-0 scale-100 flex-col overflow-y-auto overflow-x-hidden border-white/40 bg-white/35 p-4 shadow-2xl shadow-black/10 backdrop-blur-3xl transition-[width,transform,box-shadow] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] [scrollbar-width:thin] motion-reduce:transition-none hover:w-64 hover:-translate-y-1 hover:scale-[1.012] hover:shadow-[0_28px_64px_rgba(15,23,42,0.22)] motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100 ${
+        rtl
+          ? "right-0 origin-top-right rounded-l-3xl border-l"
+          : "left-0 origin-top-left rounded-r-3xl border-r"
+      }`}
       aria-label="Main navigation"
     >
       <div className="mb-7 flex w-full min-w-0 items-center justify-center gap-0 rounded-2xl py-1.5 pl-1.5 pr-1.5 transition-all duration-300 ease-out group-hover:justify-start group-hover:gap-3 group-hover:py-2 group-hover:pr-3">
@@ -209,9 +234,9 @@ export function Sidebar() {
           <DashboardIcon className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1 overflow-hidden transition-[max-width,opacity] duration-300 ease-out max-w-0 opacity-0 group-hover:max-w-[11rem] group-hover:opacity-100 motion-reduce:transition-none">
-          <p className="truncate text-lg font-semibold text-slate-900">Appli Taxi Oz</p>
+          <p className="truncate text-lg font-semibold text-slate-900">{tLayout("brand")}</p>
           <p className="truncate text-xs text-slate-600">
-            {currentUser?.accountType === "client" ? "Client Cabinet" : "Operations"}
+            {currentUser?.accountType === "client" ? tNav("clientCabinet") : tNav("operations")}
           </p>
         </div>
       </div>
@@ -247,7 +272,7 @@ export function Sidebar() {
                   isActive ? "text-white group-hover:text-white" : "text-slate-800"
                 }`}
               >
-                {item.label}
+                {translateNavLabel(item.label, tNav)}
               </span>
             </Link>
           );
@@ -287,7 +312,7 @@ export function Sidebar() {
                       isActive ? "text-white group-hover:text-white" : "text-slate-800"
                     }`}
                   >
-                    {item.label}
+                    {translateNavLabel(item.label, tNav)}
                   </span>
                 </Link>
               );

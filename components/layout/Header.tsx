@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type { AppPageKey, BusinessArea } from "@/types/auth";
+import { useTranslations } from "next-intl";
 
 const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/dashboard": {
@@ -73,14 +74,38 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
 };
 
 export function Header() {
+  const tLayout = useTranslations("layout");
+  const tLanguage = useTranslations("language");
   const router = useRouter();
   const pathname = usePathname();
-  const { currentUser, logout, currentArea, setCurrentArea, canAccessArea, canAccess } = useAuth();
+  const { currentUser, logout, currentArea, setCurrentArea, canAccessArea, canAccess, language, updateUserLanguage } =
+    useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const pageMetaByLocale: Record<"en" | "he", Record<string, { title: string; subtitle: string }>> = {
+    en: pageMeta,
+    he: {
+      "/dashboard": { title: "לוח בקרה", subtitle: "ניתוח הזמנות מתוכננות B2B" },
+      "/clients": { title: "לקוחות", subtitle: "ניהול בסיס הלקוחות" },
+      "/orders": { title: "הזמנות", subtitle: "הזמנות B2B עם סינון ופרטים" },
+      "/pre-orders": { title: "הזמנות מוקדמות", subtitle: "נסיעות מתוכננות מ-Yango API" },
+      "/price-calculator": { title: "מחשבון מחיר", subtitle: "הערכת Taximeter לפי MOT ותעריף Yango" },
+      "/request-rides": { title: "הזמנת נסיעות", subtitle: "יצירת הזמנת נסיעה דרך לקוח API נבחר" },
+      "/communications": { title: "תקשורת", subtitle: "שליחת הודעות לעובדי לקוח" },
+      "/bussiness-center": { title: "מרכז עסקי", subtitle: "ניתוח הוצאות לפי לקוח נבחר עם cache" },
+      "/client/request-rides": { title: "הזמנת נסיעות", subtitle: "הזמנות נסיעה בפורטל לקוח" },
+      "/client/communications": { title: "תקשורת", subtitle: "שליחת הודעות לעובדים שלך" },
+      "/client/pre-orders": { title: "הזמנות מוקדמות", subtitle: "נסיעות מתוכננות לחברה שלך" },
+      "/client/orders": { title: "הזמנות", subtitle: "כל הנסיעות לחשבון הלקוח שלך" },
+      "/client/financial-center": { title: "מרכז עסקי", subtitle: "ניתוח הוצאות לפורטל הזה בלבד" },
+      "/client/employees": { title: "העובדים שלי", subtitle: "חברי צוות, פעילות נסיעות והגבלות" },
+      "/accesses": { title: "ניהול הרשאות", subtitle: "ניהול הרשאות תפקיד ואישורי הרשמה" },
+      "/notes": { title: "הערות", subtitle: "דיאגנוסטיקת טוקנים ורשימות שחרור" },
+    },
+  };
   const pageRoute =
     Object.keys(pageMeta).find((route) => pathname.startsWith(route)) ??
     "/dashboard";
-  const currentPage = pageMeta[pageRoute];
+  const currentPage = pageMetaByLocale[language][pageRoute] ?? pageMeta[pageRoute];
   const avatarText =
     currentUser?.name
       ?.split(" ")
@@ -120,12 +145,16 @@ export function Header() {
   return (
     <header
       className={`crm-surface sticky top-3 z-20 mb-2 flex min-h-16 shrink-0 items-center justify-between rounded-2xl border-white/70 px-5 py-3 lg:px-6 ${
-        mapFullBleed ? "ml-[calc(0.75rem+4rem)] mr-3" : "mx-3"
+        mapFullBleed
+          ? language === "he"
+            ? "mr-[calc(0.75rem+4rem)] ml-3"
+            : "ml-[calc(0.75rem+4rem)] mr-3"
+          : "mx-3"
       }`}
     >
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <div className="min-w-0">
-          <p className="crm-label mb-0.5 text-[0.62rem] tracking-[0.14em] text-muted">Appli Taxi Oz</p>
+          <p className="crm-label mb-0.5 text-[0.62rem] tracking-[0.14em] text-muted">{tLayout("brand")}</p>
           <h1 className="truncate text-lg font-bold tracking-tight text-foreground sm:text-xl">{currentPage.title}</h1>
           <p className="crm-subtitle mt-0.5 line-clamp-2 max-sm:text-[0.8rem]">{currentPage.subtitle}</p>
         </div>
@@ -134,7 +163,7 @@ export function Header() {
       <div className="mx-4 hidden w-full max-w-2xl items-center gap-3 lg:flex">
         <input
           type="search"
-          placeholder="Search..."
+          placeholder={tLayout("searchPlaceholder")}
           className="crm-input h-10 w-full px-3 text-sm"
         />
         <div className="inline-flex rounded-full border border-white/70 bg-white/75 p-1 shadow-[0_8px_18px_rgba(15,23,42,0.14)]">
@@ -173,25 +202,52 @@ export function Header() {
         </div>
       </div>
 
-      <div className="ml-2 flex items-center gap-3">
+      <div className={`${language === "he" ? "mr-2" : "ml-2"} flex items-center gap-3`}>
         <div className="relative">
           <button
             type="button"
             onClick={() => setIsUserMenuOpen((prev) => !prev)}
             className="crm-button-primary flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold"
-            aria-label="Open user menu"
+            aria-label={tLayout("openUserMenu")}
           >
             {avatarText}
           </button>
           {isUserMenuOpen ? (
-            <div className="crm-surface absolute right-0 mt-2 w-64 rounded-2xl p-3">
-              <p className="text-xs text-muted">Signed in as</p>
+            <div
+              className={`crm-surface absolute mt-2 w-64 rounded-2xl p-3 ${
+                language === "he" ? "left-0" : "right-0"
+              }`}
+            >
+              <p className="text-xs text-muted">{tLayout("signedInAs")}</p>
               <p className="mt-0.5 text-sm font-semibold text-slate-900">
-                {currentUser?.email ?? "Unknown user"}
+                {currentUser?.email ?? tLayout("unknownUser")}
               </p>
               <p className="mt-1 text-xs text-slate-600">
-                Role: {currentUser?.role ?? "n/a"}
+                {tLayout("role")}: {currentUser?.role ?? tLayout("na")}
               </p>
+              <div className="mt-3">
+                <p className="text-xs text-muted">{tLayout("language")}</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateUserLanguage("en")}
+                    className={`rounded-lg border px-2 py-1 text-xs font-semibold ${
+                      language === "en" ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-700"
+                    }`}
+                  >
+                    {tLanguage("en")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateUserLanguage("he")}
+                    className={`rounded-lg border px-2 py-1 text-xs font-semibold ${
+                      language === "he" ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-700"
+                    }`}
+                  >
+                    {tLanguage("he")}
+                  </button>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => {
@@ -200,14 +256,14 @@ export function Header() {
                 }}
                 className="crm-button-primary mt-3 w-full rounded-xl px-3 py-2 text-sm font-medium"
               >
-                Log out
+                {tLayout("logout")}
               </button>
             </div>
           ) : null}
           {isUserMenuOpen ? (
             <button
               type="button"
-              aria-label="Close user menu overlay"
+              aria-label={tLayout("closeUserMenuOverlay")}
               onClick={() => setIsUserMenuOpen(false)}
               className="fixed inset-0 z-[-1] cursor-default"
             />

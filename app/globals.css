@@ -34,6 +34,18 @@ body {
   min-height: 100vh;
 }
 
+html[dir="rtl"] body {
+  text-align: right;
+}
+
+html[dir="rtl"] .make-shell-main {
+  direction: rtl;
+}
+
+html[dir="rtl"] .rr-dropdown-option {
+  text-align: right;
+}
+
 * {
   border-color: var(--border);
 }

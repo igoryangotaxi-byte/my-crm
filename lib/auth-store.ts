@@ -1,6 +1,7 @@
 import { kv } from "@vercel/kv";
 import {
   type AccountType,
+  type AppLanguage,
   type AppRole,
   type ClientRoleDefinition,
   type AuthStoreData,
@@ -17,6 +18,7 @@ const AUTH_STORE_KEY = "appli:auth:store:v1";
 const DEFAULT_ADMIN_EMAIL = "ig-kuznetsov@yandex-team.ru";
 const DEFAULT_ADMIN_PASSWORD = "123";
 const DEFAULT_ADMIN_NAME = "Igor Kuznetsov";
+const DEFAULT_LANGUAGE: AppLanguage = "en";
 
 let fallbackMemoryStore: AuthStoreData | null = null;
 
@@ -128,6 +130,10 @@ function isAppRole(value: unknown): value is AppRole {
 
 function isUserStatus(value: unknown): value is UserStatus {
   return value === "pending" || value === "approved" || value === "rejected";
+}
+
+function normalizeLanguage(value: unknown): AppLanguage {
+  return value === "he" ? "he" : DEFAULT_LANGUAGE;
 }
 
 function isAuthUser(value: unknown): value is AuthUser {
@@ -242,6 +248,7 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
               tokenLabel: item.tokenLabel ?? null,
               apiClientId: item.apiClientId ?? null,
               clientRoleId: item.clientRoleId ?? null,
+              language: normalizeLanguage(item.language),
             })),
         )
       : base.users;

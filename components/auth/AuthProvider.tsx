@@ -8,8 +8,10 @@ import {
   useMemo,
   useState,
 } from "react";
+import { NextIntlClientProvider } from "next-intl";
 import {
   type AuthApiActionRequest,
+  type AppLanguage,
   type AuthStoreData,
   type AppPageKey,
   type AppRole,
@@ -25,6 +27,8 @@ import {
   type TenantAccount,
   type UserStatus,
 } from "@/types/auth";
+import enMessages from "@/messages/en.json";
+import heMessages from "@/messages/he.json";
 
 const SESSION_STORAGE_KEY = "appli_auth_session_v1";
 const CURRENT_AREA_STORAGE_KEY = "appli_auth_current_area_v1";
@@ -68,6 +72,8 @@ type AuthContextValue = {
   /** Remove a client cabinet and all its client-portal users (main CRM internal admins only). */
   deleteTenantAccount: (tenantId: string) => Promise<void>;
   lastLoginEmail: string;
+  language: AppLanguage;
+  updateUserLanguage: (language: AppLanguage) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -152,6 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
   const [loading, setLoading] = useState(true);
   const [tenantAccounts, setTenantAccounts] = useState<TenantAccount[]>([]);
+  const [languageState, setLanguageState] = useState<AppLanguage>("en");
 
   useEffect(() => {
     if (sessionUserId) {
@@ -165,6 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => users.find((user) => user.id === sessionUserId) ?? null,
     [users, sessionUserId],
   );
+  const language = currentUser?.language === "he" ? "he" : languageState;
   const currentArea = useMemo<BusinessArea>(() => {
     if (!currentUser) {
       return currentAreaState;
@@ -211,6 +219,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     localStorage.setItem(LAST_LOGIN_EMAIL_STORAGE_KEY, lastLoginEmail);
   }, [lastLoginEmail]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    const root = document.documentElement;
+    root.lang = language;
+    root.dir = language === "he" ? "rtl" : "ltr";
+  }, [language]);
 
   const applyStoreData = useCallback((data: AuthStoreData) => {
     setUsers(data.users);
@@ -344,7 +361,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     void runAction({ action: "logout" });
     setSessionUserId(null);
+    setLanguageState("en");
   }, [runAction]);
+
+  const updateUserLanguage = useCallback(
+    async (nextLanguage: AppLanguage) => {
+      setLanguageState(nextLanguage);
+      await runAction({ action: "updateUserLanguage", language: nextLanguage });
+    },
+    [runAction],
+  );
 
   const updateUserStatus = useCallback(
     async (userId: string, status: UserStatus) => {
@@ -472,6 +498,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       tenantAccounts,
       deleteTenantAccount,
       lastLoginEmail,
+      language,
+      updateUserLanguage,
     }),
     [
       loading,
@@ -499,10 +527,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       tenantAccounts,
       deleteTenantAccount,
       lastLoginEmail,
+      language,
+      updateUserLanguage,
     ],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const messages = language === "he" ? heMessages : enMessages;
+
+  return (
+    <AuthContext.Provider value={value}>
+      <NextIntlClientProvider locale={language} messages={messages}>
+        {children}
+      </NextIntlClientProvider>
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

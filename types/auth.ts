@@ -3,6 +3,7 @@ export type UserStatus = "pending" | "approved" | "rejected";
 export type BusinessArea = "b2b" | "b2c";
 export type DashboardBlockKey = "apiData" | "yangoData" | "tariffHealthCheck";
 export type AccountType = "internal" | "client";
+export type AppLanguage = "en" | "he";
 
 export type AppPageKey =
   | "dashboard"
@@ -33,6 +34,7 @@ export type AuthUser = {
   tokenLabel?: string | null;
   apiClientId?: string | null;
   clientRoleId?: string | null;
+  language?: AppLanguage;
 };
 
 export type ClientPortalPageKey =
@@ -219,6 +221,10 @@ export type AuthApiActionRequest =
   | {
       action: "deleteUser";
       userId: string;
+    }
+  | {
+      action: "updateUserLanguage";
+      language: AppLanguage;
     }
   | {
       action: "upsertTenantAccount";

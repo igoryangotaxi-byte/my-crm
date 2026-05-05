@@ -260,6 +260,7 @@ export async function POST(request: Request) {
         role: "User" as const,
         status: "pending" as const,
         createdAt: new Date().toISOString(),
+        language: "en" as const,
       };
       const nextStore: AuthStoreData = {
         ...store,
@@ -305,6 +306,22 @@ export async function POST(request: Request) {
       const response = NextResponse.json<AuthActionResponse>({ ok: true });
       clearSessionCookie(response);
       return response;
+    }
+    case "updateUserLanguage": {
+      if (!sessionUser) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Unauthorized" },
+          { status: 401 },
+        );
+      }
+      const nextStore: AuthStoreData = {
+        ...store,
+        users: store.users.map((user) =>
+          user.id === sessionUser.id ? { ...user, language: payload.language } : user,
+        ),
+      };
+      await saveAuthStore(nextStore);
+      return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
     case "updateUserStatus": {
       if (!sessionUser || sessionUser.role !== "Admin") {
@@ -536,6 +553,7 @@ export async function POST(request: Request) {
               tokenLabel,
               apiClientId,
               clientRoleId: "client-admin",
+              language: "en",
             },
           ];
       const synced = await syncTenantEmployeesFromYango({
@@ -834,6 +852,7 @@ export async function POST(request: Request) {
               tokenLabel: tenant.tokenLabel,
               apiClientId: tenant.apiClientId,
               clientRoleId: payload.clientRoleId,
+              language: "en",
             },
           ];
       let nextStore: AuthStoreData = {

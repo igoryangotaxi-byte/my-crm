@@ -1,0 +1,34 @@
+{
+  "layout": {
+    "brand": "Appli Taxi Oz",
+    "searchPlaceholder": "Search...",
+    "signedInAs": "Signed in as",
+    "role": "Role",
+    "logout": "Log out",
+    "openUserMenu": "Open user menu",
+    "closeUserMenuOverlay": "Close user menu overlay",
+    "unknownUser": "Unknown user",
+    "na": "n/a",
+    "language": "Language"
+  },
+  "language": {
+    "en": "English",
+    "he": "Hebrew"
+  },
+  "nav": {
+    "requestRides": "Request Rides",
+    "preOrders": "Pre-Orders",
+    "orders": "Orders",
+    "communications": "Communications",
+    "bussinessCenter": "Bussiness Center",
+    "priceCalculator": "Price Calculator",
+    "dashboard": "Dashboard",
+    "driversMap": "Drivers on the Map",
+    "accesses": "Access managment",
+    "notes": "Notes",
+    "employees": "Employees",
+    "clientCabinet": "Client Cabinet",
+    "operations": "Operations",
+    "myEmployees": "My Employees"
+  }
+}

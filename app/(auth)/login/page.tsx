@@ -8,7 +8,36 @@ type AuthMode = "login" | "register";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { loading, currentUser, login, register, lastLoginEmail } = useAuth();
+  const { loading, currentUser, login, register, lastLoginEmail, language } = useAuth();
+  const copy = language === "he"
+    ? {
+        loading: "טוען...",
+        signIn: "כניסה",
+        createAccount: "יצירת חשבון",
+        subtitleLogin: "גישה פנימית ל-CRM עבור צוות התפעול.",
+        subtitleRegister: "משתמשים חדשים דורשים אישור מנהל לפני כניסה.",
+        login: "כניסה",
+        register: "הרשמה",
+        name: "שם",
+        fullName: "שם מלא",
+        email: "אימייל",
+        password: "סיסמה",
+        pleaseWait: "נא להמתין...",
+      }
+    : {
+        loading: "Loading...",
+        signIn: "Sign in",
+        createAccount: "Create account",
+        subtitleLogin: "Internal CRM access for operations team.",
+        subtitleRegister: "New users require admin approval before sign in.",
+        login: "Login",
+        register: "Register",
+        name: "Name",
+        fullName: "Your full name",
+        email: "Email",
+        password: "Password",
+        pleaseWait: "Please wait...",
+      };
   const [mode, setMode] = useState<AuthMode>("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState(lastLoginEmail);
@@ -33,13 +62,13 @@ export default function LoginPage() {
         if (result.ok) {
           router.replace("/dashboard");
         } else {
-          setMessage(result.message ?? "Login failed");
+          setMessage(result.message ?? (language === "he" ? "הכניסה נכשלה" : "Login failed"));
         }
         return;
       }
 
       if (!name.trim()) {
-        setMessage("Name is required for registration");
+        setMessage(language === "he" ? "נדרש שם להרשמה" : "Name is required for registration");
         return;
       }
 
@@ -59,7 +88,7 @@ export default function LoginPage() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background text-sm text-muted">
-        Loading...
+        {copy.loading}
       </main>
     );
   }
@@ -70,12 +99,12 @@ export default function LoginPage() {
         <div className="mb-6">
           <p className="text-sm font-medium text-accent">Appli Taxi Oz</p>
           <h1 className="mt-2 text-2xl font-semibold text-foreground">
-            {mode === "login" ? "Sign in" : "Create account"}
+            {mode === "login" ? copy.signIn : copy.createAccount}
           </h1>
           <p className="mt-1 text-sm text-muted">
             {mode === "login"
-              ? "Internal CRM access for operations team."
-              : "New users require admin approval before sign in."}
+              ? copy.subtitleLogin
+              : copy.subtitleRegister}
           </p>
         </div>
 
@@ -90,7 +119,7 @@ export default function LoginPage() {
               mode === "login" ? "crm-button-primary text-white" : "text-slate-600"
             }`}
           >
-            Login
+            {copy.login}
           </button>
           <button
             type="button"
@@ -102,26 +131,26 @@ export default function LoginPage() {
               mode === "register" ? "crm-button-primary text-white" : "text-slate-600"
             }`}
           >
-            Register
+            {copy.register}
           </button>
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           {mode === "register" ? (
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-foreground">Name</span>
+              <span className="mb-1 block text-sm font-medium text-foreground">{copy.name}</span>
               <input
                 type="text"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="Your full name"
+                placeholder={copy.fullName}
                 className="crm-input h-11 w-full px-3 text-sm"
               />
             </label>
           ) : null}
 
           <label className="block">
-            <span className="mb-1 block text-sm font-medium text-foreground">Email</span>
+            <span className="mb-1 block text-sm font-medium text-foreground">{copy.email}</span>
             <input
               type="email"
               value={email}
@@ -132,7 +161,7 @@ export default function LoginPage() {
           </label>
 
           <label className="block">
-            <span className="mb-1 block text-sm font-medium text-foreground">Password</span>
+            <span className="mb-1 block text-sm font-medium text-foreground">{copy.password}</span>
             <input
               type="password"
               value={password}
@@ -152,10 +181,10 @@ export default function LoginPage() {
             className="crm-button-primary mt-2 h-11 w-full rounded-xl text-sm font-semibold transition hover:opacity-95"
           >
             {isSubmitting
-              ? "Please wait..."
+              ? copy.pleaseWait
               : mode === "login"
-                ? "Sign in"
-                : "Create account"}
+                ? copy.signIn
+                : copy.createAccount}
           </button>
         </form>
 
