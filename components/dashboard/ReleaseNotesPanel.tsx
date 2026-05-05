@@ -9,7 +9,7 @@ const releaseItems: ReleaseItem[] = [
     date: "2026-05-05",
     title: "Request Rides: Rider phone placement, SMS recipients, original address language (0.2.15)",
     notes:
-      "App version 0.2.15. Request Rides: Rider Phone moved under Pickup location; immediate/bulk request_created SMS recipients always include Rider Phone with dedupe; driver_on_way continues on the same recipient set. Added request-rides address snapshot storage for new rides and Orders/Pre-Orders now prefer stored original source/destination text (language-preserving), with fallback to Yango fullname. Address/phone inputs in route section were made more visually prominent while keeping CRM style.",
+      "5cb6c705 — App version 0.2.15. Request Rides: Rider Phone moved under Pickup location; immediate/bulk request_created SMS recipients always include Rider Phone with dedupe; driver_on_way continues on the same recipient set. Added request-rides address snapshot storage for new rides and Orders/Pre-Orders now prefer stored original source/destination text (language-preserving), with fallback to Yango fullname. Address/phone inputs in route section were made more visually prominent while keeping CRM style.",
   },
   {
     date: "2026-05-04",
