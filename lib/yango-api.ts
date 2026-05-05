@@ -26,6 +26,7 @@ import {
   listPreOrderFallbackSnapshotsByScope,
   tryStartPreOrderFallbackAttempt,
 } from "@/lib/preorder-fallback-store";
+import { loadRequestRideAddressSnapshotsBatch } from "@/lib/request-rides-address-store";
 import {
   loadYangoTokenRegistry,
   normalizeYangoTokenRegistryLabel,
@@ -714,10 +715,16 @@ async function getClientPreOrders(tokenConfig: TokenConfig, client: YangoClient)
         getOrderDetails(tokenConfig, client.client_id, order.id),
       ),
     );
+    const addressOverridesByOrderId = await loadRequestRideAddressSnapshotsBatch({
+      tokenLabel: tokenConfig.label,
+      clientId: client.client_id,
+      orderIds: futureOrders.map((order) => order.id),
+    });
 
     for (const [index, order] of futureOrders.entries()) {
       const orderDetails: YangoOrderInfoResponse | undefined =
         orderDetailsList[index];
+      const addressOverride = addressOverridesByOrderId[order.id];
       persistUserMapFromApiPayload(
         { tokenLabel: tokenConfig.label, clientId: client.client_id },
         orderDetails ?? null,
@@ -736,8 +743,8 @@ async function getClientPreOrders(tokenConfig: TokenConfig, client: YangoClient)
         requestedAt: getCreatedAtText(orderDetails, order.due_date),
         scheduledFor: formatDateTime(order.due_date),
         scheduledAt: order.due_date,
-        pointA: order.source?.fullname ?? "Not available",
-        pointB: order.destination?.fullname ?? "Not available",
+        pointA: addressOverride?.sourceAddress ?? order.source?.fullname ?? "Not available",
+        pointB: addressOverride?.destinationAddress ?? order.destination?.fullname ?? "Not available",
         driverAssigned: Boolean(performer?.fullname || performer?.phone || performer?.id),
         driverId: performer?.id ?? null,
         driverFirstName: names.firstName,
@@ -1004,6 +1011,11 @@ async function yangoOrderMapToB2BRows(
 ): Promise<B2BDashboardOrder[]> {
   const orderIds = [...uniqueById.keys()];
   if (orderIds.length === 0) return [];
+  const addressOverridesByOrderId = await loadRequestRideAddressSnapshotsBatch({
+    tokenLabel: tokenConfig.label,
+    clientId: client.client_id,
+    orderIds,
+  });
 
   const reportChunks = chunkArray(orderIds, 100);
   const reportOrdersById = new Map<string, YangoTaxiReportOrder>();
@@ -1038,6 +1050,7 @@ async function yangoOrderMapToB2BRows(
 
   for (const [orderId, order] of uniqueById.entries()) {
     const reportOrder = reportOrdersById.get(orderId);
+    const addressOverride = addressOverridesByOrderId[orderId];
     const statusRaw = reportOrder?.ride_status?.value ?? order.status ?? "unknown";
     const clientPaid =
       reportOrder?.total_cost ?? reportOrder?.cost_w_vat ?? reportOrder?.cost ?? 0;
@@ -1064,8 +1077,13 @@ async function yangoOrderMapToB2BRows(
       statusRaw,
       createdAt,
       scheduledAt,
-      pointA: order.source?.fullname ?? reportOrder?.source_fullname ?? "Not available",
+      pointA:
+        addressOverride?.sourceAddress ??
+        order.source?.fullname ??
+        reportOrder?.source_fullname ??
+        "Not available",
       pointB:
+        addressOverride?.destinationAddress ??
         order.destination?.fullname ??
         reportOrder?.destination_fullname ??
         "Not available",

@@ -1031,40 +1031,12 @@ export default function RequestRidesPage() {
           return { ...row, addresses: nextAddresses };
         }),
       );
-      try {
-        const response = await fetch("/api/address-reverse", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lat: input.lat, lon: input.lon, language }),
-        });
-        const data = (await response.json()) as AddressReverseResponse;
-        if (!response.ok || !data.ok || !data.suggestion) {
-          throw new Error(data.error ?? "Failed to decode dragged point.");
-        }
-        const label = data.suggestion.label || data.suggestion.displayName;
-        setPendingUploads((prev) =>
-          prev.map((row) => {
-            if (row.id !== rowId) return row;
-            const nextAddresses = row.addresses.map((entry, idx) =>
-              idx === addressIndex
-                ? { ...entry, text: label, lat: input.lat, lon: input.lon, geocodeError: undefined }
-                : entry,
-            );
-            return { ...row, addresses: nextAddresses };
-          }),
-        );
-      } catch {
-        // Keep dragged coordinates on pending row even when reverse-geocoding fails.
-      }
+      // Keep original language text; drag should only update geopoint.
       return;
     }
     if (input.id !== "pickup" && input.id !== "destination" && !input.id.startsWith("stop:")) {
       return;
     }
-    const language = detectInputLanguage(
-      [pickup.text, destination.text, ...stops.map((stop) => stop.text)].join(" "),
-    );
-
     if (input.id === "pickup") {
       setPickup((prev) => ({ ...prev, lat: input.lat, lon: input.lon }));
     } else if (input.id === "destination") {
@@ -1074,33 +1046,6 @@ export default function RequestRidesPage() {
       setStops((prev) =>
         prev.map((stop) => (stop.id === stopId ? { ...stop, lat: input.lat, lon: input.lon } : stop)),
       );
-    }
-
-    try {
-      const response = await fetch("/api/address-reverse", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lat: input.lat, lon: input.lon, language }),
-      });
-      const data = (await response.json()) as AddressReverseResponse;
-      if (!response.ok || !data.ok || !data.suggestion) {
-        throw new Error(data.error ?? "Failed to decode dragged point.");
-      }
-      const label = data.suggestion.label || data.suggestion.displayName;
-      if (input.id === "pickup") {
-        setPickup({ text: label, lat: input.lat, lon: input.lon });
-      } else if (input.id === "destination") {
-        setDestination({ text: label, lat: input.lat, lon: input.lon });
-      } else {
-        const stopId = input.id.slice("stop:".length);
-        setStops((prev) =>
-          prev.map((stop) =>
-            stop.id === stopId ? { ...stop, text: label, lat: input.lat, lon: input.lon } : stop,
-          ),
-        );
-      }
-    } catch {
-      // Keep dragged coordinates even if reverse-geocode fails.
     }
   };
 
@@ -1355,6 +1300,7 @@ export default function RequestRidesPage() {
       const created = data.result;
       const createdAtIso = new Date().toISOString();
       const addressPhones = dedupePhones([
+        phoneNumber,
         ...stops.map((stop) => stop.phone),
         destinationPhone,
       ]);
@@ -1919,9 +1865,10 @@ export default function RequestRidesPage() {
         }
         const created = data.result;
         const createdAtIso = new Date().toISOString();
-        const bulkAddressPhones = dedupePhones(
-          snapshot.addresses.slice(1).map((entry) => entry.phone ?? ""),
-        );
+        const bulkAddressPhones = dedupePhones([
+          snapshot.phone,
+          ...snapshot.addresses.slice(1).map((entry) => entry.phone ?? ""),
+        ]);
         const createdRide: RequestedRideItem = {
           orderId: created.orderId,
           createdAtIso,
@@ -2130,7 +2077,7 @@ export default function RequestRidesPage() {
                 void tryGeocodeFieldFromText(fid, snap);
               }, 400);
             }}
-            className="crm-input rr-input-volumetric h-11 w-full px-10 text-sm"
+            className="crm-input rr-input-volumetric h-11 w-full border-slate-300 bg-white px-10 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_8px_20px_rgba(15,23,42,0.08)] transition-[border-color,box-shadow,background-color] duration-200 [transition-timing-function:var(--ease-ui)] hover:border-slate-400 hover:bg-white focus-visible:shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_0_0_3px_rgba(255,45,45,0.14),0_10px_22px_rgba(15,23,42,0.1)]"
             required={params.required}
           />
           {activeAddressFieldId === params.fieldId && params.value.text.trim() ? (
@@ -2267,46 +2214,6 @@ export default function RequestRidesPage() {
                   )}
                 </label>
 
-                <label
-                  className={`block ${!selectedClient ? "cursor-not-allowed" : ""}`}
-                >
-                  <span className="crm-label block">Rider phone</span>
-                  <div ref={phoneSuggestAnchorRef} className="relative">
-                    <input
-                      value={phoneNumber}
-                      disabled={!selectedClient}
-                      onChange={(event) => {
-                        setPhoneNumber(event.target.value);
-                        setNewRiderDisplayName("");
-                        if (!event.target.value.trim()) {
-                          setPhoneSuggestions([]);
-                        }
-                        setShowPhoneSuggestions(true);
-                        setPhoneLookupOk(null);
-                        setPhoneLookupMessage(null);
-                      }}
-                      onFocus={() => selectedClient && setShowPhoneSuggestions(true)}
-                      onBlur={() => {
-                        window.setTimeout(() => {
-                          const pop = phoneSuggestPopoverRef.current;
-                          const active = document.activeElement;
-                          if (pop && active && pop.contains(active)) return;
-                          setShowPhoneSuggestions(false);
-                        }, 120);
-                      }}
-                      className="crm-input rr-input-volumetric h-11 w-full px-3 text-sm disabled:cursor-not-allowed disabled:opacity-55"
-                      placeholder={
-                        selectedClient
-                          ? "+972..."
-                          : isClientScopedUser && clientsLoading
-                            ? "Loading…"
-                            : "Select a client first"
-                      }
-                      required={Boolean(selectedClient)}
-                    />
-                  </div>
-                </label>
-
                 {selectedClient ? (
                   <div className="space-y-2 rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-sm">
                     <p className="text-xs text-slate-600">
@@ -2369,6 +2276,43 @@ export default function RequestRidesPage() {
                     required: true,
                     onChange: setPickup,
                   })}
+                  <label className={`block ${!selectedClient ? "cursor-not-allowed" : ""}`}>
+                    <span className="crm-label block">Rider phone</span>
+                    <div ref={phoneSuggestAnchorRef} className="relative">
+                      <input
+                        value={phoneNumber}
+                        disabled={!selectedClient}
+                        onChange={(event) => {
+                          setPhoneNumber(event.target.value);
+                          setNewRiderDisplayName("");
+                          if (!event.target.value.trim()) {
+                            setPhoneSuggestions([]);
+                          }
+                          setShowPhoneSuggestions(true);
+                          setPhoneLookupOk(null);
+                          setPhoneLookupMessage(null);
+                        }}
+                        onFocus={() => selectedClient && setShowPhoneSuggestions(true)}
+                        onBlur={() => {
+                          window.setTimeout(() => {
+                            const pop = phoneSuggestPopoverRef.current;
+                            const active = document.activeElement;
+                            if (pop && active && pop.contains(active)) return;
+                            setShowPhoneSuggestions(false);
+                          }, 120);
+                        }}
+                        className="crm-input rr-input-volumetric h-11 w-full border-slate-300 bg-white px-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_8px_20px_rgba(15,23,42,0.08)] transition-[border-color,box-shadow,background-color] duration-200 [transition-timing-function:var(--ease-ui)] hover:border-slate-400 hover:bg-white focus-visible:shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_0_0_3px_rgba(255,45,45,0.14),0_10px_22px_rgba(15,23,42,0.1)] disabled:cursor-not-allowed disabled:opacity-55"
+                        placeholder={
+                          selectedClient
+                            ? "+972..."
+                            : isClientScopedUser && clientsLoading
+                              ? "Loading…"
+                              : "Select a client first"
+                        }
+                        required={Boolean(selectedClient)}
+                      />
+                    </div>
+                  </label>
                   <button
                     type="button"
                     onClick={() => setStops((prev) => [...prev, createEmptyStopField()])}
@@ -2415,7 +2359,7 @@ export default function RequestRidesPage() {
                                   ),
                                 )
                               }
-                              className="crm-input rr-input-volumetric h-10 w-full px-3 text-sm"
+                              className="crm-input rr-input-volumetric h-10 w-full border-slate-300 bg-white px-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_8px_20px_rgba(15,23,42,0.08)] transition-[border-color,box-shadow,background-color] duration-200 [transition-timing-function:var(--ease-ui)] hover:border-slate-400 hover:bg-white focus-visible:shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_0_0_3px_rgba(255,45,45,0.14),0_10px_22px_rgba(15,23,42,0.1)]"
                               placeholder="+972..."
                             />
                           </label>
@@ -2454,7 +2398,7 @@ export default function RequestRidesPage() {
                       inputMode="tel"
                       value={destinationPhone}
                       onChange={(event) => setDestinationPhone(event.target.value)}
-                      className="crm-input rr-input-volumetric h-10 w-full px-3 text-sm"
+                      className="crm-input rr-input-volumetric h-10 w-full border-slate-300 bg-white px-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_8px_20px_rgba(15,23,42,0.08)] transition-[border-color,box-shadow,background-color] duration-200 [transition-timing-function:var(--ease-ui)] hover:border-slate-400 hover:bg-white focus-visible:shadow-[inset_0_1px_0_rgba(255,255,255,0.98),0_0_0_3px_rgba(255,45,45,0.14),0_10px_22px_rgba(15,23,42,0.1)]"
                       placeholder="+972..."
                     />
                   </label>

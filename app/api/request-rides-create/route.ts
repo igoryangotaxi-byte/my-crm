@@ -11,6 +11,7 @@ import {
   resolveDefaultCostCenterIdForYangoClient,
 } from "@/lib/tenant-yango-bootstrap";
 import { searchAddressSuggestions } from "@/lib/geocoding";
+import { saveRequestRideAddressSnapshot } from "@/lib/request-rides-address-store";
 import { normalizeYangoClientIdKey } from "@/lib/request-rides-user-map";
 import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 import type { RequestRidePayload } from "@/types/crm";
@@ -44,8 +45,17 @@ function normalizePhoneDigits(input: string): string {
 
 type WaypointPayload = { address: string; lat?: number; lon?: number };
 
-async function geocodeAddress(address: string): Promise<{ lat: number; lon: number } | null> {
-  const rows = await searchAddressSuggestions({ query: address, language: "en", limit: 1 });
+function detectAddressLanguage(input: string): "he" | "ru" | "en" {
+  if (/[\u0590-\u05FF]/.test(input)) return "he";
+  if (/[\u0400-\u04FF]/.test(input)) return "ru";
+  return "en";
+}
+
+async function geocodeAddress(
+  address: string,
+  language: "he" | "ru" | "en",
+): Promise<{ lat: number; lon: number } | null> {
+  const rows = await searchAddressSuggestions({ query: address, language, limit: 1 });
   const first = rows[0];
   if (!first) return null;
   return { lat: first.lat, lon: first.lon };
@@ -293,14 +303,17 @@ export async function POST(request: Request) {
   }
 
   if (payload.sourceLat == null || payload.sourceLon == null) {
-    const src = await geocodeAddress(payload.sourceAddress);
+    const src = await geocodeAddress(payload.sourceAddress, detectAddressLanguage(payload.sourceAddress));
     if (src) {
       payload.sourceLat = src.lat;
       payload.sourceLon = src.lon;
     }
   }
   if (payload.destinationLat == null || payload.destinationLon == null) {
-    const dst = await geocodeAddress(payload.destinationAddress);
+    const dst = await geocodeAddress(
+      payload.destinationAddress,
+      detectAddressLanguage(payload.destinationAddress),
+    );
     if (dst) {
       payload.destinationLat = dst.lat;
       payload.destinationLon = dst.lon;
@@ -320,7 +333,7 @@ export async function POST(request: Request) {
   if (payload.waypoints?.length) {
     for (const waypoint of payload.waypoints) {
       if (waypoint.lat == null || waypoint.lon == null) {
-        const geo = await geocodeAddress(waypoint.address);
+        const geo = await geocodeAddress(waypoint.address, detectAddressLanguage(waypoint.address));
         if (geo) {
           waypoint.lat = geo.lat;
           waypoint.lon = geo.lon;
@@ -337,6 +350,14 @@ export async function POST(request: Request) {
 
   try {
     const result = await createRequestRide(payload);
+    await saveRequestRideAddressSnapshot({
+      tokenLabel: payload.tokenLabel,
+      clientId: payload.clientId,
+      orderId: result.orderId,
+      sourceAddress: payload.sourceAddress,
+      destinationAddress: payload.destinationAddress,
+      waypointAddresses: (payload.waypoints ?? []).map((item) => item.address),
+    }).catch(() => null);
     return Response.json(
       {
         ok: true,
