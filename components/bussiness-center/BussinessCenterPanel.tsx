@@ -1,16 +1,9 @@
 "use client";
 
-import { ClientPortalSectionGate } from "@/components/client/ClientPortalSectionGate";
 import { useEffect, useMemo, useState } from "react";
+import type { B2BDashboardOrder, YangoApiClientRef } from "@/types/crm";
 
-type TopBucket = {
-  key: string;
-  label: string;
-  spend: number;
-  rides: number;
-};
-
-type FinancialResponse = {
+type SummaryPayload = {
   ok: boolean;
   cached?: boolean;
   summary: {
@@ -21,19 +14,8 @@ type FinancialResponse = {
     averageCheck: number;
     rides: number;
   };
-  topUsers: TopBucket[];
-  topDepartments: TopBucket[];
-  rows: Array<{
-    orderId: string;
-    tokenLabel: string;
-    clientId: string | null;
-    clientName: string;
-    statusRaw: string;
-    pointA: string;
-    pointB: string;
-    clientPaid: number;
-    scheduledAt: string;
-  }>;
+  topDepartments: Array<{ key: string; label: string; spend: number; rides: number }>;
+  rows: B2BDashboardOrder[];
   errors: string[];
 };
 
@@ -45,73 +27,108 @@ function money(value: number): string {
 }
 
 function toDateInput(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
 }
 
-function ClientFinancialCenterInner() {
-  const now = useMemo(() => new Date(), []);
+export function BussinessCenterPanel() {
+  const [clients, setClients] = useState<YangoApiClientRef[]>([]);
+  const [selectedClient, setSelectedClient] = useState<string>("");
   const [fromDate, setFromDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 90);
     return toDateInput(d.toISOString());
   });
-  const [toDate, setToDate] = useState(() => toDateInput(now.toISOString()));
-  const [loading, setLoading] = useState(true);
+  const [toDate, setToDate] = useState(() => toDateInput(new Date().toISOString()));
+  const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState<"csv" | "xlsx" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<FinancialResponse | null>(null);
+  const [data, setData] = useState<SummaryPayload | null>(null);
+
+  const selectedClientRef = useMemo(
+    () => clients.find((item) => `${item.tokenLabel}:${item.clientId}` === selectedClient) ?? null,
+    [clients, selectedClient],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch("/api/request-rides-clients", { cache: "no-store" });
+        const payload = (await response.json().catch(() => null)) as
+          | { ok?: boolean; clients?: YangoApiClientRef[] }
+          | null;
+        if (!response.ok || !payload?.ok) throw new Error("Failed to load clients.");
+        if (cancelled) return;
+        const loaded = payload.clients ?? [];
+        setClients(loaded);
+      } catch {
+        if (!cancelled) setError("Failed to load clients.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const load = async () => {
+    if (!selectedClientRef) {
+      setError("Select Client first.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const since = new Date(`${fromDate}T00:00:00.000Z`).toISOString();
       const till = new Date(`${toDate}T23:59:59.999Z`).toISOString();
-      const response = await fetch("/api/client-financial-center/summary", {
+      const response = await fetch("/api/bussiness-center/summary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ since, till }),
+        body: JSON.stringify({
+          tokenLabel: selectedClientRef.tokenLabel,
+          clientId: selectedClientRef.clientId,
+          since,
+          till,
+        }),
       });
-      const payload = (await response.json().catch(() => null)) as FinancialResponse | null;
-      if (!response.ok || !payload?.ok) {
-        throw new Error("Failed to load bussiness center data.");
-      }
+      const payload = (await response.json().catch(() => null)) as SummaryPayload | null;
+      if (!response.ok || !payload?.ok) throw new Error("Failed to load Bussiness Center data.");
       setData(payload);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load bussiness center data.");
+      setError(e instanceof Error ? e.message : "Failed to load Bussiness Center data.");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void load();
-    }, 0);
-    return () => {
-      window.clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const download = async (format: "csv" | "xlsx") => {
+    if (!selectedClientRef) {
+      setError("Select Client first.");
+      return;
+    }
     setExporting(format);
+    setError(null);
     try {
       const since = new Date(`${fromDate}T00:00:00.000Z`).toISOString();
       const till = new Date(`${toDate}T23:59:59.999Z`).toISOString();
-      const response = await fetch("/api/client-financial-center/export", {
+      const response = await fetch("/api/bussiness-center/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ since, till, format }),
+        body: JSON.stringify({
+          tokenLabel: selectedClientRef.tokenLabel,
+          clientId: selectedClientRef.clientId,
+          since,
+          till,
+          format,
+        }),
       });
       if (!response.ok) throw new Error("Export failed.");
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `financial-center.${format}`;
+      link.download = `bussiness-center.${format}`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -124,57 +141,64 @@ function ClientFinancialCenterInner() {
   return (
     <section className="crm-page space-y-4">
       <div className="rounded-2xl border border-white/70 bg-white/85 p-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">Bussiness Center</h1>
-            <p className="text-sm text-slate-600">
-              Spend analytics for your cabinet only.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="text-xs text-slate-600">
-              From
-              <input
-                type="date"
-                value={fromDate}
-                onChange={(event) => setFromDate(event.target.value)}
-                className="crm-input mt-1 h-10 px-3 text-sm"
-              />
-            </label>
-            <label className="text-xs text-slate-600">
-              To
-              <input
-                type="date"
-                value={toDate}
-                onChange={(event) => setToDate(event.target.value)}
-                className="crm-input mt-1 h-10 px-3 text-sm"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => void load()}
-              disabled={loading}
-              className="crm-button-primary h-10 rounded-xl px-4 text-sm font-semibold"
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="min-w-0 flex-1 text-xs text-slate-600">
+            Client
+            <select
+              value={selectedClient}
+              onChange={(event) => setSelectedClient(event.target.value)}
+              className="crm-input mt-1 h-10 w-full px-3 text-sm"
             >
-              {loading ? "Refreshing..." : "Apply filters"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void download("csv")}
-              disabled={Boolean(exporting)}
-              className="crm-hover-lift h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
-            >
-              {exporting === "csv" ? "Exporting..." : "Export CSV"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void download("xlsx")}
-              disabled={Boolean(exporting)}
-              className="crm-hover-lift h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
-            >
-              {exporting === "xlsx" ? "Exporting..." : "Export XLSX"}
-            </button>
-          </div>
+              <option value="">Select Client</option>
+              {clients.map((item) => (
+                <option key={`${item.tokenLabel}:${item.clientId}`} value={`${item.tokenLabel}:${item.clientId}`}>
+                  {item.clientName} ({item.tokenLabel})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-slate-600">
+            From
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(event) => setFromDate(event.target.value)}
+              className="crm-input mt-1 h-10 px-3 text-sm"
+            />
+          </label>
+          <label className="text-xs text-slate-600">
+            To
+            <input
+              type="date"
+              value={toDate}
+              onChange={(event) => setToDate(event.target.value)}
+              className="crm-input mt-1 h-10 px-3 text-sm"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={loading}
+            className="crm-button-primary h-10 rounded-xl px-4 text-sm font-semibold"
+          >
+            {loading ? "Refreshing..." : "Apply filters"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void download("csv")}
+            disabled={Boolean(exporting)}
+            className="crm-hover-lift h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
+          >
+            {exporting === "csv" ? "Exporting..." : "Export CSV"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void download("xlsx")}
+            disabled={Boolean(exporting)}
+            className="crm-hover-lift h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"
+          >
+            {exporting === "xlsx" ? "Exporting..." : "Export XLSX"}
+          </button>
         </div>
         {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
       </div>
@@ -208,18 +232,13 @@ function ClientFinancialCenterInner() {
           {(data?.topDepartments ?? []).map((item) => (
             <div key={item.key} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2">
               <p className="text-sm font-medium text-slate-900">{item.label}</p>
-              <p className="text-sm text-slate-700">
-                {money(item.spend)} · {item.rides} rides
-              </p>
+              <p className="text-sm text-slate-700">{money(item.spend)} · {item.rides} rides</p>
             </div>
           ))}
           {(data?.topDepartments.length ?? 0) === 0 ? (
             <p className="text-sm text-slate-500">No department data yet for selected range.</p>
           ) : null}
         </div>
-        {(data?.errors.length ?? 0) > 0 ? (
-          <p className="mt-2 text-xs text-amber-700">Some sources returned partial data: {data?.errors.join("; ")}</p>
-        ) : null}
       </article>
 
       <article className="rounded-2xl border border-white/70 bg-white/85 p-4">
@@ -247,25 +266,10 @@ function ClientFinancialCenterInner() {
                   <td className="px-3 py-2 text-slate-700">{money(row.clientPaid)}</td>
                 </tr>
               ))}
-              {(data?.rows.length ?? 0) === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-3 py-4 text-center text-sm text-slate-500">
-                    No orders for selected range.
-                  </td>
-                </tr>
-              ) : null}
             </tbody>
           </table>
         </div>
       </article>
     </section>
-  );
-}
-
-export default function ClientFinancialCenterPage() {
-  return (
-    <ClientPortalSectionGate section="financialCenter">
-      <ClientFinancialCenterInner />
-    </ClientPortalSectionGate>
   );
 }

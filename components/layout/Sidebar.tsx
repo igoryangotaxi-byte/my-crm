@@ -134,6 +134,13 @@ const navItems = [
     icon: CommunicationsIcon,
   },
   {
+    href: "/bussiness-center",
+    label: "Bussiness Center",
+    page: "financialCenter" as AppPageKey,
+    area: "b2b" as const,
+    icon: WalletIcon,
+  },
+  {
     href: "/price-calculator",
     label: "Price Calculator",
     page: "priceCalculator" as AppPageKey,
@@ -172,7 +179,7 @@ export function Sidebar() {
         { href: "/client/pre-orders", label: "Pre-Orders", page: "preOrders" as AppPageKey, area: "b2b" as const, icon: CalendarIcon },
         { href: "/client/orders", label: "Orders", page: "orders" as AppPageKey, area: "b2b" as const, icon: OrdersIcon },
         { href: "/client/communications", label: "Communications", page: "communications" as AppPageKey, area: "b2b" as const, icon: CommunicationsIcon },
-        { href: "/client/financial-center", label: "Financial Center", page: "financialCenter" as AppPageKey, area: "b2b" as const, icon: WalletIcon },
+        { href: "/client/financial-center", label: "Bussiness Center", page: "financialCenter" as AppPageKey, area: "b2b" as const, icon: WalletIcon },
         { href: "/client/drivers-map", label: "Drivers on the Map", page: "driversMap" as AppPageKey, area: "b2c" as const, icon: DriversMapIcon },
         { href: "/client/employees", label: "Employees", page: "orders" as AppPageKey, area: "b2b" as const, icon: ShieldIcon },
       ]

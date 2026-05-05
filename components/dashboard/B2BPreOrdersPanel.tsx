@@ -1433,6 +1433,8 @@ export function B2BPreOrdersPanel({
   const [orderDetails, setOrderDetails] = useState<B2BOrderDetailsResponse | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [cancelInYangoLoading, setCancelInYangoLoading] = useState(false);
+  const [cancelInYangoError, setCancelInYangoError] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const orderSourceRows = view === "orders" && ordersRemote ? loadedOrders : rows;
@@ -2076,9 +2078,54 @@ export function B2BPreOrdersPanel({
     setSelectedOrder(null);
     setOrderDetails(null);
     setDetailsError(null);
+    setCancelInYangoError(null);
+    setCancelInYangoLoading(false);
     setDetailsLoading(false);
     setCopiedField(null);
   };
+
+  const canCancelSelectedOrderInYango = useMemo(() => {
+    if (!selectedOrder) return false;
+    const normalized = resolveDashboardStatus(selectedOrder);
+    return (
+      normalized !== "cancelled" &&
+      normalized !== "in_progress" &&
+      normalized !== "completed"
+    );
+  }, [selectedOrder]);
+
+  const handleCancelInYango = useCallback(async () => {
+    if (!selectedOrder?.clientId || cancelInYangoLoading || !canCancelSelectedOrderInYango) return;
+    setCancelInYangoLoading(true);
+    setCancelInYangoError(null);
+    try {
+      const response = await fetch("/api/yango-order-cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tokenLabel: selectedOrder.tokenLabel,
+          clientId: selectedOrder.clientId,
+          orderId: selectedOrder.orderId,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error ?? `HTTP ${response.status}`);
+      }
+      setLoadedOrders((prev) =>
+        prev.map((row) =>
+          row.orderId === selectedOrder.orderId ? { ...row, statusRaw: "cancelled" } : row,
+        ),
+      );
+      setSelectedOrder((prev) => (prev ? { ...prev, statusRaw: "cancelled" } : prev));
+    } catch (error) {
+      setCancelInYangoError(
+        error instanceof Error ? error.message : "Failed to cancel order in Yango.",
+      );
+    } finally {
+      setCancelInYangoLoading(false);
+    }
+  }, [canCancelSelectedOrderInYango, cancelInYangoLoading, selectedOrder]);
 
   const copyToClipboard = async (fieldKey: string, value?: string | null) => {
     if (!value) return;
@@ -2978,6 +3025,23 @@ export function B2BPreOrdersPanel({
 
                 <aside className="rounded-3xl border border-slate-200 bg-[#f8f9fb] p-4">
                   <h4 className="mb-4 text-2xl font-semibold text-slate-900">Details</h4>
+                  {view === "orders" && canCancelSelectedOrderInYango ? (
+                    <div className="mb-4">
+                      <button
+                        type="button"
+                        onClick={() => void handleCancelInYango()}
+                        disabled={cancelInYangoLoading}
+                        className="crm-hover-lift inline-flex w-full items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {cancelInYangoLoading ? "Cancelling..." : "Cancel in Yango"}
+                      </button>
+                    </div>
+                  ) : null}
+                  {cancelInYangoError ? (
+                    <p className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                      {cancelInYangoError}
+                    </p>
+                  ) : null}
                   <dl className="space-y-3 text-sm">
                     <div>
                       <dt className="text-muted">Order ID</dt>

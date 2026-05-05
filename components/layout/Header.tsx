@@ -34,6 +34,10 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
     title: "Communications",
     subtitle: "Send messages to client employees",
   },
+  "/bussiness-center": {
+    title: "Bussiness Center",
+    subtitle: "Spend analytics by selected client with cached data",
+  },
   "/client/request-rides": {
     title: "Request Rides",
     subtitle: "Client cabinet ride requests",
@@ -51,8 +55,8 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
     subtitle: "All rides for your client account",
   },
   "/client/financial-center": {
-    title: "Financial Center",
-    subtitle: "Spend analytics, average check, users and departments",
+    title: "Bussiness Center",
+    subtitle: "Spend analytics for your cabinet only",
   },
   "/client/employees": {
     title: "My Employees",

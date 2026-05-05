@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-05-05",
+    title: "Bussiness Center + Orders modal cancellation (0.2.16)",
+    notes:
+      "App version 0.2.16. Added main CRM Bussiness Center with client selector, summary/export APIs, and Supabase-backed cache layer (with in-memory fallback) so repeated filter ranges avoid hitting Yango every time. Client cabinet label and page copy switched from Financial Center to Bussiness Center while staying tenant-scoped. Orders modal now shows Cancel in Yango for cancellable statuses only and updates status in UI after successful cancel.",
+  },
+  {
+    date: "2026-05-05",
     title: "Request Rides: Rider phone placement, SMS recipients, original address language (0.2.15)",
     notes:
       "5cb6c705 — App version 0.2.15. Request Rides: Rider Phone moved under Pickup location; immediate/bulk request_created SMS recipients always include Rider Phone with dedupe; driver_on_way continues on the same recipient set. Added request-rides address snapshot storage for new rides and Orders/Pre-Orders now prefer stored original source/destination text (language-preserving), with fallback to Yango fullname. Address/phone inputs in route section were made more visually prominent while keeping CRM style.",
