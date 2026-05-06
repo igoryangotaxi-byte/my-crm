@@ -2,8 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/components/auth/AuthProvider";
+import {
+  segmentedTabInactiveClass,
+  segmentedTabSelectedClass,
+  segmentedTabTrackClass,
+} from "@/components/crm/segmented-tab-classes";
+import { PreOrdersMapView } from "@/components/pre-orders/PreOrdersMapView";
 import type { PreOrder } from "@/types/crm";
 
 type PreOrdersBoardProps = {
@@ -12,6 +19,7 @@ type PreOrdersBoardProps = {
 };
 
 type FilterMode = "all" | "today" | "tomorrow" | "range";
+type ViewMode = "list" | "onMap";
 
 function IconCalendar({ className }: { className?: string }) {
   return (
@@ -87,10 +95,13 @@ function buildYangoB2CHandoffUrl(preOrder: PreOrder) {
 }
 
 export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
+  const tPreOrders = useTranslations("preOrdersPage");
   const { currentUser } = useAuth();
   const isClientScopedUser = currentUser?.accountType === "client";
+  const canUseOnMap = !isClientScopedUser;
   const router = useRouter();
   const [selectedPreOrder, setSelectedPreOrder] = useState<PreOrder | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -101,6 +112,12 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
   const [handoffMessage, setHandoffMessage] = useState<string | null>(null);
   const [handoffPreOrder, setHandoffPreOrder] = useState<PreOrder | null>(null);
   const [handoffOpenedOrderId, setHandoffOpenedOrderId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!canUseOnMap && viewMode === "onMap") {
+      setViewMode("list");
+    }
+  }, [canUseOnMap, viewMode]);
 
   const cancelPreOrder = async (preOrder: PreOrder) => {
     if (
@@ -312,82 +329,116 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
         </div>
       ) : null}
 
-      <div className="mb-0.5 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
-        <div className="flex w-full min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between lg:gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {([
-              { mode: "all", label: "All" },
-              { mode: "today", label: "Today" },
-              { mode: "tomorrow", label: "Tomorrow" },
-              { mode: "range", label: "Date range" },
-            ] as const).map((item) => (
-              <button
-                key={item.mode}
-                type="button"
-                onClick={() => setFilterMode(item.mode)}
-                className={`inline-flex h-9 shrink-0 items-center justify-center rounded-lg border px-3 text-sm font-medium transition ${
-                  filterMode === item.mode
-                    ? "crm-button-primary border-transparent text-white shadow-sm"
-                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 lg:w-auto lg:flex-1 lg:justify-center">
-            <div className="relative min-w-0 flex-1 sm:max-w-[11rem]">
-              <IconCalendar className="pointer-events-none absolute left-2.5 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                type="date"
-                value={fromDate}
-                aria-label="From date"
-                onChange={(event) => {
-                  setFilterMode("range");
-                  setFromDate(event.target.value);
-                }}
-                className="crm-input h-9 w-full min-w-0 rounded-lg border-slate-200 bg-white pl-9 pr-2 text-sm text-slate-800"
-              />
-            </div>
-            <div className="relative min-w-0 flex-1 sm:max-w-[11rem]">
-              <IconCalendar className="pointer-events-none absolute left-2.5 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                type="date"
-                value={toDate}
-                aria-label="To date"
-                onChange={(event) => {
-                  setFilterMode("range");
-                  setToDate(event.target.value);
-                }}
-                className="crm-input h-9 w-full min-w-0 rounded-lg border-slate-200 bg-white pl-9 pr-2 text-sm text-slate-800"
-              />
-            </div>
-          </div>
-
-          <div
-            className="inline-flex h-9 w-full min-w-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 lg:w-auto lg:shrink-0 lg:justify-end"
-            title="Assignment counts for the current filter"
+      <div className={segmentedTabTrackClass}>
+          <button
+            type="button"
+            onClick={() => setViewMode("list")}
+            className={`flex-1 rounded-xl px-2 py-2.5 text-xs font-semibold sm:px-3 sm:text-sm ${
+              viewMode === "list"
+                ? segmentedTabSelectedClass
+                : segmentedTabInactiveClass
+            }`}
           >
-            <span className="flex -space-x-1 pr-0.5" aria-hidden>
-              <span className="relative z-10 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white" />
-              <span className="relative z-[2] h-2 w-2 rounded-full bg-amber-400 ring-2 ring-white" />
-              <span className="relative z-[3] h-2 w-2 rounded-full bg-slate-400 ring-2 ring-white" />
-            </span>
-            <span className="whitespace-nowrap">
-              Assigned{" "}
-              <strong className="tabular-nums font-semibold text-slate-900">{preOrdersCounts.assigned}</strong>
-            </span>
-            <span className="text-slate-300">·</span>
-            <span className="whitespace-nowrap">
-              Unassigned{" "}
-              <strong className="tabular-nums font-semibold text-slate-900">{preOrdersCounts.unassigned}</strong>
-            </span>
-          </div>
-        </div>
+            {tPreOrders("tabList")}
+          </button>
+        {canUseOnMap ? (
+          <button
+            type="button"
+            onClick={() => setViewMode("onMap")}
+            className={`flex-1 rounded-xl px-2 py-2.5 text-xs font-semibold sm:px-3 sm:text-sm ${
+              viewMode === "onMap"
+                ? segmentedTabSelectedClass
+                : segmentedTabInactiveClass
+            }`}
+          >
+            {tPreOrders("tabOnMap")}
+          </button>
+        ) : null}
       </div>
 
-      {filteredPreOrders.length === 0 ? (
+      {viewMode === "list" ? (
+        <div className="mb-0.5 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+          <div className="flex w-full min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between lg:gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              {([
+                { mode: "all", label: "All" },
+                { mode: "today", label: "Today" },
+                { mode: "tomorrow", label: "Tomorrow" },
+                { mode: "range", label: "Date range" },
+              ] as const).map((item) => (
+                <button
+                  key={item.mode}
+                  type="button"
+                  onClick={() => setFilterMode(item.mode)}
+                  className={`inline-flex h-9 shrink-0 items-center justify-center rounded-lg border px-3 text-sm font-medium transition ${
+                    filterMode === item.mode
+                      ? "crm-button-primary border-transparent text-white shadow-sm"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 lg:w-auto lg:flex-1 lg:justify-center">
+              <div className="relative min-w-0 flex-1 sm:max-w-[11rem]">
+                <IconCalendar className="pointer-events-none absolute left-2.5 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="date"
+                  value={fromDate}
+                  aria-label="From date"
+                  onChange={(event) => {
+                    setFilterMode("range");
+                    setFromDate(event.target.value);
+                  }}
+                  className="crm-input h-9 w-full min-w-0 rounded-lg border-slate-200 bg-white pl-9 pr-2 text-sm text-slate-800"
+                />
+              </div>
+              <div className="relative min-w-0 flex-1 sm:max-w-[11rem]">
+                <IconCalendar className="pointer-events-none absolute left-2.5 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="date"
+                  value={toDate}
+                  aria-label="To date"
+                  onChange={(event) => {
+                    setFilterMode("range");
+                    setToDate(event.target.value);
+                  }}
+                  className="crm-input h-9 w-full min-w-0 rounded-lg border-slate-200 bg-white pl-9 pr-2 text-sm text-slate-800"
+                />
+              </div>
+            </div>
+
+            <div
+              className="inline-flex h-9 w-full min-w-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 lg:w-auto lg:shrink-0 lg:justify-end"
+              title="Assignment counts for the current filter"
+            >
+              <span className="flex -space-x-1 pr-0.5" aria-hidden>
+                <span className="relative z-10 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white" />
+                <span className="relative z-[2] h-2 w-2 rounded-full bg-amber-400 ring-2 ring-white" />
+                <span className="relative z-[3] h-2 w-2 rounded-full bg-slate-400 ring-2 ring-white" />
+              </span>
+              <span className="whitespace-nowrap">
+                Assigned{" "}
+                <strong className="tabular-nums font-semibold text-slate-900">{preOrdersCounts.assigned}</strong>
+              </span>
+              <span className="text-slate-300">·</span>
+              <span className="whitespace-nowrap">
+                Unassigned{" "}
+                <strong className="tabular-nums font-semibold text-slate-900">{preOrdersCounts.unassigned}</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {viewMode === "onMap" && canUseOnMap ? (
+        <PreOrdersMapView
+          preOrders={filteredPreOrders}
+          onOpenFull={(preOrder) => setSelectedPreOrder(preOrder)}
+        />
+      ) : filteredPreOrders.length === 0 ? (
         <div className="glass-surface rounded-3xl px-4 py-10 text-center text-sm text-muted">
           No pre-orders found for selected filter.
         </div>

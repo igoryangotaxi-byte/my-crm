@@ -248,6 +248,7 @@ export async function parseTariffHealthIntent(query: string): Promise<TariffHeal
     })) as IntentLike;
     return normalizeIntent(llmRaw, query);
   } catch {
+    // Insufficient quota / network / parse errors: Tariff Health still runs using heuristic intent (no LLM).
     return fallbackIntent(query);
   }
 }
@@ -673,6 +674,7 @@ async function buildTariffAnalystMarkdown(
       userPrompt: JSON.stringify(payload),
     });
   } catch {
+    // Optional markdown narrative only; core numbers still ship without LLM if quota fails.
     return null;
   }
 }

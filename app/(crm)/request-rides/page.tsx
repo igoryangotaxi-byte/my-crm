@@ -210,6 +210,10 @@ function normalizePhoneLookupKey(value: string): string {
   return digits;
 }
 
+function normalizeClientIdLookupKey(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 /** Enough digits to treat input as a phone (not a name search) for “create in cabinet”. */
 function isPhoneLikeForCreateRider(value: string): boolean {
   return value.replace(/\D/g, "").length >= 8;
@@ -680,14 +684,15 @@ export default function RequestRidesPage() {
   ]);
 
   const tenantEmployeeNameByPhone = useMemo(() => {
-    const tokenLabel = selectedClient?.tokenLabel?.trim();
-    const apiClientId = selectedClient?.clientId?.trim();
+    const tokenLabel = selectedClient?.tokenLabel?.trim().toLowerCase();
+    const apiClientId = normalizeClientIdLookupKey(selectedClient?.clientId ?? "");
     if (!tokenLabel || !apiClientId) return new Map<string, string>();
     const out = new Map<string, string>();
     for (const user of users) {
       if (user.accountType !== "client") continue;
-      if ((user.tokenLabel ?? "").trim() !== tokenLabel) continue;
-      if ((user.apiClientId ?? "").trim() !== apiClientId) continue;
+      if (normalizeClientIdLookupKey(user.apiClientId ?? "") !== apiClientId) continue;
+      const userToken = (user.tokenLabel ?? "").trim().toLowerCase();
+      if (userToken && tokenLabel && userToken !== tokenLabel) continue;
       const key = normalizePhoneLookupKey(user.phoneNumber ?? "");
       const name = user.name?.trim();
       if (!key || !name) continue;
@@ -2962,29 +2967,34 @@ export default function RequestRidesPage() {
                                     (phoneKey ? tenantEmployeeNameByPhone.get(phoneKey) : null) ||
                                     item.fullName?.trim() ||
                                     null;
+                                  const resolvedPhone = item.phone?.trim() || (phoneKey ? `+${phoneKey}` : "");
+                                  const suggestionName =
+                                    resolvedName || (isRtl ? "עובד" : "Employee");
                                   return (
                                     <button
                                       key={`${item.userId}:${item.phone ?? "none"}`}
                                       type="button"
                                       onMouseDown={(event) => {
                                         event.preventDefault();
-                                        const displayName = resolvedName || item.phone?.trim() || "employee";
+                                        const displayName = suggestionName;
                                         if (item.phone) {
                                           setPhoneNumber(item.phone);
                                         }
                                         setPhoneLookupOk(true);
                                         setPhoneLookupMessage(
-                                          `Selected ${displayName}${item.phone ? ` (${item.phone})` : ""}.`,
+                                          isRtl
+                                            ? `נבחר: ${displayName}${resolvedPhone ? ` (${resolvedPhone})` : ""}.`
+                                            : `Selected ${displayName}${resolvedPhone ? ` (${resolvedPhone})` : ""}.`,
                                         );
                                         setShowPhoneSuggestions(false);
                                       }}
                                       className={dropdownOptionClass}
                                     >
                                       <p className="text-sm font-semibold text-slate-800">
-                                        {resolvedName || item.phone || "Employee"}
+                                        {suggestionName}
                                       </p>
                                       <p className="text-xs text-slate-600">
-                                        {item.phone ?? "Phone n/a"} • {item.source}
+                                        {resolvedPhone || (isRtl ? "טלפון לא זמין" : "Phone n/a")} • {item.source}
                                       </p>
                                     </button>
                                   );

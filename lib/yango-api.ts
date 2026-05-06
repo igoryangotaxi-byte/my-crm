@@ -32,6 +32,7 @@ import {
   normalizeYangoTokenRegistryLabel,
 } from "@/lib/yango-token-registry";
 import { loadAuthStore } from "@/lib/auth-store";
+import { googleGeocodeLatLon, normalizeAddressForGeocode } from "@/lib/google-geocoding";
 import { unstable_cache } from "next/cache";
 
 const YANGO_BASE_URL = "https://b2b-api.yango.com/integration";
@@ -42,12 +43,28 @@ const DASHBOARD_REPORT_CHUNK_CONCURRENCY = Number(
   process.env.YANGO_DASHBOARD_REPORT_CONCURRENCY ?? "3",
 );
 const DASHBOARD_LOCAL_CACHE_TTL_MS = B2B_DASHBOARD_CACHE_REVALIDATE_SECONDS * 1000;
+const PREORDER_POINT_GEOCODE_TIMEOUT_MS = 4000;
+const PREORDER_POINT_GEOCODE_CACHE = new Map<string, { lat: number; lon: number } | null>();
 
 function readPositiveIntEnv(name: string, defaultValue: number): number {
   const raw = process.env[name];
   if (!raw) return defaultValue;
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : defaultValue;
+}
+
+async function geocodePointA(addressRaw: string): Promise<{ lat: number; lon: number } | null> {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
+  if (!apiKey) return null;
+  const address = normalizeAddressForGeocode(addressRaw);
+  if (!address) return null;
+  const cacheKey = address.toLowerCase();
+  if (PREORDER_POINT_GEOCODE_CACHE.has(cacheKey)) {
+    return PREORDER_POINT_GEOCODE_CACHE.get(cacheKey) ?? null;
+  }
+  const hit = await googleGeocodeLatLon(address, apiKey, PREORDER_POINT_GEOCODE_TIMEOUT_MS);
+  PREORDER_POINT_GEOCODE_CACHE.set(cacheKey, hit);
+  return hit;
 }
 
 type TokenConfig = {
@@ -88,6 +105,8 @@ type YangoClient = {
 
 type YangoOrderPoint = {
   fullname?: string;
+  geopoint?: unknown;
+  point?: unknown;
 };
 
 type YangoOrder = {
@@ -138,6 +157,8 @@ type YangoPerformer = {
 };
 
 type YangoOrderInfoResponse = {
+  info?: Record<string, unknown>;
+  report?: Record<string, unknown>;
   performer?: YangoPerformer;
   cost?: number;
   cost_with_vat?: number;
@@ -731,6 +752,20 @@ async function getClientPreOrders(tokenConfig: TokenConfig, client: YangoClient)
       );
       const performer: YangoPerformer | undefined = orderDetails?.performer;
       const names = splitDriverFullName(performer?.fullname);
+      const pointAAddress = addressOverride?.sourceAddress ?? order.source?.fullname ?? "Not available";
+
+      const info = (orderDetails?.info ?? null) as Record<string, unknown> | null;
+      const report = (orderDetails?.report ?? null) as Record<string, unknown> | null;
+      const orderSourcePoint = readGeopoint(order.source?.geopoint ?? order.source?.point ?? null);
+      const detailsSourceObj =
+        (info?.source as Record<string, unknown> | undefined) ??
+        (report?.source as Record<string, unknown> | undefined) ??
+        null;
+      const detailsSourcePoint = readGeopoint(
+        detailsSourceObj?.geopoint ?? detailsSourceObj?.point ?? null,
+      );
+      const geocodedPointA =
+        orderSourcePoint ?? detailsSourcePoint ?? (await geocodePointA(pointAAddress));
 
       preOrders.push({
         id: `${tokenConfig.label}-${order.id}`,
@@ -743,8 +778,10 @@ async function getClientPreOrders(tokenConfig: TokenConfig, client: YangoClient)
         requestedAt: getCreatedAtText(orderDetails, order.due_date),
         scheduledFor: formatDateTime(order.due_date),
         scheduledAt: order.due_date,
-        pointA: addressOverride?.sourceAddress ?? order.source?.fullname ?? "Not available",
+        pointA: pointAAddress,
         pointB: addressOverride?.destinationAddress ?? order.destination?.fullname ?? "Not available",
+        pointALat: geocodedPointA?.lat ?? null,
+        pointALon: geocodedPointA?.lon ?? null,
         driverAssigned: Boolean(performer?.fullname || performer?.phone || performer?.id),
         driverId: performer?.id ?? null,
         driverFirstName: names.firstName,

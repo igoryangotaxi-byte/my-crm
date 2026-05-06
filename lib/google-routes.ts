@@ -261,6 +261,87 @@ export async function googleComputeRoute(
   return { durationSeconds, distanceMeters, encodedPolyline, coordinates, legs };
 }
 
+/**
+ * Routes with departure when the trip is **in the future** (traffic-aware).
+ * For **past or current** trip times, Google rejects `departureTime` (“must be future”); we omit it and use
+ * `TRAFFIC_UNAWARE` so km/min still compute (no historical traffic model).
+ */
+export async function googleComputeRouteWithDeparture(
+  orderedPoints: LatLon[],
+  apiKey: string,
+  timeoutMs: number,
+  departureAt: Date,
+): Promise<GoogleRouteResult> {
+  if (orderedPoints.length < 2) {
+    throw new Error("At least two locations are required.");
+  }
+  const [origin, ...rest] = orderedPoints;
+  const destination = rest[rest.length - 1];
+  const intermediates = rest.slice(0, -1);
+  const departMs = departureAt.getTime();
+  const nowMs = Date.now();
+  const useFutureDepartureTraffic = departMs > nowMs;
+
+  const body: Record<string, unknown> = {
+    origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lon } } },
+    destination: { location: { latLng: { latitude: destination.lat, longitude: destination.lon } } },
+    intermediates: intermediates.map((point) => ({
+      location: { latLng: { latitude: point.lat, longitude: point.lon } },
+    })),
+    travelMode: "DRIVE" as const,
+    polylineQuality: "HIGH_QUALITY" as const,
+    polylineEncoding: "ENCODED_POLYLINE" as const,
+    computeAlternativeRoutes: false,
+  };
+
+  if (useFutureDepartureTraffic) {
+    body.routingPreference = "TRAFFIC_AWARE_OPTIMAL";
+    body.departureTime = departureAt.toISOString();
+  } else {
+    body.routingPreference = "TRAFFIC_UNAWARE";
+  }
+  const url = `${ROUTES_BASE}/directions/v2:computeRoutes`;
+  const { status, data, raw } = await fetchJsonWithTimeout(
+    url,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask":
+          "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.duration,routes.legs.distanceMeters",
+      },
+      body: JSON.stringify(body),
+    },
+    timeoutMs,
+  );
+  if (status < 200 || status >= 300) {
+    throw new Error(formatRoutesHttpError("Appli Taxi full route (departure)", status, raw, "full-route-dep"));
+  }
+  const payload = data as {
+    routes?: Array<{
+      duration?: unknown;
+      distanceMeters?: unknown;
+      polyline?: { encodedPolyline?: unknown };
+      legs?: Array<{ duration?: unknown; distanceMeters?: unknown }>;
+    }>;
+  } | null;
+  const route = payload?.routes?.[0];
+  if (!route) {
+    throw new Error("No route was found between these points.");
+  }
+  const durationSeconds = readDurationSeconds(route.duration) ?? 0;
+  const distanceMeters = typeof route.distanceMeters === "number" ? route.distanceMeters : 0;
+  const encodedPolyline =
+    typeof route.polyline?.encodedPolyline === "string" ? route.polyline.encodedPolyline : "";
+  const coordinates = decodeGooglePolyline(encodedPolyline);
+  const legs: GoogleRouteLeg[] = (route.legs ?? []).map((leg) => ({
+    durationSeconds: readDurationSeconds(leg.duration) ?? 0,
+    distanceMeters: typeof leg.distanceMeters === "number" ? leg.distanceMeters : 0,
+  }));
+  return { durationSeconds, distanceMeters, encodedPolyline, coordinates, legs };
+}
+
 function congestionFromSpeed(distanceM: number, durationS: number): "low" | "moderate" | "heavy" {
   if (!(durationS > 0) || !(distanceM > 0)) return "low";
   const kmh = (distanceM / 1000 / durationS) * 3600;

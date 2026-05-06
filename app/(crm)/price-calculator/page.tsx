@@ -1,7 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/components/auth/AuthProvider";
+import {
+  segmentedTabInactiveClass,
+  segmentedTabSelectedClass,
+  segmentedTabTrackClass,
+} from "@/components/crm/segmented-tab-classes";
+import { TranscriptsTab } from "@/components/price-calculator/TranscriptsTab";
 import {
   calculateMoneTariff,
   calculateYangoDriversTariff,
@@ -43,7 +50,7 @@ function describeTieredTariff(tariff: TieredClientTariff) {
   return `Base ${tariff.basePrice.toFixed(2)}; ${bandParts.join("; ")}`;
 }
 
-type PriceCalculatorTab = "compare" | "health";
+type PriceCalculatorTab = "compare" | "health" | "transcripts";
 
 function CompareDriverPriceTab() {
   const [tripKm, setTripKm] = useState("");
@@ -502,50 +509,77 @@ function TariffHealthCheckTab() {
 export default function PriceCalculatorPage() {
   const [activeTab, setActiveTab] = useState<PriceCalculatorTab>("compare");
   const { canAccessDashboardBlock } = useAuth();
+  const tNav = useTranslations("nav");
+  const tPage = useTranslations("priceCalculatorPage");
   const canAccessTariffHealthCheck = canAccessDashboardBlock("tariffHealthCheck");
-  const effectiveActiveTab =
-    canAccessTariffHealthCheck && activeTab === "health" ? "health" : "compare";
+  const effectiveActiveTab: PriceCalculatorTab =
+    activeTab === "transcripts"
+      ? "transcripts"
+      : canAccessTariffHealthCheck && activeTab === "health"
+        ? "health"
+        : "compare";
 
   return (
     <section className="crm-page">
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="glass-surface w-full max-w-3xl rounded-3xl p-6">
-          <div className="mb-4 inline-flex rounded-xl border border-white/70 bg-white/70 p-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab("compare")}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                activeTab === "compare"
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-700 hover:bg-white/80"
-              }`}
-            >
-              Compare Driver Price
-            </button>
-            <button
-              type="button"
-              disabled={!canAccessTariffHealthCheck}
-              onClick={() => setActiveTab("health")}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                effectiveActiveTab === "health"
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-700 hover:bg-white/80"
-              } ${!canAccessTariffHealthCheck ? "cursor-not-allowed opacity-45 hover:bg-transparent" : ""}`}
-            >
-              Tariff Health Check
-            </button>
-          </div>
+      <div className="glass-surface rounded-3xl p-4 lg:p-5">
+        <h1 className="crm-title-xl">{tNav("priceCalculator")}</h1>
+        <p className="crm-subtitle mt-2 max-w-2xl">{tPage("subtitle")}</p>
+      </div>
 
+      <div className={segmentedTabTrackClass}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={effectiveActiveTab === "compare"}
+          onClick={() => setActiveTab("compare")}
+          className={`flex-1 rounded-xl px-2 py-2.5 text-xs font-semibold sm:px-3 sm:text-sm ${
+            effectiveActiveTab === "compare" ? segmentedTabSelectedClass : segmentedTabInactiveClass
+          }`}
+        >
+          {tPage("tabCompare")}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={effectiveActiveTab === "health"}
+          disabled={!canAccessTariffHealthCheck}
+          onClick={() => setActiveTab("health")}
+          className={`flex-1 rounded-xl px-2 py-2.5 text-xs font-semibold sm:px-3 sm:text-sm ${
+            effectiveActiveTab === "health"
+              ? segmentedTabSelectedClass
+              : segmentedTabInactiveClass
+          } ${!canAccessTariffHealthCheck ? "cursor-not-allowed opacity-45 hover:!translate-none hover:!bg-transparent hover:!shadow-none" : ""}`}
+        >
+          {tPage("tabHealth")}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={effectiveActiveTab === "transcripts"}
+          onClick={() => setActiveTab("transcripts")}
+          className={`flex-1 rounded-xl px-2 py-2.5 text-xs font-semibold sm:px-3 sm:text-sm ${
+            effectiveActiveTab === "transcripts" ? segmentedTabSelectedClass : segmentedTabInactiveClass
+          }`}
+        >
+          {tPage("tabTranscripts")}
+        </button>
+      </div>
+
+      <div className="glass-surface space-y-5 rounded-3xl p-4 lg:p-5">
+        <div
+          className={`mx-auto ${effectiveActiveTab === "transcripts" ? "max-w-7xl" : "max-w-3xl"}`}
+        >
           {effectiveActiveTab === "compare" ? (
             <CompareDriverPriceTab />
-          ) : (
+          ) : effectiveActiveTab === "health" ? (
             <TariffHealthCheckTab />
+          ) : (
+            <TranscriptsTab />
           )}
 
-          {!canAccessTariffHealthCheck ? (
-            <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              Tariff Health Check is disabled for your role. Ask an Admin to enable this action
-              in Access management.
+          {!canAccessTariffHealthCheck && effectiveActiveTab !== "transcripts" ? (
+            <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              {tPage("roleDisabledNote")}
             </p>
           ) : null}
         </div>

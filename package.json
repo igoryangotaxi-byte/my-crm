@@ -1,6 +1,6 @@
 {
   "name": "my-crm",
-  "version": "0.2.17",
+  "version": "0.2.18",
   "private": true,
   "engines": {
     "node": ">=20.9.0"
@@ -13,7 +13,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:price-calculator": "tsx --test tests/price-calculator-formulas.test.ts tests/tariff-health-check.test.ts tests/request-rides.test.ts tests/tenant-yango-bootstrap.test.ts",
+    "test:price-calculator": "tsx --test tests/price-calculator-formulas.test.ts tests/tariff-health-check.test.ts tests/transcript-mot-tariff-rules.test.ts tests/transcript-decoupling-fallback.test.ts tests/google-geocoding.test.ts tests/request-rides.test.ts tests/tenant-yango-bootstrap.test.ts tests/gett-api.test.ts",
     "vercel:sync-fleet-env": "node scripts/vercel-sync-fleet-env.mjs",
     "vercel:sync-google-maps-env": "node scripts/vercel-sync-google-maps-env.mjs",
     "vercel:sync-yango-opticity-env": "node scripts/vercel-sync-yango-opticity-env.mjs",
@@ -36,7 +36,8 @@
     "env:pull:development": "vercel env pull .env.local --environment development --yes",
     "env:merge-from-backup": "node scripts/merge-env-local-from-backup.mjs",
     "sync:tenant-cost-centers": "tsx scripts/sync-tenant-cost-centers-from-yango.ts",
-    "sync:yango-tokens-to-kv": "tsx scripts/sync-yango-env-tokens-to-kv.ts"
+    "sync:yango-tokens-to-kv": "tsx scripts/sync-yango-env-tokens-to-kv.ts",
+    "gett:business-id": "tsx scripts/gett-resolve-business-id.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.104.0",

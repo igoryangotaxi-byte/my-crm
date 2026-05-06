@@ -35,6 +35,8 @@ export type PreOrder = {
   scheduledAt?: string;
   pointA: string;
   pointB: string;
+  pointALat?: number | null;
+  pointALon?: number | null;
   driverAssigned: boolean;
   driverId: string | null;
   driverFirstName: string | null;
@@ -353,4 +355,21 @@ export type TariffHealthResult = {
   analystMarkdown?: string | null;
   warning?: string;
   error?: string;
+};
+
+/** One processed row from POST /api/price-calculator/transcript-rows */
+export type PriceCalculatorTranscriptRowResult = {
+  orderIndex: number;
+  tripIso: string;
+  /** Display datetime as provided by source spreadsheet/local formatting. */
+  tripDisplay?: string;
+  pointA: string;
+  pointB: string;
+  km: number | null;
+  min: number | null;
+  clientPrice: number | null;
+  driverPrice: number | null;
+  decoupling: number | null;
+  decouplingPct: number | null;
+  error: string | null;
 };

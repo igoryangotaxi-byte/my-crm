@@ -127,10 +127,19 @@ export async function POST(request: Request) {
         .filter(
           (user) =>
             user.accountType === "client" &&
-            (user.tokenLabel ?? "").trim() === tLabel &&
-            normalizeYangoClientIdKey((user.apiClientId ?? "").trim()) === cId,
+            normalizeYangoClientIdKey((user.apiClientId ?? "").trim()) === cId &&
+            (((user.tokenLabel ?? "").trim().toLowerCase() === tLabel.toLowerCase()) ||
+              !(user.tokenLabel ?? "").trim()),
         )
         .slice(0, 400);
+      const localNameByPhone = new Map<string, string>();
+      for (const user of localCandidates) {
+        const phone = user.phoneNumber?.trim() ?? "";
+        const key = normalizePhoneKey(phone);
+        const name = user.name?.trim() ?? "";
+        if (!key || !name) continue;
+        localNameByPhone.set(key, name);
+      }
       const existingByPhone = new Set(enriched.map((item) => normalizePhoneKey(item.phone ?? "")));
       let phoneProbes = 0;
       const maxPhoneProbes = 8;
@@ -172,10 +181,16 @@ export async function POST(request: Request) {
         });
       }
       enriched = enriched.slice(0, 8);
+      enriched = enriched.map((item) => {
+        if (item.fullName?.trim()) return item;
+        const key = normalizePhoneKey(item.phone ?? "");
+        const mappedName = key ? localNameByPhone.get(key) : null;
+        if (mappedName) return { ...item, fullName: mappedName };
+        return item;
+      });
     }
     enriched = enriched.map((item) => {
       if (item.fullName?.trim()) return item;
-      if (item.phone?.trim()) return { ...item, fullName: item.phone.trim() };
       return item;
     });
     return Response.json({ ok: true, users: enriched }, { headers: { "Cache-Control": "no-store" } });

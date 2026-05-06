@@ -213,6 +213,12 @@ export function Sidebar() {
 
   const navIconWellActive =
     "border border-white/25 bg-gradient-to-br from-red-500 to-red-700 text-white shadow-[0_10px_28px_rgba(239,68,68,0.45)]";
+  const activeNavBackground =
+    "group-hover:bg-gradient-to-r group-hover:from-red-500 group-hover:to-red-600 group-hover:shadow-lg group-hover:shadow-red-500/45";
+  const logoHref = "/gett/request-rides";
+  const logoGradient = "from-red-500 to-red-700 text-white";
+  const logoShadow = "shadow-[0_10px_26px_rgba(239,68,68,0.5)]";
+  const logoBrand = tLayout("brand");
   const navIconWellInactive =
     "border border-white/70 bg-white/95 text-slate-700 shadow-[0_6px_18px_rgba(15,23,42,0.1)]";
 
@@ -229,17 +235,25 @@ export function Sidebar() {
       }`}
       aria-label="Main navigation"
     >
-      <div className="mb-7 flex w-full min-w-0 items-center justify-center gap-0 rounded-2xl py-1.5 pl-1.5 pr-1.5 transition-all duration-300 ease-out group-hover:justify-start group-hover:gap-3 group-hover:py-2 group-hover:pr-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-red-700 text-white shadow-[0_10px_26px_rgba(239,68,68,0.5)]">
+      <Link
+        href={logoHref}
+        onClick={() => {
+          if (!pathname.startsWith(logoHref)) {
+            startRouteLoading();
+          }
+        }}
+        className="mb-7 flex w-full min-w-0 items-center justify-center gap-0 rounded-2xl py-1.5 pl-1.5 pr-1.5 transition-all duration-300 ease-out group-hover:justify-start group-hover:gap-3 group-hover:py-2 group-hover:pr-3"
+      >
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${logoGradient} ${logoShadow}`}>
           <DashboardIcon className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1 overflow-hidden transition-[max-width,opacity] duration-300 ease-out max-w-0 opacity-0 group-hover:max-w-[11rem] group-hover:opacity-100 motion-reduce:transition-none">
-          <p className="truncate text-lg font-semibold text-slate-900">{tLayout("brand")}</p>
+          <p className="truncate text-lg font-semibold text-slate-900">{logoBrand}</p>
           <p className="truncate text-xs text-slate-600">
             {currentUser?.accountType === "client" ? tNav("clientCabinet") : tNav("operations")}
           </p>
         </div>
-      </div>
+      </Link>
 
       <nav className="flex flex-col gap-2.5">
         {filteredNavItems.map((item) => {
@@ -258,7 +272,7 @@ export function Sidebar() {
               }}
               className={`group/nav flex w-full items-center justify-center gap-0 rounded-2xl py-1.5 pl-1.5 pr-1.5 transition-all duration-300 ease-out group-hover:justify-start group-hover:gap-3 group-hover:py-2 group-hover:pr-3 ${
                 isActive
-                  ? "group-hover:bg-gradient-to-r group-hover:from-red-500 group-hover:to-red-600 group-hover:shadow-lg group-hover:shadow-red-500/45"
+                  ? activeNavBackground
                   : "hover:bg-white/45"
               }`}
             >
@@ -298,7 +312,7 @@ export function Sidebar() {
                   }}
                   className={`group/nav flex w-full items-center justify-center gap-0 rounded-2xl py-1.5 pl-1.5 pr-1.5 transition-all duration-300 ease-out group-hover:justify-start group-hover:gap-3 group-hover:py-2 group-hover:pr-3 ${
                     isActive
-                      ? "group-hover:bg-gradient-to-r group-hover:from-red-500 group-hover:to-red-600 group-hover:shadow-lg group-hover:shadow-red-500/45"
+                      ? activeNavBackground
                       : "hover:bg-white/45"
                   }`}
                 >
