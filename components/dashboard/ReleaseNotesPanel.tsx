@@ -9,7 +9,7 @@ const releaseItems: ReleaseItem[] = [
     date: "2026-05-06",
     title: "Gett CRM section, Price Calculator transcripts, Pre-Orders map (0.2.18)",
     notes:
-      "PLACEHOLDER_COMMIT — App version 0.2.18. Gett Business API integration: /gett/* (Request Rides quote/order flow, orders by period, business center), server routes under /api/gett/*, lib/gett-api.ts (Business vs Demand OAuth, businessId from JWT/bundle), diagnostics script gett:business-id. Price Calculator: transcript tariff APIs, XLSX/MOT rules, decoupling suggestions, extended EN/HE copy. Pre-Orders: map view and board updates. Sidebar logo entry to Gett; Communications and Request Rides tweaks; Google Routes/geocoding helpers. Tests for Gett and transcript flows.",
+      "64c1b99c — App version 0.2.18. Gett Business API integration: /gett/* (Request Rides quote/order flow, orders by period, business center), server routes under /api/gett/*, lib/gett-api.ts (Business vs Demand OAuth, businessId from JWT/bundle), diagnostics script gett:business-id. Price Calculator: transcript tariff APIs, XLSX/MOT rules, decoupling suggestions, extended EN/HE copy. Pre-Orders: map view and board updates. Sidebar logo entry to Gett; Communications and Request Rides tweaks; Google Routes/geocoding helpers. Tests for Gett and transcript flows.",
   },
   {
     date: "2026-05-05",
