@@ -152,6 +152,21 @@ Current script behavior:
 
 This is intended for local laptop usage with active VPN session and token access.
 
+## B2C Heat Map data source
+
+Default source is local CSV (`data/b2c-trip-starts.csv`), but you can switch to Supabase:
+
+1. Run SQL schema:
+   - `scripts/sql/supabase_b2c_heatmap_trip_starts.sql`
+2. Import CSV:
+   - `npm run import:b2c-heatmap:csv -- /absolute/path/to/b2c-trip-starts.csv`
+3. Enable Supabase source:
+   - `B2C_HEATMAP_SOURCE=supabase`
+   - optional `B2C_HEATMAP_SUPABASE_TABLE` (default `b2c_heatmap_trip_starts`)
+   - optional `B2C_HEATMAP_SUPABASE_FETCH_LIMIT` (default `150000`)
+
+If Supabase is not configured or source is not set to `supabase`, API falls back to local CSV.
+
 ## Optional: trigger sync from production button
 
 If you want to click sync in production and execute it from your VPN laptop:
@@ -257,6 +272,7 @@ Deploy with Vercel: [https://vercel.com/new](https://vercel.com/new)
 
 **Production checklist (common gaps):**
 
+- **Address suggest provider (`/api/address-suggest`)** — default is OSM/Nominatim. Optional IL PoC: set `GEOCODING_SUGGEST_PROVIDER=govmap` and provide `GOVMAP_SUGGEST_BASE_URL` (+ optional `GOVMAP_SUGGEST_PATH`, `GOVMAP_API_KEY`). If GovMap returns empty/error, the server falls back to OSM automatically. Reverse geocoding (`/api/address-reverse`) remains OSM.
 - **`GOOGLE_MAPS_API_KEY`** — one server-side variable for Request Rides **route preview** (traffic-aware), **`/api/route-optimize`**, and **Price Calculator → Transcripts** (Google Routes with `departureTime`; no OSRM fallback). **Transcripts** also uses the **Geocoding API** (JSON) for batch address resolution (Hebrew/Russian/English); enable **Geocoding API** + **Routes API** + billing on the same GCP project. Without the key, optimization returns an error and preview may fall back or fail depending on route; Transcripts returns HTTP 503. Add to **Production** (and Preview if needed) in Vercel env.
 - **`OPENAI_API_KEY`** — **Tariff Health Check** and **Price Calculator → Transcripts** (modal **Total decoupling %** → AI tariff suggestions). Uses OpenAI Chat Completions (`OPENAI_MODEL`, default `gpt-4.1-mini`). Without it, those endpoints return HTTP 503. Store only in `.env.local` / Vercel env — never commit.
 - **Gett CRM (`/gett/*`)** — Two stacks: **Gett Business API** (`business-api.gett.com`: JSON `POST /oauth/token`, products → price-estimate → `POST /v1/orders`) vs **Demand Partner** (`api.gett.com`: form `POST /v1/oauth/token`, `POST /v1/private/preorder/aggregated`, `POST /v1/private/orders/create`). Portal credentials map to **Business** — if `GETT_API_BASE_URL` contains `business-api.gett.com`, the app uses Business flows unless **`GETT_USE_BUSINESS_API=false`**. **`?businessId=` must match the JWT `companyUUID`** — the app reads it from the access token (override with **`GETT_BUSINESS_ID`** if needed). Meter-heavy quotes: **`GETT_BUSINESS_PRICE_MODEL=meter`** (default) filters `/v1/products` transportation rows toward meter-style tariffs when discoverable; use **`any`** to show all products. Demand-only env: `GETT_DEMAND_*`, `GETT_DEMAND_OAUTH_SCOPE` (default `demand_partner`). Business: `GETT_OAUTH_SCOPE` (default `finance employee`). Optional `GETT_REPORTS_ORDERS_BY_PERIOD_URL` feeds Pre-Orders / Orders / Bussiness Center lists.

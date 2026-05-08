@@ -435,6 +435,7 @@ export async function POST(request: Request) {
             communications: payload.value,
             financialCenter: payload.value,
             driversMap: payload.value,
+            heatMap: payload.value,
             priceCalculator: payload.value,
             accesses: payload.value,
             notes: payload.value,

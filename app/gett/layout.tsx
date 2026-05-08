@@ -9,8 +9,12 @@ import type { AppPageKey } from "@/types/auth";
 function resolveGettPageKey(pathname: string): AppPageKey {
   if (pathname.startsWith("/gett/orders")) return "orders";
   if (pathname.startsWith("/gett/pre-orders")) return "preOrders";
+  if (pathname.startsWith("/gett/business-center") || pathname.startsWith("/gett/bussiness-center")) {
+    return "financialCenter";
+  }
   if (pathname.startsWith("/gett/request-rides")) return "requestRides";
-  if (pathname.startsWith("/gett/bussiness-center")) return "financialCenter";
+  if (pathname.startsWith("/gett/delivery")) return "requestRides";
+  if (pathname.startsWith("/gett/company-settings")) return "requestRides";
   return "requestRides";
 }
 

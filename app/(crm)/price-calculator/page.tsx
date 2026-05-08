@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
@@ -51,6 +51,7 @@ function describeTieredTariff(tariff: TieredClientTariff) {
 }
 
 type PriceCalculatorTab = "compare" | "health" | "transcripts";
+type TariffOption = { code: string; label: string; sortOrder: number };
 
 function CompareDriverPriceTab() {
   const [tripKm, setTripKm] = useState("");
@@ -279,9 +280,36 @@ function CompareDriverPriceTab() {
 
 function TariffHealthCheckTab() {
   const [query, setQuery] = useState("");
+  const [tariffs, setTariffs] = useState<TariffOption[]>([]);
+  const [baseTariffCode, setBaseTariffCode] = useState("");
+  const [targetDrInput, setTargetDrInput] = useState("");
+  const [tariffLoadError, setTariffLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<TariffHealthResult | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch("/api/price-calculator/transcript-tariffs", { cache: "no-store" });
+        const data = (await response.json()) as { ok?: boolean; tariffs?: TariffOption[]; error?: string };
+        if (cancelled) return;
+        if (!response.ok || !data.ok || !data.tariffs?.length) {
+          setTariffLoadError(data.error ?? "Не удалось загрузить список тарифов.");
+          return;
+        }
+        const tariffRows = data.tariffs;
+        setTariffs(tariffRows);
+        setBaseTariffCode((prev) => prev || tariffRows[0]!.code);
+      } catch {
+        if (!cancelled) setTariffLoadError("Не удалось загрузить список тарифов.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -299,7 +327,11 @@ function TariffHealthCheckTab() {
       const response = await fetch("/api/tariff-health-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: payload }),
+        body: JSON.stringify({
+          query: payload,
+          baseTariffCode,
+          targetDecouplingRatePct: targetDrInput.trim() ? Number(targetDrInput.trim().replace(",", ".")) : null,
+        }),
       });
       const data = (await response.json()) as TariffHealthResult & { error?: string };
       if (!response.ok || !data.ok) {
@@ -332,6 +364,38 @@ function TariffHealthCheckTab() {
             className="crm-input min-h-24 w-full resize-y px-3 py-2 text-sm"
           />
         </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-slate-900">Base Tariff For Optimization</span>
+          <select
+            className="crm-input h-11 w-full px-3 text-sm"
+            value={baseTariffCode}
+            onChange={(event) => setBaseTariffCode(event.target.value)}
+            disabled={!tariffs.length}
+          >
+            {tariffs.map((item) => (
+              <option key={item.code} value={item.code}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-slate-900">Target DR (%) Override</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={targetDrInput}
+            onChange={(event) => setTargetDrInput(event.target.value)}
+            placeholder="e.g. 5 or 10"
+            className="crm-input h-11 w-full px-3 text-sm"
+          />
+          <p className="mt-1 text-xs text-muted">
+            If filled, this value has priority over query text and is used as exact optimization target.
+          </p>
+        </label>
+        {tariffLoadError ? (
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">{tariffLoadError}</p>
+        ) : null}
         {error ? (
           <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
         ) : null}
@@ -426,6 +490,31 @@ function TariffHealthCheckTab() {
                 <p>
                   Delta vs actual (total): {formatSignedMoney(result.referenceFlatTariff.deltaVsActualTotal)} · avg
                   price vs actual: {formatSignedPct(result.referenceFlatTariff.deltaPctAvgVsActual)}
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          {result.selectedBaseTariff ? (
+            <div className="rounded-2xl border border-white/70 bg-white/75">
+              <div className="border-b border-white/70 px-4 py-3 text-sm font-semibold text-slate-800">
+                Selected base tariff (optimization baseline)
+              </div>
+              <div className="space-y-2 p-4 text-sm text-slate-800">
+                <p className="text-xs text-muted">{result.selectedBaseTariff.label}</p>
+                <p>
+                  Simulated total / avg per trip: {formatMoney(result.selectedBaseTariff.simulatedTotal)} /{" "}
+                  {formatMoney(result.selectedBaseTariff.simulatedAvgPerTrip)}
+                </p>
+                <p>
+                  Delta vs actual (total): {formatSignedMoney(result.selectedBaseTariff.deltaVsActualTotal)} · avg
+                  price vs actual: {formatSignedPct(result.selectedBaseTariff.deltaPctAvgVsActual)}
+                </p>
+                <p>
+                  Portfolio DR (sim):{" "}
+                  {result.selectedBaseTariff.portfolioDecouplingRatePct == null
+                    ? "n/a"
+                    : `${result.selectedBaseTariff.portfolioDecouplingRatePct.toFixed(2)}%`}
                 </p>
               </div>
             </div>

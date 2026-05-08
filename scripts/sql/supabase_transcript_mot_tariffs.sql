@@ -27,7 +27,8 @@ insert into public.transcript_mot_tariffs (code, label, rules, sort_order) value
   ('Main-ISR-2023-MOT_VIP_B2B', 'Main-ISR-2023-MOT_VIP_B2B', '{"version":1,"segments":[{"wrap":false,"fromHour":0,"fromMinute":0,"toHour":23,"toMinute":59,"model":{"type":"linear","base":47.2,"perKm":5.9}}]}'::jsonb, 13),
   ('Main-ISR-2023-MOT_SUPER_VIP_B2B', 'Main-ISR-2023-MOT_SUPER_VIP_B2B', '{"version":1,"segments":[{"wrap":false,"fromHour":0,"fromMinute":0,"toHour":23,"toMinute":59,"model":{"type":"linear","base":41.3,"perKm":5.9}}]}'::jsonb, 14),
   ('Main-ISR-2023-MOT_PRIME_B2B', 'Main-ISR-2023-MOT_PRIME_B2B', '{"version":1,"segments":[{"wrap":false,"fromHour":0,"fromMinute":0,"toHour":23,"toMinute":59,"model":{"type":"linear","base":29.5,"perKm":5.9}}]}'::jsonb, 15),
-  ('2271496/21.Public_MOT_lower', '2271496/21.Public_MOT_lower', '{"version":1,"segments":[{"wrap":false,"fromHour":0,"fromMinute":0,"toHour":23,"toMinute":59,"model":{"type":"linear","base":43.29,"perKm":5.34}}]}'::jsonb, 16)
+  ('2271496/21.Public_MOT_lower', '2271496/21.Public_MOT_lower', '{"version":1,"segments":[{"wrap":false,"fromHour":0,"fromMinute":0,"toHour":23,"toMinute":59,"model":{"type":"linear","base":43.29,"perKm":5.34}}]}'::jsonb, 16),
+  ('Main-ISR-2023-MOT_MACABI_B2B', 'Main-ISR-2023-MOT_MACABI_B2B', '{"version":1,"segments":[{"wrap":false,"fromHour":0,"fromMinute":0,"toHour":23,"toMinute":59,"model":{"type":"tiered_km","base":35.4,"firstKm":3,"rateFirst":0,"rateAfter":5.9}}]}'::jsonb, 17)
 on conflict (code) do update set
   label = excluded.label,
   rules = excluded.rules,

@@ -78,6 +78,15 @@ function DriversMapIcon({ className = "h-4 w-4" }: IconProps) {
   );
 }
 
+function HeatMapIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth="1.8">
+      <path d="M4.5 19.5c2-4 2.5-7.5 2.5-10.5a5.5 5.5 0 0111 0c0 3 .5 6.5 2.5 10.5" strokeLinecap="round" />
+      <path d="M9 10.5c.8 2.2 2.2 4 4 5.2M12 8.5v11" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function ShieldIcon({ className = "h-4 w-4" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth="1.8">
@@ -162,6 +171,13 @@ const navItems = [
     area: "b2c" as const,
     icon: DriversMapIcon,
   },
+  {
+    href: "/heat-map",
+    label: "Demand Heat Map",
+    page: "heatMap" as AppPageKey,
+    area: "b2c" as const,
+    icon: HeatMapIcon,
+  },
 ];
 
 const footerNavItems = [
@@ -179,6 +195,7 @@ function translateNavLabel(label: string, tNav: (key: string) => string) {
     "Price Calculator": tNav("priceCalculator"),
     Dashboard: tNav("dashboard"),
     "Drivers on the Map": tNav("driversMap"),
+    "Demand Heat Map": tNav("heatMap"),
     "Access managment": tNav("accesses"),
     Notes: tNav("notes"),
     Employees: tNav("employees"),

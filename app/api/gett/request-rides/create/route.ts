@@ -1,4 +1,4 @@
-import { createGettOrder } from "@/lib/gett-api";
+import { createGettOrder, getGettCompanySettings, type GettOrderReferenceInput } from "@/lib/gett-api";
 import { searchAddressSuggestions } from "@/lib/geocoding";
 import { requireApprovedUser } from "@/lib/server-auth";
 
@@ -60,6 +60,51 @@ export async function POST(request: Request) {
       payload.destinationLng = geo.lng;
     }
   }
+  const noteToDriver = str(body?.noteToDriver) || null;
+  const paymentType = str(body?.paymentType) || null;
+  const idempotencyKey = str(body?.idempotencyKey) || null;
+  const categoryRaw = str(body?.category).toLowerCase();
+  const category = categoryRaw === "delivery" ? ("delivery" as const) : ("transportation" as const);
+  const refsRaw = body?.references;
+  const referencesInput: GettOrderReferenceInput[] = Array.isArray(refsRaw)
+    ? refsRaw
+        .map((r) => {
+          const o = r as Record<string, unknown>;
+          const id = Number(o.id);
+          const value = str(o.value);
+          if (!Number.isFinite(id) || !value) return null;
+          const title = str(o.title);
+          return title ? { id, value, title } : { id, value };
+        })
+        .filter((x): x is GettOrderReferenceInput => x != null)
+    : [];
+  const extraRaw = body?.extraPassengers;
+  const extraPassengers = Array.isArray(extraRaw)
+    ? extraRaw
+        .map((r) => {
+          const o = r as Record<string, unknown>;
+          const name = str(o.name);
+          const phone = str(o.phone);
+          if (!name || !phone) return null;
+          return { name, phone };
+        })
+        .filter((x): x is { name: string; phone: string } => x != null)
+    : [];
+
+  let references = referencesInput;
+  if (references.length > 0) {
+    try {
+      const settings = await getGettCompanySettings();
+      const titleById = new Map((settings?.references ?? []).map((ref) => [ref.id, ref.title]));
+      references = references.map((r) => ({
+        ...r,
+        title: r.title?.trim() || titleById.get(r.id) || undefined,
+      }));
+    } catch {
+      // keep as sent
+    }
+  }
+
   const waypointsRaw = Array.isArray(body?.waypoints) ? body.waypoints : [];
   const waypoints: Array<{ address: string; lat: number; lng: number }> = [];
   for (const row of waypointsRaw) {
@@ -105,6 +150,12 @@ export async function POST(request: Request) {
       destinationAddress: payload.destinationAddress,
       waypoints,
       scheduledAt: payload.scheduledAt,
+      category,
+      noteToDriver,
+      paymentType,
+      references: references.length ? references : undefined,
+      idempotencyKey,
+      extraPassengers: extraPassengers.length ? extraPassengers : undefined,
     });
     return Response.json({ ok: true, result }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

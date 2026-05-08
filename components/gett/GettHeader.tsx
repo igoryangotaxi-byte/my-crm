@@ -6,9 +6,11 @@ import { useAuth } from "@/components/auth/AuthProvider";
 
 const gettPageMeta: Record<string, { title: string; subtitle: string }> = {
   "/gett/request-rides": { title: "Request Rides", subtitle: "Gett B2C order creation flow" },
+  "/gett/delivery": { title: "Delivery", subtitle: "Business API parcels — pickup and up to six drop-offs" },
   "/gett/pre-orders": { title: "Pre-Orders", subtitle: "Upcoming scheduled Gett rides" },
   "/gett/orders": { title: "Orders", subtitle: "Gett order statuses and lifecycle" },
-  "/gett/bussiness-center": { title: "Bussiness Center", subtitle: "Gett spend and operational metrics" },
+  "/gett/company-settings": { title: "Company settings", subtitle: "References, payment types, and policy flags from Gett" },
+  "/gett/business-center": { title: "Business Center", subtitle: "Gett spend and operational metrics" },
 };
 
 export function GettHeader() {

@@ -38,6 +38,7 @@ export async function POST(request: Request) {
         destinationAddress?: unknown;
         waypoints?: Array<{ lat?: unknown; lng?: unknown; address?: unknown }>;
         scheduledAt?: unknown;
+        category?: unknown;
       }
     | null;
   let originLat = num(body?.originLat);
@@ -47,6 +48,8 @@ export async function POST(request: Request) {
   const originAddress = str(body?.originAddress);
   const destinationAddress = str(body?.destinationAddress);
   const scheduledAt = str(body?.scheduledAt);
+  const categoryRaw = str(body?.category).toLowerCase();
+  const category = categoryRaw === "delivery" ? ("delivery" as const) : ("transportation" as const);
 
   if ((originLat == null || originLng == null) && originAddress) {
     const geo = await geocodeAddress(originAddress);
@@ -88,6 +91,7 @@ export async function POST(request: Request) {
       destinationLng,
       waypoints,
       scheduledAt: scheduledAt || null,
+      category,
     });
     return Response.json({ ok: true, result }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

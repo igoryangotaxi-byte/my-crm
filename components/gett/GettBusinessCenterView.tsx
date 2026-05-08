@@ -34,7 +34,7 @@ export function GettBusinessCenterView() {
   return (
     <section className="crm-page">
       <div className="crm-surface rounded-3xl p-4">
-        <h2 className="crm-section-title">Gett Bussiness Center</h2>
+        <h2 className="crm-section-title">Gett Business Center</h2>
         <p className="crm-subtitle mt-1">Operational summary powered by Gett orders API.</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <input type="datetime-local" className="crm-input px-3 py-2 text-sm" value={from} onChange={(e) => setFrom(e.target.value)} />

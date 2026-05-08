@@ -14,6 +14,7 @@ export type AppPageKey =
   | "communications"
   | "financialCenter"
   | "driversMap"
+  | "heatMap"
   | "priceCalculator"
   | "accesses"
   | "notes";
@@ -106,6 +107,7 @@ export const defaultRolePermissions: RolePermissions = {
     communications: true,
     financialCenter: true,
     driversMap: true,
+    heatMap: true,
     priceCalculator: true,
     accesses: true,
     notes: true,
@@ -119,6 +121,7 @@ export const defaultRolePermissions: RolePermissions = {
     communications: true,
     financialCenter: true,
     driversMap: false,
+    heatMap: false,
     priceCalculator: true,
     accesses: false,
     notes: false,
@@ -132,6 +135,7 @@ export const defaultRolePermissions: RolePermissions = {
     communications: true,
     financialCenter: true,
     driversMap: false,
+    heatMap: false,
     priceCalculator: true,
     accesses: false,
     notes: true,

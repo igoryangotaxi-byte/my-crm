@@ -58,6 +58,42 @@ export type GettOrderListItem = {
 
 export type GettIntegrationFlavor = "business" | "demand_partner";
 
+export type GettServiceCategory = "transportation" | "delivery";
+
+export type GettCompanyReferenceField = {
+  id: number;
+  title: string;
+  mandatory?: boolean;
+};
+
+export type GettCompanySettings = {
+  mandatory_destination?: boolean;
+  allow_multi_riders?: boolean;
+  references: GettCompanyReferenceField[];
+  payment_types: string[];
+};
+
+export type GettOrderReferenceInput = {
+  id: number;
+  value: string;
+  /** Include when company settings mark reference mandatory (Gett docs). */
+  title?: string;
+};
+
+export type GettExtraPassengerInput = {
+  name: string;
+  phone: string;
+};
+
+export type GettDeliveryDropoffInput = {
+  lat: number;
+  lng: number;
+  address: string;
+  parcelName: string;
+  contactName: string;
+  contactPhone: string;
+};
+
 export function mapGettOrderRow(row: Record<string, unknown>): GettOrderListItem {
   return {
     orderId: String(row.order_id ?? row.id ?? "").trim(),
@@ -160,6 +196,9 @@ let tokenCache: { token: string; expiresAt: number; oauthKey: string } | null = 
 
 /** Cached company UUID derived from JWT (must match ?businessId= on Business API). */
 let cachedBusinessCompanyId: { oauthKey: string; companyId: string } | null = null;
+
+const GETT_COMPANY_SETTINGS_TTL_MS = 60_000;
+let cachedCompanySettings: { fetchedAt: number; oauthKey: string; data: GettCompanySettings | null } | null = null;
 
 /** Decode JWT payload without verifying signature (read Gett claims only). */
 export function decodeJwtPayloadUnsafe(accessToken: string): Record<string, unknown> | null {
@@ -526,6 +565,48 @@ async function resolveBusinessCompanyId(cfg: GettConfig): Promise<string> {
 }
 
 /**
+ * Business API: company rules for references, payment types, multi-rider (cached ~60s per OAuth client).
+ * Returns null when not using Business API flavor.
+ */
+export async function getGettCompanySettings(forceRefresh = false): Promise<GettCompanySettings | null> {
+  const cfg = getGettConfig();
+  if (cfg.flavor !== "business") return null;
+  const cacheKey = oauthCacheKey(cfg);
+  if (
+    !forceRefresh &&
+    cachedCompanySettings &&
+    cachedCompanySettings.oauthKey === cacheKey &&
+    Date.now() - cachedCompanySettings.fetchedAt < GETT_COMPANY_SETTINGS_TTL_MS
+  ) {
+    return cachedCompanySettings.data;
+  }
+  const bid = await resolveBusinessCompanyId(cfg);
+  const raw = await gettFetchJson<Record<string, unknown>>(
+    `/v1/companies/settings?businessId=${encodeURIComponent(bid)}`,
+    { method: "GET" },
+  );
+  const refRaw = raw.references;
+  const references: GettCompanyReferenceField[] = Array.isArray(refRaw)
+    ? refRaw.flatMap((item) => {
+        const o = item as Record<string, unknown>;
+        const id = Number(o.id);
+        if (!Number.isFinite(id)) return [];
+        return [{ id, title: String(o.title ?? ""), mandatory: Boolean(o.mandatory) }];
+      })
+    : [];
+  const ptRaw = raw.payment_types;
+  const payment_types = Array.isArray(ptRaw) ? ptRaw.map((x) => String(x)) : [];
+  const data: GettCompanySettings = {
+    mandatory_destination: Boolean(raw.mandatory_destination),
+    allow_multi_riders: Boolean(raw.allow_multi_riders),
+    references,
+    payment_types,
+  };
+  cachedCompanySettings = { fetchedAt: Date.now(), oauthKey: cacheKey, data };
+  return data;
+}
+
+/**
  * Calls Gett OAuth, then resolves the `businessId` used for `?businessId=` (Business API) — same as order/quote code.
  * For debugging: run `npx tsx scripts/gett-resolve-business-id.ts` (loads `.env.local`).
  */
@@ -561,18 +642,24 @@ function normalizeRiderPhone(phone: string): string {
   return phone.replace(/\s+/g, "").replace(/^\+/, "");
 }
 
-async function gettFetchJson<T>(pathOrUrl: string, init?: RequestInit): Promise<T> {
+type GettFetchInit = RequestInit & { idempotencyKey?: string };
+
+async function gettFetchJson<T>(pathOrUrl: string, init?: GettFetchInit): Promise<T> {
   const cfg = getGettConfig();
   const token = await getBearerToken();
   const isAbsolute = /^https?:\/\//i.test(pathOrUrl);
   const url = isAbsolute ? pathOrUrl : `${cfg.apiBaseUrl}${pathOrUrl}`;
+  const { idempotencyKey, headers: initHeaders, ...restInit } = init ?? {};
+  const mergedHeaders: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+    ...(initHeaders as Record<string, string> | undefined),
+  };
+  const idem = (idempotencyKey ?? "").trim();
+  if (idem) mergedHeaders["X-Request-ID"] = idem;
   const response = await fetch(url, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    ...restInit,
+    headers: mergedHeaders,
     cache: "no-store",
   });
   if (!response.ok) {
@@ -617,6 +704,7 @@ async function getGettQuoteBusiness(
     destinationLng: number;
     waypoints?: GettWaypointInput[];
     scheduledAt?: string | null;
+    category?: GettServiceCategory;
   },
 ): Promise<GettQuoteResponse> {
   const bid = await resolveBusinessCompanyId(cfg);
@@ -624,27 +712,34 @@ async function getGettQuoteBusiness(
   const destination = { lat: input.destinationLat, lng: input.destinationLng };
   const stops = (input.waypoints ?? []).map((w) => ({ lat: w.lat, lng: w.lng }));
   const scheduledAt = input.scheduledAt ?? undefined;
+  const category = input.category ?? "transportation";
 
   const productsPayload = await gettFetchJson<{
-    products?: { transportation?: BusinessTransportProduct[] };
+    products?: { transportation?: BusinessTransportProduct[]; delivery?: BusinessTransportProduct[] };
   }>(`/v1/products?businessId=${encodeURIComponent(bid)}`, {
     method: "POST",
     body: JSON.stringify({
       origin,
       destination,
       scheduled_at: scheduledAt,
+      category,
     }),
   });
 
-  let transportation = productsPayload.products?.transportation ?? [];
-  transportation = filterTransportationForMeterPreference(transportation);
-  if (!Array.isArray(transportation) || transportation.length === 0) {
+  let slice: BusinessTransportProduct[] =
+    category === "delivery"
+      ? (productsPayload.products?.delivery ?? [])
+      : (productsPayload.products?.transportation ?? []);
+  if (category === "transportation") {
+    slice = filterTransportationForMeterPreference(slice);
+  }
+  if (!Array.isArray(slice) || slice.length === 0) {
     return { status: "success", data: { products: [] } };
   }
 
   const quoteProducts: GettQuoteProduct[] = [];
   const maxProducts = 20;
-  for (const p of transportation.slice(0, maxProducts)) {
+  for (const p of slice.slice(0, maxProducts)) {
     const pid = String(p.product_id ?? "").trim();
     if (!pid) continue;
     try {
@@ -697,10 +792,12 @@ export async function getGettQuote(input: {
   destinationLng: number;
   waypoints?: GettWaypointInput[];
   scheduledAt?: string | null;
+  category?: GettServiceCategory;
 }) {
   const cfg = getGettConfig();
+  const category = input.category ?? "transportation";
   if (cfg.flavor === "business") {
-    return getGettQuoteBusiness(cfg, input);
+    return getGettQuoteBusiness(cfg, { ...input, category });
   }
 
   const stops = [
@@ -718,7 +815,7 @@ export async function getGettQuote(input: {
       body: JSON.stringify({
         stops,
         scheduled_at: input.scheduledAt ?? undefined,
-        category: "transportation",
+        category,
         locale: "en",
         payment_type: "cash",
       }),
@@ -751,9 +848,24 @@ export async function createGettOrder(input: {
     address: string;
   }>;
   scheduledAt?: string | null;
+  category?: GettServiceCategory;
+  noteToDriver?: string | null;
+  paymentType?: string | null;
+  references?: GettOrderReferenceInput[];
+  idempotencyKey?: string | null;
+  extraPassengers?: GettExtraPassengerInput[];
 }) {
   const cfg = getGettConfig();
   const phone = normalizeRiderPhone(input.userPhone);
+  const category = input.category ?? "transportation";
+  const pickupActions: Array<{ type: string; user: { name: string; phone: string } }> = [
+    { type: "pick_up", user: { name: input.userName, phone } },
+  ];
+  for (const ex of input.extraPassengers ?? []) {
+    const n = ex.name.trim();
+    const p = normalizeRiderPhone(ex.phone);
+    if (n && p) pickupActions.push({ type: "pick_up", user: { name: n, phone: p } });
+  }
 
   if (cfg.flavor === "business") {
     const bid = await resolveBusinessCompanyId(cfg);
@@ -763,27 +875,40 @@ export async function createGettOrder(input: {
         actions: [{ type: "stop_by" as const, user: { name: input.userName, phone } }],
         location: businessLocation(waypoint.lat, waypoint.lng, waypoint.address),
       })) ?? [];
+    const body: Record<string, unknown> = {
+      category,
+      product_id: input.productId,
+      scheduled_at: input.scheduledAt ?? undefined,
+      quote_id: input.quoteId,
+      stops: [
+        {
+          type: "origin",
+          actions: pickupActions,
+          location: businessLocation(input.originLat, input.originLng, input.originAddress),
+        },
+        ...midStops,
+        {
+          type: "destination",
+          actions: [{ type: "drop_off", user: { name: input.userName, phone } }],
+          location: businessLocation(input.destinationLat, input.destinationLng, input.destinationAddress),
+        },
+      ],
+    };
+    const note = (input.noteToDriver ?? "").trim();
+    if (note) body.note_to_driver = note.slice(0, 100);
+    const pay = (input.paymentType ?? "").trim();
+    if (pay) body.payment_type = pay;
+    if (input.references?.length) {
+      body.references = input.references.map((r) => {
+        const row: Record<string, unknown> = { id: r.id, value: r.value };
+        if (r.title?.trim()) row.title = r.title.trim();
+        return row;
+      });
+    }
     const raw = await gettFetchJson<Record<string, unknown>>(`/v1/orders?businessId=${encodeURIComponent(bid)}`, {
       method: "POST",
-      body: JSON.stringify({
-        category: "transportation",
-        product_id: input.productId,
-        scheduled_at: input.scheduledAt ?? undefined,
-        quote_id: input.quoteId,
-        stops: [
-          {
-            type: "origin",
-            actions: [{ type: "pick_up", user: { name: input.userName, phone } }],
-            location: businessLocation(input.originLat, input.originLng, input.originAddress),
-          },
-          ...midStops,
-          {
-            type: "destination",
-            actions: [{ type: "drop_off", user: { name: input.userName, phone } }],
-            location: businessLocation(input.destinationLat, input.destinationLng, input.destinationAddress),
-          },
-        ],
-      }),
+      body: JSON.stringify(body),
+      idempotencyKey: input.idempotencyKey ?? undefined,
     });
     const orderId = raw.id != null ? String(raw.id) : "";
     return {
@@ -799,44 +924,155 @@ export async function createGettOrder(input: {
   const midStops =
     input.waypoints?.map((waypoint) => ({
       type: "on_going" as const,
-      actions: [{ type: "stop_by", user: { name: input.userName, phone: input.userPhone } }],
+      actions: [{ type: "stop_by", user: { name: input.userName, phone } }],
       location: { lat: waypoint.lat, lng: waypoint.lng, full_address: waypoint.address },
     })) ?? [];
+  let demandPayment = (input.paymentType ?? "").trim();
+  if (!demandPayment) {
+    try {
+      const s = await getGettCompanySettings();
+      demandPayment = s?.payment_types?.[0]?.trim() || "cash";
+    } catch {
+      demandPayment = "cash";
+    }
+  }
+  const demandBody: Record<string, unknown> = {
+    partner_id: cfg.partnerId,
+    product_id: input.productId,
+    quote_id: input.quoteId,
+    user_accepted_terms_and_privacy: true,
+    category,
+    lc: "en",
+    scheduled_at: input.scheduledAt ?? undefined,
+    stops: [
+      {
+        type: "origin",
+        actions: pickupActions.map((a) => ({
+          type: a.type,
+          user: { name: a.user.name, phone: a.user.phone },
+        })),
+        location: { lat: input.originLat, lng: input.originLng, full_address: input.originAddress },
+      },
+      ...midStops,
+      {
+        type: "destination",
+        actions: [{ type: "drop_off", user: { name: input.userName, phone } }],
+        location: {
+          lat: input.destinationLat,
+          lng: input.destinationLng,
+          full_address: input.destinationAddress,
+        },
+      },
+    ],
+    payment: { payment_type: demandPayment === "account" ? "account" : "cash" },
+    preferences: { num_of_passengers: Math.max(1, pickupActions.length), num_of_suitcases: 1 },
+  };
+  const dNote = (input.noteToDriver ?? "").trim();
+  if (dNote) demandBody.note_to_driver = dNote.slice(0, 100);
+  if (input.references?.length) {
+    demandBody.references = input.references.map((r) => {
+      const row: Record<string, unknown> = { id: r.id, value: r.value };
+      if (r.title?.trim()) row.title = r.title.trim();
+      return row;
+    });
+  }
   return gettFetchJson<{
     status?: string;
     order?: { id?: string };
     ride_request_id?: string;
   }>("/v1/private/orders/create", {
     method: "POST",
-    body: JSON.stringify({
-      partner_id: cfg.partnerId,
-      product_id: input.productId,
-      quote_id: input.quoteId,
-      user_accepted_terms_and_privacy: true,
-      category: "transportation",
-      lc: "en",
-      scheduled_at: input.scheduledAt ?? undefined,
-      stops: [
+    body: JSON.stringify(demandBody),
+    idempotencyKey: input.idempotencyKey ?? undefined,
+  });
+}
+
+/** Business API: delivery (1 origin + up to 6 drop-off stops). See Gett Delivery docs. */
+export async function createGettDeliveryOrder(input: {
+  productId: string;
+  quoteId: string;
+  pickupContactName: string;
+  pickupContactPhone: string;
+  originLat: number;
+  originLng: number;
+  originAddress: string;
+  dropoffs: GettDeliveryDropoffInput[];
+  scheduledAt?: string | null;
+  noteToDriver?: string | null;
+  paymentType?: string | null;
+  references?: GettOrderReferenceInput[];
+  idempotencyKey?: string | null;
+}) {
+  const cfg = getGettConfig();
+  if (cfg.flavor !== "business") {
+    throw new Error("Gett delivery orders require Business API (GETT_USE_BUSINESS_API / business-api host).");
+  }
+  const drops = input.dropoffs.filter((d) => d.address.trim() && d.parcelName.trim());
+  if (drops.length < 1 || drops.length > 6) {
+    throw new Error("Delivery requires 1–6 drop-off stops with parcel names.");
+  }
+  const bid = await resolveBusinessCompanyId(cfg);
+  const pickupPhone = normalizeRiderPhone(input.pickupContactPhone);
+  const originActions = drops.map((d) => ({
+    type: "pick_up" as const,
+    user: { name: input.pickupContactName.trim(), phone: pickupPhone },
+    parcel: { name: d.parcelName.trim() },
+  }));
+  const stops: Array<Record<string, unknown>> = [
+    {
+      type: "origin",
+      actions: originActions,
+      location: businessLocation(input.originLat, input.originLng, input.originAddress),
+    },
+  ];
+  for (let i = 0; i < drops.length; i++) {
+    const d = drops[i]!;
+    const isLast = i === drops.length - 1;
+    const phone = normalizeRiderPhone(d.contactPhone);
+    stops.push({
+      type: isLast ? "destination" : "on_going",
+      actions: [
         {
-          type: "origin",
-          actions: [{ type: "pick_up", user: { name: input.userName, phone: input.userPhone } }],
-          location: { lat: input.originLat, lng: input.originLng, full_address: input.originAddress },
-        },
-        ...midStops,
-        {
-          type: "destination",
-          actions: [{ type: "drop_off", user: { name: input.userName, phone: input.userPhone } }],
-          location: {
-            lat: input.destinationLat,
-            lng: input.destinationLng,
-            full_address: input.destinationAddress,
-          },
+          type: "drop_off",
+          user: { name: d.contactName.trim(), phone },
+          parcel: { name: d.parcelName.trim() },
         },
       ],
-      payment: { payment_type: "cash" },
-      preferences: { num_of_passengers: 1, num_of_suitcases: 1 },
-    }),
+      location: businessLocation(d.lat, d.lng, d.address),
+    });
+  }
+  const body: Record<string, unknown> = {
+    category: "delivery",
+    product_id: input.productId,
+    scheduled_at: input.scheduledAt ?? undefined,
+    quote_id: input.quoteId,
+    stops,
+  };
+  const note = (input.noteToDriver ?? "").trim();
+  if (note) body.note_to_driver = note.slice(0, 100);
+  const pay = (input.paymentType ?? "").trim();
+  if (pay) body.payment_type = pay;
+  if (input.references?.length) {
+    body.references = input.references.map((r) => {
+      const row: Record<string, unknown> = { id: r.id, value: r.value };
+      if (r.title?.trim()) row.title = r.title.trim();
+      return row;
+    });
+  }
+  const raw = await gettFetchJson<Record<string, unknown>>(`/v1/orders?businessId=${encodeURIComponent(bid)}`, {
+    method: "POST",
+    body: JSON.stringify(body),
+    idempotencyKey: input.idempotencyKey ?? undefined,
   });
+  const orderId = raw.id != null ? String(raw.id) : "";
+  return {
+    status: "success",
+    order: { id: orderId },
+  } as {
+    status?: string;
+    order?: { id?: string };
+    ride_request_id?: string;
+  };
 }
 
 export async function getGettOrder(orderId: string) {
@@ -861,6 +1097,22 @@ export async function getGettOrder(orderId: string) {
   }
 
   return gettFetchJson<GettOrderResponse>(
+    `/v1/private/orders/${encodeURIComponent(orderId)}?partner_id=${encodeURIComponent(cfg.partnerId)}`,
+    { method: "GET" },
+  );
+}
+
+/** Full JSON from Gett order detail (Business or Demand) — for CRM detail drawer. */
+export async function fetchGettOrderJson(orderId: string): Promise<Record<string, unknown>> {
+  const cfg = getGettConfig();
+  if (cfg.flavor === "business") {
+    const bid = await resolveBusinessCompanyId(cfg);
+    return gettFetchJson<Record<string, unknown>>(
+      `/v1/orders/${encodeURIComponent(orderId)}?businessId=${encodeURIComponent(bid)}`,
+      { method: "GET" },
+    );
+  }
+  return gettFetchJson<Record<string, unknown>>(
     `/v1/private/orders/${encodeURIComponent(orderId)}?partner_id=${encodeURIComponent(cfg.partnerId)}`,
     { method: "GET" },
   );

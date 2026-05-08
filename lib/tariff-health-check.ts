@@ -1,5 +1,10 @@
 import { requestChatText, requestStructuredJson } from "@/lib/llm";
 import { getSupabaseAdminClient } from "@/lib/supabase";
+import {
+  loadTranscriptMotTariffs,
+  type TranscriptMotRules,
+  type TranscriptMotTariffResolved,
+} from "@/lib/transcript-mot-tariffs";
 import type {
   ReferenceFlatTariffComparison,
   TariffHealthIntent,
@@ -33,7 +38,13 @@ type IntentLike = Partial<{
   fromDate: string;
   toDate: string;
   targetDecouplingRatePct: number | string | null;
+  baseTariffCode: string | null;
 }>;
+
+type TariffHealthRunOptions = {
+  baseTariffCode?: string | null;
+  targetDecouplingRatePctOverride?: number | null;
+};
 
 export type OrderTripRow = {
   km: number;
@@ -225,6 +236,10 @@ function normalizeIntent(raw: IntentLike, query: string): TariffHealthIntent {
       label: periodLabel,
     },
     targetDecouplingRatePct,
+    baseTariffCode:
+      typeof raw.baseTariffCode === "string" && raw.baseTariffCode.trim()
+        ? raw.baseTariffCode.trim()
+        : null,
   };
 }
 
@@ -235,7 +250,7 @@ export async function parseTariffHealthIntent(query: string): Promise<TariffHeal
     "metric (decoupling_rate|decoupling_abs|trips|client_spend|driver_cost|health_check),",
     "clientName (string|null), corpClientId (string|null),",
     "fromDate (YYYY-MM-DD|null), toDate (YYYY-MM-DD|null),",
-    "targetDecouplingRatePct (number|null).",
+    "targetDecouplingRatePct (number|null), baseTariffCode (string|null).",
     "If user asks month+year, return exact month boundaries in fromDate/toDate.",
   ].join(" ");
 
@@ -369,6 +384,51 @@ export function computeTripPriceTiered(km: number, tariff: TieredClientTariff): 
   return tariff.basePrice + kmVariablePortion(km, tariff.bands);
 }
 
+function convertMotRulesToTiered(rules: TranscriptMotRules): TieredClientTariff | null {
+  if (!rules.segments.length) return null;
+  if (rules.segments.length !== 1) return null;
+  const seg = rules.segments[0]!;
+  if (seg.wrap || seg.fromHour !== 0 || seg.fromMinute !== 0 || seg.toHour !== 23 || seg.toMinute !== 59) {
+    return null;
+  }
+  if (seg.model.type === "linear") {
+    return {
+      basePrice: seg.model.base,
+      bands: [{ km: null, ratePerKm: seg.model.perKm }],
+    };
+  }
+  return {
+    basePrice: seg.model.base,
+    bands: [
+      { km: seg.model.firstKm, ratePerKm: seg.model.rateFirst },
+      { km: null, ratePerKm: seg.model.rateAfter },
+    ],
+  };
+}
+
+function buildSelectedBaseTariff(
+  trips: OrderTripRow[],
+  tariffs: TranscriptMotTariffResolved[],
+  selectedCode: string | null,
+): {
+  code: string;
+  label: string;
+  tariff: TieredClientTariff;
+  metrics: TariffSuggestionMetrics;
+} | null {
+  if (!selectedCode) return null;
+  const row = tariffs.find((t) => t.code === selectedCode);
+  if (!row) return null;
+  const tiered = convertMotRulesToTiered(row.rules);
+  if (!tiered) return null;
+  return {
+    code: row.code,
+    label: row.label,
+    tariff: tiered,
+    metrics: portfolioMetrics(trips, tiered),
+  };
+}
+
 function portfolioMetrics(trips: OrderTripRow[], tariff: TieredClientTariff): TariffSuggestionMetrics {
   let simulatedTotal = 0;
   let actualTotal = 0;
@@ -492,6 +552,25 @@ function metricsLessAggressive(a: TariffSuggestionMetrics, b: TariffSuggestionMe
   return a.deltaVsActualAvgPerTrip < b.deltaVsActualAvgPerTrip;
 }
 
+function avgBandRate(tariff: TieredClientTariff): number {
+  if (!tariff.bands.length) return 0;
+  return tariff.bands.reduce((sum, band) => sum + band.ratePerKm, 0) / tariff.bands.length;
+}
+
+function buildBaseTariffAnchoredVariants(baseTariff: TieredClientTariff): Array<{
+  detail: string;
+  bands: TariffKmBand[];
+}> {
+  const multipliers = [0.8, 0.9, 1, 1.1, 1.2, 1.35];
+  return multipliers.map((k) => ({
+    detail: `from selected tariff ×${k.toFixed(2)} on km rates`,
+    bands: baseTariff.bands.map((band) => ({
+      km: band.km,
+      ratePerKm: Number((band.ratePerKm * k).toFixed(2)),
+    })),
+  }));
+}
+
 function makeTieredSuggestion(
   trips: OrderTripRow[],
   requiredTotal: number,
@@ -542,6 +621,7 @@ function pickLeastAggressiveInFamily(
 export function buildTieredTariffSuggestions(
   trips: OrderTripRow[],
   targetRatePct: number | null,
+  baseTariff: TieredClientTariff | null = null,
 ): { suggestions: TariffSuggestion[]; assumptions: string[] } {
   const assumptions: string[] = [];
   assumptions.push(
@@ -550,6 +630,11 @@ export function buildTieredTariffSuggestions(
   assumptions.push(
     "Default flat tariff (58.9 + 5.9×km) is reference-only and is not used to derive the optimized tiered tariffs.",
   );
+  if (baseTariff) {
+    assumptions.push(
+      "Selected base tariff is used as optimization baseline; CRM scales its base and km rates to hit target decoupling with minimal structural changes.",
+    );
+  }
 
   const summary = buildSummaryFromTrips(trips);
   if (summary.trips <= 0 || summary.clientSpend <= 0 || summary.driverCost <= 0) {
@@ -569,20 +654,58 @@ export function buildTieredTariffSuggestions(
   const target = clamp(inferredTarget, 0.1, 95);
   const requiredTotal = summary.driverCost / (1 - target / 100);
   const revenueDelta = requiredTotal - summary.clientSpend;
+  assumptions.push(
+    revenueDelta >= 0
+      ? "Целевой DR выше текущего: рекомендации сдвигают клиентскую выручку вверх до требуемого портфельного уровня."
+      : "Целевой DR ниже текущего: рекомендации сдвигают клиентскую выручку вниз до требуемого портфельного уровня.",
+  );
 
-  if (revenueDelta <= 0) {
-    assumptions.push("Текущий decoupling rate уже достигает целевого значения (или выше).");
-    return { suggestions: [], assumptions };
+  if (baseTariff) {
+    const anchored = pickLeastAggressiveInFamily(
+      trips,
+      requiredTotal,
+      target,
+      "Selected tariff adjusted",
+      "Uses the selected client tariff structure as baseline and scales km rates; base is solved to match the requested target on the same trips.",
+      buildBaseTariffAnchoredVariants(baseTariff),
+    );
+    if (anchored) {
+      return { suggestions: [anchored], assumptions };
+    }
+    assumptions.push("Не удалось получить корректный вариант из выбранного базового тарифа; использован общий подбор сеток.");
   }
 
-  const flatVariants = [4, 5, 5.9, 7, 9, 12].map((r) => ({
+  const baselineBandRates =
+    baseTariff?.bands.length
+      ? baseTariff.bands.map((b) => b.ratePerKm)
+      : null;
+
+  const baselineAvg = baseTariff ? avgBandRate(baseTariff) : null;
+  const flatSeedRates = baselineBandRates?.length
+    ? [
+        baselineBandRates[0] ?? 5.9,
+        baselineAvg ?? 5.9,
+        (baselineBandRates[0] ?? 5.9) * 0.85,
+        (baselineBandRates[0] ?? 5.9) * 1.15,
+      ]
+    : [4, 5, 5.9, 7, 9, 12];
+  const flatVariants = [...new Set(flatSeedRates.map((x) => Number(x.toFixed(2))))]
+    .filter((x) => x > 0)
+    .map((r) => ({
     detail: `${r}/km`,
     bands: [{ km: null, ratePerKm: r }] as TariffKmBand[],
   }));
 
   const twoBandVariants: Array<{ detail: string; bands: TariffKmBand[] }> = [];
-  const r1Two = [3, 4, 5, 6];
-  const r2Two = [6, 8, 10, 12, 14];
+  const r1Two = baselineBandRates?.length
+    ? [baselineBandRates[0] * 0.8, baselineBandRates[0], baselineBandRates[0] * 1.2].map((x) =>
+        Number(x.toFixed(2)),
+      )
+    : [3, 4, 5, 6];
+  const r2Base = baselineBandRates && baselineBandRates.length > 1 ? baselineBandRates[1] : baselineBandRates?.[0];
+  const r2Two = r2Base
+    ? [r2Base * 0.9, r2Base * 1.1, r2Base * 1.35].map((x) => Number(x.toFixed(2)))
+    : [6, 8, 10, 12, 14];
   for (const r1 of r1Two) {
     for (const r2 of r2Two) {
       twoBandVariants.push({
@@ -595,14 +718,32 @@ export function buildTieredTariffSuggestions(
     }
   }
 
-  const triplePresets: Array<[number, number, number]> = [
-    [4, 6, 10],
-    [5, 6, 8],
-    [6, 8, 12],
-    [4, 7, 11],
-    [9, 7, 5],
-    [8, 6, 5],
-  ];
+  const triplePresets: Array<[number, number, number]> = baseTariff?.bands.length
+    ? [
+        [
+          Number((baselineBandRates?.[0] ?? 5.9).toFixed(2)),
+          Number((r2Base ?? 7).toFixed(2)),
+          Number(((r2Base ?? 7) * 1.2).toFixed(2)),
+        ],
+        [
+          Number(((baselineBandRates?.[0] ?? 5.9) * 0.9).toFixed(2)),
+          Number((r2Base ?? 7).toFixed(2)),
+          Number(((r2Base ?? 7) * 1.1).toFixed(2)),
+        ],
+        [
+          Number(((baselineBandRates?.[0] ?? 5.9) * 1.1).toFixed(2)),
+          Number(((r2Base ?? 7) * 1.05).toFixed(2)),
+          Number(((r2Base ?? 7) * 1.3).toFixed(2)),
+        ],
+      ]
+    : [
+        [4, 6, 10],
+        [5, 6, 8],
+        [6, 8, 12],
+        [4, 7, 11],
+        [9, 7, 5],
+        [8, 6, 5],
+      ];
   const tripleVariants = triplePresets.map(([a, b, c]) => ({
     detail: `${a}/${b}/${c} per km on 5+5+rest`,
     bands: [
@@ -679,7 +820,10 @@ async function buildTariffAnalystMarkdown(
   }
 }
 
-export async function runTariffHealthCheck(query: string): Promise<TariffHealthResult> {
+export async function runTariffHealthCheck(
+  query: string,
+  options: TariffHealthRunOptions = {},
+): Promise<TariffHealthResult> {
   const cleanQuery = query.trim();
   if (!cleanQuery) {
     throw new Error("Query is empty.");
@@ -701,6 +845,15 @@ export async function runTariffHealthCheck(query: string): Promise<TariffHealthR
   };
 
   const parsedIntent = await parseTariffHealthIntent(cleanQuery);
+  const targetOverride =
+    typeof options.targetDecouplingRatePctOverride === "number" &&
+    Number.isFinite(options.targetDecouplingRatePctOverride)
+      ? clamp(options.targetDecouplingRatePctOverride, 0.1, 95)
+      : null;
+  if (targetOverride != null) {
+    parsedIntent.targetDecouplingRatePct = targetOverride;
+  }
+  const effectiveBaseTariffCode = options.baseTariffCode ?? parsedIntent.baseTariffCode ?? null;
   const supabase = getSupabaseAdminClient();
   const resolvedClient = await resolveClientIds(supabase, parsedIntent);
   if (resolvedClient.corpClientIds.length === 0) {
@@ -714,6 +867,7 @@ export async function runTariffHealthCheck(query: string): Promise<TariffHealthR
       },
       summary: emptySummary,
       referenceFlatTariff: null,
+      selectedBaseTariff: null,
       suggestions: [],
       assumptions: [],
       analystMarkdown: null,
@@ -730,9 +884,14 @@ export async function runTariffHealthCheck(query: string): Promise<TariffHealthR
   const trips = buildTripsFromRows(rows);
   const summary = buildSummaryFromTrips(trips);
   const referenceFlatTariff = buildReferenceFlatComparison(trips);
+  const availableTariffs = await loadTranscriptMotTariffs();
+  const selectedBaseTariff = buildSelectedBaseTariff(trips, availableTariffs, effectiveBaseTariffCode);
+  const selectedTariffUnsupported =
+    Boolean(effectiveBaseTariffCode) && !selectedBaseTariff;
   const recommendation = buildTieredTariffSuggestions(
     trips,
     parsedIntent.targetDecouplingRatePct ?? null,
+    selectedTariffUnsupported ? null : selectedBaseTariff?.tariff ?? null,
   );
 
   const analystPayload = {
@@ -741,6 +900,17 @@ export async function runTariffHealthCheck(query: string): Promise<TariffHealthR
     resolvedClient,
     summary,
     referenceFlatTariff,
+    selectedBaseTariff: selectedBaseTariff
+      ? {
+          code: selectedBaseTariff.code,
+          label: selectedBaseTariff.label,
+          simulatedTotal: selectedBaseTariff.metrics.simulatedTotal,
+          simulatedAvgPerTrip: selectedBaseTariff.metrics.simulatedAvgPerTrip,
+          deltaVsActualTotal: selectedBaseTariff.metrics.deltaVsActualTotal,
+          deltaPctAvgVsActual: selectedBaseTariff.metrics.deltaPctAvgVsActual,
+          portfolioDecouplingRatePct: selectedBaseTariff.metrics.portfolioDecouplingRatePct,
+        }
+      : null,
     suggestions: recommendation.suggestions,
     assumptions: recommendation.assumptions,
   };
@@ -757,12 +927,19 @@ export async function runTariffHealthCheck(query: string): Promise<TariffHealthR
     },
     summary,
     referenceFlatTariff,
-    suggestions: recommendation.suggestions,
-    assumptions: recommendation.assumptions,
+    suggestions: selectedTariffUnsupported ? [] : recommendation.suggestions,
+    assumptions: selectedTariffUnsupported
+      ? [
+          ...recommendation.assumptions,
+          "Selected base tariff could not be converted to the optimization model. Choose a 24x7 single-tariff profile or extend the optimizer for time-window rules.",
+        ]
+      : recommendation.assumptions,
     analystMarkdown,
     warning:
-      parsedIntent.targetDecouplingRatePct === null
-        ? "Target decoupling rate was not explicit in query, auto-target was used."
-        : undefined,
+      selectedTariffUnsupported
+        ? "Selected base tariff is not yet supported by the current optimizer model; no fallback suggestions were returned to avoid mixing baselines."
+        : parsedIntent.targetDecouplingRatePct === null
+          ? "Target decoupling rate was not explicit in query, auto-target was used."
+          : undefined,
   };
 }

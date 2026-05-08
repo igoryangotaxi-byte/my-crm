@@ -22,8 +22,19 @@ export async function POST(request: Request) {
     );
   }
 
-  const payload = (await request.json().catch(() => null)) as { query?: unknown } | null;
+  const payload = (await request.json().catch(() => null)) as
+    | { query?: unknown; baseTariffCode?: unknown; targetDecouplingRatePct?: unknown }
+    | null;
   const query = typeof payload?.query === "string" ? payload.query.trim() : "";
+  const baseTariffCode =
+    typeof payload?.baseTariffCode === "string" ? payload.baseTariffCode.trim() : "";
+  const targetOverrideRaw = payload?.targetDecouplingRatePct;
+  const targetDecouplingRatePctOverride =
+    typeof targetOverrideRaw === "number" && Number.isFinite(targetOverrideRaw)
+      ? targetOverrideRaw
+      : typeof targetOverrideRaw === "string" && targetOverrideRaw.trim()
+        ? Number(targetOverrideRaw.trim().replace("%", ""))
+        : null;
   if (!query) {
     return Response.json({ ok: false, error: "Query is required." }, { status: 400 });
   }
@@ -35,7 +46,13 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await runTariffHealthCheck(query);
+    const result = await runTariffHealthCheck(query, {
+      baseTariffCode: baseTariffCode || null,
+      targetDecouplingRatePctOverride:
+        targetDecouplingRatePctOverride != null && Number.isFinite(targetDecouplingRatePctOverride)
+          ? targetDecouplingRatePctOverride
+          : null,
+    });
     return Response.json(result, {
       headers: {
         "Cache-Control": "no-store",

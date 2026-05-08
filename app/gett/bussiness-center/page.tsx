@@ -1,5 +1,6 @@
-import { GettBusinessCenterView } from "@/components/gett/GettBusinessCenterView";
+import { redirect } from "next/navigation";
 
-export default function GettBussinessCenterPage() {
-  return <GettBusinessCenterView />;
+/** Legacy URL (typo) — canonical route is `/gett/business-center`. */
+export default function GettBussinessCenterRedirectPage() {
+  redirect("/gett/business-center");
 }

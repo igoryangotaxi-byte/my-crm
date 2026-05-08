@@ -7,6 +7,7 @@ import {
   getGettFirstOrderDone,
   markGettFirstOrderDone,
 } from "@/components/gett/GettFirstOrderOnboarding";
+import type { GettCompanySettings } from "@/lib/gett-api";
 
 type RoutePoint = { id: string; role: "pickup" | "stop" | "destination"; address: string; lat?: number; lon?: number };
 type SavedRecipient = { id: string; name: string; phone: string };
@@ -56,10 +57,58 @@ export function GettRequestRidesFlow() {
   const [loading, setLoading] = useState<"" | "route" | "quote" | "create" | "status" | "cancel" | "geo">("");
   const [error, setError] = useState("");
   const [showFirstOrderGuide, setShowFirstOrderGuide] = useState(false);
+  const [companySettings, setCompanySettings] = useState<GettCompanySettings | null>(null);
+  const [companySettingsError, setCompanySettingsError] = useState("");
+  const [refValues, setRefValues] = useState<Record<number, string>>({});
+  const [paymentType, setPaymentType] = useState("");
+  const [noteToDriver, setNoteToDriver] = useState("");
+  const [extraPassengers, setExtraPassengers] = useState<{ name: string; phone: string }[]>([]);
 
   useEffect(() => {
     setShowFirstOrderGuide(!getGettFirstOrderDone());
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/gett/company-settings", { cache: "no-store" });
+        const data = (await res.json()) as { ok?: boolean; error?: string; settings?: GettCompanySettings | null };
+        if (cancelled) return;
+        if (!res.ok || !data.ok) {
+          setCompanySettingsError(data.error ?? "Company settings unavailable.");
+          setCompanySettings(null);
+          return;
+        }
+        setCompanySettingsError("");
+        setCompanySettings(data.settings ?? null);
+      } catch {
+        if (!cancelled) {
+          setCompanySettingsError("Failed to load company settings.");
+          setCompanySettings(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!companySettings) return;
+    setPaymentType((prev) => {
+      if (prev.trim()) return prev;
+      const first = companySettings.payment_types[0];
+      return first ?? prev;
+    });
+    setRefValues((prev) => {
+      const next = { ...prev };
+      for (const ref of companySettings.references) {
+        if (next[ref.id] === undefined) next[ref.id] = "";
+      }
+      return next;
+    });
+  }, [companySettings]);
 
   useEffect(() => {
     try {
@@ -206,6 +255,7 @@ export function GettRequestRidesFlow() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          category: "transportation",
           originAddress: pickup.address,
           originLat: pickup.lat,
           originLng: pickup.lon,
@@ -234,11 +284,36 @@ export function GettRequestRidesFlow() {
   async function createOrder() {
     setLoading("create");
     setError("");
+    const idempotencyKey =
+      typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `req-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const refsFromForm =
+      companySettings?.references
+        .map((ref) => {
+          const value = (refValues[ref.id] ?? "").trim();
+          if (!value) return null;
+          return { id: ref.id, value, title: ref.title };
+        })
+        .filter((x): x is { id: number; value: string; title: string } => x != null) ?? [];
+    if (companySettings?.references.length) {
+      for (const ref of companySettings.references) {
+        if (!ref.mandatory) continue;
+        if (!(refValues[ref.id] ?? "").trim()) {
+          setError(`Reference "${ref.title || ref.id}" is required by company settings.`);
+          setLoading("");
+          return;
+        }
+      }
+    }
+    const noteTrim = noteToDriver.trim().slice(0, 100);
+    const extras = companySettings?.allow_multi_riders
+      ? extraPassengers.filter((row) => row.name.trim() && row.phone.trim())
+      : [];
     try {
       const response = await fetch("/api/gett/request-rides/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          category: "transportation",
           productId: selectedProductId,
           quoteId,
           userName: recipientName,
@@ -251,6 +326,11 @@ export function GettRequestRidesFlow() {
           destinationLng: destination.lon,
           waypoints: stops.map((stop) => ({ address: stop.address, lat: stop.lat, lng: stop.lon })),
           scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+          noteToDriver: noteTrim || undefined,
+          paymentType: paymentType.trim() || undefined,
+          idempotencyKey,
+          references: refsFromForm.length ? refsFromForm : undefined,
+          extraPassengers: extras.length ? extras : undefined,
         }),
       });
       const data = (await response.json()) as { ok?: boolean; error?: string; result?: { order?: { id?: string } } };
@@ -399,6 +479,102 @@ export function GettRequestRidesFlow() {
               + Add intermediate stop
             </button>
             <input className="crm-input px-3 py-2 text-sm" type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
+          </div>
+
+          <h3 className="crm-section-title mt-5">Company policy</h3>
+          <div className="mt-2 rounded-2xl border border-slate-200 bg-white/90 p-3 text-sm text-slate-700">
+            {companySettingsError ? <p className="text-xs text-amber-800">{companySettingsError}</p> : null}
+            {!companySettings && !companySettingsError ? <p className="text-xs text-muted">Loading Gett company settings…</p> : null}
+            {companySettings ? (
+              <>
+                {companySettings.payment_types.length > 0 ? (
+                  <label className="mt-1 block">
+                    <span className="text-xs font-semibold text-slate-600">Payment type</span>
+                    <select className="crm-input mt-1 w-full px-3 py-2 text-sm" value={paymentType} onChange={(e) => setPaymentType(e.target.value)}>
+                      <option value="">Default (server)</option>
+                      {companySettings.payment_types.map((pt) => (
+                        <option key={pt} value={pt}>
+                          {pt}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <p className="text-xs text-muted">No payment types in company settings (Business API).</p>
+                )}
+                <label className="mt-2 block">
+                  <span className="text-xs font-semibold text-slate-600">Note to driver (max 100)</span>
+                  <textarea
+                    className="crm-input mt-1 min-h-[3rem] w-full px-3 py-2 text-sm"
+                    maxLength={100}
+                    placeholder="Instructions for the driver"
+                    value={noteToDriver}
+                    onChange={(e) => setNoteToDriver(e.target.value.slice(0, 100))}
+                  />
+                </label>
+                {companySettings.references.length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs font-semibold text-slate-600">References</p>
+                    {companySettings.references.map((ref) => (
+                      <label key={ref.id} className="block">
+                        <span className="text-[11px] text-slate-600">
+                          {ref.title || `Ref #${ref.id}`}
+                          {ref.mandatory ? <span className="text-rose-600"> *</span> : null}
+                        </span>
+                        <input
+                          className="crm-input mt-0.5 w-full px-3 py-2 text-sm"
+                          value={refValues[ref.id] ?? ""}
+                          onChange={(e) => setRefValues((prev) => ({ ...prev, [ref.id]: e.target.value }))}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                ) : null}
+                {companySettings.allow_multi_riders ? (
+                  <div className="mt-3 space-y-2 border-t border-slate-100 pt-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-slate-600">Extra passengers (pick-up)</p>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700"
+                        onClick={() => setExtraPassengers((prev) => [...prev, { name: "", phone: "" }])}
+                      >
+                        + Add
+                      </button>
+                    </div>
+                    {extraPassengers.map((row, idx) => (
+                      <div key={idx} className="flex flex-col gap-1 rounded-xl border border-slate-100 p-2">
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            className="text-[11px] text-rose-600"
+                            onClick={() => setExtraPassengers((prev) => prev.filter((_, i) => i !== idx))}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <input
+                          className="crm-input px-2 py-1.5 text-sm"
+                          placeholder="Name"
+                          value={row.name}
+                          onChange={(e) =>
+                            setExtraPassengers((prev) => prev.map((p, i) => (i === idx ? { ...p, name: e.target.value } : p)))
+                          }
+                        />
+                        <input
+                          className="crm-input px-2 py-1.5 text-sm"
+                          placeholder="Phone (RFC3966 style, no + prefix per Gett)"
+                          value={row.phone}
+                          onChange={(e) =>
+                            setExtraPassengers((prev) => prev.map((p, i) => (i === idx ? { ...p, phone: e.target.value } : p)))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </>
+            ) : null}
           </div>
 
           <h3 className="crm-section-title mt-5">Quote & order</h3>

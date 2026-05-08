@@ -39,6 +39,14 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
     title: "Bussiness Center",
     subtitle: "Spend analytics by selected client with cached data",
   },
+  "/drivers-map": {
+    title: "Drivers on the Map",
+    subtitle: "Live fleet positions and status",
+  },
+  "/heat-map": {
+    title: "Demand Heat Map",
+    subtitle: "B2C trip starts by time of day (Asia/Jerusalem)",
+  },
   "/client/request-rides": {
     title: "Request Rides",
     subtitle: "Client cabinet ride requests",
@@ -92,6 +100,8 @@ export function Header() {
       "/request-rides": { title: "הזמנת נסיעות", subtitle: "יצירת הזמנת נסיעה דרך לקוח API נבחר" },
       "/communications": { title: "תקשורת", subtitle: "שליחת הודעות לעובדי לקוח" },
       "/bussiness-center": { title: "מרכז עסקי", subtitle: "ניתוח הוצאות לפי לקוח נבחר עם cache" },
+      "/drivers-map": { title: "נהגים על המפה", subtitle: "מיקומי צי בזמן אמת וסטטוס" },
+      "/heat-map": { title: "מפת חום ביקוש", subtitle: "התחלות נסיעות B2C לפי שעה (Asia/Jerusalem)" },
       "/client/request-rides": { title: "הזמנת נסיעות", subtitle: "הזמנות נסיעה בפורטל לקוח" },
       "/client/communications": { title: "תקשורת", subtitle: "שליחת הודעות לעובדים שלך" },
       "/client/pre-orders": { title: "הזמנות מוקדמות", subtitle: "נסיעות מתוכננות לחברה שלך" },
@@ -129,7 +139,10 @@ export function Header() {
       { page: "preOrders", path: "/pre-orders" },
       { page: "priceCalculator", path: "/price-calculator" },
     ],
-    b2c: [{ page: "driversMap", path: "/drivers-map" }],
+    b2c: [
+      { page: "heatMap", path: "/heat-map" },
+      { page: "driversMap", path: "/drivers-map" },
+    ],
   };
 
   const resolveAreaLandingPath = (area: BusinessArea): string => {

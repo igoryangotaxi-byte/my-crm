@@ -48,7 +48,10 @@ const accessSections: AccessSection[] = [
   {
     key: "b2c-pages",
     label: "B2C pages",
-    actions: [{ type: "page", key: "driversMap", label: "Drivers on the Map" }],
+    actions: [
+      { type: "page", key: "driversMap", label: "Drivers on the Map" },
+      { type: "page", key: "heatMap", label: "Demand Heat Map" },
+    ],
   },
   {
     key: "dashboard-blocks",

@@ -35,6 +35,23 @@ function WalletIcon({ className = "h-4 w-4" }: IconProps) {
   );
 }
 
+function PackageIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth="1.8">
+      <path d="M21 8l-9 4-9-4M3 8v8l9 4 9-4V8M12 4l9 4-9 4-9-4 9-4zM12 12v8" />
+    </svg>
+  );
+}
+
+function ShieldIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth="1.8">
+      <path d="M12 3l7 3v5c0 5-2.7 8-7 10-4.3-2-7-5-7-10V6l7-3z" />
+      <path d="M9.5 12.5l1.8 1.8 3.3-3.3" />
+    </svg>
+  );
+}
+
 function RideRequestIcon({ className = "h-4 w-4" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth="1.8">
@@ -48,9 +65,11 @@ function RideRequestIcon({ className = "h-4 w-4" }: IconProps) {
 
 const gettItems = [
   { href: "/gett/request-rides", label: "Request Rides", icon: RideRequestIcon },
+  { href: "/gett/delivery", label: "Delivery", icon: PackageIcon },
   { href: "/gett/pre-orders", label: "Pre-Orders", icon: CalendarIcon },
   { href: "/gett/orders", label: "Orders", icon: OrdersIcon },
-  { href: "/gett/bussiness-center", label: "Bussiness Center", icon: WalletIcon },
+  { href: "/gett/company-settings", label: "Company settings", icon: ShieldIcon },
+  { href: "/gett/business-center", label: "Business Center", icon: WalletIcon },
 ];
 
 export function GettSidebar() {

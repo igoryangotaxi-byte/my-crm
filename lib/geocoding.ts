@@ -6,6 +6,8 @@ type NominatimSearchItem = {
   address?: Record<string, string | undefined>;
 };
 
+type GovMapRawItem = Record<string, unknown>;
+
 export type GeocodePoint = { lat: number; lon: number };
 
 export type AddressSuggestion = GeocodePoint & {
@@ -134,6 +136,121 @@ function itemsToSuggestions(items: NominatimSearchItem[], limit: number): Addres
   return rows;
 }
 
+function normalizeGovMapBaseUrl(input: string): string {
+  return input.trim().replace(/\/+$/, "");
+}
+
+function extractGovMapRows(payload: unknown): GovMapRawItem[] {
+  if (Array.isArray(payload)) return payload.filter((row): row is GovMapRawItem => !!row && typeof row === "object");
+  if (!payload || typeof payload !== "object") return [];
+  const root = payload as Record<string, unknown>;
+  const containers = [
+    root.data,
+    root.results,
+    root.items,
+    root.suggestions,
+    root.value,
+    root.response,
+  ];
+  for (const value of containers) {
+    if (Array.isArray(value)) return value.filter((row): row is GovMapRawItem => !!row && typeof row === "object");
+    if (value && typeof value === "object") {
+      const nested = value as Record<string, unknown>;
+      if (Array.isArray(nested.results)) {
+        return nested.results.filter((row): row is GovMapRawItem => !!row && typeof row === "object");
+      }
+      if (Array.isArray(nested.items)) {
+        return nested.items.filter((row): row is GovMapRawItem => !!row && typeof row === "object");
+      }
+    }
+  }
+  return [];
+}
+
+function pickGovMapText(row: GovMapRawItem): string {
+  const candidates = [
+    row.label,
+    row.display_name,
+    row.displayName,
+    row.address,
+    row.name,
+    row.text,
+    row.title,
+    row.fullAddress,
+  ];
+  for (const raw of candidates) {
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+  }
+  return "";
+}
+
+function pickGovMapNumber(row: GovMapRawItem, keys: string[]): number | null {
+  for (const key of keys) {
+    const num = toFiniteNumber(row[key]);
+    if (num != null) return num;
+  }
+  return null;
+}
+
+function toGovMapSuggestion(row: GovMapRawItem): AddressSuggestion | null {
+  const lat = pickGovMapNumber(row, ["lat", "latitude", "y", "Y"]);
+  const lon = pickGovMapNumber(row, ["lon", "lng", "long", "longitude", "x", "X"]);
+  if (lat == null || lon == null) return null;
+  const displayName = pickGovMapText(row);
+  if (!displayName) return null;
+  const parts = displayName.split(",").map((part) => part.trim()).filter(Boolean);
+  const street = parts.length > 0 ? parts[0] : null;
+  const city = parts.length > 1 ? parts[1] : null;
+  const label = buildSuggestionLabel(street, city, displayName);
+  return { lat, lon, label, street, city, displayName };
+}
+
+function geocodingSuggestProvider(): "osm" | "govmap" {
+  const raw = (process.env.GEOCODING_SUGGEST_PROVIDER ?? "").trim().toLowerCase();
+  return raw === "govmap" ? "govmap" : "osm";
+}
+
+async function govMapSearch(input: {
+  query: string;
+  language: "he" | "ru" | "en";
+  limit: number;
+}): Promise<AddressSuggestion[]> {
+  const baseUrl = normalizeGovMapBaseUrl(process.env.GOVMAP_SUGGEST_BASE_URL ?? "");
+  if (!baseUrl) return [];
+  const endpoint = process.env.GOVMAP_SUGGEST_PATH?.trim() || "/api/search";
+  const apiKey = (process.env.GOVMAP_API_KEY ?? "").trim();
+  const params = new URLSearchParams({
+    q: input.query,
+    query: input.query,
+    limit: String(Math.max(1, Math.min(input.limit, 10))),
+    lang: input.language,
+  });
+  if (apiKey) params.set("apiKey", apiKey);
+  const headers: HeadersInit = {
+    Accept: "application/json",
+  };
+  if (apiKey) headers["X-Api-Key"] = apiKey;
+  const response = await fetch(`${baseUrl}${endpoint}?${params.toString()}`, {
+    headers,
+    cache: "no-store",
+  });
+  if (!response.ok) return [];
+  const payload = (await response.json().catch(() => null)) as unknown;
+  const rows = extractGovMapRows(payload);
+  const dedup = new Set<string>();
+  const suggestions: AddressSuggestion[] = [];
+  for (const row of rows) {
+    const suggestion = toGovMapSuggestion(row);
+    if (!suggestion) continue;
+    const key = `${suggestion.lat.toFixed(5)}:${suggestion.lon.toFixed(5)}`;
+    if (dedup.has(key)) continue;
+    dedup.add(key);
+    suggestions.push(suggestion);
+    if (suggestions.length >= input.limit) break;
+  }
+  return suggestions;
+}
+
 export async function searchAddressSuggestions(input: {
   query: string;
   language: "he" | "ru" | "en";
@@ -142,6 +259,15 @@ export async function searchAddressSuggestions(input: {
   const q = input.query.trim();
   if (!q) return [];
   const limit = Math.max(1, Math.min(input.limit ?? 8, 10));
+  const provider = geocodingSuggestProvider();
+  if (provider === "govmap") {
+    try {
+      const govRows = await govMapSearch({ query: q, language: input.language, limit });
+      if (govRows.length > 0) return govRows;
+    } catch {
+      // non-fatal: fallback to OSM/Nominatim for resiliency
+    }
+  }
   const useStructured = !prefersFreeTextGeocodeOnly(q);
   const structured = useStructured ? parseStreetAndCity(q) : null;
   const geocodeQuery = normalizeHebrewAddressQueryForGeocode(q);

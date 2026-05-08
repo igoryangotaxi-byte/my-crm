@@ -70,7 +70,7 @@ function ensureDefaultAdmin(users: AuthUser[]): AuthUser[] {
 }
 
 /** v2 first migration; v3 fixes stores that already had meta v2 but User.orders/preOrders stayed false. v6 drops legacy ZHAK / Star Taxi Point client cabinets from KV. */
-const CURRENT_PERMISSIONS_VERSION = 6;
+const CURRENT_PERMISSIONS_VERSION = 7;
 
 /** Yango corp_client_id values for one-off cabinets removed from Clients Cabinets (Access management). */
 const LEGACY_REMOVED_CLIENT_CABINET_CORP_IDS = new Set([

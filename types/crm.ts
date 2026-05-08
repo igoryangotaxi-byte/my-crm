@@ -281,6 +281,7 @@ export type TariffHealthIntent = {
   corpClientId?: string | null;
   period: TariffHealthPeriod;
   targetDecouplingRatePct?: number | null;
+  baseTariffCode?: string | null;
 };
 
 export type TariffHealthSummary = {
@@ -349,6 +350,15 @@ export type TariffHealthResult = {
   };
   summary: TariffHealthSummary;
   referenceFlatTariff: ReferenceFlatTariffComparison | null;
+  selectedBaseTariff?: {
+    code: string;
+    label: string;
+    simulatedTotal: number;
+    simulatedAvgPerTrip: number;
+    deltaVsActualTotal: number;
+    deltaPctAvgVsActual: number | null;
+    portfolioDecouplingRatePct: number | null;
+  } | null;
   suggestions: TariffSuggestion[];
   assumptions: string[];
   /** Long-form analyst narrative (markdown-ish plain text); null if LLM unavailable */

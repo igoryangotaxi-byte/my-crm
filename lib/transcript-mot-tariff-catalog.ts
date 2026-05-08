@@ -313,4 +313,22 @@ export const TRANSCRIPT_MOT_TARIFF_CATALOG: TranscriptMotTariffRow[] = [
       ],
     },
   },
+  {
+    code: "Main-ISR-2023-MOT_MACABI_B2B",
+    label: "Main-ISR-2023-MOT_MACABI_B2B",
+    sortOrder: 17,
+    rules: {
+      version: 1,
+      segments: [
+        {
+          wrap: false,
+          fromHour: 0,
+          fromMinute: 0,
+          toHour: 23,
+          toMinute: 59,
+          model: { type: "tiered_km", base: 35.4, firstKm: 3, rateFirst: 0, rateAfter: 5.9 },
+        },
+      ],
+    },
+  },
 ];
