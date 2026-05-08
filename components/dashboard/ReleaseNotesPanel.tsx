@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-05-08",
+    title: "Heat Map demand UX + branches CSV, Gett/API/auth rollup release",
+    notes:
+      "a88e97bd — Production rollout with B2C Heat Map section (time filtering modes, MapLibre heat layer, overlay controls), branch CSV upload and map markers with hover details, role/navigation/i18n updates, Supabase heatmap ingestion plumbing, plus accumulated Gett/API/auth and docs updates included in this release.",
+  },
+  {
     date: "2026-05-06",
     title: "Gett CRM section, Price Calculator transcripts, Pre-Orders map (0.2.18)",
     notes:
