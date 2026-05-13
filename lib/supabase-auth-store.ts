@@ -898,7 +898,6 @@ async function ensureDefaultAdminAuthFallbackSeeded(supabase: SupabaseAdminClien
   }
 
   const { error } = await supabase.auth.admin.updateUserById(existingAuthUser.id, {
-    password: DEFAULT_ADMIN_PASSWORD,
     email_confirm: true,
     user_metadata: metadata,
   });
