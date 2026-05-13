@@ -1,3 +1,4 @@
+import { kv } from "@vercel/kv";
 import {
   type AccountType,
   type AppLanguage,
@@ -28,6 +29,7 @@ const DEFAULT_ADMIN_NAME = "Igor Kuznetsov";
 const DEFAULT_LANGUAGE: AppLanguage = "en";
 const DEFAULT_ADMIN_PUBLIC_ID = "user-admin-1";
 const CURRENT_PERMISSIONS_VERSION = 7;
+const AUTH_STORE_KEY = "appli:auth:store:v1";
 let fallbackMemoryStore: AuthStoreData | null = null;
 
 const LEGACY_REMOVED_CLIENT_CABINET_CORP_IDS = new Set([
@@ -88,6 +90,23 @@ type RoleJsonRow = {
 type TenantRolesRow = {
   tenant_id: string;
   roles: ClientRoleDefinition[];
+};
+
+type SupabaseAuthMetadata = {
+  crmManaged?: boolean;
+  crmPublicUserId?: string;
+  crmName?: string;
+  crmRole?: AppRole;
+  crmStatus?: UserStatus;
+  crmAccountType?: AccountType;
+  crmLanguage?: AppLanguage;
+  crmPhoneNumber?: string | null;
+  crmCostCenterId?: string | null;
+  crmTenantId?: string | null;
+  crmCorpClientId?: string | null;
+  crmTokenLabel?: string | null;
+  crmApiClientId?: string | null;
+  crmClientRoleId?: string | null;
 };
 
 function defaultTenantRoleSet(): ClientRoleDefinition[] {
@@ -165,6 +184,61 @@ function createDefaultStore(): AuthStoreData {
     },
     storeMeta: { permissionsVersion: CURRENT_PERMISSIONS_VERSION },
   };
+}
+
+function canUseKv() {
+  return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+}
+
+function isMissingSupabaseAuthSchemaMessage(message: string) {
+  return (
+    message.includes("crm_user_profiles") ||
+    message.includes("crm_role_permissions") ||
+    message.includes("crm_role_area_access") ||
+    message.includes("crm_role_dashboard_block_access") ||
+    message.includes("crm_tenant_accounts") ||
+    message.includes("crm_tenant_roles") ||
+    message.includes("crm_global_b2c_settings") ||
+    message.includes("schema cache") ||
+    message.includes("relation")
+  );
+}
+
+function isMissingSupabaseAuthSchemaError(error: unknown) {
+  return error instanceof Error && isMissingSupabaseAuthSchemaMessage(error.message);
+}
+
+function buildSupabaseAuthMetadata(input: {
+  publicUserId: string;
+  name: string;
+  role: AppRole;
+  status: UserStatus;
+  accountType: AccountType;
+  language: AppLanguage;
+  phoneNumber?: string | null;
+  costCenterId?: string | null;
+  tenantId?: string | null;
+  corpClientId?: string | null;
+  tokenLabel?: string | null;
+  apiClientId?: string | null;
+  clientRoleId?: string | null;
+}) {
+  return {
+    crmManaged: true,
+    crmPublicUserId: input.publicUserId,
+    crmName: input.name,
+    crmRole: input.role,
+    crmStatus: input.status,
+    crmAccountType: input.accountType,
+    crmLanguage: input.language,
+    crmPhoneNumber: input.phoneNumber ?? null,
+    crmCostCenterId: input.costCenterId ?? null,
+    crmTenantId: input.tenantId ?? null,
+    crmCorpClientId: input.corpClientId ?? null,
+    crmTokenLabel: input.tokenLabel ?? null,
+    crmApiClientId: input.apiClientId ?? null,
+    crmClientRoleId: input.clientRoleId ?? null,
+  } satisfies SupabaseAuthMetadata;
 }
 
 function canUseDevelopmentFallback() {
@@ -402,6 +476,82 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
   };
 }
 
+async function loadLegacyStoreForFallback(): Promise<AuthStoreData> {
+  if (canUseKv()) {
+    try {
+      const raw = await kv.get<AuthStoreData>(AUTH_STORE_KEY);
+      return normalizeStore(raw);
+    } catch {
+      // Fall back to in-memory/default store below.
+    }
+  }
+  if (fallbackMemoryStore) {
+    return normalizeStore(fallbackMemoryStore);
+  }
+  return createDefaultStore();
+}
+
+function mergeUsersByIdOrEmail(primaryUsers: AuthUser[], fallbackUsers: AuthUser[]) {
+  const merged = new Map<string, AuthUser>();
+  for (const user of fallbackUsers) {
+    const key = user.id || user.email.trim().toLowerCase();
+    merged.set(key, user);
+  }
+  for (const user of primaryUsers) {
+    const byIdKey = user.id || user.email.trim().toLowerCase();
+    const byEmailKey = user.email.trim().toLowerCase();
+    const fallback =
+      merged.get(byIdKey) ??
+      Array.from(merged.values()).find((item) => item.email.trim().toLowerCase() === byEmailKey) ??
+      null;
+    merged.set(byIdKey, {
+      ...fallback,
+      ...user,
+      id: user.id || fallback?.id || `user-${crypto.randomUUID()}`,
+      email: user.email.trim().toLowerCase(),
+    });
+  }
+  return Array.from(merged.values());
+}
+
+function mapAuthMetadataUserToAuthUser(input: {
+  authUserId: string;
+  email: string;
+  createdAt?: string | null;
+  metadata: Record<string, unknown> | null | undefined;
+}): AuthUser {
+  const metadata = (input.metadata ?? {}) as SupabaseAuthMetadata;
+  return {
+    id:
+      typeof metadata.crmPublicUserId === "string" && metadata.crmPublicUserId
+        ? metadata.crmPublicUserId
+        : `user-${input.authUserId}`,
+    authUserId: input.authUserId,
+    name:
+      typeof metadata.crmName === "string" && metadata.crmName.trim()
+        ? metadata.crmName.trim()
+        : input.email.split("@")[0] || "User",
+    email: input.email.trim().toLowerCase(),
+    password: "",
+    role: isAppRole(metadata.crmRole) ? metadata.crmRole : "User",
+    status: isUserStatus(metadata.crmStatus) ? metadata.crmStatus : "pending",
+    createdAt: input.createdAt ?? new Date().toISOString(),
+    accountType: normalizeAccountType(metadata.crmAccountType),
+    phoneNumber:
+      typeof metadata.crmPhoneNumber === "string" ? metadata.crmPhoneNumber : null,
+    costCenterId:
+      typeof metadata.crmCostCenterId === "string" ? metadata.crmCostCenterId : null,
+    tenantId: typeof metadata.crmTenantId === "string" ? metadata.crmTenantId : null,
+    corpClientId:
+      typeof metadata.crmCorpClientId === "string" ? metadata.crmCorpClientId : null,
+    tokenLabel: typeof metadata.crmTokenLabel === "string" ? metadata.crmTokenLabel : null,
+    apiClientId: typeof metadata.crmApiClientId === "string" ? metadata.crmApiClientId : null,
+    clientRoleId:
+      typeof metadata.crmClientRoleId === "string" ? metadata.crmClientRoleId : null,
+    language: normalizeLanguage(metadata.crmLanguage),
+  };
+}
+
 function mapProfileRowToUser(row: AuthProfileRow): AuthUser {
   return {
     id: row.id,
@@ -434,6 +584,35 @@ async function listAllAuthUsers(supabase: SupabaseAdminClient) {
       id: user.id,
       email: String(user.email ?? "").trim().toLowerCase(),
     }));
+    users.push(...batch);
+    if (batch.length < 1000) break;
+    page += 1;
+  }
+  return users;
+}
+
+async function listAllAuthUsersDetailed(supabase: SupabaseAdminClient) {
+  const users: Array<{
+    id: string;
+    email: string;
+    createdAt: string | null;
+    metadata: Record<string, unknown> | null | undefined;
+  }> = [];
+  let page = 1;
+  for (;;) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw new Error(`Failed to list auth users: ${error.message}`);
+    const batch = (data?.users ?? [])
+      .map((user) => ({
+        id: user.id,
+        email: String(user.email ?? "").trim().toLowerCase(),
+        createdAt: typeof user.created_at === "string" ? user.created_at : null,
+        metadata:
+          user.user_metadata && typeof user.user_metadata === "object"
+            ? (user.user_metadata as Record<string, unknown>)
+            : null,
+      }))
+      .filter((user) => user.email);
     users.push(...batch);
     if (batch.length < 1000) break;
     page += 1;
@@ -569,6 +748,27 @@ async function loadGlobalB2CSettings(
   };
 }
 
+async function loadAuthStoreFromSupabaseAuthFallback(
+  supabase: SupabaseAdminClient,
+): Promise<AuthStoreData> {
+  const legacyStore = await loadLegacyStoreForFallback();
+  const detailedUsers = await listAllAuthUsersDetailed(supabase);
+  const authUsers = detailedUsers
+    .filter((user) => user.metadata?.crmManaged === true)
+    .map((user) =>
+      mapAuthMetadataUserToAuthUser({
+        authUserId: user.id,
+        email: user.email,
+        createdAt: user.createdAt,
+        metadata: user.metadata,
+      }),
+    );
+  return normalizeStore({
+    ...legacyStore,
+    users: mergeUsersByIdOrEmail(authUsers, legacyStore.users ?? []),
+  });
+}
+
 async function ensureDefaultSettings(supabase: SupabaseAdminClient) {
   const rolePermissionRows = Object.entries(defaultRolePermissions).map(([role, permissions]) => ({
     role,
@@ -673,6 +873,40 @@ async function ensureDefaultAdminSeeded(supabase: SupabaseAdminClient) {
   }
 }
 
+async function ensureDefaultAdminAuthFallbackSeeded(supabase: SupabaseAdminClient) {
+  const existingAuthUser = await findAuthUserByEmail(supabase, DEFAULT_ADMIN_EMAIL);
+  const metadata = buildSupabaseAuthMetadata({
+    publicUserId: DEFAULT_ADMIN_PUBLIC_ID,
+    name: DEFAULT_ADMIN_NAME,
+    role: "Admin",
+    status: "approved",
+    accountType: "internal",
+    language: DEFAULT_LANGUAGE,
+  });
+
+  if (!existingAuthUser?.id) {
+    const { data, error } = await supabase.auth.admin.createUser({
+      email: DEFAULT_ADMIN_EMAIL,
+      password: DEFAULT_ADMIN_PASSWORD,
+      email_confirm: true,
+      user_metadata: metadata,
+    });
+    if (error || !data.user?.id) {
+      throw new Error(`Failed to seed default admin auth user: ${error?.message ?? "unknown"}`);
+    }
+    return;
+  }
+
+  const { error } = await supabase.auth.admin.updateUserById(existingAuthUser.id, {
+    password: DEFAULT_ADMIN_PASSWORD,
+    email_confirm: true,
+    user_metadata: metadata,
+  });
+  if (error) {
+    throw new Error(`Failed to refresh default admin auth user: ${error.message}`);
+  }
+}
+
 async function ensureSupabaseAuthStoreInitialized(supabase: SupabaseAdminClient) {
   await ensureDefaultSettings(supabase);
   await ensureDefaultAdminSeeded(supabase);
@@ -748,9 +982,16 @@ async function deleteRemovedProfiles(
 
 export async function loadAuthStoreFromSupabase(): Promise<AuthStoreData> {
   const supabase = getSupabaseAdminClient();
-  await ensureSupabaseAuthStoreInitialized(supabase);
-  const [users, rolePermissions, roleAreaAccess, roleDashboardBlockAccess, tenantAccounts, globalB2CSettings] =
-    await Promise.all([
+  try {
+    await ensureSupabaseAuthStoreInitialized(supabase);
+    const [
+      users,
+      rolePermissions,
+      roleAreaAccess,
+      roleDashboardBlockAccess,
+      tenantAccounts,
+      globalB2CSettings,
+    ] = await Promise.all([
       loadProfiles(supabase),
       loadRolePermissions(supabase),
       loadRoleAreaAccess(supabase),
@@ -758,17 +999,24 @@ export async function loadAuthStoreFromSupabase(): Promise<AuthStoreData> {
       loadTenantAccounts(supabase),
       loadGlobalB2CSettings(supabase),
     ]);
-  const tenantRoles = await loadTenantRoles(supabase, tenantAccounts);
-  return normalizeStore({
-    users,
-    rolePermissions,
-    roleAreaAccess,
-    roleDashboardBlockAccess,
-    tenantAccounts,
-    tenantRoles,
-    globalB2CSettings,
-    storeMeta: { permissionsVersion: CURRENT_PERMISSIONS_VERSION },
-  });
+    const tenantRoles = await loadTenantRoles(supabase, tenantAccounts);
+    return normalizeStore({
+      users,
+      rolePermissions,
+      roleAreaAccess,
+      roleDashboardBlockAccess,
+      tenantAccounts,
+      tenantRoles,
+      globalB2CSettings,
+      storeMeta: { permissionsVersion: CURRENT_PERMISSIONS_VERSION },
+    });
+  } catch (error) {
+    if (!isMissingSupabaseAuthSchemaError(error)) {
+      throw error;
+    }
+    await ensureDefaultAdminAuthFallbackSeeded(supabase);
+    return loadAuthStoreFromSupabaseAuthFallback(supabase);
+  }
 }
 
 export async function saveAuthStoreToSupabase(data: AuthStoreData): Promise<void> {
@@ -908,6 +1156,86 @@ export async function saveAuthStoreToSupabase(data: AuthStoreData): Promise<void
   }
 }
 
+export async function saveAuthUsersToSupabaseAuthFallback(data: AuthStoreData): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  const normalized = normalizeStore(data);
+  const existingUsers = await listAllAuthUsersDetailed(supabase);
+  const existingByEmail = new Map(existingUsers.map((user) => [user.email, user]));
+  const existingByPublicUserId = new Map(
+    existingUsers
+      .filter((user) => typeof user.metadata?.crmPublicUserId === "string")
+      .map((user) => [String(user.metadata?.crmPublicUserId), user]),
+  );
+
+  for (const user of normalized.users) {
+    const metadata = buildSupabaseAuthMetadata({
+      publicUserId: user.id,
+      name: user.name,
+      role: user.role,
+      status: user.status,
+      accountType: normalizeAccountType(user.accountType),
+      language: normalizeLanguage(user.language),
+      phoneNumber: user.phoneNumber ?? null,
+      costCenterId: user.costCenterId ?? null,
+      tenantId: user.tenantId ?? null,
+      corpClientId: user.corpClientId ?? null,
+      tokenLabel: user.tokenLabel ?? null,
+      apiClientId: user.apiClientId ?? null,
+      clientRoleId: user.clientRoleId ?? null,
+    });
+    const existing =
+      (user.authUserId ? existingUsers.find((item) => item.id === user.authUserId) : null) ??
+      existingByPublicUserId.get(user.id) ??
+      existingByEmail.get(user.email.trim().toLowerCase()) ??
+      null;
+
+    if (existing) {
+      const updatePayload: {
+        email?: string;
+        password?: string;
+        email_confirm?: boolean;
+        user_metadata: SupabaseAuthMetadata;
+      } = {
+        email: user.email.trim().toLowerCase(),
+        email_confirm: true,
+        user_metadata: metadata,
+      };
+      if (user.password.trim()) {
+        updatePayload.password = user.password;
+      }
+      const { error } = await supabase.auth.admin.updateUserById(existing.id, updatePayload);
+      if (error) {
+        throw new Error(`Failed to sync auth user ${user.email}: ${error.message}`);
+      }
+      continue;
+    }
+
+    if (!user.password.trim()) {
+      throw new Error(`Cannot create missing Supabase auth user for ${user.email} without password.`);
+    }
+    const { data: created, error } = await supabase.auth.admin.createUser({
+      email: user.email.trim().toLowerCase(),
+      password: user.password,
+      email_confirm: true,
+      user_metadata: metadata,
+    });
+    if (error || !created.user?.id) {
+      throw new Error(`Failed to create auth user ${user.email}: ${error?.message ?? "unknown"}`);
+    }
+  }
+
+  const wantedIds = new Set(normalized.users.map((user) => user.id));
+  const managedToDelete = existingUsers.filter(
+    (user) => user.metadata?.crmManaged === true && !wantedIds.has(String(user.metadata?.crmPublicUserId ?? "")),
+  );
+  for (const user of managedToDelete) {
+    const { error } = await supabase.auth.admin.deleteUser(user.id);
+    if (error) {
+      throw new Error(`Failed to delete auth user ${user.email}: ${error.message}`);
+    }
+  }
+}
+
 export async function loadAuthStore(): Promise<AuthStoreData> {
   if (!isSupabaseConfigured()) {
     if (canUseDevelopmentFallback()) {
@@ -985,18 +1313,53 @@ export async function createAuthBackedUser(input: AuthUserInput): Promise<AuthUs
   }
   const supabase = getSupabaseAdminClient();
   const normalizedEmail = input.email.trim().toLowerCase();
-  let data;
+  const publicUserId = input.publicUserId ?? `user-${crypto.randomUUID()}`;
+  const metadata = buildSupabaseAuthMetadata({
+    publicUserId,
+    name: input.name.trim(),
+    role: input.role,
+    status: input.status,
+    accountType: normalizeAccountType(input.accountType),
+    language: normalizeLanguage(input.language),
+    phoneNumber: input.phoneNumber ?? null,
+    costCenterId: input.costCenterId ?? null,
+    tenantId: input.tenantId ?? null,
+    corpClientId: input.corpClientId ?? null,
+    tokenLabel: input.tokenLabel ?? null,
+    apiClientId: input.apiClientId ?? null,
+    clientRoleId: input.clientRoleId ?? null,
+  });
+  let authUserId: string | null = null;
+  let createdNewAuthUser = false;
   try {
-    ({ data } = await supabase.auth.admin.createUser({
-      email: normalizedEmail,
-      password: input.password,
-      email_confirm: true,
-      user_metadata: { accountType: input.accountType ?? "internal" },
-    }));
+    const existingAuthUser = await findAuthUserByEmail(supabase, normalizedEmail);
+    if (existingAuthUser?.id) {
+      authUserId = existingAuthUser.id;
+      const { error } = await supabase.auth.admin.updateUserById(existingAuthUser.id, {
+        password: input.password,
+        email_confirm: true,
+        user_metadata: metadata,
+      });
+      if (error) {
+        throw error;
+      }
+    } else {
+      const { data, error } = await supabase.auth.admin.createUser({
+        email: normalizedEmail,
+        password: input.password,
+        email_confirm: true,
+        user_metadata: metadata,
+      });
+      if (error || !data.user?.id) {
+        throw error ?? new Error("Failed to create auth user: unknown error");
+      }
+      authUserId = data.user.id;
+      createdNewAuthUser = true;
+    }
   } catch (error) {
     if (canUseDevelopmentFallback()) {
       return {
-        id: input.publicUserId ?? `user-${crypto.randomUUID()}`,
+        id: publicUserId,
         authUserId: null,
         name: input.name.trim(),
         email: normalizedEmail,
@@ -1017,10 +1380,10 @@ export async function createAuthBackedUser(input: AuthUserInput): Promise<AuthUs
     }
     throw error;
   }
-  if (!data.user?.id) {
+  if (!authUserId) {
     if (canUseDevelopmentFallback()) {
       return {
-        id: input.publicUserId ?? `user-${crypto.randomUUID()}`,
+        id: publicUserId,
         authUserId: null,
         name: input.name.trim(),
         email: normalizedEmail,
@@ -1043,8 +1406,8 @@ export async function createAuthBackedUser(input: AuthUserInput): Promise<AuthUs
   }
 
   const user: AuthUser = {
-    id: input.publicUserId ?? `user-${crypto.randomUUID()}`,
-    authUserId: data.user.id,
+    id: publicUserId,
+    authUserId,
     name: input.name.trim(),
     email: normalizedEmail,
     password: "",
@@ -1066,7 +1429,12 @@ export async function createAuthBackedUser(input: AuthUserInput): Promise<AuthUs
     toProfileRows([user])[0],
   );
   if (profileError) {
-    await supabase.auth.admin.deleteUser(data.user.id);
+    if (isMissingSupabaseAuthSchemaMessage(profileError.message)) {
+      return user;
+    }
+    if (createdNewAuthUser) {
+      await supabase.auth.admin.deleteUser(authUserId);
+    }
     if (canUseDevelopmentFallback()) {
       return {
         ...user,
@@ -1110,8 +1478,7 @@ export async function verifyLoginCredentials(email: string, password: string): P
       store.users.find(
         (user) =>
           user.email.trim().toLowerCase() === normalizedEmail &&
-          user.password === password &&
-          user.status === "approved",
+          user.password === password,
       ) ?? null
     );
   }
@@ -1145,8 +1512,7 @@ export async function verifyLoginCredentials(email: string, password: string): P
       store.users.find(
         (user) =>
           user.authUserId === data.user.id &&
-          user.email.trim().toLowerCase() === normalizedEmail &&
-          user.status === "approved",
+          user.email.trim().toLowerCase() === normalizedEmail,
       ) ?? null
     );
   } catch (error) {
@@ -1156,8 +1522,7 @@ export async function verifyLoginCredentials(email: string, password: string): P
         store.users.find(
           (user) =>
             user.email.trim().toLowerCase() === normalizedEmail &&
-            user.password === password &&
-            user.status === "approved",
+            user.password === password,
         ) ?? null
       );
     }

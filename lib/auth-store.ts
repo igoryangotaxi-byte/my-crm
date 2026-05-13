@@ -18,6 +18,7 @@ import {
   createAuthBackedUser as createSupabaseAuthBackedUser,
   deleteAuthBackedUser as deleteSupabaseAuthBackedUser,
   saveAuthStoreToSupabase,
+  saveAuthUsersToSupabaseAuthFallback,
   updateAuthUserPassword as updateSupabaseAuthUserPassword,
   upsertExistingAuthUserProfile as upsertSupabaseExistingAuthUserProfile,
   verifyLoginCredentials as verifySupabaseLoginCredentials,
@@ -395,6 +396,11 @@ export async function saveAuthStore(data: AuthStoreData): Promise<void> {
       await saveAuthStoreToSupabase(data);
       return;
     } catch {
+      try {
+        await saveAuthUsersToSupabaseAuthFallback(data);
+      } catch {
+        // Continue to legacy save for resilience.
+      }
       await saveLegacyAuthStore(data);
       return;
     }
@@ -481,8 +487,7 @@ export async function verifyLoginCredentials(email: string, password: string): P
     store.users.find(
       (user) =>
         user.email.trim().toLowerCase() === normalizedEmail &&
-        user.password === password &&
-        user.status === "approved",
+        user.password === password,
     ) ?? null
   );
 }
