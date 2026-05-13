@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-05-13",
+    title: "CRM auth fallback login hotfix",
+    notes:
+      "bbac22a5 — Fixed the Supabase Auth metadata fallback so default-admin refresh no longer breaks verifier loads. Newly registered pending users and admin-created approved users now persist and authenticate correctly in production.",
+  },
+  {
+    date: "2026-05-13",
     title: "CRM registration moved onto Supabase Auth fallback",
     notes:
       "5755d51f — Production auth no longer waits on missing crm_* Supabase tables or exhausted KV requests for the core CRM user flow. New registrations and Main CRM user creation now persist through Supabase Auth metadata, login still checks Supabase credentials, and platform access remains blocked until an admin approves the user.",
