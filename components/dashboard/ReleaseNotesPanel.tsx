@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-05-13",
+    title: "Mind Map boards + CRM auth rollout safeguards",
+    notes:
+      "d2cb27b1 — Added the Notes Mind Map workspace with board CRUD, attachments, link previews, and React Flow editing. Also shipped the new Main CRM Users inline create flow and Supabase auth migration groundwork, while keeping production safe with a backward-compatible KV fallback until Supabase runtime env/schema are fully ready.",
+  },
+  {
     date: "2026-05-10",
     title: "Notes Mind Map (React Flow whiteboards)",
     notes:
