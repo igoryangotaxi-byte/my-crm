@@ -13,6 +13,16 @@ import {
   defaultRoleDashboardBlockAccess,
   defaultRolePermissions,
 } from "@/types/auth";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import {
+  createAuthBackedUser as createSupabaseAuthBackedUser,
+  deleteAuthBackedUser as deleteSupabaseAuthBackedUser,
+  saveAuthStoreToSupabase,
+  updateAuthUserPassword as updateSupabaseAuthUserPassword,
+  upsertExistingAuthUserProfile as upsertSupabaseExistingAuthUserProfile,
+  verifyLoginCredentials as verifySupabaseLoginCredentials,
+  loadAuthStore as loadSupabaseAuthStore,
+} from "@/lib/supabase-auth-store";
 
 const AUTH_STORE_KEY = "appli:auth:store:v1";
 const DEFAULT_ADMIN_EMAIL = "ig-kuznetsov@yandex-team.ru";
@@ -69,10 +79,8 @@ function ensureDefaultAdmin(users: AuthUser[]): AuthUser[] {
   ];
 }
 
-/** v2 first migration; v3 fixes stores that already had meta v2 but User.orders/preOrders stayed false. v6 drops legacy ZHAK / Star Taxi Point client cabinets from KV. */
 const CURRENT_PERMISSIONS_VERSION = 7;
 
-/** Yango corp_client_id values for one-off cabinets removed from Clients Cabinets (Access management). */
 const LEGACY_REMOVED_CLIENT_CABINET_CORP_IDS = new Set([
   "8234b0f928a348e19cf8ccf2df6d4fd7",
   "1151f896bd8248ed977d4abcf1df4929",
@@ -259,7 +267,6 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
     ...base.rolePermissions.User,
     ...(data.rolePermissions?.User ?? {}),
   };
-  /** Older KV had User.orders/preOrders false; v3 re-applies after some stores hit meta v2 without fixing User. */
   const userPerms =
     storedVersion < CURRENT_PERMISSIONS_VERSION
       ? {
@@ -329,7 +336,7 @@ function canUseKv() {
   return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
 }
 
-export async function loadAuthStore(): Promise<AuthStoreData> {
+async function loadLegacyAuthStore(): Promise<AuthStoreData> {
   if (canUseKv()) {
     try {
       const raw = await kv.get<AuthStoreData>(AUTH_STORE_KEY);
@@ -352,7 +359,7 @@ export async function loadAuthStore(): Promise<AuthStoreData> {
   return fallbackMemoryStore;
 }
 
-export async function saveAuthStore(data: AuthStoreData): Promise<void> {
+async function saveLegacyAuthStore(data: AuthStoreData): Promise<void> {
   const normalized = normalizeStore(data);
 
   if (canUseKv()) {
@@ -365,4 +372,127 @@ export async function saveAuthStore(data: AuthStoreData): Promise<void> {
   }
 
   fallbackMemoryStore = normalized;
+}
+
+function shouldTrySupabase() {
+  return isSupabaseConfigured();
+}
+
+export async function loadAuthStore(): Promise<AuthStoreData> {
+  if (shouldTrySupabase()) {
+    try {
+      return await loadSupabaseAuthStore();
+    } catch {
+      return loadLegacyAuthStore();
+    }
+  }
+  return loadLegacyAuthStore();
+}
+
+export async function saveAuthStore(data: AuthStoreData): Promise<void> {
+  if (shouldTrySupabase()) {
+    try {
+      await saveAuthStoreToSupabase(data);
+      return;
+    } catch {
+      await saveLegacyAuthStore(data);
+      return;
+    }
+  }
+  await saveLegacyAuthStore(data);
+}
+
+export async function findUserByPublicId(userId: string): Promise<AuthUser | null> {
+  const store = await loadAuthStore();
+  return store.users.find((user) => user.id === userId) ?? null;
+}
+
+export async function findUserByEmail(email: string): Promise<AuthUser | null> {
+  const normalizedEmail = email.trim().toLowerCase();
+  const store = await loadAuthStore();
+  return store.users.find((user) => user.email.trim().toLowerCase() === normalizedEmail) ?? null;
+}
+
+export async function createAuthBackedUser(
+  input: Parameters<typeof createSupabaseAuthBackedUser>[0],
+): Promise<AuthUser> {
+  if (shouldTrySupabase()) {
+    try {
+      return await createSupabaseAuthBackedUser(input);
+    } catch {
+      // fall through to legacy user creation
+    }
+  }
+
+  return {
+    id: input.publicUserId ?? `user-${crypto.randomUUID()}`,
+    authUserId: null,
+    name: input.name.trim(),
+    email: input.email.trim().toLowerCase(),
+    password: input.password,
+    role: input.role,
+    status: input.status,
+    createdAt: input.createdAt ?? new Date().toISOString(),
+    accountType: normalizeAccountType(input.accountType),
+    phoneNumber: input.phoneNumber ?? null,
+    costCenterId: input.costCenterId ?? null,
+    tenantId: input.tenantId ?? null,
+    corpClientId: input.corpClientId ?? null,
+    tokenLabel: input.tokenLabel ?? null,
+    apiClientId: input.apiClientId ?? null,
+    clientRoleId: input.clientRoleId ?? null,
+    language: normalizeLanguage(input.language),
+  };
+}
+
+export async function updateAuthUserPassword(authUserId: string, password: string): Promise<void> {
+  if (shouldTrySupabase() && authUserId) {
+    try {
+      await updateSupabaseAuthUserPassword(authUserId, password);
+    } catch {
+      // Password will continue to persist via legacy store save path.
+    }
+  }
+}
+
+export async function deleteAuthBackedUser(publicUserId: string): Promise<void> {
+  if (shouldTrySupabase()) {
+    try {
+      await deleteSupabaseAuthBackedUser(publicUserId);
+    } catch {
+      // Legacy delete path is handled by saveAuthStore(users.filter(...)).
+    }
+  }
+}
+
+export async function verifyLoginCredentials(email: string, password: string): Promise<AuthUser | null> {
+  if (shouldTrySupabase()) {
+    try {
+      const user = await verifySupabaseLoginCredentials(email, password);
+      if (user) return user;
+    } catch {
+      // Fall through to legacy password validation.
+    }
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const store = await loadLegacyAuthStore();
+  return (
+    store.users.find(
+      (user) =>
+        user.email.trim().toLowerCase() === normalizedEmail &&
+        user.password === password &&
+        user.status === "approved",
+    ) ?? null
+  );
+}
+
+export async function upsertExistingAuthUserProfile(input: AuthUser): Promise<void> {
+  if (shouldTrySupabase() && input.authUserId) {
+    try {
+      await upsertSupabaseExistingAuthUserProfile(input);
+    } catch {
+      // Legacy persistence continues through saveAuthStore().
+    }
+  }
 }

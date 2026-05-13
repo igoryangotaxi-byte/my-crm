@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl, { LngLatBounds } from "maplibre-gl";
-import { HeatMapLegend } from "@/components/b2c-heatmap/HeatMapLegend";
 
 const DEFAULT_STYLE =
   process.env.NEXT_PUBLIC_MAPLIBRE_STYLE_URL?.trim() ||
@@ -243,7 +242,6 @@ export function DemandHeatMap({ points, branches = [], cameraFitKey, autoFitOnEm
   return (
     <div className="relative h-full w-full min-h-0">
       <div ref={containerRef} className="h-full w-full min-h-0" />
-      <HeatMapLegend />
     </div>
   );
 }

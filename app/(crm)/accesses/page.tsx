@@ -103,6 +103,7 @@ export default function AccessesPage() {
     updateUserStatus,
     updateUserRole,
     deleteUser,
+    createInternalUser,
     deleteTenantAccount,
     toggleRolePageAccess,
     toggleRoleAreaAccess,
@@ -133,6 +134,14 @@ export default function AccessesPage() {
   const [newUserDrafts, setNewUserDrafts] = useState<
     Record<string, { name: string; email: string; password: string; roleId: string }>
   >({});
+  const [internalUserDraft, setInternalUserDraft] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "User" as AppRole,
+  });
+  const [mainUsersMessage, setMainUsersMessage] = useState<string | null>(null);
+  const [creatingInternalUser, setCreatingInternalUser] = useState(false);
   const [selectedSectionKey, setSelectedSectionKey] = useState<string>(
     accessSections[0]?.key ?? "platform",
   );
@@ -1070,6 +1079,98 @@ export default function AccessesPage() {
           <AccessBlockChevron />
         </summary>
         <div className="border-t border-border px-5 pb-5 pt-3">
+        {isAdmin ? (
+          <div className="mb-4 rounded-2xl border border-border bg-white/70 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Create approved CRM user</p>
+                <p className="text-xs text-slate-500">
+                  New internal users are created in Supabase Auth and become active immediately.
+                </p>
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-4">
+              <input
+                type="text"
+                value={internalUserDraft.name}
+                onChange={(event) => {
+                  setInternalUserDraft((prev) => ({ ...prev, name: event.target.value }));
+                  setMainUsersMessage(null);
+                }}
+                placeholder="Full name"
+                className="crm-input h-10 px-3 text-sm"
+              />
+              <input
+                type="email"
+                value={internalUserDraft.email}
+                onChange={(event) => {
+                  setInternalUserDraft((prev) => ({ ...prev, email: event.target.value }));
+                  setMainUsersMessage(null);
+                }}
+                placeholder="name@company.com"
+                className="crm-input h-10 px-3 text-sm"
+              />
+              <input
+                type="password"
+                value={internalUserDraft.password}
+                onChange={(event) => {
+                  setInternalUserDraft((prev) => ({ ...prev, password: event.target.value }));
+                  setMainUsersMessage(null);
+                }}
+                placeholder="Password"
+                className="crm-input h-10 px-3 text-sm"
+              />
+              <select
+                value={internalUserDraft.role}
+                onChange={(event) => {
+                  setInternalUserDraft((prev) => ({
+                    ...prev,
+                    role: event.target.value as AppRole,
+                  }));
+                  setMainUsersMessage(null);
+                }}
+                className="crm-input h-10 px-3 text-sm"
+              >
+                {roleItems.map((role) => (
+                  <option key={role} value={role}>
+                    {role}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled={creatingInternalUser}
+                onClick={async () => {
+                  setCreatingInternalUser(true);
+                  try {
+                    const result = await createInternalUser(internalUserDraft);
+                    setMainUsersMessage(
+                      result.message ?? (result.ok ? "CRM user created." : "Failed to create CRM user."),
+                    );
+                    if (result.ok) {
+                      setInternalUserDraft({
+                        name: "",
+                        email: "",
+                        password: "",
+                        role: "User",
+                      });
+                    }
+                  } finally {
+                    setCreatingInternalUser(false);
+                  }
+                }}
+                className="crm-button-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50"
+              >
+                {creatingInternalUser ? "Creating..." : "Create user"}
+              </button>
+              {mainUsersMessage ? (
+                <p className="text-sm text-slate-600">{mainUsersMessage}</p>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
         <div className="overflow-x-auto">
           <table className="min-w-full">
             <thead className="bg-white/60">

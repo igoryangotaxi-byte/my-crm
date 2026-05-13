@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-05-10",
+    title: "Notes Mind Map (React Flow whiteboards)",
+    notes:
+      "Mind Map subsection under Notes at /notes/mind-map: Supabase table mind_maps + optional Storage bucket mind-map-files, APIs for CRUD/upload/signed previews, React Flow canvas with colored blocks, sticky notes, link nodes with in-app iframe preview + open-in-tab, file attachments with image/PDF upload, autosave and EN/HE copy.",
+  },
+  {
     date: "2026-05-08",
     title: "Heat Map demand UX + branches CSV, Gett/API/auth rollup release",
     notes:

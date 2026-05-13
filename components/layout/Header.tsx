@@ -75,6 +75,10 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
     title: "Access managment",
     subtitle: "Manage role permissions and registration approvals",
   },
+  "/notes/mind-map": {
+    title: "Mind Map",
+    subtitle: "Brainstorm boards with blocks, stickers, links, and files",
+  },
   "/notes": {
     title: "Notes",
     subtitle: "Token diagnostics and release notes",
@@ -109,6 +113,10 @@ export function Header() {
       "/client/financial-center": { title: "מרכז עסקי", subtitle: "ניתוח הוצאות לפורטל הזה בלבד" },
       "/client/employees": { title: "העובדים שלי", subtitle: "חברי צוות, פעילות נסיעות והגבלות" },
       "/accesses": { title: "ניהול הרשאות", subtitle: "ניהול הרשאות תפקיד ואישורי הרשמה" },
+      "/notes/mind-map": {
+        title: "מפת מוח",
+        subtitle: "לוחות סיעור מוחין עם בלוקים, מדבקות, קישורים וקבצים",
+      },
       "/notes": { title: "הערות", subtitle: "דיאגנוסטיקת טוקנים ורשימות שחרור" },
     },
   };
@@ -173,12 +181,7 @@ export function Header() {
         </div>
       </div>
 
-      <div className="mx-4 hidden w-full max-w-2xl items-center gap-3 lg:flex">
-        <input
-          type="search"
-          placeholder={tLayout("searchPlaceholder")}
-          className="crm-input h-10 w-full px-3 text-sm"
-        />
+      <div className="mx-4 hidden items-center gap-3 lg:flex">
         <div className="inline-flex rounded-full border border-white/70 bg-white/75 p-1 shadow-[0_8px_18px_rgba(15,23,42,0.14)]">
           {areaToggleItems.map((item) => {
             const allowed = canAccessArea(item.key);

@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { loadAuthStore, saveAuthStore } from "@/lib/auth-store";
+import {
+  createAuthBackedUser,
+  loadAuthStore,
+  saveAuthStore,
+  updateAuthUserPassword,
+  verifyLoginCredentials,
+} from "@/lib/auth-store";
 import {
   discoverYangoTenantDefaultCostCenterId,
   resolveDefaultCostCenterIdForYangoClient,
@@ -11,6 +17,7 @@ import { createSessionToken, SESSION_COOKIE_NAME } from "@/lib/server-session";
 import {
   type AuthApiActionRequest,
   type AuthStoreData,
+  type AuthUser,
   type ClientPortalPageKey,
   defaultClientPortalPermissions,
 } from "@/types/auth";
@@ -64,6 +71,14 @@ function clearSessionCookie(response: NextResponse) {
   });
 }
 
+function authStoreUnavailableResponse(error: unknown) {
+  const message =
+    error instanceof Error
+      ? `Supabase auth/profile store is unavailable: ${error.message}`
+      : "Supabase auth/profile store is unavailable.";
+  return NextResponse.json<AuthActionResponse>({ ok: false, message }, { status: 503 });
+}
+
 async function resolveTenantCostCenterId(
   tokenLabel: string,
   clientId: string,
@@ -94,6 +109,68 @@ function sanitizeEmailLocalPart(input: string): string {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 40);
+}
+
+async function createOrUpdateAuthUser(
+  existingUser: AuthUser | undefined,
+  input: {
+    name: string;
+    email: string;
+    password: string;
+    role: AuthUser["role"];
+    status: AuthUser["status"];
+    accountType: AuthUser["accountType"];
+    tenantId?: string | null;
+    corpClientId?: string | null;
+    tokenLabel?: string | null;
+    apiClientId?: string | null;
+    clientRoleId?: string | null;
+    phoneNumber?: string | null;
+    costCenterId?: string | null;
+    language?: AuthUser["language"];
+  },
+) {
+  if (existingUser) {
+    if (input.password.trim()) {
+      if (existingUser.authUserId) {
+        await updateAuthUserPassword(existingUser.authUserId, input.password);
+      }
+    }
+    return {
+      ...existingUser,
+      name: input.name.trim() || existingUser.name,
+      email: input.email.trim().toLowerCase(),
+      password: existingUser.authUserId ? "" : input.password || existingUser.password,
+      role: input.role,
+      status: input.status,
+      accountType: input.accountType,
+      tenantId: input.tenantId ?? null,
+      corpClientId: input.corpClientId ?? null,
+      tokenLabel: input.tokenLabel ?? null,
+      apiClientId: input.apiClientId ?? null,
+      clientRoleId: input.clientRoleId ?? null,
+      phoneNumber: input.phoneNumber ?? existingUser.phoneNumber ?? null,
+      costCenterId: input.costCenterId ?? existingUser.costCenterId ?? null,
+      language: input.language ?? existingUser.language ?? "en",
+    } satisfies AuthUser;
+  }
+
+  return createAuthBackedUser({
+    name: input.name.trim(),
+    email: input.email.trim().toLowerCase(),
+    password: input.password,
+    role: input.role,
+    status: input.status,
+    accountType: input.accountType,
+    tenantId: input.tenantId ?? null,
+    corpClientId: input.corpClientId ?? null,
+    tokenLabel: input.tokenLabel ?? null,
+    apiClientId: input.apiClientId ?? null,
+    clientRoleId: input.clientRoleId ?? null,
+    phoneNumber: input.phoneNumber ?? null,
+    costCenterId: input.costCenterId ?? null,
+    language: input.language ?? "en",
+  });
 }
 
 async function syncTenantEmployeesFromYango(params: {
@@ -149,23 +226,23 @@ async function syncTenantEmployeesFromYango(params: {
     }
     existingEmails.add(candidateEmail.toLowerCase());
     existingPhones.add(phoneDigits);
-    users.push({
-      id: `user-${crypto.randomUUID()}`,
+    const nextUser = await createAuthBackedUser({
       name: (remoteUser.fullName ?? "").trim() || phoneRaw || "Employee",
       email: candidateEmail,
-      phoneNumber: phoneRaw || null,
-      costCenterId: (remoteUser.costCenterId ?? "").trim() || null,
       password: `auto-${crypto.randomUUID()}`,
       role: "User",
       status: "approved",
-      createdAt: new Date().toISOString(),
       accountType: "client",
+      phoneNumber: phoneRaw || null,
+      costCenterId: (remoteUser.costCenterId ?? "").trim() || null,
       tenantId: tenant.id,
       corpClientId: tenant.corpClientId,
       tokenLabel: tenant.tokenLabel,
       apiClientId: tenant.apiClientId,
       clientRoleId: "employee",
+      language: "en",
     });
+    users.push(nextUser);
     if (phoneRaw && remoteUser.userId) {
       upsertMappedUserId({
         tokenLabel: tenant.tokenLabel,
@@ -218,14 +295,24 @@ async function syncTenantEmployeesFromYango(params: {
 }
 
 export async function GET(request: Request) {
-  const user = await getRequestUser(request);
+  let user: Awaited<ReturnType<typeof getRequestUser>>;
+  try {
+    user = await getRequestUser(request);
+  } catch (error) {
+    return authStoreUnavailableResponse(error);
+  }
   if (!user) {
     return NextResponse.json<AuthActionResponse>(
       { ok: false, message: "Unauthorized" },
       { status: 401 },
     );
   }
-  const data = await loadAuthStore();
+  let data: AuthStoreData;
+  try {
+    data = await loadAuthStore();
+  } catch (error) {
+    return authStoreUnavailableResponse(error);
+  }
   return NextResponse.json(sanitizeStore(data));
 }
 
@@ -238,8 +325,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const store = await loadAuthStore();
-  const sessionUser = await getRequestUser(request);
+  let store: AuthStoreData;
+  let sessionUser: Awaited<ReturnType<typeof getRequestUser>>;
+  try {
+    store = await loadAuthStore();
+    sessionUser = await getRequestUser(request);
+  } catch (error) {
+    return authStoreUnavailableResponse(error);
+  }
 
   switch (payload.action) {
     case "register": {
@@ -252,16 +345,15 @@ export async function POST(request: Request) {
         });
       }
 
-      const nextUser = {
-        id: `user-${crypto.randomUUID()}`,
+      const nextUser = await createAuthBackedUser({
         name: payload.name.trim(),
         email,
         password: payload.password,
-        role: "User" as const,
-        status: "pending" as const,
-        createdAt: new Date().toISOString(),
-        language: "en" as const,
-      };
+        role: "User",
+        status: "pending",
+        accountType: "internal",
+        language: "en",
+      });
       const nextStore: AuthStoreData = {
         ...store,
         users: [...store.users, nextUser],
@@ -273,10 +365,51 @@ export async function POST(request: Request) {
         data: sanitizeStore(nextStore),
       });
     }
-    case "login": {
+    case "createInternalUser": {
+      if (!isInternalAdmin(sessionUser)) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Forbidden" },
+          { status: 403 },
+        );
+      }
       const email = payload.email.trim().toLowerCase();
-      const user = store.users.find((item) => item.email.toLowerCase() === email);
-      if (!user || user.password !== payload.password) {
+      const name = payload.name.trim();
+      const password = payload.password.trim();
+      if (!name || !email || !password) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Name, email and password are required." },
+          { status: 400 },
+        );
+      }
+      if (store.users.some((user) => user.email.toLowerCase() === email)) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "User with this email already exists" },
+          { status: 400 },
+        );
+      }
+      const nextUser = await createAuthBackedUser({
+        name,
+        email,
+        password,
+        role: payload.role,
+        status: "approved",
+        accountType: "internal",
+        language: "en",
+      });
+      const nextStore: AuthStoreData = {
+        ...store,
+        users: [...store.users, nextUser],
+      };
+      await saveAuthStore(nextStore);
+      return NextResponse.json<AuthActionResponse>({
+        ok: true,
+        message: "Internal user created.",
+        data: sanitizeStore(nextStore),
+      });
+    }
+    case "login": {
+      const user = await verifyLoginCredentials(payload.email, payload.password);
+      if (!user) {
         return NextResponse.json<AuthActionResponse>({
           ok: false,
           message: "Invalid email or password",
@@ -521,42 +654,23 @@ export async function POST(request: Request) {
         ];
       }
       const exists = store.users.find((user) => user.email.toLowerCase() === primaryAdminEmail);
+      const nextPrimaryAdmin = await createOrUpdateAuthUser(exists, {
+        name: payload.primaryAdminName.trim() || exists?.name || "Client Admin",
+        email: primaryAdminEmail,
+        password: payload.primaryAdminPassword,
+        role: "User",
+        status: "approved",
+        accountType: "client",
+        tenantId,
+        corpClientId,
+        tokenLabel,
+        apiClientId,
+        clientRoleId: "client-admin",
+        language: exists?.language ?? "en",
+      });
       const users: AuthStoreData["users"] = exists
-        ? store.users.map((user) =>
-            user.id === exists.id
-              ? {
-                  ...user,
-                  name: payload.primaryAdminName.trim() || user.name,
-                  password: payload.primaryAdminPassword || user.password,
-                  status: "approved",
-                  accountType: "client",
-                  tenantId,
-                  corpClientId,
-                  tokenLabel,
-                  apiClientId,
-                  clientRoleId: "client-admin",
-                }
-              : user,
-          )
-        : [
-            ...store.users,
-            {
-              id: `user-${crypto.randomUUID()}`,
-              name: payload.primaryAdminName.trim() || "Client Admin",
-              email: primaryAdminEmail,
-              password: payload.primaryAdminPassword,
-              role: "User",
-              status: "approved",
-              createdAt: new Date().toISOString(),
-              accountType: "client",
-              tenantId,
-              corpClientId,
-              tokenLabel,
-              apiClientId,
-              clientRoleId: "client-admin",
-              language: "en",
-            },
-          ];
+        ? store.users.map((user) => (user.id === exists.id ? nextPrimaryAdmin : user))
+        : [...store.users, nextPrimaryAdmin];
       const synced = await syncTenantEmployeesFromYango({
         store: { ...store, users, tenantAccounts, tenantRoles },
         tenant: {
@@ -816,46 +930,25 @@ export async function POST(request: Request) {
           );
         }
       }
+      const nextEmployeeUser = await createOrUpdateAuthUser(existingByEmail, {
+        name: payload.name.trim() || existingByEmail?.name || "Employee",
+        email,
+        password: payload.password,
+        role: "User",
+        status: "approved",
+        accountType: "client",
+        tenantId: tenant.id,
+        corpClientId: tenant.corpClientId,
+        tokenLabel: tenant.tokenLabel,
+        apiClientId: tenant.apiClientId,
+        clientRoleId: payload.clientRoleId,
+        phoneNumber: phoneNumber || null,
+        costCenterId: costCenterId || null,
+        language: existingByEmail?.language ?? "en",
+      });
       const nextUsers: AuthStoreData["users"] = existingByEmail
-        ? workingStore.users.map((user) =>
-            user.id === existingByEmail.id
-              ? {
-                  ...user,
-                  name: payload.name.trim() || user.name || "Employee",
-                  phoneNumber: phoneNumber || null,
-                  costCenterId: costCenterId || null,
-                  password: payload.password,
-                  status: "approved" as const,
-                  accountType: "client" as const,
-                  tenantId: tenant.id,
-                  corpClientId: tenant.corpClientId,
-                  tokenLabel: tenant.tokenLabel,
-                  apiClientId: tenant.apiClientId,
-                  clientRoleId: payload.clientRoleId,
-                }
-              : user,
-          )
-        : [
-            ...workingStore.users,
-            {
-              id: `user-${crypto.randomUUID()}`,
-              name: payload.name.trim() || "Employee",
-              email,
-              phoneNumber: phoneNumber || null,
-              costCenterId: costCenterId || null,
-              password: payload.password,
-              role: "User" as const,
-              status: "approved" as const,
-              createdAt: new Date().toISOString(),
-              accountType: "client" as const,
-              tenantId: tenant.id,
-              corpClientId: tenant.corpClientId,
-              tokenLabel: tenant.tokenLabel,
-              apiClientId: tenant.apiClientId,
-              clientRoleId: payload.clientRoleId,
-              language: "en",
-            },
-          ];
+        ? workingStore.users.map((user) => (user.id === existingByEmail.id ? nextEmployeeUser : user))
+        : [...workingStore.users, nextEmployeeUser];
       let nextStore: AuthStoreData = {
         ...workingStore,
         users: nextUsers,

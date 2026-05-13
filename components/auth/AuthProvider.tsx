@@ -45,6 +45,10 @@ type RegisterInput = {
   password: string;
 };
 
+type CreateInternalUserInput = RegisterInput & {
+  role: AppRole;
+};
+
 type AuthContextValue = {
   loading: boolean;
   users: AuthUser[];
@@ -57,6 +61,7 @@ type AuthContextValue = {
   roleDashboardBlockAccess: RoleDashboardBlockAccess;
   login: (email: string, password: string) => Promise<AuthResult>;
   register: (input: RegisterInput) => Promise<AuthResult>;
+  createInternalUser: (input: CreateInternalUserInput) => Promise<AuthResult>;
   logout: () => void;
   updateUserStatus: (userId: string, status: UserStatus) => Promise<void>;
   updateUserRole: (userId: string, role: AppRole) => Promise<void>;
@@ -239,6 +244,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchState = useCallback(async () => {
     const response = await fetch("/api/auth", { cache: "no-store" });
+    if (response.status === 401) {
+      setSessionUserId(null);
+      return;
+    }
     if (!response.ok) {
       throw new Error(`Failed to load auth state: HTTP ${response.status}`);
     }
@@ -271,7 +280,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const pollId = window.setInterval(() => {
-      void fetchState();
+      void fetchState().catch(() => {
+        // Ignore transient polling failures; interactive actions surface their own errors.
+      });
     }, 10000);
 
     return () => {
@@ -353,6 +364,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ok: result.ok,
         message:
           result.message ?? (result.ok ? "Registration submitted" : "Registration failed"),
+      };
+    },
+    [runAction],
+  );
+
+  const createInternalUser = useCallback(
+    async ({ name, email, password, role }: CreateInternalUserInput): Promise<AuthResult> => {
+      const result = await runAction({
+        action: "createInternalUser",
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+        role,
+      });
+      return {
+        ok: result.ok,
+        message:
+          result.message ?? (result.ok ? "Internal user created" : "Failed to create user"),
       };
     },
     [runAction],
@@ -484,6 +513,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       roleDashboardBlockAccess,
       login,
       register,
+      createInternalUser,
       logout,
       updateUserStatus,
       updateUserRole,
@@ -513,6 +543,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       roleDashboardBlockAccess,
       login,
       register,
+      createInternalUser,
       logout,
       updateUserStatus,
       updateUserRole,

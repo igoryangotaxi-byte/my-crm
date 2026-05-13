@@ -32,6 +32,7 @@
     "import:b2c-heatmap:csv": "node scripts/import-b2c-heatmap-csv-to-supabase.js",
     "import:corp-client-map:csv": "node scripts/import-corp-client-map-to-supabase.js",
     "import:request-rides-user-map:csv": "node scripts/import-request-rides-user-map.js",
+    "migrate:auth:kv-to-supabase": "tsx scripts/migrate-auth-kv-to-supabase.ts",
     "env:pull:production": "vercel env pull .env.local --environment production --yes",
     "env:pull:preview": "vercel env pull .env.local --environment preview --yes",
     "env:pull:development": "vercel env pull .env.local --environment development --yes",
@@ -43,6 +44,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.104.0",
     "@vercel/kv": "^3.0.0",
+    "@xyflow/react": "^12.10.2",
     "csv-parse": "^6.2.1",
     "dotenv": "^17.4.2",
     "fast-xml-parser": "^5.7.1",

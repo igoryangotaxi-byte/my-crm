@@ -389,6 +389,13 @@ html[dir="rtl"] .rr-dropdown-option {
   animation-delay: 0.63s;
 }
 
+/* Skip entrance animation — opacity:0 during delay lets clicks fall through (see Mind Map actions). */
+.make-shell-main .crm-page > .crm-instant-visible {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
 /* Single root when a page omits .crm-page */
 .make-shell-main > *:not(.crm-page) {
   animation: make-slide-in 0.58s var(--ease-ui) backwards;

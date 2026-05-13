@@ -1,4 +1,5 @@
 import { ReleaseNotesPanel } from "@/components/dashboard/ReleaseNotesPanel";
+import { NotesPageIntroCards } from "@/components/notes/NotesPageIntroCards";
 import { TokenOnboardingPanel } from "@/components/notes/TokenOnboardingPanel";
 import { TokenDiagnosticsPanel } from "@/components/notes/TokenDiagnosticsPanel";
 import { UnmappedCorpClientsPanel } from "@/components/notes/UnmappedCorpClientsPanel";
@@ -13,6 +14,7 @@ export default async function NotesPage() {
 
   return (
     <section className="crm-page">
+      <NotesPageIntroCards />
       <TokenOnboardingPanel />
       <UnmappedCorpClientsPanel rows={unmappedCorpClients} />
       <TokenDiagnosticsPanel diagnostics={diagnostics} />

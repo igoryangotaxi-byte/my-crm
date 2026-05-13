@@ -1,5 +1,10 @@
 import { revalidateTag } from "next/cache";
-import { loadAuthStore, saveAuthStore } from "@/lib/auth-store";
+import {
+  createAuthBackedUser,
+  loadAuthStore,
+  saveAuthStore,
+  updateAuthUserPassword,
+} from "@/lib/auth-store";
 import { relabelGoogleVendorForDisplay } from "@/lib/public-error-message";
 import { upsertMappedUserId } from "@/lib/request-rides-user-map";
 import { requireAdminUser } from "@/lib/server-auth";
@@ -7,7 +12,7 @@ import { resolveCostCenterWithFullYangoDiscovery } from "@/lib/tenant-yango-boot
 import { getRequestRideApiClients, listYangoClientUsers, listYangoCostCenters } from "@/lib/yango-api";
 import { validateYangoApiToken } from "@/lib/yango-token-onboarding";
 import { upsertYangoTokenRegistryEntry } from "@/lib/yango-token-registry";
-import type { AuthStoreData } from "@/types/auth";
+import type { AuthStoreData, AuthUser } from "@/types/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +38,61 @@ function sanitizeEmailLocalPart(input: string): string {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 40);
+}
+
+async function createOrUpdateClientUser(
+  existingUser: AuthUser | undefined,
+  input: {
+    name: string;
+    email: string;
+    password: string;
+    tenantId: string;
+    corpClientId: string;
+    tokenLabel: string;
+    apiClientId: string;
+    clientRoleId: string;
+    phoneNumber?: string | null;
+    costCenterId?: string | null;
+  },
+) {
+  if (existingUser) {
+    if (existingUser.authUserId) {
+      await updateAuthUserPassword(existingUser.authUserId, input.password);
+    }
+    return {
+      ...existingUser,
+      name: input.name || existingUser.name,
+      email: input.email.trim().toLowerCase(),
+      password: existingUser.authUserId ? "" : input.password || existingUser.password,
+      status: "approved" as const,
+      accountType: "client" as const,
+      tenantId: input.tenantId,
+      corpClientId: input.corpClientId,
+      tokenLabel: input.tokenLabel,
+      apiClientId: input.apiClientId,
+      clientRoleId: input.clientRoleId,
+      phoneNumber: input.phoneNumber ?? existingUser.phoneNumber ?? null,
+      costCenterId: input.costCenterId ?? existingUser.costCenterId ?? null,
+      language: existingUser.language ?? "en",
+    } satisfies AuthUser;
+  }
+
+  return createAuthBackedUser({
+    name: input.name,
+    email: input.email.trim().toLowerCase(),
+    password: input.password,
+    role: "User",
+    status: "approved",
+    accountType: "client",
+    tenantId: input.tenantId,
+    corpClientId: input.corpClientId,
+    tokenLabel: input.tokenLabel,
+    apiClientId: input.apiClientId,
+    clientRoleId: input.clientRoleId,
+    phoneNumber: input.phoneNumber ?? null,
+    costCenterId: input.costCenterId ?? null,
+    language: "en",
+  });
 }
 
 async function upsertTenantAdmin(input: {
@@ -110,41 +170,19 @@ async function upsertTenantAdmin(input: {
 
   const normalizedAdminEmail = input.adminEmail.toLowerCase();
   const existing = store.users.find((user) => user.email.toLowerCase() === normalizedAdminEmail);
+  const tenantAdminUser = await createOrUpdateClientUser(existing, {
+    name: input.adminName || existing?.name || "Client Admin",
+    email: normalizedAdminEmail,
+    password: input.adminPassword,
+    tenantId,
+    corpClientId: input.corpClientId,
+    tokenLabel: input.tokenLabel,
+    apiClientId: input.apiClientId,
+    clientRoleId: "client-admin",
+  });
   const users: AuthStoreData["users"] = existing
-    ? store.users.map((user) =>
-        user.id === existing.id
-          ? {
-              ...user,
-              name: input.adminName || user.name,
-              password: input.adminPassword || user.password,
-              status: "approved",
-              accountType: "client",
-              tenantId,
-              corpClientId: input.corpClientId,
-              tokenLabel: input.tokenLabel,
-              apiClientId: input.apiClientId,
-              clientRoleId: "client-admin",
-            }
-          : user,
-      )
-    : [
-        ...store.users,
-        {
-          id: `user-${crypto.randomUUID()}`,
-          name: input.adminName || "Client Admin",
-          email: normalizedAdminEmail,
-          password: input.adminPassword,
-          role: "User",
-          status: "approved",
-          createdAt: new Date().toISOString(),
-          accountType: "client",
-          tenantId,
-          corpClientId: input.corpClientId,
-          tokenLabel: input.tokenLabel,
-          apiClientId: input.apiClientId,
-          clientRoleId: "client-admin",
-        },
-      ];
+    ? store.users.map((user) => (user.id === existing.id ? tenantAdminUser : user))
+    : [...store.users, tenantAdminUser];
 
   const existingEmails = new Set(users.map((user) => user.email.toLowerCase()));
   const existingPhonesInTenant = new Set(
@@ -199,23 +237,20 @@ async function upsertTenantAdmin(input: {
     const generatedPassword = `auto-${crypto.randomUUID()}`;
     const employeeCostCenterId =
       (yangoUser.costCenterId ?? "").trim() || discoveredDefaultCostCenterId || "";
-    users.push({
-      id: `user-${crypto.randomUUID()}`,
-      name: (yangoUser.fullName ?? "").trim() || phoneRaw || "Employee",
-      email: candidateEmail,
-      phoneNumber: phoneRaw || null,
-      costCenterId: employeeCostCenterId || null,
-      password: generatedPassword,
-      role: "User",
-      status: "approved",
-      createdAt: new Date().toISOString(),
-      accountType: "client",
-      tenantId,
-      corpClientId: input.corpClientId,
-      tokenLabel: input.tokenLabel,
-      apiClientId: input.apiClientId,
-      clientRoleId: "employee",
-    });
+    users.push(
+      await createOrUpdateClientUser(undefined, {
+        name: (yangoUser.fullName ?? "").trim() || phoneRaw || "Employee",
+        email: candidateEmail,
+        password: generatedPassword,
+        tenantId,
+        corpClientId: input.corpClientId,
+        tokenLabel: input.tokenLabel,
+        apiClientId: input.apiClientId,
+        clientRoleId: "employee",
+        phoneNumber: phoneRaw || null,
+        costCenterId: employeeCostCenterId || null,
+      }),
+    );
     if (phoneRaw && yangoUser.userId) {
       upsertMappedUserId({
         tokenLabel: input.tokenLabel,

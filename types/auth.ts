@@ -21,6 +21,7 @@ export type AppPageKey =
 
 export type AuthUser = {
   id: string;
+  authUserId?: string | null;
   name: string;
   email: string;
   phoneNumber?: string | null;
@@ -183,6 +184,13 @@ export type AuthApiActionRequest =
       name: string;
       email: string;
       password: string;
+    }
+  | {
+      action: "createInternalUser";
+      name: string;
+      email: string;
+      password: string;
+      role: AppRole;
     }
   | {
       action: "login";
