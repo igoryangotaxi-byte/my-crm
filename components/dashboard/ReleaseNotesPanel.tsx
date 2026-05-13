@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-05-13",
+    title: "CRM registration moved onto Supabase Auth fallback",
+    notes:
+      "5755d51f — Production auth no longer waits on missing crm_* Supabase tables or exhausted KV requests for the core CRM user flow. New registrations and Main CRM user creation now persist through Supabase Auth metadata, login still checks Supabase credentials, and platform access remains blocked until an admin approves the user.",
+  },
+  {
+    date: "2026-05-13",
     title: "Mind Map boards + CRM auth rollout safeguards",
     notes:
       "d2cb27b1 — Added the Notes Mind Map workspace with board CRUD, attachments, link previews, and React Flow editing. Also shipped the new Main CRM Users inline create flow and Supabase auth migration groundwork, while keeping production safe with a backward-compatible KV fallback until Supabase runtime env/schema are fully ready.",
