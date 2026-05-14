@@ -402,6 +402,26 @@ function normalizeCorpClientId(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase();
 }
 
+function buildYangoClientTripsHref({
+  corpClientId,
+  clientName,
+  from,
+  to,
+}: {
+  corpClientId: string;
+  clientName: string;
+  from: string;
+  to: string;
+}) {
+  const params = new URLSearchParams({
+    corpClientId: normalizeCorpClientId(corpClientId),
+    clientName,
+    from,
+    to,
+  });
+  return `/dashboard/yango-client-trips?${params.toString()}`;
+}
+
 function dateKeyToDate(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day);
@@ -2759,24 +2779,41 @@ export function B2BPreOrdersPanel({
                   {decouplingData.rows.map((row) => (
                     <tr
                       key={row.clientId}
-                      className={`${row.decoupling < 0 ? "bg-rose-50/70" : ""} hover:bg-white`}
+                      className={`crm-hover-lift ${
+                        row.decoupling < 0 ? "bg-rose-50/70 hover:bg-rose-50/90" : "hover:bg-white/65"
+                      }`}
                     >
                       <td className="px-3 py-2 text-slate-700">
-                        <a
-                          href={`https://corp-admin-frontend.taxi.yandex-team.ru/corp-clients?search=${encodeURIComponent(
-                            row.clientId,
-                          )}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="group/client block rounded-lg px-1 py-0.5 transition hover:bg-slate-50"
-                        >
-                          <div className="font-medium text-slate-900 group-hover/client:text-red-600">
-                            {row.clientName}
-                          </div>
-                          {row.clientName !== row.clientId ? (
-                            <div className="text-[11px] text-slate-500">{row.clientId}</div>
-                          ) : null}
-                        </a>
+                        <div className="px-1 py-0.5">
+                          <Link
+                            href={buildYangoClientTripsHref({
+                              corpClientId: row.clientId,
+                              clientName: row.clientName,
+                              from: yangoFromDate,
+                              to: yangoToDate,
+                            })}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="group/client block rounded-lg transition hover:bg-slate-50"
+                          >
+                            <div className="font-medium text-slate-900 group-hover/client:text-red-600">
+                              {row.clientName}
+                            </div>
+                            {row.clientName !== row.clientId ? (
+                              <div className="text-[11px] text-slate-500">{row.clientId}</div>
+                            ) : null}
+                          </Link>
+                          <a
+                            href={`https://corp-admin-frontend.taxi.yandex-team.ru/corp-clients?search=${encodeURIComponent(
+                              row.clientId,
+                            )}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-1 inline-flex text-[11px] font-medium text-slate-500 transition hover:text-red-600"
+                          >
+                            Open in corp admin
+                          </a>
+                        </div>
                       </td>
                       <td className="px-3 py-2 text-right text-slate-900">{row.requests.toLocaleString("en-US")}</td>
                       <td className="px-3 py-2 text-right text-slate-900">{row.trips.toLocaleString("en-US")}</td>

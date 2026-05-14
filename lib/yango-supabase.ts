@@ -92,7 +92,22 @@ function applyCorpClientMap(
   });
 }
 
-async function loadYangoSupabaseOrderMetrics(corpClientId?: string): Promise<YangoSupabaseOrderMetric[]> {
+type LoadYangoSupabaseOrderMetricsOptions = {
+  corpClientId?: string;
+  since?: string;
+  till?: string;
+};
+
+function normalizeIsoBoundary(value: string | undefined): string | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
+async function loadYangoSupabaseOrderMetrics(
+  options: LoadYangoSupabaseOrderMetricsOptions = {},
+): Promise<YangoSupabaseOrderMetric[]> {
   if (!isSupabaseConfigured()) {
     return [];
   }
@@ -104,6 +119,15 @@ async function loadYangoSupabaseOrderMetrics(corpClientId?: string): Promise<Yan
   const now = new Date();
   const safeLookback = Number.isFinite(LOOKBACK_DAYS) && LOOKBACK_DAYS > 0 ? LOOKBACK_DAYS : 120;
   const cutoff = new Date(now.getTime() - safeLookback * 24 * 60 * 60 * 1000).toISOString();
+  const requestedSince = normalizeIsoBoundary(options.since);
+  const requestedTill = normalizeIsoBoundary(options.till);
+  const effectiveSince = requestedSince && requestedSince > cutoff ? requestedSince : cutoff;
+  const effectiveTill = requestedTill && requestedTill >= effectiveSince ? requestedTill : null;
+  const scopedCorpClientId = options.corpClientId?.trim() || undefined;
+
+  if (requestedTill && requestedTill < effectiveSince) {
+    return [];
+  }
 
   for (let offset = 0; ; offset += PAGE_SIZE) {
     if (MAX_ROWS > 0 && offset >= MAX_ROWS) {
@@ -119,15 +143,19 @@ async function loadYangoSupabaseOrderMetrics(corpClientId?: string): Promise<Yan
       ? `${selectBase},decoupling_flg`
       : selectBase;
 
-    const scoped = supabase
+    let scoped = supabase
       .from("gp_fct_order_raw")
       .select(selectExpr)
       .not("corp_client_id", "is", null)
       .not("lcl_order_due_dttm", "is", null)
-      .gte("lcl_order_due_dttm", cutoff);
-    const baseResult = await (corpClientId ? scoped.eq("corp_client_id", corpClientId) : scoped)
-      .order("lcl_order_due_dttm", { ascending: false })
-      .range(offset, endOffset);
+      .gte("lcl_order_due_dttm", effectiveSince);
+    if (effectiveTill) {
+      scoped = scoped.lte("lcl_order_due_dttm", effectiveTill);
+    }
+    if (scopedCorpClientId) {
+      scoped = scoped.eq("corp_client_id", scopedCorpClientId);
+    }
+    const baseResult = await scoped.order("lcl_order_due_dttm", { ascending: false }).range(offset, endOffset);
     let data = (baseResult.data ?? null) as Array<Record<string, unknown>> | null;
     let error = baseResult.error;
 
@@ -137,14 +165,19 @@ async function loadYangoSupabaseOrderMetrics(corpClientId?: string): Promise<Yan
       error.message.toLowerCase().includes("decoupling_flg")
     ) {
       includeDecouplingFlg = false;
-      const retry = await supabase
+      let retryQuery = supabase
         .from("gp_fct_order_raw")
         .select(selectBase)
         .not("corp_client_id", "is", null)
         .not("lcl_order_due_dttm", "is", null)
-        .gte("lcl_order_due_dttm", cutoff)
-        .order("lcl_order_due_dttm", { ascending: false })
-        .range(offset, endOffset);
+        .gte("lcl_order_due_dttm", effectiveSince);
+      if (effectiveTill) {
+        retryQuery = retryQuery.lte("lcl_order_due_dttm", effectiveTill);
+      }
+      if (scopedCorpClientId) {
+        retryQuery = retryQuery.eq("corp_client_id", scopedCorpClientId);
+      }
+      const retry = await retryQuery.order("lcl_order_due_dttm", { ascending: false }).range(offset, endOffset);
       data = (retry.data ?? null) as Array<Record<string, unknown>> | null;
       error = retry.error;
     }
@@ -209,7 +242,7 @@ async function loadYangoSupabaseOrderMetrics(corpClientId?: string): Promise<Yan
 export async function getYangoSupabaseOrderMetrics(corpClientId?: string): Promise<YangoSupabaseOrderMetric[]> {
   if (corpClientId) {
     try {
-      return await loadYangoSupabaseOrderMetrics(corpClientId);
+      return await loadYangoSupabaseOrderMetrics({ corpClientId });
     } catch {
       return [];
     }
@@ -234,6 +267,29 @@ export async function getYangoSupabaseOrderMetrics(corpClientId?: string): Promi
     return mappedRows;
   } catch {
     inMemoryCache = null;
+    return [];
+  }
+}
+
+export async function getYangoSupabaseOrderMetricsForRange({
+  corpClientId,
+  since,
+  till,
+}: {
+  corpClientId: string;
+  since: string;
+  till: string;
+}): Promise<YangoSupabaseOrderMetric[]> {
+  if (!corpClientId.trim()) {
+    return [];
+  }
+  try {
+    return await loadYangoSupabaseOrderMetrics({
+      corpClientId,
+      since,
+      till,
+    });
+  } catch {
     return [];
   }
 }
