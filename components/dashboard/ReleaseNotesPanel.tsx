@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-05-14",
+    title: "Yango Data client trips drilldown + CRM row hover (0.2.20)",
+    notes:
+      "157db734 — App version 0.2.20. Dashboards -> Yango Data client rows now open a dedicated CRM tab with that client and the currently selected period prefilled, using the same Supabase-backed Yango metrics as the dashboard. Added the new /dashboard/yango-client-trips page, range-aware client filtering in Yango Supabase metrics, preserved corp-admin as a secondary link, and upgraded the Yango client table rows to the standard CRM hover-lift interaction.",
+  },
+  {
     date: "2026-05-13",
     title: "CRM auth fallback login hotfix",
     notes:
