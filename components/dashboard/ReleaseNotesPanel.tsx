@@ -9,7 +9,7 @@ const releaseItems: ReleaseItem[] = [
     date: "2026-05-24",
     title: "Price Calculator driver vs mone comparison (0.2.21)",
     notes:
-      "COMMIT_HASH — App version 0.2.21. Price Calculator Compare tab: import taxitariff.co.il mone prices (CSV/XLSX), match to CRM GP orders by order_id, driver price comparison dashboard (KPIs, charts, filters, export). Unsuccessful trips (0 km / 0 min / 0 driver price) use No price flag and are excluded from analytics. SQL schema in scripts/sql/supabase_driver_price_comparison.sql; optional localhost schema apply route. B2B CSV import skips duplicate order_id rows.",
+      "19656e04 — App version 0.2.21. Price Calculator Compare tab: import taxitariff.co.il mone prices (CSV/XLSX), match to CRM GP orders by order_id, driver price comparison dashboard (KPIs, charts, filters, export). Unsuccessful trips (0 km / 0 min / 0 driver price) use No price flag and are excluded from analytics. SQL schema in scripts/sql/supabase_driver_price_comparison.sql; optional localhost schema apply route. B2B CSV import skips duplicate order_id rows.",
   },
   {
     date: "2026-05-14",
