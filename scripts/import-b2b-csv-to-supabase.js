@@ -5,6 +5,7 @@ const { parse } = require("csv-parse");
 const { createClient } = require("@supabase/supabase-js");
 
 const BATCH_SIZE = 500;
+const QUERY_CHUNK = 200;
 
 const CSV_COLUMNS = [
   "order_date",
@@ -228,10 +229,42 @@ async function upsertBatch(supabase, rows) {
   return validRows.length;
 }
 
+async function insertBatch(supabase, rows) {
+  const validRows = rows.filter((row) => row.order_id);
+  if (!validRows.length) return 0;
+  const { error } = await supabase.from("gp_fct_order_raw").insert(validRows);
+  if (error) {
+    throw new Error(`Supabase insert failed: ${error.message}`);
+  }
+  return validRows.length;
+}
+
+async function findExistingOrderIds(supabase, orderIds) {
+  const existing = new Set();
+  for (let i = 0; i < orderIds.length; i += QUERY_CHUNK) {
+    const chunk = orderIds.slice(i, i + QUERY_CHUNK);
+    const { data, error } = await supabase
+      .from("gp_fct_order_raw")
+      .select("order_id")
+      .in("order_id", chunk);
+    if (error) {
+      throw new Error(`Supabase duplicate check failed: ${error.message}`);
+    }
+    for (const row of data ?? []) {
+      if (row?.order_id) existing.add(row.order_id);
+    }
+  }
+  return existing;
+}
+
 async function main() {
-  const filePath = process.argv[2];
+  const args = process.argv.slice(2);
+  const insertOnly = args.includes("--insert-only");
+  const filePath = args.find((arg) => !arg.startsWith("--"));
   if (!filePath) {
-    throw new Error("Usage: node scripts/import-b2b-csv-to-supabase.js <absolute_csv_path>");
+    throw new Error(
+      "Usage: node scripts/import-b2b-csv-to-supabase.js <absolute_csv_path> [--insert-only]",
+    );
   }
   if (!fs.existsSync(filePath)) {
     throw new Error(`CSV file does not exist: ${filePath}`);
@@ -303,23 +336,45 @@ async function main() {
     duplicateRowsCollapsed += 1;
   }
 
-  let batch = [];
   const dedupedRows = [...latestByOrder.values()];
-  for (const row of dedupedRows) {
+  let rowsToWrite = dedupedRows;
+  let skippedExistingInDb = 0;
+
+  if (insertOnly) {
+    const existing = await findExistingOrderIds(
+      supabase,
+      dedupedRows.map((row) => row.order_id),
+    );
+    rowsToWrite = dedupedRows.filter((row) => {
+      if (existing.has(row.order_id)) {
+        skippedExistingInDb += 1;
+        return false;
+      }
+      return true;
+    });
+    process.stdout.write(
+      `Duplicate check vs DB: unique_in_file=${dedupedRows.length}, already_in_db=${skippedExistingInDb}, to_insert=${rowsToWrite.length}\n`,
+    );
+  }
+
+  const writeBatch = insertOnly ? insertBatch : upsertBatch;
+  let batch = [];
+  for (const row of rowsToWrite) {
     batch.push(row);
     if (batch.length >= BATCH_SIZE) {
-      totalUpserted += await upsertBatch(supabase, batch);
+      totalUpserted += await writeBatch(supabase, batch);
       process.stdout.write(`Imported rows: ${totalUpserted}\n`);
       batch = [];
     }
   }
 
   if (batch.length) {
-    totalUpserted += await upsertBatch(supabase, batch);
+    totalUpserted += await writeBatch(supabase, batch);
   }
 
+  const actionLabel = insertOnly ? "inserted" : "upserted";
   process.stdout.write(
-    `Import finished. Read: ${totalRead}, unique: ${dedupedRows.length}, upserted: ${totalUpserted}, duplicates_collapsed: ${duplicateRowsCollapsed}, skipped_empty_order_id: ${skippedEmptyOrderId}, skipped_headers: ${skippedHeaderRows}, source_time_mode: as_is_local, file: ${filePath}\n`,
+    `Import finished. Read: ${totalRead}, unique: ${dedupedRows.length}, ${actionLabel}: ${totalUpserted}, duplicates_collapsed: ${duplicateRowsCollapsed}, skipped_existing_in_db: ${skippedExistingInDb}, skipped_empty_order_id: ${skippedEmptyOrderId}, skipped_headers: ${skippedHeaderRows}, mode: ${insertOnly ? "insert_only" : "upsert"}, source_time_mode: as_is_local, file: ${filePath}\n`,
   );
 }
 

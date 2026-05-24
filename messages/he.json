@@ -38,6 +38,12 @@
     "tabHealth": "בדיקת בריאות תעריף",
     "tabTranscripts": "תמלולים",
     "roleDisabledNote": "בדיקת בריאות התעריף אינה זמינה לתפקיד שלך. בקש ממנהל מערכת להפעיל פעולה זו בהרשאות.",
+    "comparisonDashboard": {
+      "title": "אנליטיקת מחיר נהג מול Mone",
+      "subtitle": "השוואת driver_price_with_vat מול mone_price מ-taxitariff.co.il.",
+      "importTitle": "ייבוא mone price מ-taxitariff.co.il",
+      "empty": "אין נסיעות עם mone price בטווח שנבחר."
+    },
     "transcripts": {
       "intro": "העלה גיליון: עמודה A = כתובת איסוף, B = כתובת יעד, C = תאריך ושעת נסיעה. המערכת מבצעת גיאוקוד, מסלול בגוגל (תנועה לפי זמן היציאה), ומחיר לקוח לפי תעריף MOT שנבחר מול נוסחת Yango Drivers.",
       "sameMapsKeyAsRequestRides": "משתמש באותו GOOGLE_MAPS_API_KEY כמו בהזמנת נסיעות: יש להפעיל בפרויקט ב-Google Cloud את Geocoding API ו-Routes API (גיאוקוד אצווה + מסלולים עם תנועה).",

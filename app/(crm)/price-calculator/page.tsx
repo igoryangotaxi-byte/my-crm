@@ -9,6 +9,8 @@ import {
   segmentedTabTrackClass,
 } from "@/components/crm/segmented-tab-classes";
 import { TranscriptsTab } from "@/components/price-calculator/TranscriptsTab";
+import { DriverPriceComparisonDashboard } from "@/components/price-calculator/DriverPriceComparisonDashboard";
+import { MonePriceImportPanel } from "@/components/price-calculator/MonePriceImportPanel";
 import {
   calculateMoneTariff,
   calculateYangoDriversTariff,
@@ -62,6 +64,7 @@ function CompareDriverPriceTab() {
     useState<YangoDriversBreakdown | null>(null);
   const [moneBreakdown, setMoneBreakdown] = useState<MoneBreakdown | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -105,8 +108,16 @@ function CompareDriverPriceTab() {
       : null;
 
   return (
-    <>
-      <form className="space-y-4" onSubmit={handleSubmit}>
+    <div className="w-full space-y-5">
+      <section className="glass-surface mx-auto w-full max-w-3xl rounded-3xl p-4 lg:p-5">
+        <div className="mb-5">
+          <h2 className="text-base font-semibold text-slate-900">Manual price calculator</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            What-if comparison for a single trip: Yango Drivers tariff vs taxitariff.co.il mone price.
+          </p>
+        </div>
+
+        <form className="space-y-4" onSubmit={handleSubmit}>
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-slate-900">Trip Km</span>
           <input
@@ -274,7 +285,18 @@ function CompareDriverPriceTab() {
           </div>
         </div>
       ) : null}
-    </>
+      </section>
+
+      <section className="glass-surface w-full rounded-3xl p-4 lg:p-5">
+        <MonePriceImportPanel
+          onImportComplete={() => setDashboardRefreshKey((value) => value + 1)}
+        />
+      </section>
+
+      <section className="glass-surface w-full rounded-3xl p-4 lg:p-5">
+        <DriverPriceComparisonDashboard key={dashboardRefreshKey} />
+      </section>
+    </div>
   );
 }
 
@@ -654,25 +676,21 @@ export default function PriceCalculatorPage() {
         </button>
       </div>
 
-      <div className="glass-surface space-y-5 rounded-3xl p-4 lg:p-5">
-        <div
-          className={`mx-auto ${effectiveActiveTab === "transcripts" ? "max-w-7xl" : "max-w-3xl"}`}
-        >
-          {effectiveActiveTab === "compare" ? (
-            <CompareDriverPriceTab />
-          ) : effectiveActiveTab === "health" ? (
-            <TariffHealthCheckTab />
-          ) : (
-            <TranscriptsTab />
-          )}
+      {effectiveActiveTab === "compare" ? (
+        <CompareDriverPriceTab />
+      ) : (
+        <div className="glass-surface space-y-5 rounded-3xl p-4 lg:p-5">
+          <div className={`mx-auto ${effectiveActiveTab === "transcripts" ? "max-w-7xl" : "max-w-3xl"}`}>
+            {effectiveActiveTab === "health" ? <TariffHealthCheckTab /> : <TranscriptsTab />}
 
-          {!canAccessTariffHealthCheck && effectiveActiveTab !== "transcripts" ? (
-            <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              {tPage("roleDisabledNote")}
-            </p>
-          ) : null}
+            {!canAccessTariffHealthCheck && effectiveActiveTab !== "transcripts" ? (
+              <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                {tPage("roleDisabledNote")}
+              </p>
+            ) : null}
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }

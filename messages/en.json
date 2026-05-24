@@ -38,6 +38,12 @@
     "tabHealth": "Tariff health check",
     "tabTranscripts": "Transcripts",
     "roleDisabledNote": "Tariff Health Check is disabled for your role. Ask an Admin to enable this action in Access management.",
+    "comparisonDashboard": {
+      "title": "Driver vs Mone price analytics",
+      "subtitle": "Compare synced driver_price_with_vat against imported taxitariff.co.il mone_price.",
+      "importTitle": "Import taxitariff.co.il mone prices",
+      "empty": "No rides with mone price in the selected range."
+    },
     "transcripts": {
       "intro": "Upload a spreadsheet with column A = pickup address, B = drop-off address, C = trip date and time. The CRM geocodes addresses, routes with Google (traffic at departure time), and prices the trip with the selected MOT client tariff vs the Yango Drivers formula.",
       "sameMapsKeyAsRequestRides": "Uses the same GOOGLE_MAPS_API_KEY as Request Rides: enable Geocoding API + Routes API on that Google Cloud project (batch geocode + traffic-aware routes).",
