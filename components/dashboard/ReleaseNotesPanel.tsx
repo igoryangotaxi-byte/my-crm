@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-05-25",
+    title: "Yango Data GP trip upload + segmented dashboard tabs (0.2.22)",
+    notes:
+      "d47abc70 — App version 0.2.22. Dashboards Yango Data: Upload Data button imports GP trip CSV into gp_fct_order_raw (dedupe by order_id, insert-only), shows added/unique/duplicate stats modal, refreshes client table. API Data / Yango Data switcher matches Price Calculator segmented tabs. Shared lib/gp-trips-import for UI API and npm run import:b2b:csv.",
+  },
+  {
     date: "2026-05-24",
     title: "Price Calculator driver vs mone comparison (0.2.21)",
     notes:
