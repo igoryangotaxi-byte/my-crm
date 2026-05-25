@@ -239,6 +239,10 @@ async function loadYangoSupabaseOrderMetrics(
   return rows;
 }
 
+export function clearYangoSupabaseMetricsCache() {
+  inMemoryCache = null;
+}
+
 export async function getYangoSupabaseOrderMetrics(corpClientId?: string): Promise<YangoSupabaseOrderMetric[]> {
   if (corpClientId) {
     try {

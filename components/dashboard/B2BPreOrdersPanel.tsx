@@ -1,11 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { b2bDashboardOrderKey, type B2BOrdersListCursors } from "@/lib/b2b-orders-keys";
 import { useAuth } from "@/components/auth/AuthProvider";
+import {
+  segmentedTabInactiveClass,
+  segmentedTabSelectedClass,
+  segmentedTabTrackClass,
+} from "@/components/crm/segmented-tab-classes";
 import { useRouteLoading } from "@/components/layout/RouteLoadingContext";
+import type { GpTripsImportResult } from "@/lib/gp-trips-import";
 import type {
   B2BDashboardOrder,
   B2BOrderDetailsResponse,
@@ -1369,7 +1375,9 @@ export function B2BPreOrdersPanel({
 }: B2BPreOrdersPanelProps) {
   const { canAccessDashboardBlock, currentUser } = useAuth();
   const { startRouteLoading } = useRouteLoading();
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const gpUploadInputRef = useRef<HTMLInputElement>(null);
   const defaultFromDate = (() => {
     if (view === "orders" && ordersRemote) {
       return ordersRemote.range.fromDateStr;
@@ -1456,6 +1464,11 @@ export function B2BPreOrdersPanel({
   const [cancelInYangoLoading, setCancelInYangoLoading] = useState(false);
   const [cancelInYangoError, setCancelInYangoError] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [gpUploading, setGpUploading] = useState(false);
+  const [gpUploadError, setGpUploadError] = useState<string | null>(null);
+  const [gpUploadResult, setGpUploadResult] = useState<GpTripsImportResult | null>(null);
+  const [gpUploadModalOpen, setGpUploadModalOpen] = useState(false);
+  const [gpUploadRefreshOnClose, setGpUploadRefreshOnClose] = useState(false);
 
   const orderSourceRows = view === "orders" && ordersRemote ? loadedOrders : rows;
 
@@ -2241,6 +2254,51 @@ export function B2BPreOrdersPanel({
     URL.revokeObjectURL(url);
   };
 
+  const closeGpUploadModal = useCallback(() => {
+    setGpUploadModalOpen(false);
+    setGpUploadResult(null);
+    setGpUploadError(null);
+    if (gpUploadRefreshOnClose) {
+      setGpUploadRefreshOnClose(false);
+      router.refresh();
+    }
+  }, [gpUploadRefreshOnClose, router]);
+
+  const handleGpTripsUpload = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
+
+      setGpUploading(true);
+      setGpUploadError(null);
+      setGpUploadResult(null);
+      setGpUploadRefreshOnClose(false);
+
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetch("/api/dashboard/gp-trips/upload", {
+          method: "POST",
+          body: formData,
+        });
+        const payload = (await response.json()) as GpTripsImportResult & { ok?: boolean; error?: string };
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error ?? "Upload failed.");
+        }
+        setGpUploadResult(payload);
+        setGpUploadRefreshOnClose(true);
+        setGpUploadModalOpen(true);
+      } catch (error) {
+        setGpUploadError(error instanceof Error ? error.message : "Upload failed.");
+        setGpUploadModalOpen(true);
+      } finally {
+        setGpUploading(false);
+      }
+    },
+    [],
+  );
+
   const exportYangoClientsCsv = () => {
     if (decouplingData.rows.length === 0) return;
     const escapeCsv = (value: string | number) => {
@@ -2313,44 +2371,38 @@ export function B2BPreOrdersPanel({
     <>
     <section className={view === "orders" ? "" : "glass-surface mt-6 rounded-3xl p-4"}>
       {view === "dashboard" && canSeeApiData && canSeeYangoData ? (
-        <section className="mb-4 rounded-3xl border border-white/70 bg-white/70 p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/dashboard?section=api"
-              onClick={() => startRouteLoading()}
-              className={`crm-hover-lift rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
-                dashboardSection === "api"
-                  ? "border-red-200 bg-red-50 text-red-700 shadow-[0_8px_16px_rgba(239,68,68,0.15)]"
-                  : "border-white/80 bg-white/85 text-slate-700 hover:bg-white"
-              }`}
-            >
-              <span
-                className={`inline-block border-b-2 pb-0.5 ${
-                  dashboardSection === "api" ? "border-red-500" : "border-transparent"
-                }`}
-              >
-                API Data
-              </span>
-            </Link>
-            <Link
-              href="/dashboard?section=yango"
-              onClick={() => startRouteLoading()}
-              className={`crm-hover-lift rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
-                dashboardSection === "yango"
-                  ? "border-red-200 bg-red-50 text-red-700 shadow-[0_8px_16px_rgba(239,68,68,0.15)]"
-                  : "border-white/80 bg-white/85 text-slate-700 hover:bg-white"
-              }`}
-            >
-              <span
-                className={`inline-block border-b-2 pb-0.5 ${
-                  dashboardSection === "yango" ? "border-red-500" : "border-transparent"
-                }`}
-              >
-                Yango Data
-              </span>
-            </Link>
-          </div>
-        </section>
+        <div className={segmentedTabTrackClass}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={dashboardSection === "api"}
+            onClick={() => {
+              if (dashboardSection === "api") return;
+              startRouteLoading();
+              router.push("/dashboard?section=api");
+            }}
+            className={`flex-1 rounded-xl px-2 py-2.5 text-xs font-semibold sm:px-3 sm:text-sm ${
+              dashboardSection === "api" ? segmentedTabSelectedClass : segmentedTabInactiveClass
+            }`}
+          >
+            API Data
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={dashboardSection === "yango"}
+            onClick={() => {
+              if (dashboardSection === "yango") return;
+              startRouteLoading();
+              router.push("/dashboard?section=yango");
+            }}
+            className={`flex-1 rounded-xl px-2 py-2.5 text-xs font-semibold sm:px-3 sm:text-sm ${
+              dashboardSection === "yango" ? segmentedTabSelectedClass : segmentedTabInactiveClass
+            }`}
+          >
+            Yango Data
+          </button>
+        </div>
       ) : null}
 
       {view === "orders" && ordersRemote?.bootstrapErrors && ordersRemote.bootstrapErrors.length > 0 ? (
@@ -2696,7 +2748,24 @@ export function B2BPreOrdersPanel({
               </article>
             </div>
 
-            <div className="mb-2 flex justify-end">
+            <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
+              <input
+                ref={gpUploadInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(event) => void handleGpTripsUpload(event)}
+              />
+              {canSeeYangoData ? (
+                <button
+                  type="button"
+                  onClick={() => gpUploadInputRef.current?.click()}
+                  disabled={gpUploading}
+                  className="rounded-lg border border-border/80 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {gpUploading ? "Uploading…" : "Upload Data"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={exportYangoClientsCsv}
@@ -2981,6 +3050,65 @@ export function B2BPreOrdersPanel({
           </div>
         ) : null}
     </section>
+    ) : null}
+
+    {gpUploadModalOpen ? (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-8 backdrop-blur-sm"
+        onClick={closeGpUploadModal}
+      >
+        <div
+          className="crm-modal-surface w-full max-w-md rounded-3xl p-4 lg:p-5"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="mb-4 flex items-start justify-between gap-3 px-1">
+            <h3 className="text-xl font-semibold text-foreground">
+              {gpUploadError ? "Upload failed" : "Upload complete"}
+            </h3>
+            <button
+              type="button"
+              onClick={closeGpUploadModal}
+              className="crm-hover-lift inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-lg font-semibold leading-none text-slate-700"
+              aria-label="Close modal"
+            >
+              ×
+            </button>
+          </div>
+          {gpUploadError ? (
+            <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {gpUploadError}
+            </p>
+          ) : gpUploadResult ? (
+            <dl className="space-y-2 text-sm text-slate-700">
+              <div className="flex justify-between gap-4">
+                <dt>Added trips</dt>
+                <dd className="font-semibold text-slate-900">{gpUploadResult.inserted}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt>Unique in file</dt>
+                <dd className="font-semibold text-slate-900">{gpUploadResult.uniqueInFile}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt>Duplicates in file</dt>
+                <dd className="font-semibold text-slate-900">{gpUploadResult.duplicatesInFile}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt>Already in database</dt>
+                <dd className="font-semibold text-slate-900">{gpUploadResult.skippedExistingInDb}</dd>
+              </div>
+            </dl>
+          ) : null}
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              onClick={closeGpUploadModal}
+              className="crm-button-primary px-4 py-2 text-sm"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
     ) : null}
 
     {selectedOrder ? (

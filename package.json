@@ -1,6 +1,6 @@
 {
   "name": "my-crm",
-  "version": "0.2.21",
+  "version": "0.2.22",
   "private": true,
   "engines": {
     "node": ">=20.9.0"
@@ -13,7 +13,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:price-calculator": "tsx --test tests/price-calculator-formulas.test.ts tests/tariff-health-check.test.ts tests/transcript-mot-tariff-rules.test.ts tests/transcript-decoupling-fallback.test.ts tests/google-geocoding.test.ts tests/request-rides.test.ts tests/tenant-yango-bootstrap.test.ts tests/gett-api.test.ts tests/driver-price-comparison-calculated-fields.test.ts",
+    "test:price-calculator": "tsx --test tests/price-calculator-formulas.test.ts tests/tariff-health-check.test.ts tests/transcript-mot-tariff-rules.test.ts tests/transcript-decoupling-fallback.test.ts tests/google-geocoding.test.ts tests/request-rides.test.ts tests/tenant-yango-bootstrap.test.ts tests/gett-api.test.ts tests/driver-price-comparison-calculated-fields.test.ts tests/gp-trips-import.test.ts",
     "vercel:sync-fleet-env": "node scripts/vercel-sync-fleet-env.mjs",
     "vercel:sync-google-maps-env": "node scripts/vercel-sync-google-maps-env.mjs",
     "vercel:sync-yango-opticity-env": "node scripts/vercel-sync-yango-opticity-env.mjs",
@@ -30,7 +30,7 @@
     "sync:datagrip:run:b2b:2026": "node scripts/datagrip-sync-b2b-2026-by-created-date.js",
     "sync:datagrip:taxi-orders": "node scripts/datagrip-sync-taxi-orders.js",
     "db:apply:driver-price-comparison": "node scripts/apply-driver-price-comparison-schema.js",
-    "import:b2b:csv": "node scripts/import-b2b-csv-to-supabase.js",
+    "import:b2b:csv": "tsx scripts/import-b2b-csv-to-supabase.ts",
     "import:b2c-heatmap:csv": "node scripts/import-b2c-heatmap-csv-to-supabase.js",
     "import:corp-client-map:csv": "node scripts/import-corp-client-map-to-supabase.js",
     "import:request-rides-user-map:csv": "node scripts/import-request-rides-user-map.js",
