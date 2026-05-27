@@ -9,7 +9,7 @@ const releaseItems: ReleaseItem[] = [
     date: "2026-05-27",
     title: "Price Calculator compare table and problematic insights (0.2.23)",
     notes:
-      "TBD_COMMIT — App version 0.2.23. Price Calculator Compare: Detailed rides adds order_id, excludes No price rows, sortable columns without reloading charts; removed P90/P95/Anomalies KPI cards; Top problematic hours/weekdays split into Mone price higher vs Driver price higher (>₪10), with block descriptions.",
+      "cf55e944 — App version 0.2.23. Price Calculator Compare: Detailed rides adds order_id, excludes No price rows, sortable columns without reloading charts; removed P90/P95/Anomalies KPI cards; Top problematic hours/weekdays split into Mone price higher vs Driver price higher (>₪10), with block descriptions.",
   },
   {
     date: "2026-05-25",
