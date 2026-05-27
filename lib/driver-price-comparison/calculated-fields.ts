@@ -25,6 +25,11 @@ export const DIFFERENCE_FLAGS: DifferenceFlag[] = [
   "No price",
 ];
 
+/** Flags shown in analytics charts (excludes unsuccessful no-price trips). */
+export const ANALYTICS_DIFFERENCE_FLAGS: DifferenceFlag[] = DIFFERENCE_FLAGS.filter(
+  (flag) => flag !== "No price",
+);
+
 export const DISTANCE_BUCKETS: DistanceBucket[] = [
   "0-3 km",
   "3-5 km",
@@ -35,6 +40,7 @@ export const DISTANCE_BUCKETS: DistanceBucket[] = [
 
 const JERUSALEM_TZ = "Asia/Jerusalem";
 const NO_DIFFERENCE_THRESHOLD_NIS = 0.5;
+export const DRIVER_PRICE_HIGHER_PROBLEMATIC_MIN_NIS = 10;
 
 export type ComparisonBaseRow = {
   order_id: string;
@@ -117,6 +123,15 @@ export function isNoPriceTrip(
 
 export function isComparableRide(row: Pick<ComparisonEnrichedRow, "difference_flag">) {
   return row.difference_flag !== "No price";
+}
+
+export function isTopProblematicDriverPriceHigher(
+  row: Pick<ComparisonEnrichedRow, "difference_flag" | "absolute_difference_nis">,
+) {
+  return (
+    row.difference_flag === "Driver price higher" &&
+    row.absolute_difference_nis > DRIVER_PRICE_HIGHER_PROBLEMATIC_MIN_NIS
+  );
 }
 
 export function computeDifferenceFlag(

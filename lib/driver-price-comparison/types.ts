@@ -72,6 +72,11 @@ export type RankedBucket = {
   count: number;
 };
 
+export type TopProblematicBuckets = {
+  monePriceHigher: RankedBucket[];
+  driverPriceHigher: RankedBucket[];
+};
+
 export type ComparisonSummaryResponse = {
   ok: true;
   kpis: ComparisonKpis;
@@ -81,8 +86,8 @@ export type ComparisonSummaryResponse = {
   byDistance: DistanceBucketPoint[];
   scatterSample: ScatterPoint[];
   trendByDay: TrendPoint[];
-  topProblematicHours: RankedBucket[];
-  topProblematicWeekdays: RankedBucket[];
+  topProblematicHours: TopProblematicBuckets;
+  topProblematicWeekdays: TopProblematicBuckets;
   anomalyCount: number;
   mismatchAlert: {
     active: boolean;
@@ -105,6 +110,19 @@ export type ComparisonTableRow = {
   differenceFlag: DifferenceFlag;
   orderId: string;
 };
+
+export type ComparisonTableSortKey =
+  | "orderId"
+  | "orderDate"
+  | "orderTime"
+  | "dayOfWeek"
+  | "distanceKm"
+  | "timeMin"
+  | "driverPriceWithVat"
+  | "monePrice"
+  | "differenceNis"
+  | "differencePercent"
+  | "differenceFlag";
 
 export type MoneImportPreviewRow = Record<string, string>;
 

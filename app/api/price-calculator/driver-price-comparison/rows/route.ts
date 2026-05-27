@@ -1,6 +1,7 @@
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { requireApprovedUser } from "@/lib/server-auth";
 import { fetchComparisonRowsPage } from "@/lib/driver-price-comparison/repository";
+import { normalizeComparisonTableSortKey } from "@/lib/driver-price-comparison/table-sort";
 import type { ComparisonFilters } from "@/lib/driver-price-comparison/types";
 
 export const runtime = "nodejs";
@@ -14,17 +15,26 @@ export async function POST(request: Request) {
   }
 
   const body = (await request.json().catch(() => null)) as
-    | (Partial<ComparisonFilters> & { page?: unknown; pageSize?: unknown })
+    | (Partial<ComparisonFilters> & {
+        page?: unknown;
+        pageSize?: unknown;
+        sortKey?: unknown;
+        sortDirection?: unknown;
+      })
     | null;
   const page = typeof body?.page === "number" ? body.page : Number(body?.page ?? 1);
   const pageSize =
     typeof body?.pageSize === "number" ? body.pageSize : Number(body?.pageSize ?? 50);
+  const sortDirection = body?.sortDirection === "asc" ? "asc" : "desc";
+  const sortKey = normalizeComparisonTableSortKey(body?.sortKey);
 
   try {
     const result = await fetchComparisonRowsPage({
       filters: body ?? {},
       page: Number.isFinite(page) ? page : 1,
       pageSize: Number.isFinite(pageSize) ? pageSize : 50,
+      sortKey,
+      sortDirection,
     });
     return Response.json({ ok: true, ...result }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

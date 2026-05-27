@@ -15,9 +15,11 @@ import {
   YAxis,
 } from "recharts";
 import {
+  ANALYTICS_DIFFERENCE_FLAGS,
   DAY_OF_WEEK_LABELS,
   DIFFERENCE_FLAGS,
   DISTANCE_BUCKETS,
+  DRIVER_PRICE_HIGHER_PROBLEMATIC_MIN_NIS,
   type DayOfWeekLabel,
   type DifferenceFlag,
 } from "@/lib/driver-price-comparison/calculated-fields";
@@ -25,7 +27,11 @@ import type {
   ComparisonFilters,
   ComparisonSummaryResponse,
   ComparisonTableRow,
+  ComparisonTableSortKey,
+  RankedBucket,
+  TopProblematicBuckets,
 } from "@/lib/driver-price-comparison/types";
+import { COMPARISON_TABLE_COLUMNS } from "@/lib/driver-price-comparison/table-sort";
 import { ComparisonChartShell } from "@/components/price-calculator/charts/ComparisonChartShell";
 
 const FLAG_COLORS: Record<DifferenceFlag, string> = {
@@ -65,6 +71,89 @@ function defaultFilters(): ComparisonFilters {
   };
 }
 
+function hasTopProblematicData(buckets: TopProblematicBuckets | undefined) {
+  if (!buckets) return false;
+  return buckets.monePriceHigher.length > 0 || buckets.driverPriceHigher.length > 0;
+}
+
+function ProblematicInsightsCard({
+  title,
+  bucketLabel,
+  buckets,
+}: {
+  title: string;
+  bucketLabel: "hour" | "weekday";
+  buckets: TopProblematicBuckets;
+}) {
+  const bucketExample = bucketLabel === "hour" ? "20:00" : "Friday";
+  const driverThreshold = money(DRIVER_PRICE_HIGHER_PROBLEMATIC_MIN_NIS);
+
+  return (
+    <div className="space-y-4 rounded-2xl border border-white/70 bg-white/80 p-4">
+      <div>
+        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+        <p className="mt-1 text-xs leading-relaxed text-slate-500">
+          Top 5 {bucketLabel}s with the largest average absolute price gap between driver tariff and
+          mone. Each line is{" "}
+          <span className="font-medium text-slate-700">
+            {bucketLabel} · avg |driver − mone| · ride count
+          </span>
+          . Example: {bucketExample} · ₪20.31 · 81 rides means 81 rides in that {bucketLabel} had an
+          average gap of ₪20.31. Excludes No price trips and respects current filters.
+        </p>
+      </div>
+      <ProblematicBucketList
+        title="Mone price higher"
+        description="Taxitariff (mone) is higher than the driver tariff. All such mismatches are included."
+        items={buckets.monePriceHigher}
+        accentClass="text-orange-700"
+      />
+      <ProblematicBucketList
+        title="Driver price higher"
+        description={`Driver tariff is higher than mone. Only rides where the gap exceeds ${driverThreshold} are counted.`}
+        items={buckets.driverPriceHigher}
+        accentClass="text-red-700"
+      />
+    </div>
+  );
+}
+
+function ProblematicBucketList({
+  title,
+  description,
+  items,
+  accentClass,
+}: {
+  title: string;
+  description?: string;
+  items: RankedBucket[];
+  accentClass: string;
+}) {
+  if (!items.length) {
+    return (
+      <div>
+        <p className={`text-xs font-semibold uppercase tracking-wide ${accentClass}`}>{title}</p>
+        {description ? <p className="mt-1 text-xs text-slate-500">{description}</p> : null}
+        <p className="mt-1 text-sm text-slate-500">No rides in this group.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className={`text-xs font-semibold uppercase tracking-wide ${accentClass}`}>{title}</p>
+      {description ? <p className="mt-1 text-xs text-slate-500">{description}</p> : null}
+      <ul className="mt-2 space-y-1 text-sm text-slate-700">
+        {items.map((item) => (
+          <li key={item.label}>
+            {item.label} · {money(item.averageAbsoluteDifferenceNis)} · {item.count} rides
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function DriverPriceComparisonDashboard() {
   const [filters, setFilters] = useState<ComparisonFilters>(() => defaultFilters());
   const [draft, setDraft] = useState<ComparisonFilters>(() => defaultFilters());
@@ -72,6 +161,8 @@ export function DriverPriceComparisonDashboard() {
   const [tableRows, setTableRows] = useState<ComparisonTableRow[]>([]);
   const [tableTotal, setTableTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState<ComparisonTableSortKey>("differenceNis");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [loadingTable, setLoadingTable] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -129,48 +220,76 @@ export function DriverPriceComparisonDashboard() {
     }
   }, []);
 
-  const loadTable = useCallback(async (activeFilters: ComparisonFilters, nextPage: number) => {
-    setLoadingTable(true);
-    try {
-      const response = await fetch("/api/price-calculator/driver-price-comparison/rows", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...activeFilters, page: nextPage, pageSize: 50 }),
-      });
-      const payload = (await response.json()) as {
-        ok?: boolean;
-        rows?: ComparisonTableRow[];
-        total?: number;
-        error?: string;
-      };
-      if (!response.ok || !payload.ok) {
-        throw new Error(payload.error ?? "Failed to load table.");
+  const loadTable = useCallback(
+    async (
+      activeFilters: ComparisonFilters,
+      nextPage: number,
+      nextSortKey: ComparisonTableSortKey,
+      direction: "asc" | "desc",
+    ) => {
+      setLoadingTable(true);
+      try {
+        const response = await fetch("/api/price-calculator/driver-price-comparison/rows", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...activeFilters,
+            page: nextPage,
+            pageSize: 50,
+            sortKey: nextSortKey,
+            sortDirection: direction,
+          }),
+        });
+        const payload = (await response.json()) as {
+          ok?: boolean;
+          rows?: ComparisonTableRow[];
+          total?: number;
+          error?: string;
+        };
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error ?? "Failed to load table.");
+        }
+        setTableRows(payload.rows ?? []);
+        setTableTotal(payload.total ?? 0);
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : "Failed to load table.");
+      } finally {
+        setLoadingTable(false);
       }
-      setTableRows(payload.rows ?? []);
-      setTableTotal(payload.total ?? 0);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Failed to load table.");
-    } finally {
-      setLoadingTable(false);
-    }
-  }, []);
-
-  const refresh = useCallback(
-    async (activeFilters: ComparisonFilters, nextPage = 1) => {
-      await Promise.all([loadSummary(activeFilters), loadTable(activeFilters, nextPage), loadStatus()]);
     },
-    [loadSummary, loadTable, loadStatus],
+    [],
   );
 
+  const refreshSummary = useCallback(async (activeFilters: ComparisonFilters) => {
+    await Promise.all([loadSummary(activeFilters), loadStatus()]);
+  }, [loadSummary, loadStatus]);
+
   useEffect(() => {
-    void refresh(filters, page);
-  }, [filters, page, refresh]);
+    void refreshSummary(filters);
+  }, [filters, refreshSummary]);
+
+  useEffect(() => {
+    void loadTable(filters, page, sortKey, sortDirection);
+  }, [filters, page, sortKey, sortDirection, loadTable]);
+
+  function handleSortColumn(columnKey: ComparisonTableSortKey) {
+    if (sortKey === columnKey) {
+      setSortDirection((prev) => (prev === "desc" ? "asc" : "desc"));
+    } else {
+      setSortKey(columnKey);
+      setSortDirection("desc");
+    }
+    setPage(1);
+  }
+
+  const activeSortLabel =
+    COMPARISON_TABLE_COLUMNS.find((column) => column.key === sortKey)?.label ?? "Diff NIS";
 
   const frequencyChartData = useMemo(() => {
     if (!summary) return [];
     return DAY_OF_WEEK_LABELS.map((day) => {
       const row: Record<string, string | number> = { dayOfWeek: day };
-      for (const flag of DIFFERENCE_FLAGS) {
+      for (const flag of ANALYTICS_DIFFERENCE_FLAGS) {
         row[flag] =
           summary.frequencyByDay.find(
             (item) => item.dayOfWeek === day && item.differenceFlag === flag,
@@ -302,7 +421,7 @@ export function DriverPriceComparisonDashboard() {
                 }))
               }
             >
-              {DIFFERENCE_FLAGS.map((flag) => (
+              {ANALYTICS_DIFFERENCE_FLAGS.map((flag) => (
                 <option key={flag} value={flag}>
                   {flag}
                 </option>
@@ -380,9 +499,6 @@ export function DriverPriceComparisonDashboard() {
             format: "pct",
           },
           { label: "Max difference (NIS)", value: summary?.kpis.maxDifferenceNis ?? 0, format: "money" },
-          { label: "P90 abs diff", value: summary?.kpis.p90AbsoluteDifferenceNis ?? 0, format: "money" },
-          { label: "P95 abs diff", value: summary?.kpis.p95AbsoluteDifferenceNis ?? 0, format: "money" },
-          { label: "Anomalies (>P95)", value: summary?.anomalyCount ?? 0, format: "number" },
         ].map((card) => (
           <div key={card.label} className="rounded-xl border border-white/70 bg-white/85 p-4">
             <p className="text-xs uppercase tracking-wide text-slate-500">{card.label}</p>
@@ -411,7 +527,7 @@ export function DriverPriceComparisonDashboard() {
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip />
               <Legend />
-              {DIFFERENCE_FLAGS.map((flag) => (
+              {ANALYTICS_DIFFERENCE_FLAGS.map((flag) => (
                 <Bar
                   key={flag}
                   dataKey={flag}
@@ -565,35 +681,30 @@ export function DriverPriceComparisonDashboard() {
         </ComparisonChartShell>
       </div>
 
-      {(summary?.topProblematicHours.length || summary?.topProblematicWeekdays.length) ? (
+      {(hasTopProblematicData(summary?.topProblematicHours) ||
+        hasTopProblematicData(summary?.topProblematicWeekdays)) ? (
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Top problematic hours</h3>
-            <ul className="mt-2 space-y-1 text-sm text-slate-700">
-              {summary?.topProblematicHours.map((item) => (
-                <li key={item.label}>
-                  {item.label} · {money(item.averageAbsoluteDifferenceNis)} · {item.count} rides
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Top problematic weekdays</h3>
-            <ul className="mt-2 space-y-1 text-sm text-slate-700">
-              {summary?.topProblematicWeekdays.map((item) => (
-                <li key={item.label}>
-                  {item.label} · {money(item.averageAbsoluteDifferenceNis)} · {item.count} rides
-                </li>
-              ))}
-            </ul>
-          </div>
+          <ProblematicInsightsCard
+            title="Top problematic hours"
+            bucketLabel="hour"
+            buckets={summary?.topProblematicHours ?? { monePriceHigher: [], driverPriceHigher: [] }}
+          />
+          <ProblematicInsightsCard
+            title="Top problematic weekdays"
+            bucketLabel="weekday"
+            buckets={
+              summary?.topProblematicWeekdays ?? { monePriceHigher: [], driverPriceHigher: [] }
+            }
+          />
         </div>
       ) : null}
 
       <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h3 className="text-sm font-semibold text-slate-900">Detailed rides</h3>
-          <p className="text-xs text-slate-500">Sorted by absolute difference (desc)</p>
+          <p className="text-xs text-slate-500">
+            Sorted by {activeSortLabel} ({sortDirection === "desc" ? "high → low" : "low → high"})
+          </p>
         </div>
         {loadingTable ? (
           <p className="text-sm text-slate-500">Loading table…</p>
@@ -604,20 +715,18 @@ export function DriverPriceComparisonDashboard() {
             <table className="min-w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-600">
                 <tr>
-                  {[
-                    "Date",
-                    "Time",
-                    "Day",
-                    "Km",
-                    "Min",
-                    "Driver",
-                    "Mone",
-                    "Diff NIS",
-                    "Diff %",
-                    "Flag",
-                  ].map((header) => (
-                    <th key={header} className="px-2 py-2 font-medium">
-                      {header}
+                  {COMPARISON_TABLE_COLUMNS.map((column) => (
+                    <th key={column.key} className="px-2 py-2 font-medium">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 hover:text-slate-900"
+                        onClick={() => handleSortColumn(column.key)}
+                      >
+                        {column.label}
+                        {sortKey === column.key ? (
+                          <span aria-hidden="true">{sortDirection === "desc" ? "↓" : "↑"}</span>
+                        ) : null}
+                      </button>
                     </th>
                   ))}
                 </tr>
@@ -625,6 +734,7 @@ export function DriverPriceComparisonDashboard() {
               <tbody>
                 {tableRows.map((row) => (
                   <tr key={row.orderId} className="border-t border-slate-100">
+                    <td className="px-2 py-1.5 font-mono text-[11px]">{row.orderId}</td>
                     <td className="px-2 py-1.5">{row.orderDate}</td>
                     <td className="px-2 py-1.5">{row.orderTime}</td>
                     <td className="px-2 py-1.5">{row.dayOfWeek}</td>

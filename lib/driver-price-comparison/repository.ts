@@ -1,27 +1,31 @@
 import { getSupabaseAdminClient } from "@/lib/supabase";
 import {
+  ANALYTICS_DIFFERENCE_FLAGS,
   DAY_OF_WEEK_LABELS,
   isComparableRide,
+  isTopProblematicDriverPriceHigher,
   mapDbEnrichedRow,
   type ComparisonEnrichedRow,
   type DayOfWeekLabel,
-  type DifferenceFlag,
 } from "@/lib/driver-price-comparison/calculated-fields";
 import {
   normalizeComparisonFilters,
   percentile,
 } from "@/lib/driver-price-comparison/filters";
+import { sortComparisonRows } from "@/lib/driver-price-comparison/table-sort";
 import type {
   ComparisonFilters,
   ComparisonKpis,
   ComparisonSummaryResponse,
   ComparisonTableRow,
+  ComparisonTableSortKey,
   DistanceBucketPoint,
   FrequencyByDayPoint,
   HeatmapCell,
   RankedBucket,
   ScatterPoint,
   SeverityByDayPoint,
+  TopProblematicBuckets,
   TrendPoint,
 } from "@/lib/driver-price-comparison/types";
 
@@ -91,7 +95,7 @@ export async function fetchEnrichedRows(
 
     for (const row of data) {
       const mapped = mapDbEnrichedRow(row as Record<string, unknown>);
-      if (mapped) rows.push(mapped);
+      if (mapped && isComparableRide(mapped)) rows.push(mapped);
     }
     if (data.length < batchSize) break;
     from += batchSize;
@@ -143,7 +147,7 @@ function buildKpis(rows: ComparisonEnrichedRow[], coverage: Awaited<ReturnType<t
     (row) => row.difference_flag !== "No difference",
   ).length;
   const absDiffs = analyticsRows.map((row) => row.absolute_difference_nis);
-  const pctDiffs = rows
+  const pctDiffs = analyticsRows
     .map((row) => row.difference_percent)
     .filter((value): value is number => value !== null);
 
@@ -171,11 +175,7 @@ function buildFrequencyByDay(rows: ComparisonEnrichedRow[]): FrequencyByDayPoint
   }
   const output: FrequencyByDayPoint[] = [];
   for (const dayOfWeek of DAY_OF_WEEK_LABELS) {
-    for (const differenceFlag of [
-      "No difference",
-      "Driver price higher",
-      "Mone price higher",
-    ] as DifferenceFlag[]) {
+    for (const differenceFlag of ANALYTICS_DIFFERENCE_FLAGS) {
       output.push({
         dayOfWeek,
         differenceFlag,
@@ -287,9 +287,23 @@ function buildTrendByDay(rows: ComparisonEnrichedRow[]): TrendPoint[] {
     });
 }
 
-function buildTopProblematicHours(rows: ComparisonEnrichedRow[]): RankedBucket[] {
+function matchesTopProblematicFlag(
+  row: ComparisonEnrichedRow,
+  differenceFlag: "Mone price higher" | "Driver price higher",
+) {
+  if (differenceFlag === "Driver price higher") {
+    return isTopProblematicDriverPriceHigher(row);
+  }
+  return row.difference_flag === differenceFlag;
+}
+
+function buildTopProblematicHours(
+  rows: ComparisonEnrichedRow[],
+  differenceFlag: "Mone price higher" | "Driver price higher",
+): RankedBucket[] {
   const buckets = new Map<number, number[]>();
   for (const row of comparableRows(rows)) {
+    if (!matchesTopProblematicFlag(row, differenceFlag)) continue;
     const list = buckets.get(row.hour) ?? [];
     list.push(row.absolute_difference_nis);
     buckets.set(row.hour, list);
@@ -305,16 +319,42 @@ function buildTopProblematicHours(rows: ComparisonEnrichedRow[]): RankedBucket[]
     .slice(0, 5);
 }
 
-function buildTopProblematicWeekdays(rows: ComparisonEnrichedRow[]): RankedBucket[] {
-  const analyticsRows = comparableRows(rows);
-  return buildSeverityByDay(rows)
-    .map((point) => ({
-      label: point.dayOfWeek,
-      count: analyticsRows.filter((row) => row.day_of_week === point.dayOfWeek).length,
-      averageAbsoluteDifferenceNis: point.averageAbsoluteDifferenceNis,
-    }))
+function buildTopProblematicWeekdays(
+  rows: ComparisonEnrichedRow[],
+  differenceFlag: "Mone price higher" | "Driver price higher",
+): RankedBucket[] {
+  const buckets = new Map<DayOfWeekLabel, number[]>();
+  for (const row of comparableRows(rows)) {
+    if (!matchesTopProblematicFlag(row, differenceFlag)) continue;
+    const list = buckets.get(row.day_of_week) ?? [];
+    list.push(row.absolute_difference_nis);
+    buckets.set(row.day_of_week, list);
+  }
+  return DAY_OF_WEEK_LABELS.map((dayOfWeek) => {
+    const values = buckets.get(dayOfWeek) ?? [];
+    return {
+      label: dayOfWeek,
+      count: values.length,
+      averageAbsoluteDifferenceNis:
+        values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0,
+    };
+  })
+    .filter((point) => point.count > 0)
     .sort((a, b) => b.averageAbsoluteDifferenceNis - a.averageAbsoluteDifferenceNis)
     .slice(0, 5);
+}
+
+function buildTopProblematicBuckets(
+  rows: ComparisonEnrichedRow[],
+  buildBuckets: (
+    sourceRows: ComparisonEnrichedRow[],
+    differenceFlag: "Mone price higher" | "Driver price higher",
+  ) => RankedBucket[],
+): TopProblematicBuckets {
+  return {
+    monePriceHigher: buildBuckets(rows, "Mone price higher"),
+    driverPriceHigher: buildBuckets(rows, "Driver price higher"),
+  };
 }
 
 function buildMismatchAlert(rows: ComparisonEnrichedRow[]) {
@@ -366,8 +406,8 @@ export async function buildComparisonSummary(
     byDistance: buildByDistance(rows),
     scatterSample: buildScatterSample(rows),
     trendByDay: buildTrendByDay(rows),
-    topProblematicHours: buildTopProblematicHours(rows),
-    topProblematicWeekdays: buildTopProblematicWeekdays(rows),
+    topProblematicHours: buildTopProblematicBuckets(rows, buildTopProblematicHours),
+    topProblematicWeekdays: buildTopProblematicBuckets(rows, buildTopProblematicWeekdays),
     anomalyCount,
     mismatchAlert: buildMismatchAlert(rows),
   };
@@ -393,13 +433,15 @@ export async function fetchComparisonRowsPage(input: {
   filters: Partial<ComparisonFilters>;
   page: number;
   pageSize: number;
+  sortKey?: ComparisonTableSortKey;
+  sortDirection?: "asc" | "desc";
 }) {
   const page = Math.max(1, input.page);
   const pageSize = Math.min(200, Math.max(1, input.pageSize));
+  const sortDirection = input.sortDirection === "asc" ? "asc" : "desc";
+  const sortKey = input.sortKey ?? "differenceNis";
   const rows = await fetchEnrichedRows(input.filters, EXPORT_MAX_ROWS);
-  const sorted = [...rows].sort(
-    (a, b) => b.absolute_difference_nis - a.absolute_difference_nis,
-  );
+  const sorted = sortComparisonRows(rows, sortKey, sortDirection);
   const start = (page - 1) * pageSize;
   const slice = sorted.slice(start, start + pageSize);
   return {
@@ -412,9 +454,7 @@ export async function fetchComparisonRowsPage(input: {
 
 export async function fetchComparisonExportRows(rawFilters: Partial<ComparisonFilters>) {
   const rows = await fetchEnrichedRows(rawFilters, EXPORT_MAX_ROWS);
-  return [...rows]
-    .sort((a, b) => b.absolute_difference_nis - a.absolute_difference_nis)
-    .map(toTableRow);
+  return sortComparisonRows(rows, "differenceNis", "desc").map(toTableRow);
 }
 
 export function rowsToCsv(rows: ComparisonTableRow[]) {
