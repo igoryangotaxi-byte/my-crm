@@ -5,22 +5,31 @@ alwaysApply: true
 
 # Production Release Governance
 
-- Deploy to production only when the user explicitly requests it in this chat.
-- For every production release, create a git commit with the release changes before deploy.
-- For every production release, record the release in release notes.
+When the user asks to ship to production (e.g. «можно в прод», «deploy to prod», «выложи в прод»), run the **full release pipeline** in this chat — do not stop after local commits only.
 
-## Required Release Flow
+## Required Release Flow (complete every step)
 
-1. Confirm the user asked to deploy to production.
-2. Ensure release changes are committed to git (no uncommitted release edits).
-3. Deploy to production.
-4. Add a release-notes entry in `components/dashboard/ReleaseNotesPanel.tsx` that includes:
-   - short release title,
+1. **Verify** — run relevant tests and `npm run build`; fix failures before shipping.
+2. **Version** — bump `package.json` `version` (patch unless user asked for minor/major).
+3. **Commit feature/fix** — one or more commits with clear messages (feature first, then release wrapper if needed).
+4. **Release notes** — add entry at top of `components/dashboard/ReleaseNotesPanel.tsx`:
+   - date, short title with version,
    - what changed,
-   - commit hash.
+   - commit hash (use short hash after commit).
+5. **Commit release notes** — separate `docs(release): …` commit if not in the same commit.
+6. **Push** — `git push origin main` (or the branch the user specified). Retry with `required_permissions: ["all"]`. If push fails on HTTPS, try `gh` or SSH; report clearly only if auth is missing on the machine.
+7. **Deploy** — `npx vercel deploy --prod --yes` from repo root (`required_permissions: ["all"]`). Wait until alias (e.g. applitaxi.space) is ready.
+8. **Report** — production URL, Vercel inspect link, version, commit hash(es), and whether `git push` succeeded.
 
 ## Guardrails
 
-- Do not perform production deploys proactively.
-- If a deploy is requested but there are no committed changes, ask for confirmation before deploying.
-- If release notes were not updated yet, update them in the same release task.
+- Deploy to production **only** when the user explicitly requests it in this chat.
+- Do not deploy proactively after implementing a feature.
+- Do not skip release notes or version bump for production releases.
+- Do not use `git commit --amend` unless user rules allow it.
+- Never update git config (user name/email, credential helpers).
+- If there are no code changes to ship, confirm with the user before deploying.
+
+## SQL / schema
+
+- If the release adds or changes Supabase schema, remind the user to run the SQL file in Supabase SQL Editor (or `npm run db:apply:*` when applicable) — deploy alone does not apply DB migrations.

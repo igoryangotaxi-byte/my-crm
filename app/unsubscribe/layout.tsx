@@ -1,4 +1,11 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
+
+const yangoHeadline = localFont({
+  src: "../../public/fonts/yango-headline.ttf",
+  display: "swap",
+  variable: "--font-yango-headline",
+});
 
 export const metadata: Metadata = {
   title: "Unsubscribed",
@@ -10,5 +17,5 @@ export default function UnsubscribeLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return children;
+  return <div className={yangoHeadline.variable}>{children}</div>;
 }
