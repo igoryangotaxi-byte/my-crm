@@ -1,0 +1,103 @@
+.screen {
+  display: flex;
+  min-height: 100dvh;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  padding: 24px;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  max-width: 320px;
+  width: 100%;
+  text-align: center;
+}
+
+.checkWrap {
+  width: 88px;
+  height: 88px;
+}
+
+.checkSvg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.circle {
+  fill: none;
+  stroke: #22c55e;
+  stroke-width: 3;
+  transform-origin: 44px 44px;
+  animation: circlePop 520ms cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+}
+
+.checkPath {
+  fill: none;
+  stroke: #22c55e;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: checkDraw 420ms cubic-bezier(0.2, 0.8, 0.2, 1) 380ms forwards;
+}
+
+.title {
+  margin: 0;
+  color: #21201f;
+  font-size: clamp(2rem, 7vw, 2.5rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  transform: skewX(-8deg);
+  opacity: 0;
+  translate: 0 12px;
+  animation: titleIn 520ms cubic-bezier(0.2, 0.8, 0.2, 1) 680ms forwards;
+}
+
+@keyframes circlePop {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes checkDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes titleIn {
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .circle,
+  .checkPath,
+  .title {
+    animation: none;
+    opacity: 1;
+    translate: 0 0;
+    transform: none;
+    stroke-dashoffset: 0;
+  }
+
+  .title {
+    transform: skewX(-8deg);
+  }
+}

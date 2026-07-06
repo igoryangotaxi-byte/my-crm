@@ -44,6 +44,17 @@ body {
   --accent-strong: #e29b00;
 }
 
+.unsubscribe-theme {
+  --background: #ffffff;
+  --foreground: #21201f;
+  background: #ffffff;
+  color: #21201f;
+}
+
+body:has(.unsubscribe-theme) {
+  background: #ffffff;
+}
+
 .gett-theme .crm-surface {
   background: #ffffff;
   border: 1px solid rgba(229, 231, 235, 0.9);
