@@ -9,7 +9,7 @@ const releaseItems: ReleaseItem[] = [
     date: "2026-07-06",
     title: "Unsubscribe page Yango Headline font (0.2.25)",
     notes:
-      "TBD_COMMIT — App version 0.2.25. /unsubscribe: Yango Headline font, simplified animations (taxi removed), standalone public landing at applitaxi.space/unsubscribe.",
+      "08beeb5c — App version 0.2.25. /unsubscribe: Yango Headline font, simplified animations (taxi removed), standalone public landing at applitaxi.space/unsubscribe.",
   },
   {
     date: "2026-05-27",
