@@ -9,7 +9,7 @@ const releaseItems: ReleaseItem[] = [
     date: "2026-05-27",
     title: "Unsubscribe landing page (0.2.24)",
     notes:
-      "TBD_COMMIT — App version 0.2.24. Public /unsubscribe page: white Yango-style landing with animated green checkmark and Hebrew title (ההרשמה בוטלה), no auth required.",
+      "8fa937dc — App version 0.2.24. Public /unsubscribe page: white Yango-style landing with animated green checkmark and Hebrew title (ההרשמה בוטלה), no auth required.",
   },
   {
     date: "2026-05-27",
