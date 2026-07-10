@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-07-10",
+    title: "Sales Operation CRM + Gett removal (0.2.26)",
+    notes:
+      "0a83da7a — App version 0.2.26. New Sales Operation module: pipeline, clients, B2B registry, analytics, WordPress form webhook. Removed Gett. Access delete removes Auth + profile. proposal_sent works without DB constraint change (compat). Faster clients list. SQL: supabase_sales_operation*.sql, supabase_b2b_client_managers.sql, supabase_auth_roles_account_sales_managers.sql.",
+  },
+  {
     date: "2026-07-06",
     title: "Unsubscribe page Yango Headline font (0.2.25)",
     notes:
