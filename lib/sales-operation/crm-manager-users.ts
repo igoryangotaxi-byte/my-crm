@@ -1,0 +1,34 @@
+import type { AppRole, AuthUser } from "@/types/auth";
+
+export type CrmManagerUserOption = {
+  id: string;
+  name: string;
+  role: AppRole;
+};
+
+export function isInternalCrmUser(user: AuthUser): boolean {
+  return user.status === "approved" && (user.accountType ?? "internal") !== "client";
+}
+
+export function getAccountManagerUserOptions(users: AuthUser[]): CrmManagerUserOption[] {
+  return users
+    .filter(isInternalCrmUser)
+    .filter((user) => user.role === "Account Manager" || user.role === "Admin")
+    .map((user) => ({ id: user.id, name: user.name, role: user.role }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function getSalesManagerUserOptions(users: AuthUser[]): CrmManagerUserOption[] {
+  return users
+    .filter(isInternalCrmUser)
+    .filter((user) => user.role === "Sales Manager" || user.role === "Admin")
+    .map((user) => ({ id: user.id, name: user.name, role: user.role }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function getManagerUserOptionsForRole(
+  users: AuthUser[],
+  role: "account" | "sales",
+): CrmManagerUserOption[] {
+  return role === "account" ? getAccountManagerUserOptions(users) : getSalesManagerUserOptions(users);
+}

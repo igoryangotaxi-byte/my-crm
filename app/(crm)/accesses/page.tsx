@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { APP_ROLES } from "@/lib/role-permissions";
 import type {
   AppPageKey,
   AppRole,
@@ -11,7 +12,7 @@ import type {
   TenantAccount,
 } from "@/types/auth";
 
-const roleItems: AppRole[] = ["Admin", "User", "Team Lead"];
+const roleItems: AppRole[] = [...APP_ROLES];
 type AccessAction =
   | { type: "page"; key: AppPageKey; label: string }
   | { type: "area"; key: BusinessArea; label: string }
@@ -37,12 +38,26 @@ const accessSections: AccessSection[] = [
     label: "B2B pages",
     actions: [
       { type: "page", key: "dashboard", label: "Dashboard" },
+      { type: "page", key: "clients", label: "Clients" },
       { type: "page", key: "requestRides", label: "Request Rides" },
       { type: "page", key: "preOrders", label: "Pre-Orders" },
       { type: "page", key: "orders", label: "Orders" },
       { type: "page", key: "communications", label: "Communications" },
+      { type: "page", key: "financialCenter", label: "Business Center" },
       { type: "page", key: "priceCalculator", label: "Price Calculator" },
       { type: "page", key: "notes", label: "Notes" },
+    ],
+  },
+  {
+    key: "sales-operation",
+    label: "Sales Operation",
+    actions: [
+      { type: "page", key: "salesOperation", label: "Sales Operation (shell)" },
+      { type: "page", key: "salesPipeline", label: "Pipeline" },
+      { type: "page", key: "salesSignedClients", label: "Signed Clients" },
+      { type: "page", key: "salesB2BClients", label: "B2B Clients Overview" },
+      { type: "page", key: "salesAnalytics", label: "Analytics" },
+      { type: "page", key: "salesManagerAnalytics", label: "Manager Analytics" },
     ],
   },
   {
@@ -543,7 +558,17 @@ export default function AccessesPage() {
                     type="button"
                     aria-label={`Delete ${user.email}`}
                     disabled={!isAdmin || currentUser?.id === user.id}
-                    onClick={() => deleteUser(user.id)}
+                    onClick={async () => {
+                      try {
+                        await deleteUser(user.id);
+                      } catch (error) {
+                        window.alert(
+                          error instanceof Error
+                            ? error.message
+                            : "Failed to delete user.",
+                        );
+                      }
+                    }}
                     className="crm-hover-lift inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-300/80 bg-gradient-to-b from-rose-500 to-red-600 text-white shadow-[0_10px_18px_rgba(225,29,72,0.32)] transition disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     <DeleteIcon />
@@ -960,7 +985,18 @@ export default function AccessesPage() {
                                       type="button"
                                       aria-label={`Delete ${user.email}`}
                                       disabled={!isAdmin || currentUser?.id === user.id}
-                                      onClick={() => deleteUser(user.id)}
+                                      onClick={async () => {
+                                        try {
+                                          await deleteUser(user.id);
+                                          setCabinetMessage(`Removed ${user.email}.`);
+                                        } catch (error) {
+                                          setCabinetMessage(
+                                            error instanceof Error
+                                              ? error.message
+                                              : "Failed to delete user.",
+                                          );
+                                        }
+                                      }}
                                       className="crm-hover-lift inline-flex h-7 w-7 items-center justify-center rounded-md border border-rose-300/80 bg-gradient-to-b from-rose-500 to-red-600 text-white shadow-[0_8px_16px_rgba(225,29,72,0.3)] transition disabled:cursor-not-allowed disabled:opacity-45"
                                     >
                                       <DeleteIcon />
@@ -1221,7 +1257,19 @@ export default function AccessesPage() {
                         type="button"
                         aria-label={`Delete ${user.email}`}
                         disabled={!isAdmin || currentUser?.id === user.id}
-                        onClick={() => deleteUser(user.id)}
+                        onClick={async () => {
+                          setMainUsersMessage(null);
+                          try {
+                            await deleteUser(user.id);
+                            setMainUsersMessage(`Removed platform access for ${user.email}.`);
+                          } catch (error) {
+                            setMainUsersMessage(
+                              error instanceof Error
+                                ? error.message
+                                : "Failed to remove platform access.",
+                            );
+                          }
+                        }}
                         className="crm-hover-lift inline-flex h-7 w-7 items-center justify-center rounded-md border border-rose-300/80 bg-gradient-to-b from-rose-500 to-red-600 text-white shadow-[0_8px_16px_rgba(225,29,72,0.3)] transition disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         <DeleteIcon />

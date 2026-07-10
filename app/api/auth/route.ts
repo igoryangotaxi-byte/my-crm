@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   createAuthBackedUser,
+  deleteAuthBackedUser,
   loadAuthStore,
   saveAuthStore,
   updateAuthUserPassword,
@@ -14,6 +15,7 @@ import { ensureRequestRideUserByPhone, listYangoClientUsers } from "@/lib/yango-
 import { removeMappedUserId, upsertMappedUserId } from "@/lib/request-rides-user-map";
 import { getRequestUser } from "@/lib/server-auth";
 import { createSessionToken, SESSION_COOKIE_NAME } from "@/lib/server-session";
+import { buildAllPageAccess } from "@/lib/role-permissions";
 import {
   type AuthApiActionRequest,
   type AuthStoreData,
@@ -559,20 +561,7 @@ export async function POST(request: Request) {
         ...store,
         rolePermissions: {
           ...store.rolePermissions,
-          [payload.role]: {
-            dashboard: payload.value,
-            clients: payload.value,
-            orders: payload.value,
-            preOrders: payload.value,
-            requestRides: payload.value,
-            communications: payload.value,
-            financialCenter: payload.value,
-            driversMap: payload.value,
-            heatMap: payload.value,
-            priceCalculator: payload.value,
-            accesses: payload.value,
-            notes: payload.value,
-          },
+          [payload.role]: buildAllPageAccess(payload.value),
         },
         roleDashboardBlockAccess: {
           ...store.roleDashboardBlockAccess,
@@ -593,12 +582,94 @@ export async function POST(request: Request) {
           { status: 403 },
         );
       }
+      const target = store.users.find((user) => user.id === payload.userId);
+      if (!target) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "User not found" },
+          { status: 404 },
+        );
+      }
+      if (target.id === sessionUser.id) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "You cannot delete your own account" },
+          { status: 400 },
+        );
+      }
+
+      try {
+        await deleteAuthBackedUser(target.id, { email: target.email });
+      } catch (error) {
+        return NextResponse.json<AuthActionResponse>(
+          {
+            ok: false,
+            message:
+              error instanceof Error ? error.message : "Failed to delete user from auth store",
+          },
+          { status: 500 },
+        );
+      }
+
       const nextStore: AuthStoreData = {
         ...store,
-        users: store.users.filter((user) => user.id !== payload.userId),
+        users: store.users.filter(
+          (user) =>
+            user.id !== target.id &&
+            user.email.trim().toLowerCase() !== target.email.trim().toLowerCase(),
+        ),
       };
-      await saveAuthStore(nextStore);
-      return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
+
+      try {
+        await saveAuthStore(nextStore);
+      } catch (error) {
+        // Auth/profile row is already removed; confirm the user is gone on reload.
+        try {
+          const reloaded = await loadAuthStore();
+          const stillPresent = reloaded.users.some(
+            (user) =>
+              user.id === target.id ||
+              user.email.trim().toLowerCase() === target.email.trim().toLowerCase(),
+          );
+          if (stillPresent) {
+            return NextResponse.json<AuthActionResponse>(
+              {
+                ok: false,
+                message:
+                  error instanceof Error
+                    ? error.message
+                    : "User was partially deleted but still appears in the store",
+              },
+              { status: 500 },
+            );
+          }
+          return NextResponse.json<AuthActionResponse>({
+            ok: true,
+            message: "User deleted",
+            data: sanitizeStore({
+              ...reloaded,
+              users: reloaded.users.filter(
+                (user) =>
+                  user.id !== target.id &&
+                  user.email.trim().toLowerCase() !== target.email.trim().toLowerCase(),
+              ),
+            }),
+          });
+        } catch {
+          return NextResponse.json<AuthActionResponse>(
+            {
+              ok: false,
+              message:
+                error instanceof Error ? error.message : "Failed to persist user deletion",
+            },
+            { status: 500 },
+          );
+        }
+      }
+
+      return NextResponse.json<AuthActionResponse>({
+        ok: true,
+        message: "User deleted",
+        data: sanitizeStore(nextStore),
+      });
     }
     // Programmatic tenant bootstrap (API/scripts). Primary onboarding UX is Notes → "Add client by API token".
     case "upsertTenantAccount": {

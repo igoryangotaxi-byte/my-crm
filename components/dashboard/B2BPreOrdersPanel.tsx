@@ -1,17 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { b2bDashboardOrderKey, type B2BOrdersListCursors } from "@/lib/b2b-orders-keys";
 import { useAuth } from "@/components/auth/AuthProvider";
-import {
-  segmentedTabInactiveClass,
-  segmentedTabSelectedClass,
-  segmentedTabTrackClass,
-} from "@/components/crm/segmented-tab-classes";
-import { useRouteLoading } from "@/components/layout/RouteLoadingContext";
 import type { GpTripsImportResult } from "@/lib/gp-trips-import";
+import {
+  getAccountManagerUserOptions,
+  getSalesManagerUserOptions,
+} from "@/lib/sales-operation/crm-manager-users";
+import type { B2BClientRegistryEntry } from "@/lib/sales-operation/manager-types";
 import type {
   B2BDashboardOrder,
   B2BOrderDetailsResponse,
@@ -31,8 +30,10 @@ export type B2BOrdersRemoteConfig = {
 type B2BPreOrdersPanelProps = {
   rows: B2BDashboardOrder[];
   yangoRows?: YangoSupabaseOrderMetric[];
-  view?: "dashboard" | "orders";
+  view?: "dashboard" | "orders" | "b2bClientsOverview";
   corpClientNameMap?: Record<string, string>;
+  b2bClientRegistry?: B2BClientRegistryEntry[];
+  onB2BRegistryUpdated?: () => void;
   /** Progressive Yango list+report loading for the Orders page */
   ordersRemote?: B2BOrdersRemoteConfig;
 };
@@ -136,7 +137,9 @@ type YangoClientSortKey =
   | "spend"
   | "decoupling"
   | "rate"
-  | "lastTripDate";
+  | "lastTripDate"
+  | "accountManager"
+  | "salesManager";
 
 const YANGO_NUMERIC_CARD_CLASS =
   "rounded-[24px] border border-white/70 bg-white/75 p-4 shadow-[0_14px_30px_rgba(15,23,42,0.08)] backdrop-blur-md transition-all duration-300 crm-hover-lift min-h-[160px]";
@@ -1371,12 +1374,12 @@ export function B2BPreOrdersPanel({
   yangoRows = [],
   view = "dashboard",
   corpClientNameMap = {},
+  b2bClientRegistry = [],
+  onB2BRegistryUpdated,
   ordersRemote,
 }: B2BPreOrdersPanelProps) {
-  const { canAccessDashboardBlock, currentUser } = useAuth();
-  const { startRouteLoading } = useRouteLoading();
+  const { canAccessDashboardBlock, currentUser, users } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const gpUploadInputRef = useRef<HTMLInputElement>(null);
   const defaultFromDate = (() => {
     if (view === "orders" && ordersRemote) {
@@ -1418,9 +1421,12 @@ export function B2BPreOrdersPanel({
   const [yangoMonthFilter, setYangoMonthFilter] = useState("all");
   const [yangoClientFilter, setYangoClientFilter] = useState("all");
   const [yangoClientSearch, setYangoClientSearch] = useState("");
-  const [yangoSortKey, setYangoSortKey] = useState<YangoTableSortKey>("decoupling_desc");
-  const [yangoGranularity, setYangoGranularity] = useState<YangoGranularity>("week");
-  const [yangoCompareWindow, setYangoCompareWindow] = useState<YangoCompareWindow>("week");
+  const [yangoAccountManagerFilter, setYangoAccountManagerFilter] = useState("all");
+  const [yangoSalesManagerFilter, setYangoSalesManagerFilter] = useState("all");
+  const [selectedRegistryClientId, setSelectedRegistryClientId] = useState<string | null>(null);
+  const [managerDraft, setManagerDraft] = useState({ accountManagerUserId: "", salesManagerUserId: "" });
+  const [managerSaving, setManagerSaving] = useState(false);
+  const [managerSaveError, setManagerSaveError] = useState<string | null>(null);
   const [yangoSelectedClients, setYangoSelectedClients] = useState<string[]>([]);
   const [yangoClientSortKey, setYangoClientSortKey] = useState<YangoClientSortKey>("decoupling");
   const [yangoClientSortDir, setYangoClientSortDir] = useState<"asc" | "desc">("desc");
@@ -1434,15 +1440,13 @@ export function B2BPreOrdersPanel({
   const [hasMoreRemote, setHasMoreRemote] = useState(() => ordersRemote?.initialHasMore ?? false);
   const [remoteLoading, setRemoteLoading] = useState(false);
   const [remoteError, setRemoteError] = useState<string | null>(null);
+  const isB2bClientsOverview = view === "b2bClientsOverview";
   const canSeeApiData = view !== "dashboard" || canAccessDashboardBlock("apiData");
-  const canSeeYangoData = view !== "dashboard" || canAccessDashboardBlock("yangoData");
-  const dashboardSectionParam = searchParams.get("section");
-  const dashboardSection =
-    dashboardSectionParam === "api" || dashboardSectionParam === "yango"
-      ? dashboardSectionParam
-      : "api";
-  const showApiDashboardSection = canSeeApiData && dashboardSection !== "yango";
-  const showYangoDashboardSection = canSeeYangoData && dashboardSection !== "api";
+  const canSeeYangoData =
+    isB2bClientsOverview ||
+    (view !== "dashboard" || canAccessDashboardBlock("yangoData"));
+  const showApiDashboardSection = canSeeApiData && view === "dashboard";
+  const showYangoClientsOverview = isB2bClientsOverview;
   const normalizedCorpClientNameMap = useMemo(
     () =>
       new Map<string, string>(
@@ -1455,6 +1459,14 @@ export function B2BPreOrdersPanel({
       ),
     [corpClientNameMap],
   );
+
+  const registryByCorpId = useMemo(
+    () => new Map(b2bClientRegistry.map((entry) => [entry.corpClientId, entry])),
+    [b2bClientRegistry],
+  );
+
+  const accountManagerOptions = useMemo(() => getAccountManagerUserOptions(users), [users]);
+  const salesManagerOptions = useMemo(() => getSalesManagerUserOptions(users), [users]);
 
 
   const [selectedOrder, setSelectedOrder] = useState<B2BDashboardOrder | null>(null);
@@ -1882,116 +1894,6 @@ export function B2BPreOrdersPanel({
     });
   }, [normalizedYangoRows, selectedClientSet, yangoFromDate, yangoToDate]);
 
-  const opsData = useMemo(() => {
-    const from = new Date(`${yangoFromDate}T00:00:00`);
-    const to = new Date(`${yangoToDate}T23:59:59`);
-    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || to < from) {
-      return {
-        points: [] as OpsPoint[],
-        comparePoints: [] as OpsPoint[],
-      };
-    }
-
-    const addStep = (value: Date) => {
-      const next = new Date(value);
-      if (yangoGranularity === "day") next.setDate(next.getDate() + 1);
-      if (yangoGranularity === "week") next.setDate(next.getDate() + 7);
-      if (yangoGranularity === "month") next.setMonth(next.getMonth() + 1);
-      return next;
-    };
-
-    const aggregate = (items: YangoMetricsRow[], start: Date, end: Date, granularity: YangoGranularity) => {
-      const buckets = new Map<string, { requests: number; trips: number; userCancels: number; driverCancels: number }>();
-      const rangeFrom = getBucketKey(start, "day");
-      const rangeTo = getBucketKey(end, "day");
-
-      for (const row of items) {
-        const rowDateKey = getScheduledDateKey(row.scheduledAt);
-        if (!rowDateKey || rowDateKey < rangeFrom || rowDateKey > rangeTo) continue;
-        if (
-          selectedClientSet.size > 0 &&
-          !selectedClientSet.has(normalizeCorpClientId(row.corpClientId))
-        ) {
-          continue;
-        }
-        const bucket = getBucketKey(dateKeyToDate(rowDateKey), granularity);
-        const acc = buckets.get(bucket) ?? {
-          requests: 0,
-          trips: 0,
-          userCancels: 0,
-          driverCancels: 0,
-        };
-        acc.requests += 1;
-        if (row.successOrderFlag === true) acc.trips += 1;
-        if ((row.userStatus ?? "").toLowerCase().includes("cancel")) acc.userCancels += 1;
-        if ((row.driverStatus ?? "").toLowerCase().includes("cancel")) acc.driverCancels += 1;
-        buckets.set(bucket, acc);
-      }
-      return buckets;
-    };
-
-    const currentBuckets = aggregate(normalizedYangoRows, from, to, yangoGranularity);
-    const compareFrom = shiftDate(from, yangoCompareWindow, -1);
-    const compareTo = shiftDate(to, yangoCompareWindow, -1);
-    const compareBuckets = aggregate(normalizedYangoRows, compareFrom, compareTo, yangoGranularity);
-
-    const points: OpsPoint[] = [];
-    const comparePoints: OpsPoint[] = [];
-    for (let cursor = getBucketStart(from, yangoGranularity); cursor <= to; cursor = addStep(cursor)) {
-      const bucket = getBucketKey(cursor, yangoGranularity);
-      const compareBucket = getBucketKey(
-        shiftDate(getBucketStart(cursor, yangoGranularity), yangoCompareWindow, -1),
-        yangoGranularity,
-      );
-      const current = currentBuckets.get(bucket) ?? {
-        requests: 0,
-        trips: 0,
-        userCancels: 0,
-        driverCancels: 0,
-      };
-      const previous = compareBuckets.get(compareBucket) ?? {
-        requests: 0,
-        trips: 0,
-        userCancels: 0,
-        driverCancels: 0,
-      };
-      const label =
-        yangoGranularity === "month"
-          ? formatMonthLabel(bucket.slice(0, 7))
-          : formatShortDate(bucket);
-
-      points.push({
-        ...buildOpsMetricsPoint({
-          date: bucket,
-          label,
-          requests: current.requests,
-          trips: current.trips,
-          userCancels: current.userCancels,
-          driverCancels: current.driverCancels,
-        }),
-      });
-      comparePoints.push({
-        ...buildOpsMetricsPoint({
-          date: compareBucket,
-          label,
-          requests: previous.requests,
-          trips: previous.trips,
-          userCancels: previous.userCancels,
-          driverCancels: previous.driverCancels,
-        }),
-      });
-    }
-
-    return { points, comparePoints };
-  }, [
-    normalizedYangoRows,
-    selectedClientSet,
-    yangoCompareWindow,
-    yangoFromDate,
-    yangoGranularity,
-    yangoToDate,
-  ]);
-
   const decouplingData = useMemo(() => {
     const byClient = new Map<
       string,
@@ -2042,17 +1944,44 @@ export function B2BPreOrdersPanel({
       byClient.set(clientId, client);
     }
 
-    const rows = [...byClient.values()].map((row) => ({
-      ...row,
-      rate: row.spend > 0 ? (row.decoupling / row.spend) * 100 : 0,
-    }));
-    rows.sort((a, b) => {
+    const rows = [...byClient.values()].map((row) => {
+      const registryEntry = registryByCorpId.get(row.clientId);
+      return {
+        ...row,
+        rate: row.spend > 0 ? (row.decoupling / row.spend) * 100 : 0,
+        accountManagerUserId: registryEntry?.accountManager.userId ?? null,
+        accountManagerName: registryEntry?.accountManager.name ?? null,
+        salesManagerUserId: registryEntry?.salesManager.userId ?? null,
+        salesManagerName: registryEntry?.salesManager.name ?? null,
+      };
+    });
+
+    const filteredRows = rows.filter((row) => {
+      if (
+        yangoAccountManagerFilter !== "all" &&
+        (row.accountManagerUserId ?? "") !== yangoAccountManagerFilter
+      ) {
+        return false;
+      }
+      if (yangoSalesManagerFilter !== "all" && (row.salesManagerUserId ?? "") !== yangoSalesManagerFilter) {
+        return false;
+      }
+      return true;
+    });
+
+    filteredRows.sort((a, b) => {
       const factor = yangoClientSortDir === "asc" ? 1 : -1;
       if (yangoClientSortKey === "clientId") return factor * a.clientName.localeCompare(b.clientName);
       if (yangoClientSortKey === "requests") return factor * (a.requests - b.requests);
       if (yangoClientSortKey === "trips") return factor * (a.trips - b.trips);
       if (yangoClientSortKey === "spend") return factor * (a.spend - b.spend);
       if (yangoClientSortKey === "rate") return factor * (a.rate - b.rate);
+      if (yangoClientSortKey === "accountManager") {
+        return factor * (a.accountManagerName ?? "").localeCompare(b.accountManagerName ?? "");
+      }
+      if (yangoClientSortKey === "salesManager") {
+        return factor * (a.salesManagerName ?? "").localeCompare(b.salesManagerName ?? "");
+      }
       if (yangoClientSortKey === "lastTripDate") {
         const aTs = Number.isNaN(a.lastTripTs) ? Number.NEGATIVE_INFINITY : a.lastTripTs;
         const bTs = Number.isNaN(b.lastTripTs) ? Number.NEGATIVE_INFINITY : b.lastTripTs;
@@ -2062,12 +1991,20 @@ export function B2BPreOrdersPanel({
     });
 
     return {
-      totalSpend: rows.reduce((sum, row) => sum + row.spend, 0),
-      totalDriversReceived: rows.reduce((sum, row) => sum + row.driversReceived, 0),
-      totalDecoupling: rows.reduce((sum, row) => sum + row.decoupling, 0),
-      rows,
+      totalSpend: filteredRows.reduce((sum, row) => sum + row.spend, 0),
+      totalDriversReceived: filteredRows.reduce((sum, row) => sum + row.driversReceived, 0),
+      totalDecoupling: filteredRows.reduce((sum, row) => sum + row.decoupling, 0),
+      rows: filteredRows,
     };
-  }, [activeYangoRows, yangoClientSortDir, yangoClientSortKey, normalizedCorpClientNameMap]);
+  }, [
+    activeYangoRows,
+    normalizedCorpClientNameMap,
+    registryByCorpId,
+    yangoAccountManagerFilter,
+    yangoClientSortDir,
+    yangoClientSortKey,
+    yangoSalesManagerFilter,
+  ]);
 
   const openOrderModal = useCallback(async (row: B2BDashboardOrder) => {
     setSelectedOrder(row);
@@ -2180,10 +2117,49 @@ export function B2BPreOrdersPanel({
     const from = new Date(to.getFullYear(), to.getMonth(), 1);
     setYangoFromDate(toDateInputValue(from));
     setYangoToDate(toDateInputValue(to));
-    setYangoGranularity("week");
-    setYangoCompareWindow("week");
     setYangoSelectedClients([]);
     setYangoClientSearch("");
+    setYangoAccountManagerFilter("all");
+    setYangoSalesManagerFilter("all");
+  };
+
+  const openRegistryClientSidebar = (corpClientId: string) => {
+    const entry = registryByCorpId.get(corpClientId);
+    setSelectedRegistryClientId(corpClientId);
+    setManagerDraft({
+      accountManagerUserId: entry?.accountManager.userId ?? "",
+      salesManagerUserId: entry?.salesManager.userId ?? "",
+    });
+    setManagerSaveError(null);
+  };
+
+  const saveRegistryManagers = async () => {
+    if (!selectedRegistryClientId) return;
+    setManagerSaving(true);
+    setManagerSaveError(null);
+    try {
+      const response = await fetch(
+        `/api/sales-operation/b2b-clients/${encodeURIComponent(selectedRegistryClientId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            accountManagerUserId: managerDraft.accountManagerUserId || null,
+            salesManagerUserId: managerDraft.salesManagerUserId || null,
+          }),
+        },
+      );
+      const payload = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error ?? "Failed to update managers.");
+      }
+      onB2BRegistryUpdated?.();
+      setSelectedRegistryClientId(null);
+    } catch (error) {
+      setManagerSaveError(error instanceof Error ? error.message : "Failed to update managers.");
+    } finally {
+      setManagerSaving(false);
+    }
   };
 
   const toggleYangoClient = (clientId: string) => {
@@ -2311,6 +2287,8 @@ export function B2BPreOrdersPanel({
     const headers = [
       "client_name",
       "corp_client_id",
+      "account_manager",
+      "sales_manager",
       "requests",
       "trips",
       "abs_spend",
@@ -2322,6 +2300,8 @@ export function B2BPreOrdersPanel({
       [
         row.clientName,
         row.clientId,
+        row.accountManagerName ?? "",
+        row.salesManagerName ?? "",
         row.requests,
         row.trips,
         row.spend,
@@ -2369,41 +2349,11 @@ export function B2BPreOrdersPanel({
 
   return (
     <>
-    <section className={view === "orders" ? "" : "glass-surface mt-6 rounded-3xl p-4"}>
-      {view === "dashboard" && canSeeApiData && canSeeYangoData ? (
-        <div className={segmentedTabTrackClass}>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={dashboardSection === "api"}
-            onClick={() => {
-              if (dashboardSection === "api") return;
-              startRouteLoading();
-              router.push("/dashboard?section=api");
-            }}
-            className={`flex-1 rounded-xl px-2 py-2.5 text-xs font-semibold sm:px-3 sm:text-sm ${
-              dashboardSection === "api" ? segmentedTabSelectedClass : segmentedTabInactiveClass
-            }`}
-          >
-            API Data
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={dashboardSection === "yango"}
-            onClick={() => {
-              if (dashboardSection === "yango") return;
-              startRouteLoading();
-              router.push("/dashboard?section=yango");
-            }}
-            className={`flex-1 rounded-xl px-2 py-2.5 text-xs font-semibold sm:px-3 sm:text-sm ${
-              dashboardSection === "yango" ? segmentedTabSelectedClass : segmentedTabInactiveClass
-            }`}
-          >
-            Yango Data
-          </button>
-        </div>
-      ) : null}
+    <section
+      className={
+        view === "orders" || isB2bClientsOverview ? "" : "glass-surface mt-6 rounded-3xl p-4"
+      }
+    >
 
       {view === "orders" && ordersRemote?.bootstrapErrors && ordersRemote.bootstrapErrors.length > 0 ? (
         <div className="mb-0.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -2416,7 +2366,7 @@ export function B2BPreOrdersPanel({
         </div>
       ) : null}
 
-      {view !== "dashboard" || dashboardSection !== "yango" ? (
+      {(view === "orders" || (view === "dashboard" && showApiDashboardSection)) ? (
       <div
         className={
           view === "orders"
@@ -2603,11 +2553,19 @@ export function B2BPreOrdersPanel({
           </section>
           ) : null}
 
-          {showYangoDashboardSection ? (
+          {!canSeeApiData ? (
+            <section className="mb-2 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              Your role has no access to Dashboard blocks. Ask Admin to enable API Data.
+            </section>
+          ) : null}
+        </>
+      ) : null}
+
+      {showYangoClientsOverview ? (
           <section className="mb-2 rounded-3xl border border-white/70 bg-white/70 p-4">
             <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h3 className="crm-section-title">Yango Data</h3>
+                <h3 className="crm-section-title">B2B Clients Overview</h3>
                 <p className="crm-subtitle">B2B block with independent filters and compare mode</p>
               </div>
               <div className="grid w-full gap-2 sm:w-auto sm:grid-flow-col sm:auto-cols-max sm:items-end">
@@ -2630,30 +2588,6 @@ export function B2BPreOrdersPanel({
                   />
                 </label>
                 <label className="text-xs text-muted">
-                  Granularity
-                  <select
-                    value={yangoGranularity}
-                    onChange={(event) => setYangoGranularity(event.target.value as YangoGranularity)}
-                    className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700 sm:w-auto"
-                  >
-                    <option value="day">1 Day</option>
-                    <option value="week">1 Week</option>
-                    <option value="month">1 Month</option>
-                  </select>
-                </label>
-                <label className="text-xs text-muted">
-                  Compare
-                  <select
-                    value={yangoCompareWindow}
-                    onChange={(event) => setYangoCompareWindow(event.target.value as YangoCompareWindow)}
-                    className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700 sm:w-auto"
-                  >
-                    <option value="day">1 Day</option>
-                    <option value="week">1 Week</option>
-                    <option value="month">1 Month</option>
-                  </select>
-                </label>
-                <label className="text-xs text-muted">
                   Client search
                   <input
                     type="text"
@@ -2662,6 +2596,36 @@ export function B2BPreOrdersPanel({
                     placeholder="Name or corp_client_id"
                     className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700 sm:w-56"
                   />
+                </label>
+                <label className="text-xs text-muted">
+                  Account Manager
+                  <select
+                    value={yangoAccountManagerFilter}
+                    onChange={(event) => setYangoAccountManagerFilter(event.target.value)}
+                    className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700 sm:w-44"
+                  >
+                    <option value="all">All</option>
+                    {accountManagerOptions.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name} ({user.role})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs text-muted">
+                  Sales Manager
+                  <select
+                    value={yangoSalesManagerFilter}
+                    onChange={(event) => setYangoSalesManagerFilter(event.target.value)}
+                    className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700 sm:w-44"
+                  >
+                    <option value="all">All</option>
+                    {salesManagerOptions.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name} ({user.role})
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <details className="rounded-xl border border-border bg-white/85 px-3 py-2">
                   <summary className="cursor-pointer text-xs font-semibold text-slate-700">
@@ -2709,23 +2673,6 @@ export function B2BPreOrdersPanel({
                 No rows in selected date/client filters.
               </div>
             ) : null}
-
-            <div className="mb-4 grid gap-3 xl:grid-cols-2">
-              <B2BOpsTrendChart
-                title="Requests"
-                subtitle="All corp requests. Compare line is dashed."
-                points={opsData.points}
-                comparePoints={opsData.comparePoints}
-                series={["requests"]}
-              />
-              <B2BOpsTrendChart
-                title="Trips"
-                subtitle="Successful corp trips. Compare line is dashed."
-                points={opsData.points}
-                comparePoints={opsData.comparePoints}
-                series={["trips"]}
-              />
-            </div>
 
             <div className="mb-4 grid gap-3 md:grid-cols-3">
               <article className={YANGO_NUMERIC_CARD_CLASS}>
@@ -2786,6 +2733,24 @@ export function B2BPreOrdersPanel({
                         className="inline-flex items-center gap-1"
                       >
                         Client {renderYangoSortIndicator("clientId")}
+                      </button>
+                    </th>
+                    <th className="px-3 py-2 text-left">
+                      <button
+                        type="button"
+                        onClick={() => toggleYangoClientSort("accountManager")}
+                        className="inline-flex items-center gap-1"
+                      >
+                        Account Manager {renderYangoSortIndicator("accountManager")}
+                      </button>
+                    </th>
+                    <th className="px-3 py-2 text-left">
+                      <button
+                        type="button"
+                        onClick={() => toggleYangoClientSort("salesManager")}
+                        className="inline-flex items-center gap-1"
+                      >
+                        Sales Manager {renderYangoSortIndicator("salesManager")}
                       </button>
                     </th>
                     <th className="px-3 py-2 text-right">
@@ -2882,8 +2847,19 @@ export function B2BPreOrdersPanel({
                           >
                             Open in corp admin
                           </a>
+                          {isB2bClientsOverview ? (
+                            <button
+                              type="button"
+                              onClick={() => openRegistryClientSidebar(row.clientId)}
+                              className="mt-1 inline-flex text-[11px] font-semibold text-red-700 transition hover:text-red-800"
+                            >
+                              Edit managers
+                            </button>
+                          ) : null}
                         </div>
                       </td>
+                      <td className="px-3 py-2 text-slate-700">{row.accountManagerName ?? "—"}</td>
+                      <td className="px-3 py-2 text-slate-700">{row.salesManagerName ?? "—"}</td>
                       <td className="px-3 py-2 text-right text-slate-900">{row.requests.toLocaleString("en-US")}</td>
                       <td className="px-3 py-2 text-right text-slate-900">{row.trips.toLocaleString("en-US")}</td>
                       <td className="px-3 py-2 text-right text-slate-900">{formatMoney(row.spend)}</td>
@@ -2896,7 +2872,7 @@ export function B2BPreOrdersPanel({
                   ))}
                   {decouplingData.rows.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-3 py-6 text-center text-muted">
+                      <td colSpan={9} className="px-3 py-6 text-center text-muted">
                         No client rows for selected filters.
                       </td>
                     </tr>
@@ -2905,13 +2881,70 @@ export function B2BPreOrdersPanel({
               </table>
             </div>
           </section>
-          ) : null}
-          {!canSeeApiData && !canSeeYangoData ? (
-            <section className="mb-2 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              Your role has no access to Dashboard blocks. Ask Admin to enable API Data or Yango Data.
-            </section>
-          ) : null}
-        </>
+      ) : null}
+
+      {isB2bClientsOverview && selectedRegistryClientId ? (
+        <aside className="fixed inset-y-0 right-0 z-[80] flex w-full max-w-[24rem] flex-col border-l border-white/50 bg-white/95 shadow-2xl backdrop-blur-xl">
+          <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
+            <div>
+              <p className="crm-label mb-1">B2B client managers</p>
+              <h2 className="text-lg font-semibold text-slate-900">{selectedRegistryClientId}</h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedRegistryClientId(null)}
+              className="crm-hover-lift inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-700"
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
+          <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4 text-sm">
+            {managerSaveError ? <p className="text-sm text-rose-700">{managerSaveError}</p> : null}
+            <label className="block">
+              <span className="crm-label">Account Manager</span>
+              <select
+                value={managerDraft.accountManagerUserId}
+                onChange={(event) =>
+                  setManagerDraft((prev) => ({ ...prev, accountManagerUserId: event.target.value }))
+                }
+                className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700"
+              >
+                <option value="">Unassigned</option>
+                {accountManagerOptions.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name} ({user.role})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="crm-label">Sales Manager</span>
+              <select
+                value={managerDraft.salesManagerUserId}
+                onChange={(event) =>
+                  setManagerDraft((prev) => ({ ...prev, salesManagerUserId: event.target.value }))
+                }
+                className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700"
+              >
+                <option value="">Unassigned</option>
+                {salesManagerOptions.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name} ({user.role})
+                      </option>
+                    ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => void saveRegistryManagers()}
+              disabled={managerSaving}
+              className="crm-button-primary w-full rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-60"
+            >
+              {managerSaving ? "Saving…" : "Save managers"}
+            </button>
+          </div>
+        </aside>
       ) : null}
     </section>
 

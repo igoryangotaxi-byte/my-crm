@@ -27,6 +27,12 @@ import {
   type TenantAccount,
   type UserStatus,
 } from "@/types/auth";
+import {
+  CURRENT_PERMISSIONS_VERSION,
+  mergeAllRoleAreaAccess,
+  mergeAllRoleDashboardBlockAccess,
+  mergeAllRolePermissions,
+} from "@/lib/role-permissions";
 import enMessages from "@/messages/en.json";
 import heMessages from "@/messages/he.json";
 
@@ -85,53 +91,21 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 function mergePermissions(
   input: Partial<RolePermissions> | null | undefined,
+  storedVersion = CURRENT_PERMISSIONS_VERSION,
 ): RolePermissions {
-  if (!input) {
-    return defaultRolePermissions;
-  }
-
-  return {
-    Admin: { ...defaultRolePermissions.Admin, ...(input.Admin ?? {}) },
-    User: { ...defaultRolePermissions.User, ...(input.User ?? {}) },
-    "Team Lead": {
-      ...defaultRolePermissions["Team Lead"],
-      ...(input["Team Lead"] ?? {}),
-    },
-  };
+  return mergeAllRolePermissions(input ?? undefined, storedVersion);
 }
 
 function mergeAreaAccess(
   input: Partial<RoleAreaAccess> | null | undefined,
 ): RoleAreaAccess {
-  if (!input) {
-    return defaultRoleAreaAccess;
-  }
-
-  return {
-    Admin: { ...defaultRoleAreaAccess.Admin, ...(input.Admin ?? {}) },
-    User: { ...defaultRoleAreaAccess.User, ...(input.User ?? {}) },
-    "Team Lead": {
-      ...defaultRoleAreaAccess["Team Lead"],
-      ...(input["Team Lead"] ?? {}),
-    },
-  };
+  return mergeAllRoleAreaAccess(input ?? undefined);
 }
 
 function mergeDashboardBlockAccess(
   input: Partial<RoleDashboardBlockAccess> | null | undefined,
 ): RoleDashboardBlockAccess {
-  if (!input) {
-    return defaultRoleDashboardBlockAccess;
-  }
-
-  return {
-    Admin: { ...defaultRoleDashboardBlockAccess.Admin, ...(input.Admin ?? {}) },
-    User: { ...defaultRoleDashboardBlockAccess.User, ...(input.User ?? {}) },
-    "Team Lead": {
-      ...defaultRoleDashboardBlockAccess["Team Lead"],
-      ...(input["Team Lead"] ?? {}),
-    },
-  };
+  return mergeAllRoleDashboardBlockAccess(input ?? undefined);
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -236,7 +210,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const applyStoreData = useCallback((data: AuthStoreData) => {
     setUsers(data.users);
-    setRolePermissions(mergePermissions(data.rolePermissions));
+    setRolePermissions(
+      mergePermissions(data.rolePermissions, data.storeMeta?.permissionsVersion ?? 0),
+    );
     setRoleAreaAccess(mergeAreaAccess(data.roleAreaAccess));
     setRoleDashboardBlockAccess(mergeDashboardBlockAccess(data.roleDashboardBlockAccess));
     setTenantAccounts(data.tenantAccounts ?? []);
@@ -445,7 +421,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const deleteUser = useCallback(
     async (userId: string) => {
-      await runAction({ action: "deleteUser", userId });
+      const result = await runAction({ action: "deleteUser", userId });
+      if (!result.ok) {
+        throw new Error(result.message ?? "Failed to remove user access.");
+      }
       setSessionUserId((prev) => (prev === userId ? null : prev));
     },
     [runAction],

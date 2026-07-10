@@ -1,4 +1,4 @@
-export type AppRole = "Admin" | "User" | "Team Lead";
+export type AppRole = "Admin" | "User" | "Team Lead" | "Account Manager" | "Sales Manager";
 export type UserStatus = "pending" | "approved" | "rejected";
 export type BusinessArea = "b2b" | "b2c";
 export type DashboardBlockKey = "apiData" | "yangoData" | "tariffHealthCheck";
@@ -16,6 +16,12 @@ export type AppPageKey =
   | "driversMap"
   | "heatMap"
   | "priceCalculator"
+  | "salesOperation"
+  | "salesPipeline"
+  | "salesSignedClients"
+  | "salesB2BClients"
+  | "salesAnalytics"
+  | "salesManagerAnalytics"
   | "accesses"
   | "notes";
 
@@ -98,6 +104,24 @@ export type AuthStoreData = {
   storeMeta?: { permissionsVersion?: number };
 };
 
+const salesPagesAllTrue = {
+  salesOperation: true,
+  salesPipeline: true,
+  salesSignedClients: true,
+  salesB2BClients: true,
+  salesAnalytics: true,
+  salesManagerAnalytics: true,
+} as const;
+
+const salesPagesAllFalse = {
+  salesOperation: false,
+  salesPipeline: false,
+  salesSignedClients: false,
+  salesB2BClients: false,
+  salesAnalytics: false,
+  salesManagerAnalytics: false,
+} as const;
+
 export const defaultRolePermissions: RolePermissions = {
   Admin: {
     dashboard: true,
@@ -110,6 +134,7 @@ export const defaultRolePermissions: RolePermissions = {
     driversMap: true,
     heatMap: true,
     priceCalculator: true,
+    ...salesPagesAllTrue,
     accesses: true,
     notes: true,
   },
@@ -124,6 +149,7 @@ export const defaultRolePermissions: RolePermissions = {
     driversMap: false,
     heatMap: false,
     priceCalculator: true,
+    ...salesPagesAllFalse,
     accesses: false,
     notes: false,
   },
@@ -138,42 +164,56 @@ export const defaultRolePermissions: RolePermissions = {
     driversMap: false,
     heatMap: false,
     priceCalculator: true,
+    ...salesPagesAllFalse,
     accesses: false,
     notes: true,
+  },
+  "Account Manager": {
+    dashboard: true,
+    clients: true,
+    orders: true,
+    preOrders: true,
+    requestRides: true,
+    communications: true,
+    financialCenter: true,
+    driversMap: false,
+    heatMap: false,
+    priceCalculator: true,
+    ...salesPagesAllTrue,
+    accesses: false,
+    notes: false,
+  },
+  "Sales Manager": {
+    dashboard: true,
+    clients: true,
+    orders: true,
+    preOrders: true,
+    requestRides: true,
+    communications: true,
+    financialCenter: true,
+    driversMap: false,
+    heatMap: false,
+    priceCalculator: true,
+    ...salesPagesAllTrue,
+    accesses: false,
+    notes: false,
   },
 };
 
 export const defaultRoleAreaAccess: RoleAreaAccess = {
-  Admin: {
-    b2b: true,
-    b2c: true,
-  },
-  User: {
-    b2b: true,
-    b2c: false,
-  },
-  "Team Lead": {
-    b2b: true,
-    b2c: false,
-  },
+  Admin: { b2b: true, b2c: true },
+  User: { b2b: true, b2c: false },
+  "Team Lead": { b2b: true, b2c: false },
+  "Account Manager": { b2b: true, b2c: false },
+  "Sales Manager": { b2b: true, b2c: false },
 };
 
 export const defaultRoleDashboardBlockAccess: RoleDashboardBlockAccess = {
-  Admin: {
-    apiData: true,
-    yangoData: true,
-    tariffHealthCheck: true,
-  },
-  User: {
-    apiData: true,
-    yangoData: true,
-    tariffHealthCheck: true,
-  },
-  "Team Lead": {
-    apiData: true,
-    yangoData: true,
-    tariffHealthCheck: true,
-  },
+  Admin: { apiData: true, yangoData: true, tariffHealthCheck: true },
+  User: { apiData: true, yangoData: true, tariffHealthCheck: true },
+  "Team Lead": { apiData: true, yangoData: true, tariffHealthCheck: true },
+  "Account Manager": { apiData: true, yangoData: true, tariffHealthCheck: true },
+  "Sales Manager": { apiData: true, yangoData: true, tariffHealthCheck: true },
 };
 
 export type AuthApiStateResponse = AuthStoreData;

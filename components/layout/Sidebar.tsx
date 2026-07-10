@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useRouteLoading } from "@/components/layout/RouteLoadingContext";
 import type { AppPageKey } from "@/types/auth";
+import { firstAllowedSalesOperationPath } from "@/lib/role-permissions";
 import { useTranslations } from "next-intl";
 
 type IconProps = { className?: string };
@@ -232,7 +233,7 @@ export function Sidebar() {
     "border border-white/25 bg-gradient-to-br from-red-500 to-red-700 text-white shadow-[0_10px_28px_rgba(239,68,68,0.45)]";
   const activeNavBackground =
     "group-hover:bg-gradient-to-r group-hover:from-red-500 group-hover:to-red-600 group-hover:shadow-lg group-hover:shadow-red-500/45";
-  const logoHref = "/gett/request-rides";
+  const logoHref = firstAllowedSalesOperationPath(canAccess) ?? "/request-rides";
   const logoGradient = "from-red-500 to-red-700 text-white";
   const logoShadow = "shadow-[0_10px_26px_rgba(239,68,68,0.5)]";
   const logoBrand = tLayout("brand");

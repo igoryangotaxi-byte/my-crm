@@ -82,13 +82,13 @@ export default async function YangoClientTripsPage({ searchParams }: YangoClient
     return (
       <section className="crm-page relative">
         <div className="mb-3">
-          <Link href="/dashboard?section=yango" className="text-sm font-medium text-accent hover:underline">
-            ← Back to Yango Data
+          <Link href="/sales-operation/b2b-clients" className="text-sm font-medium text-accent hover:underline">
+            ← Back to B2B Clients Overview
           </Link>
         </div>
         <PageHeading
           title="Yango client trips"
-          subtitle="Open this page from Dashboards → Yango Data to pass the client and selected period."
+          subtitle="Open this page from Sales Operation → B2B Clients Overview to pass the client and selected period."
         />
         <section className="glass-surface rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           Missing or invalid `corpClientId`, `from`, or `to` query parameters.
@@ -110,8 +110,8 @@ export default async function YangoClientTripsPage({ searchParams }: YangoClient
   return (
     <section className="crm-page relative">
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <Link href="/dashboard?section=yango" className="text-sm font-medium text-accent hover:underline">
-          ← Back to Yango Data
+        <Link href="/sales-operation/b2b-clients" className="text-sm font-medium text-accent hover:underline">
+          ← Back to B2B Clients Overview
         </Link>
         <a
           href={`https://corp-admin-frontend.taxi.yandex-team.ru/corp-clients?search=${encodeURIComponent(

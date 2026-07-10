@@ -11,9 +11,17 @@ type TableProps<T> = {
   columns: TableColumn<T>[];
   rows: T[];
   emptyText?: string;
+  getRowKey?: (row: T, index: number) => string | number;
+  getRowClassName?: (row: T, index: number) => string | undefined;
 };
 
-export function Table<T>({ columns, rows, emptyText = "No data" }: TableProps<T>) {
+export function Table<T>({
+  columns,
+  rows,
+  emptyText = "No data",
+  getRowKey,
+  getRowClassName,
+}: TableProps<T>) {
   return (
     <div className="glass-surface overflow-hidden rounded-3xl">
       <div className="overflow-x-auto">
@@ -43,7 +51,10 @@ export function Table<T>({ columns, rows, emptyText = "No data" }: TableProps<T>
               </tr>
             ) : (
               rows.map((row, index) => (
-                <tr key={index} className="crm-hover-lift hover:bg-white/65">
+                <tr
+                  key={getRowKey ? getRowKey(row, index) : index}
+                  className={`crm-hover-lift hover:bg-white/65 ${getRowClassName?.(row, index) ?? ""}`.trim()}
+                >
                   {columns.map((column) => (
                     <td
                       key={column.key}

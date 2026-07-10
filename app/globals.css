@@ -20,8 +20,9 @@
   --color-panel: var(--panel);
   --color-border: var(--border);
   --color-accent: var(--accent);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-yango-text);
   --font-mono: var(--font-geist-mono);
+  --font-headline: var(--font-yango-headline);
 }
 
 body {
@@ -30,8 +31,15 @@ body {
     radial-gradient(980px 540px at 102% -18%, rgba(255, 108, 108, 0.2), transparent 66%),
     linear-gradient(180deg, #eceef2 0%, #d6dae0 48%, #cdd2d9 100%);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-yango-text), Arial, Helvetica, sans-serif;
   min-height: 100vh;
+}
+
+.crm-section-title,
+.crm-page h1,
+.crm-page h2,
+.crm-page h3 {
+  font-family: var(--font-yango-headline), var(--font-yango-text), Arial, Helvetica, sans-serif;
 }
 
 .gett-theme {

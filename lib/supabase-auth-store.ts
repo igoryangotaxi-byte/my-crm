@@ -2,6 +2,7 @@ import { kv } from "@vercel/kv";
 import {
   type AccountType,
   type AppLanguage,
+  type AppPageKey,
   type AppRole,
   type AuthStoreData,
   type AuthUser,
@@ -18,6 +19,13 @@ import {
   defaultRolePermissions,
 } from "@/types/auth";
 import {
+  CURRENT_PERMISSIONS_VERSION,
+  isAppRole,
+  mergeAllRoleAreaAccess,
+  mergeAllRoleDashboardBlockAccess,
+  mergeAllRolePermissions,
+} from "@/lib/role-permissions";
+import {
   getSupabaseAdminClient,
   getSupabaseServerClient,
   isSupabaseConfigured,
@@ -28,7 +36,6 @@ const DEFAULT_ADMIN_PASSWORD = "123";
 const DEFAULT_ADMIN_NAME = "Igor Kuznetsov";
 const DEFAULT_LANGUAGE: AppLanguage = "en";
 const DEFAULT_ADMIN_PUBLIC_ID = "user-admin-1";
-const CURRENT_PERMISSIONS_VERSION = 7;
 const AUTH_STORE_KEY = "appli:auth:store:v1";
 let fallbackMemoryStore: AuthStoreData | null = null;
 
@@ -134,9 +141,6 @@ function normalizeAccountType(value: unknown): AccountType {
   return value === "client" ? "client" : "internal";
 }
 
-function isAppRole(value: unknown): value is AppRole {
-  return value === "Admin" || value === "User" || value === "Team Lead";
-}
 
 function isUserStatus(value: unknown): value is UserStatus {
   return value === "pending" || value === "approved" || value === "rejected";
@@ -255,6 +259,15 @@ function getDevelopmentFallbackStore() {
 
 function shouldUseDevelopmentFallbackStore() {
   return canUseDevelopmentFallback() && fallbackMemoryStore != null;
+}
+
+function isAuthUserAlreadyRemovedError(message: string) {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("not found") ||
+    normalized.includes("user not found") ||
+    normalized.includes("does not exist")
+  );
 }
 
 function ensureDefaultAdmin(users: AuthUser[]): AuthUser[] {
@@ -407,53 +420,12 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
 
   const tenantRoles = normalizeTenantRoles(data.tenantRoles, tenantAccounts);
   const storedVersion = data.storeMeta?.permissionsVersion ?? 0;
-  const mergedUserPerms = {
-    ...base.rolePermissions.User,
-    ...(data.rolePermissions?.User ?? {}),
-  };
-  const userPerms =
-    storedVersion < CURRENT_PERMISSIONS_VERSION
-      ? {
-          ...mergedUserPerms,
-          orders: true,
-          preOrders: true,
-          communications: true,
-          financialCenter: true,
-        }
-      : mergedUserPerms;
 
   return {
     users,
-    rolePermissions: {
-      Admin: { ...base.rolePermissions.Admin, ...(data.rolePermissions?.Admin ?? {}) },
-      User: userPerms,
-      "Team Lead": {
-        ...base.rolePermissions["Team Lead"],
-        ...(data.rolePermissions?.["Team Lead"] ?? {}),
-      },
-    },
-    roleAreaAccess: {
-      Admin: { ...base.roleAreaAccess.Admin, ...(data.roleAreaAccess?.Admin ?? {}) },
-      User: { ...base.roleAreaAccess.User, ...(data.roleAreaAccess?.User ?? {}) },
-      "Team Lead": {
-        ...base.roleAreaAccess["Team Lead"],
-        ...(data.roleAreaAccess?.["Team Lead"] ?? {}),
-      },
-    },
-    roleDashboardBlockAccess: {
-      Admin: {
-        ...base.roleDashboardBlockAccess.Admin,
-        ...(data.roleDashboardBlockAccess?.Admin ?? {}),
-      },
-      User: {
-        ...base.roleDashboardBlockAccess.User,
-        ...(data.roleDashboardBlockAccess?.User ?? {}),
-      },
-      "Team Lead": {
-        ...base.roleDashboardBlockAccess["Team Lead"],
-        ...(data.roleDashboardBlockAccess?.["Team Lead"] ?? {}),
-      },
-    },
+    rolePermissions: mergeAllRolePermissions(data.rolePermissions, storedVersion),
+    roleAreaAccess: mergeAllRoleAreaAccess(data.roleAreaAccess),
+    roleDashboardBlockAccess: mergeAllRoleDashboardBlockAccess(data.roleDashboardBlockAccess),
     tenantAccounts,
     tenantRoles,
     globalB2CSettings: {
@@ -969,13 +941,28 @@ async function deleteRemovedProfiles(
   const wantedIds = new Set(users.map((user) => user.id));
   const { data, error } = await supabase.from("crm_user_profiles").select("id,auth_user_id");
   if (error) throw new Error(`Failed to inspect stored profiles: ${error.message}`);
-  const rows = (data ?? []) as Array<{ id: string; auth_user_id: string }>;
+  const rows = (data ?? []) as Array<{ id: string; auth_user_id: string | null }>;
+  const profileIdsToDelete: string[] = [];
+
   for (const row of rows) {
     if (wantedIds.has(row.id)) continue;
+    profileIdsToDelete.push(row.id);
+    if (!row.auth_user_id) continue;
+
     const { error: deleteAuthError } = await supabase.auth.admin.deleteUser(row.auth_user_id);
-    if (deleteAuthError) {
+    if (deleteAuthError && !isAuthUserAlreadyRemovedError(deleteAuthError.message)) {
       throw new Error(`Failed to delete auth user ${row.id}: ${deleteAuthError.message}`);
     }
+  }
+
+  if (profileIdsToDelete.length === 0) return;
+
+  const { error: deleteProfilesError } = await supabase
+    .from("crm_user_profiles")
+    .delete()
+    .in("id", profileIdsToDelete);
+  if (deleteProfilesError) {
+    throw new Error(`Failed to delete CRM user profiles: ${deleteProfilesError.message}`);
   }
 }
 
@@ -1424,6 +1411,22 @@ export async function createAuthBackedUser(input: AuthUserInput): Promise<AuthUs
     language: normalizeLanguage(input.language),
   };
 
+  // Clear orphan profiles so re-registration after admin delete can create a fresh pending row.
+  const { error: clearEmailError } = await supabase
+    .from("crm_user_profiles")
+    .delete()
+    .eq("email", normalizedEmail);
+  if (clearEmailError && !isMissingSupabaseAuthSchemaMessage(clearEmailError.message)) {
+    throw new Error(`Failed to clear existing CRM profile for ${normalizedEmail}: ${clearEmailError.message}`);
+  }
+  const { error: clearAuthError } = await supabase
+    .from("crm_user_profiles")
+    .delete()
+    .eq("auth_user_id", authUserId);
+  if (clearAuthError && !isMissingSupabaseAuthSchemaMessage(clearAuthError.message)) {
+    throw new Error(`Failed to clear CRM profile for auth user: ${clearAuthError.message}`);
+  }
+
   const { error: profileError } = await supabase.from("crm_user_profiles").insert(
     toProfileRows([user])[0],
   );
@@ -1456,17 +1459,82 @@ export async function updateAuthUserPassword(authUserId: string, password: strin
   if (error) throw new Error(`Failed to update auth password: ${error.message}`);
 }
 
-export async function deleteAuthBackedUser(publicUserId: string): Promise<void> {
+export async function deleteAuthBackedUser(
+  publicUserId: string,
+  options?: { email?: string | null },
+): Promise<void> {
+  if ((!isSupabaseConfigured() && canUseDevelopmentFallback()) || shouldUseDevelopmentFallbackStore()) {
+    return;
+  }
+
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase
     .from("crm_user_profiles")
-    .select("auth_user_id")
+    .select("id,auth_user_id,email")
     .eq("id", publicUserId)
     .maybeSingle();
-  if (error) throw new Error(`Failed to load profile for deletion: ${error.message}`);
-  if (!data?.auth_user_id) return;
-  const { error: deleteError } = await supabase.auth.admin.deleteUser(data.auth_user_id);
-  if (deleteError) throw new Error(`Failed to delete auth user: ${deleteError.message}`);
+  if (error) {
+    if (isMissingSupabaseAuthSchemaMessage(error.message)) {
+      return;
+    }
+    throw new Error(`Failed to load profile for deletion: ${error.message}`);
+  }
+
+  const email =
+    (typeof data?.email === "string" && data.email.trim()
+      ? data.email.trim().toLowerCase()
+      : null) ??
+    (typeof options?.email === "string" && options.email.trim()
+      ? options.email.trim().toLowerCase()
+      : null);
+
+  const authIds = new Set<string>();
+  if (typeof data?.auth_user_id === "string" && data.auth_user_id) {
+    authIds.add(data.auth_user_id);
+  }
+  if (email) {
+    const byEmail = await findAuthUserByEmail(supabase, email);
+    if (byEmail?.id) authIds.add(byEmail.id);
+  }
+
+  for (const authUserId of authIds) {
+    const { error: deleteAuthError } = await supabase.auth.admin.deleteUser(authUserId);
+    if (deleteAuthError && !isAuthUserAlreadyRemovedError(deleteAuthError.message)) {
+      throw new Error(`Failed to delete auth user: ${deleteAuthError.message}`);
+    }
+  }
+
+  // Profiles may already be gone via ON DELETE CASCADE; delete explicitly for DBs without cascade.
+  if (data?.id) {
+    const { error: deleteByIdError } = await supabase
+      .from("crm_user_profiles")
+      .delete()
+      .eq("id", data.id);
+    if (deleteByIdError && !isMissingSupabaseAuthSchemaMessage(deleteByIdError.message)) {
+      throw new Error(`Failed to delete CRM user profile: ${deleteByIdError.message}`);
+    }
+  }
+  if (publicUserId) {
+    const { error: deleteByPublicIdError } = await supabase
+      .from("crm_user_profiles")
+      .delete()
+      .eq("id", publicUserId);
+    if (
+      deleteByPublicIdError &&
+      !isMissingSupabaseAuthSchemaMessage(deleteByPublicIdError.message)
+    ) {
+      throw new Error(`Failed to delete CRM user profile by id: ${deleteByPublicIdError.message}`);
+    }
+  }
+  if (email) {
+    const { error: deleteByEmailError } = await supabase
+      .from("crm_user_profiles")
+      .delete()
+      .eq("email", email);
+    if (deleteByEmailError && !isMissingSupabaseAuthSchemaMessage(deleteByEmailError.message)) {
+      throw new Error(`Failed to delete CRM user profile by email: ${deleteByEmailError.message}`);
+    }
+  }
 }
 
 export async function verifyLoginCredentials(email: string, password: string): Promise<AuthUser | null> {

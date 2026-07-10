@@ -2,6 +2,7 @@ import { kv } from "@vercel/kv";
 import {
   type AccountType,
   type AppLanguage,
+  type AppPageKey,
   type AppRole,
   type ClientRoleDefinition,
   type AuthStoreData,
@@ -13,6 +14,13 @@ import {
   defaultRoleDashboardBlockAccess,
   defaultRolePermissions,
 } from "@/types/auth";
+import {
+  CURRENT_PERMISSIONS_VERSION,
+  isAppRole,
+  mergeAllRoleAreaAccess,
+  mergeAllRoleDashboardBlockAccess,
+  mergeAllRolePermissions,
+} from "@/lib/role-permissions";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import {
   createAuthBackedUser as createSupabaseAuthBackedUser,
@@ -80,7 +88,6 @@ function ensureDefaultAdmin(users: AuthUser[]): AuthUser[] {
   ];
 }
 
-const CURRENT_PERMISSIONS_VERSION = 7;
 
 const LEGACY_REMOVED_CLIENT_CABINET_CORP_IDS = new Set([
   "8234b0f928a348e19cf8ccf2df6d4fd7",
@@ -131,10 +138,6 @@ function createDefaultStore(): AuthStoreData {
     },
     storeMeta: { permissionsVersion: CURRENT_PERMISSIONS_VERSION },
   };
-}
-
-function isAppRole(value: unknown): value is AppRole {
-  return value === "Admin" || value === "User" || value === "Team Lead";
 }
 
 function isUserStatus(value: unknown): value is UserStatus {
@@ -264,53 +267,12 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
   const tenantRoles = normalizeTenantRoles(data.tenantRoles, tenantAccounts);
 
   const storedVersion = data.storeMeta?.permissionsVersion ?? 0;
-  const mergedUserPerms = {
-    ...base.rolePermissions.User,
-    ...(data.rolePermissions?.User ?? {}),
-  };
-  const userPerms =
-    storedVersion < CURRENT_PERMISSIONS_VERSION
-      ? {
-          ...mergedUserPerms,
-          orders: true,
-          preOrders: true,
-          communications: true,
-          financialCenter: true,
-        }
-      : mergedUserPerms;
 
   return {
     users,
-    rolePermissions: {
-      Admin: { ...base.rolePermissions.Admin, ...(data.rolePermissions?.Admin ?? {}) },
-      User: userPerms,
-      "Team Lead": {
-        ...base.rolePermissions["Team Lead"],
-        ...(data.rolePermissions?.["Team Lead"] ?? {}),
-      },
-    },
-    roleAreaAccess: {
-      Admin: { ...base.roleAreaAccess.Admin, ...(data.roleAreaAccess?.Admin ?? {}) },
-      User: { ...base.roleAreaAccess.User, ...(data.roleAreaAccess?.User ?? {}) },
-      "Team Lead": {
-        ...base.roleAreaAccess["Team Lead"],
-        ...(data.roleAreaAccess?.["Team Lead"] ?? {}),
-      },
-    },
-    roleDashboardBlockAccess: {
-      Admin: {
-        ...base.roleDashboardBlockAccess.Admin,
-        ...(data.roleDashboardBlockAccess?.Admin ?? {}),
-      },
-      User: {
-        ...base.roleDashboardBlockAccess.User,
-        ...(data.roleDashboardBlockAccess?.User ?? {}),
-      },
-      "Team Lead": {
-        ...base.roleDashboardBlockAccess["Team Lead"],
-        ...(data.roleDashboardBlockAccess?.["Team Lead"] ?? {}),
-      },
-    },
+    rolePermissions: mergeAllRolePermissions(data.rolePermissions, storedVersion),
+    roleAreaAccess: mergeAllRoleAreaAccess(data.roleAreaAccess),
+    roleDashboardBlockAccess: mergeAllRoleDashboardBlockAccess(data.roleDashboardBlockAccess),
     tenantAccounts,
     tenantRoles,
     globalB2CSettings: {
@@ -461,13 +423,12 @@ export async function updateAuthUserPassword(authUserId: string, password: strin
   }
 }
 
-export async function deleteAuthBackedUser(publicUserId: string): Promise<void> {
+export async function deleteAuthBackedUser(
+  publicUserId: string,
+  options?: { email?: string | null },
+): Promise<void> {
   if (shouldTrySupabase()) {
-    try {
-      await deleteSupabaseAuthBackedUser(publicUserId);
-    } catch {
-      // Legacy delete path is handled by saveAuthStore(users.filter(...)).
-    }
+    await deleteSupabaseAuthBackedUser(publicUserId, options);
   }
 }
 

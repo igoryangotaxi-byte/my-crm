@@ -280,13 +280,10 @@ export async function getYangoSupabaseOrderMetricsForRange({
   since,
   till,
 }: {
-  corpClientId: string;
+  corpClientId?: string;
   since: string;
   till: string;
 }): Promise<YangoSupabaseOrderMetric[]> {
-  if (!corpClientId.trim()) {
-    return [];
-  }
   try {
     return await loadYangoSupabaseOrderMetrics({
       corpClientId,

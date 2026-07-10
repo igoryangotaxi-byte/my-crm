@@ -126,8 +126,18 @@ create table if not exists public.gp_corp_client_map (
   corp_client_id text primary key,
   client_name text not null,
   source text null,
+  account_manager_user_id text null,
+  account_manager_name text null,
+  sales_manager_user_id text null,
+  sales_manager_name text null,
   updated_at timestamptz not null default now()
 );
+
+create index if not exists gp_corp_client_map_account_manager_idx
+  on public.gp_corp_client_map (account_manager_user_id);
+
+create index if not exists gp_corp_client_map_sales_manager_idx
+  on public.gp_corp_client_map (sales_manager_user_id);
 
 create index if not exists gp_corp_client_map_name_idx
   on public.gp_corp_client_map (client_name);

@@ -17,6 +17,7 @@
   },
   "nav": {
     "requestRides": "הזמנת נסיעות",
+    "clients": "לקוחות",
     "preOrders": "הזמנות מוקדמות",
     "orders": "הזמנות",
     "communications": "תקשורת",
@@ -30,7 +31,126 @@
     "employees": "עובדים",
     "clientCabinet": "פורטל לקוח",
     "operations": "תפעול",
-    "myEmployees": "העובדים שלי"
+    "myEmployees": "העובדים שלי",
+    "salesOperation": "תפעול מכירות"
+  },
+  "salesOperation": {
+    "sectionLabel": "תפעול מכירות",
+    "backToCrm": "חזרה ל-CRM",
+    "tab": {
+      "pipeline": "צינור",
+      "clients": "לקוחות",
+      "b2bClients": "סקירת לקוחות B2B",
+      "managerAnalytics": "אנליטיקת מנהלים",
+      "analytics": "אנליטיקה"
+    },
+    "loading": "טוען…",
+    "addLead": "הוסף ליד",
+    "createLead": "צור ליד",
+    "saveLead": "שמור ליד",
+    "deleteLead": "מחק ליד",
+    "deleteLeadConfirm": "למחוק את הליד לצמיתות? ההערות יימחקו ולא ניתן לבטל פעולה זו.",
+    "deleteLeadSignedHint": "לא ניתן למחוק ליד חתום כי הומר ללקוח.",
+    "deleting": "מוחק…",
+    "cancel": "ביטול",
+    "close": "סגור",
+    "saving": "שומר…",
+    "leadDetails": "פרטי ליד",
+    "clientDetails": "פרטי לקוח",
+    "notes": "הערות",
+    "noNotes": "אין הערות עדיין.",
+    "notePlaceholder": "כתוב הערה…",
+    "addNote": "הוסף הערה",
+    "noCampaign": "ללא קמפיין",
+    "noClients": "אין לקוחות עדיין.",
+    "clientsSearchLabel": "חיפוש לקוחות",
+    "clientsSearchPlaceholder": "חיפוש לפי שם או corp_client_id…",
+    "clientsNoMatch": "לא נמצאו לקוחות התואמים לחיפוש.",
+    "clientsCount": "{count} מתוך {total}",
+    "clientsNeedsB2bLink": "לא מקושר ללקוח B2B",
+    "signedAt": "נחתם ב",
+    "statusEntered": "בעמודה מאז {date}",
+    "analyticsError": "טעינת האנליטיקה נכשלה.",
+    "field": {
+      "status": "סטטוס",
+      "fullName": "שם מלא",
+      "email": "אימייל",
+      "phone": "טלפון",
+      "company": "חברה",
+      "campaign": "קמפיין",
+      "corpClient": "לקוח B2B",
+      "corpClientSearch": "חיפוש לפי שם או corp_client_id…",
+      "corpClientNoMatch": "לא נמצאו לקוחות התואמים לחיפוש."
+    },
+    "manager": {
+      "role": "תפקיד בפורטפוליו",
+      "manager": "מנהל",
+      "from": "מ",
+      "to": "עד",
+      "refresh": "רענון",
+      "clientCount": "לקוחות בפורטפוליו",
+      "requests": "בקשות",
+      "trips": "נסיעות",
+      "gmv": "GMV",
+      "decoupling": "Decoupling",
+      "decouplingRate": "אחוז decoupling",
+      "noClients": "אין לקוחות בפורטפוליו לתקופה זו.",
+      "accountManager": "Account Manager",
+      "salesManager": "Sales Manager",
+      "unassigned": "לא משויך",
+      "clear": "נקה",
+      "pendingSalesManager": "Sales Manager ממתין: {name} (יוחל בעת קישור לקוח B2B)",
+      "filterAccountManager": "סינון Account Manager",
+      "filterSalesManager": "סינון Sales Manager",
+      "editManagers": "עריכת מנהלים",
+      "saveClientManagers": "שמירת מנהלי לקוח"
+    },
+    "kpi": {
+      "totalLeads": "סה״כ לידים",
+      "conversion": "המרה לחתום",
+      "conversionHint": "לידים חתומים מתוך כל הלידים בצינור."
+    },
+    "chart": {
+      "byStatus": "לידים לפי סטטוס",
+      "topCampaigns": "קמפיינים מובילים"
+    },
+    "page": {
+      "pipeline": {
+        "title": "צינור",
+        "subtitle": "קנבן לידים — חדש, בטיפול, הצעה נשלחה, חתום, נדחה"
+      },
+      "clients": {
+        "title": "לקוחות",
+        "subtitle": "לקוחות מ-B2B Overview ולידים חתומים שממתינים לקישור B2B"
+      },
+      "b2bClients": {
+        "title": "סקירת לקוחות B2B",
+        "subtitle": "ביצועי לקוחות B2B ב-Yango — הוצאות, decoupling ומדדי נסיעות"
+      },
+      "analytics": {
+        "title": "אנליטיקה",
+        "subtitle": "מדדי צינור וביצועי קמפיינים"
+      },
+      "managerAnalytics": {
+        "title": "אנליטיקת מנהלים",
+        "subtitle": "ביצועי פורטפוליו Account Manager ו-Sales Manager"
+      },
+      "clientDetail": {
+        "title": "פרופיל לקוח",
+        "subtitle": "פרטי לקוח חתום, מנהלים וביצועי B2B"
+      }
+    },
+    "client": {
+      "b2bPerformance": "ביצועי B2B",
+      "recentTrips": "נסיעות אחרונות",
+      "viewAllTrips": "כל הנסיעות",
+      "noB2BMetrics": "אין מדדי B2B לתקופה שנבחרה.",
+      "noTripsInRange": "אין נסיעות בתקופה שנבחרה.",
+      "linkB2BHint": "קשרו לקוח B2B כדי לראות נסיעות, GMV ו-decoupling.",
+      "tripDate": "תאריך נסיעה",
+      "orderId": "מספר הזמנה",
+      "notConvertedYet": "רשומת הלקוח נוצרת…"
+    }
   },
   "priceCalculatorPage": {
     "subtitle": "השוואת תעריף נהג מול בסיסי נתון והרצת בדיקות בריאות תעריף ללקוחות ארגוניים.",

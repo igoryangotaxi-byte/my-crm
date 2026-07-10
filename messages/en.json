@@ -17,6 +17,7 @@
   },
   "nav": {
     "requestRides": "Request Rides",
+    "clients": "Clients",
     "preOrders": "Pre-Orders",
     "orders": "Orders",
     "communications": "Communications",
@@ -30,7 +31,126 @@
     "employees": "Employees",
     "clientCabinet": "Client Cabinet",
     "operations": "Operations",
-    "myEmployees": "My Employees"
+    "myEmployees": "My Employees",
+    "salesOperation": "Sales Operation"
+  },
+  "salesOperation": {
+    "sectionLabel": "Sales Operation",
+    "backToCrm": "Back to CRM",
+    "tab": {
+      "pipeline": "Pipeline",
+      "clients": "Clients",
+      "b2bClients": "B2B Clients Overview",
+      "managerAnalytics": "Manager Analytics",
+      "analytics": "Analytics"
+    },
+    "loading": "Loading…",
+    "addLead": "Add lead",
+    "createLead": "Create lead",
+    "saveLead": "Save lead",
+    "deleteLead": "Delete lead",
+    "deleteLeadConfirm": "Delete this lead permanently? Notes will be removed. This cannot be undone.",
+    "deleteLeadSignedHint": "Signed leads cannot be deleted because they were converted to a client.",
+    "deleting": "Deleting…",
+    "cancel": "Cancel",
+    "close": "Close",
+    "saving": "Saving…",
+    "leadDetails": "Lead details",
+    "clientDetails": "Client details",
+    "notes": "Notes",
+    "noNotes": "No notes yet.",
+    "notePlaceholder": "Write a note…",
+    "addNote": "Add note",
+    "noCampaign": "No campaign",
+    "noClients": "No clients yet.",
+    "clientsSearchLabel": "Search clients",
+    "clientsSearchPlaceholder": "Search by name or corp_client_id…",
+    "clientsNoMatch": "No clients match this search.",
+    "clientsCount": "{count} of {total}",
+    "clientsNeedsB2bLink": "Not linked to B2B client",
+    "signedAt": "Signed at",
+    "statusEntered": "In column since {date}",
+    "analyticsError": "Failed to load analytics.",
+    "field": {
+      "status": "Status",
+      "fullName": "Full name",
+      "email": "Email",
+      "phone": "Phone",
+      "company": "Company",
+      "campaign": "Campaign",
+      "corpClient": "B2B client",
+      "corpClientSearch": "Search by name or corp_client_id…",
+      "corpClientNoMatch": "No clients match this search."
+    },
+    "manager": {
+      "role": "Portfolio role",
+      "manager": "Manager",
+      "from": "From",
+      "to": "To",
+      "refresh": "Refresh",
+      "clientCount": "Clients in portfolio",
+      "requests": "Requests",
+      "trips": "Trips",
+      "gmv": "GMV",
+      "decoupling": "Decoupling",
+      "decouplingRate": "Decoupling rate",
+      "noClients": "No clients in portfolio for this period.",
+      "accountManager": "Account Manager",
+      "salesManager": "Sales Manager",
+      "unassigned": "Unassigned",
+      "clear": "Clear",
+      "pendingSalesManager": "Pending Sales Manager: {name} (applied when B2B client is linked)",
+      "filterAccountManager": "Account Manager filter",
+      "filterSalesManager": "Sales Manager filter",
+      "editManagers": "Edit managers",
+      "saveClientManagers": "Save client managers"
+    },
+    "kpi": {
+      "totalLeads": "Total leads",
+      "conversion": "Signed conversion",
+      "conversionHint": "Signed leads divided by all leads in the pipeline."
+    },
+    "chart": {
+      "byStatus": "Leads by status",
+      "topCampaigns": "Top campaigns"
+    },
+    "page": {
+      "pipeline": {
+        "title": "Pipeline",
+        "subtitle": "Lead kanban — New, In Progress, Proposal Sent, Signed, Rejected"
+      },
+      "clients": {
+        "title": "Clients",
+        "subtitle": "B2B Overview clients + signed leads awaiting B2B link"
+      },
+      "b2bClients": {
+        "title": "B2B Clients Overview",
+        "subtitle": "Yango B2B client performance — spend, decoupling, and trip metrics"
+      },
+      "analytics": {
+        "title": "Analytics",
+        "subtitle": "Pipeline KPIs and campaign performance"
+      },
+      "managerAnalytics": {
+        "title": "Manager Analytics",
+        "subtitle": "Account and Sales Manager portfolio performance"
+      },
+      "clientDetail": {
+        "title": "Client profile",
+        "subtitle": "Signed client details, managers, and B2B performance"
+      }
+    },
+    "client": {
+      "b2bPerformance": "B2B performance",
+      "recentTrips": "Recent trips",
+      "viewAllTrips": "View all trips",
+      "noB2BMetrics": "No B2B metrics for the selected period.",
+      "noTripsInRange": "No trips in the selected period.",
+      "linkB2BHint": "Link a B2B client to see trips, GMV, and decoupling metrics.",
+      "tripDate": "Trip date",
+      "orderId": "Order ID",
+      "notConvertedYet": "Client record is being created…"
+    }
   },
   "priceCalculatorPage": {
     "subtitle": "Compare driver tariff vs benchmarks and run tariff health checks for corporate clients.",

@@ -3,7 +3,7 @@ create table if not exists public.crm_user_profiles (
   auth_user_id uuid unique not null references auth.users (id) on delete cascade,
   email text not null unique,
   name text not null,
-  role text not null check (role in ('Admin', 'User', 'Team Lead')),
+  role text not null check (role in ('Admin', 'User', 'Team Lead', 'Account Manager', 'Sales Manager')),
   status text not null check (status in ('pending', 'approved', 'rejected')),
   account_type text not null default 'internal' check (account_type in ('internal', 'client')),
   phone_number text null,
@@ -25,19 +25,19 @@ create index if not exists crm_user_profiles_tenant_id_idx
   on public.crm_user_profiles (tenant_id);
 
 create table if not exists public.crm_role_permissions (
-  role text primary key check (role in ('Admin', 'User', 'Team Lead')),
+  role text primary key check (role in ('Admin', 'User', 'Team Lead', 'Account Manager', 'Sales Manager')),
   permissions jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
 
 create table if not exists public.crm_role_area_access (
-  role text primary key check (role in ('Admin', 'User', 'Team Lead')),
+  role text primary key check (role in ('Admin', 'User', 'Team Lead', 'Account Manager', 'Sales Manager')),
   area_access jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
 
 create table if not exists public.crm_role_dashboard_block_access (
-  role text primary key check (role in ('Admin', 'User', 'Team Lead')),
+  role text primary key check (role in ('Admin', 'User', 'Team Lead', 'Account Manager', 'Sales Manager')),
   dashboard_block_access jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
