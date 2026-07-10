@@ -9,6 +9,7 @@ import {
   updateB2BClientManagers,
 } from "@/lib/sales-operation/b2b-client-registry";
 import { convertSignedLeadToClient } from "@/lib/sales-operation/convert-lead-to-client";
+import { runAutomationsForStatusChange } from "@/lib/sales-operation/automation/engine";
 import type { UpdateSalesClientInput } from "@/lib/sales-operation/manager-types";
 import { assertValidStatusTransition } from "@/lib/sales-operation/status-transitions";
 import {
@@ -72,6 +73,10 @@ function mapLeadRow(row: Record<string, unknown>): SalesLead {
     adName: typeof row.ad_name === "string" ? row.ad_name : null,
     formId: typeof row.form_id === "string" ? row.form_id : null,
     customFields,
+    assignedManagerUserId:
+      typeof row.assigned_manager_user_id === "string" ? row.assigned_manager_user_id : null,
+    assignedManagerName:
+      typeof row.assigned_manager_name === "string" ? row.assigned_manager_name : null,
     statusEnteredAt: String(row.status_entered_at ?? row.created_at ?? new Date().toISOString()),
     createdAt: String(row.created_at ?? new Date().toISOString()),
     updatedAt: String(row.updated_at ?? new Date().toISOString()),
@@ -323,6 +328,11 @@ export async function updateSalesLead(
     if (nextStatus !== existing.status) {
       payload.status = encoded.status;
       payload.status_entered_at = now;
+      // First-touch Sales Manager: assign acting user when empty.
+      if (!existing.assignedManagerUserId && actor.userId) {
+        payload.assigned_manager_user_id = actor.userId;
+        payload.assigned_manager_name = actor.name || actor.userId;
+      }
     } else if (existing.status === "proposal_sent") {
       // Keep DB encoding aligned for proposal leads when editing other fields.
       payload.status = encoded.status;
@@ -358,6 +368,14 @@ export async function updateSalesLead(
   if (nextStatus === "signed" && existing.status !== "signed") {
     const notes = await listSalesLeadNotes(lead.id);
     await convertSignedLeadToClient(supabase, lead, notes, actor);
+  }
+
+  if (nextStatus !== existing.status) {
+    try {
+      await runAutomationsForStatusChange(lead, existing.status, nextStatus);
+    } catch (error) {
+      console.error("Sales automation engine error:", error);
+    }
   }
 
   return lead;

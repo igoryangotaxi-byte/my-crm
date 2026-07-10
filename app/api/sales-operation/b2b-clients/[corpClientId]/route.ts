@@ -21,8 +21,12 @@ function resolveManagerName(
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const auth = await requireSalesOperationPage(request, "salesB2BClients");
-  if (!auth.ok) return auth.response;
+  // Used from B2B Overview and Clients list — either page is enough.
+  const authB2b = await requireSalesOperationPage(request, "salesB2BClients");
+  const authClients = authB2b.ok
+    ? authB2b
+    : await requireSalesOperationPage(request, "salesSignedClients");
+  if (!authClients.ok) return authClients.response;
   if (!isSupabaseConfigured()) {
     return Response.json({ ok: false, error: "Supabase is not configured." }, { status: 500 });
   }
@@ -37,16 +41,23 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   try {
     const store = await loadAuthStore();
-    const input: UpdateB2BClientManagersInput = {
-      accountManagerUserId: body.accountManagerUserId,
-      accountManagerName: resolveManagerName(
+    const input: UpdateB2BClientManagersInput = {};
+    if ("accountManagerUserId" in body) {
+      input.accountManagerUserId = body.accountManagerUserId;
+      input.accountManagerName = resolveManagerName(
         body.accountManagerUserId,
         body.accountManagerName,
         store.users,
-      ),
-      salesManagerUserId: body.salesManagerUserId,
-      salesManagerName: resolveManagerName(body.salesManagerUserId, body.salesManagerName, store.users),
-    };
+      );
+    }
+    if ("salesManagerUserId" in body) {
+      input.salesManagerUserId = body.salesManagerUserId;
+      input.salesManagerName = resolveManagerName(
+        body.salesManagerUserId,
+        body.salesManagerName,
+        store.users,
+      );
+    }
     const entry = await updateB2BClientManagers(corpClientId, input);
     return Response.json({ ok: true, entry }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

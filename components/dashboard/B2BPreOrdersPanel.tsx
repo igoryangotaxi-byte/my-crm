@@ -16,6 +16,7 @@ import type {
   B2BOrderDetailsResponse,
   YangoSupabaseOrderMetric,
 } from "@/types/crm";
+import { buildSalesOperationB2BClientTripsHref } from "@/lib/sales-operation/b2b-client-trips-href";
 
 type SortMode = "date_desc" | "date_asc" | "client_asc" | "client_desc";
 type StatusFilter = "all" | "completed" | "cancelled" | "pending" | "in_progress";
@@ -422,13 +423,12 @@ function buildYangoClientTripsHref({
   from: string;
   to: string;
 }) {
-  const params = new URLSearchParams({
-    corpClientId: normalizeCorpClientId(corpClientId),
+  return buildSalesOperationB2BClientTripsHref({
+    corpClientId,
     clientName,
     from,
     to,
   });
-  return `/dashboard/yango-client-trips?${params.toString()}`;
 }
 
 function dateKeyToDate(value: string) {
@@ -2826,8 +2826,6 @@ export function B2BPreOrdersPanel({
                               from: yangoFromDate,
                               to: yangoToDate,
                             })}
-                            target="_blank"
-                            rel="noopener noreferrer"
                             className="group/client block rounded-lg transition hover:bg-slate-50"
                           >
                             <div className="font-medium text-slate-900 group-hover/client:text-red-600">

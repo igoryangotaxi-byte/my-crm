@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   getAccountManagerUserOptions,
+  getAssignableManagerUserOptions,
   getSalesManagerUserOptions,
   isInternalCrmUser,
 } from "@/lib/sales-operation/crm-manager-users";
@@ -46,9 +47,11 @@ describe("crm manager user options", () => {
     assert.equal(isInternalCrmUser(clientPortalUser), false);
   });
 
-  it("returns role-specific manager options", () => {
+  it("returns assignable managers for automation", () => {
     const users = [internalAccountManager, internalSalesManager, clientPortalUser];
-    assert.deepEqual(getAccountManagerUserOptions(users).map((user) => user.id), ["u1"]);
-    assert.deepEqual(getSalesManagerUserOptions(users).map((user) => user.id), ["u2"]);
+    assert.deepEqual(
+      getAssignableManagerUserOptions(users).map((user) => user.id).sort(),
+      ["u1", "u2"],
+    );
   });
 });

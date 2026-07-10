@@ -6,7 +6,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const auth = await requireSalesOperationPage(request, "salesB2BClients");
+  const authB2b = await requireSalesOperationPage(request, "salesB2BClients");
+  const auth = authB2b.ok
+    ? authB2b
+    : await requireSalesOperationPage(request, "salesSignedClients");
   if (!auth.ok) return auth.response;
   if (!isSupabaseConfigured()) {
     return Response.json({ ok: false, error: "Supabase is not configured." }, { status: 500 });

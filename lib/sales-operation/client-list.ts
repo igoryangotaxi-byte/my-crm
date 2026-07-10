@@ -8,6 +8,7 @@ export type SalesClientListRow = {
   corpClientId: string | null;
   name: string;
   companyName: string | null;
+  accountManagerUserId: string | null;
   accountManagerName: string | null;
   salesManagerName: string | null;
   campaignName: string | null;
@@ -82,6 +83,8 @@ export function buildSalesClientListRows(
       // Once present in B2B overview / DB map, show the DB/overview client name.
       name: dbName,
       companyName: linked?.companyName ?? dbName,
+      accountManagerUserId:
+        entry?.accountManager.userId ?? linked?.accountManagerUserId ?? null,
       accountManagerName: entry?.accountManager.name ?? linked?.accountManagerName ?? null,
       salesManagerName:
         entry?.salesManager.name ??
@@ -102,11 +105,37 @@ export function buildSalesClientListRows(
       // Until linked to B2B, keep the pipeline / signed lead name.
       name: client.fullName,
       companyName: client.companyName,
+      accountManagerUserId: client.accountManagerUserId,
       accountManagerName: client.accountManagerName,
       salesManagerName: client.salesManagerName ?? client.pendingSalesManagerName,
       campaignName: client.campaignName,
       signedAt: client.signedAt,
       source: "signed",
+    });
+  }
+
+  // Pipeline clients linked to a corp that is not in the active overview still belong in Clients.
+  for (const [corpClientId, client] of salesByCorpId) {
+    if (rows.some((row) => row.corpClientId === corpClientId)) continue;
+    const entry = registryByCorpId.get(corpClientId) ?? null;
+    const dbName = entry?.clientName?.trim() || client.companyName?.trim() || client.fullName;
+    rows.push({
+      key: `sales:${client.id}`,
+      salesClientId: client.id,
+      corpClientId,
+      name: dbName,
+      companyName: client.companyName ?? dbName,
+      accountManagerUserId:
+        entry?.accountManager.userId ?? client.accountManagerUserId ?? null,
+      accountManagerName: entry?.accountManager.name ?? client.accountManagerName ?? null,
+      salesManagerName:
+        entry?.salesManager.name ??
+        client.salesManagerName ??
+        client.pendingSalesManagerName ??
+        null,
+      campaignName: client.campaignName,
+      signedAt: client.signedAt,
+      source: "linked",
     });
   }
 

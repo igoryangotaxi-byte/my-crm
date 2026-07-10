@@ -59,9 +59,20 @@ function B2BOverviewIcon({ className = "h-4 w-4" }: IconProps) {
   );
 }
 
+function AutomationIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth="1.8">
+      <circle cx="6" cy="6" r="2.5" />
+      <circle cx="18" cy="6" r="2.5" />
+      <circle cx="12" cy="18" r="2.5" />
+      <path d="M8.2 7.5 10.5 15.2M15.8 7.5 13.5 15.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 const salesOperationItems: Array<{
   href: string;
-  labelKey: "pipeline" | "clients" | "b2bClients" | "analytics" | "managerAnalytics";
+  labelKey: "pipeline" | "clients" | "b2bClients" | "analytics" | "managerAnalytics" | "automation";
   page: AppPageKey;
   icon: React.ComponentType<IconProps>;
 }> = [
@@ -79,6 +90,12 @@ const salesOperationItems: Array<{
     labelKey: "managerAnalytics",
     page: "salesManagerAnalytics",
     icon: AnalyticsIcon,
+  },
+  {
+    href: "/sales-operation/automation",
+    labelKey: "automation",
+    page: "salesAutomation",
+    icon: AutomationIcon,
   },
 ];
 

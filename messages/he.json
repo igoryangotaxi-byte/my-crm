@@ -42,7 +42,8 @@
       "clients": "לקוחות",
       "b2bClients": "סקירת לקוחות B2B",
       "managerAnalytics": "אנליטיקת מנהלים",
-      "analytics": "אנליטיקה"
+      "analytics": "אנליטיקה",
+      "automation": "אוטומציה"
     },
     "loading": "טוען…",
     "addLead": "הוסף ליד",
@@ -127,6 +128,10 @@
         "title": "סקירת לקוחות B2B",
         "subtitle": "ביצועי לקוחות B2B ב-Yango — הוצאות, decoupling ומדדי נסיעות"
       },
+      "b2bClientTrips": {
+        "title": "נסיעות לקוח B2B",
+        "subtitle": "רשימת נסיעות ללקוח B2B ולתקופה שנבחרו"
+      },
       "analytics": {
         "title": "אנליטיקה",
         "subtitle": "מדדי צינור וביצועי קמפיינים"
@@ -135,10 +140,47 @@
         "title": "אנליטיקת מנהלים",
         "subtitle": "ביצועי פורטפוליו Account Manager ו-Sales Manager"
       },
+      "automation": {
+        "title": "אוטומציה",
+        "subtitle": "תהליכים לשינוי סטטוס ליד — SMS ושיבוץ מנהל"
+      },
       "clientDetail": {
         "title": "פרופיל לקוח",
         "subtitle": "פרטי לקוח חתום, מנהלים וביצועי B2B"
       }
+    },
+    "automation": {
+      "create": "תהליך חדש",
+      "empty": "אין תהליכים עדיין. צרו אחד לאוטומציית SMS או שיבוץ מנהל.",
+      "enabled": "פעיל",
+      "disabled": "כבוי",
+      "save": "שמור תהליך",
+      "saving": "שומר…",
+      "saved": "נשמר",
+      "delete": "מחק",
+      "deleteConfirm": "למחוק את התהליך לצמיתות?",
+      "backToList": "כל התהליכים",
+      "namePlaceholder": "שם התהליך",
+      "palette": "צמתים",
+      "config": "הגדרות צומת",
+      "selectNode": "בחרו צומת להגדרה.",
+      "addTrigger": "טריגר סטטוס ליד",
+      "addSms": "שליחת SMS",
+      "addAssign": "שיבוץ מנהל",
+      "fromStatus": "מסטטוס",
+      "toStatus": "לסטטוס",
+      "anyStatus": "הכל",
+      "smsText": "טקסט SMS",
+      "smsPlaceholders": "מציינים: {{full_name}}, {{phone}}, {{company_name}}, {{status}}",
+      "assignMode": "מצב שיבוץ",
+      "modeFixed": "מנהל קבוע",
+      "modeRoundRobin": "רוטציה",
+      "manager": "מנהל",
+      "managers": "מנהלים",
+      "loadError": "טעינת האוטומציות נכשלה.",
+      "saveError": "שמירת התהליך נכשלה.",
+      "disabledBanner": "התהליך כבוי — הוא לא ירוץ בשינוי סטטוס ליד. הפעילו Enabled.",
+      "triggerHint": "טריגר: New → In Progress. ל-SMS נדרש טלפון בליד."
     },
     "client": {
       "b2bPerformance": "ביצועי B2B",

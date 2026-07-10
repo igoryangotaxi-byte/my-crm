@@ -1,0 +1,97 @@
+"use client";
+
+import { Handle, Position, type NodeProps } from "@xyflow/react";
+import type { ReactNode } from "react";
+import type { ActionAssignManagerData, ActionSmsData, TriggerLeadStatusData } from "@/lib/sales-operation/automation/types";
+
+const shell =
+  "min-w-[180px] max-w-[220px] rounded-2xl border border-white/70 bg-white/95 px-3 py-2.5 shadow-[0_10px_28px_rgba(15,23,42,0.12)]";
+
+function NodeChrome({
+  title,
+  tone,
+  children,
+  showTarget = true,
+  showSource = true,
+}: {
+  title: string;
+  tone: "trigger" | "sms" | "assign";
+  children: ReactNode;
+  showTarget?: boolean;
+  showSource?: boolean;
+}) {
+  const badge =
+    tone === "trigger"
+      ? "bg-red-50 text-red-700"
+      : tone === "sms"
+        ? "bg-sky-50 text-sky-800"
+        : "bg-emerald-50 text-emerald-800";
+
+  return (
+    <div className={shell}>
+      {showTarget ? (
+        <Handle
+          type="target"
+          position={Position.Left}
+          className="!h-2.5 !w-2.5 !border-2 !border-white !bg-red-500"
+        />
+      ) : null}
+      <p className={`mb-1 inline-flex rounded-lg px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide ${badge}`}>
+        {title}
+      </p>
+      <div className="text-xs text-slate-700">{children}</div>
+      {showSource ? (
+        <Handle
+          type="source"
+          position={Position.Right}
+          className="!h-2.5 !w-2.5 !border-2 !border-white !bg-red-500"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+export function TriggerLeadStatusNode({ data }: NodeProps) {
+  const d = data as TriggerLeadStatusData;
+  return (
+    <NodeChrome title="Trigger" tone="trigger" showTarget={false}>
+      <p className="font-medium text-slate-900">Lead status</p>
+      <p className="mt-1 text-[0.7rem] text-slate-500">
+        {d.fromStatus ?? "*"} → {d.toStatus ?? "*"}
+      </p>
+    </NodeChrome>
+  );
+}
+
+export function ActionSmsNode({ data }: NodeProps) {
+  const d = data as ActionSmsData;
+  const preview = (d.text ?? "").trim();
+  return (
+    <NodeChrome title="SMS" tone="sms">
+      <p className="font-medium text-slate-900">InforU SMS</p>
+      <p className="mt-1 line-clamp-2 text-[0.7rem] text-slate-500">
+        {preview || "Configure message…"}
+      </p>
+    </NodeChrome>
+  );
+}
+
+export function ActionAssignManagerNode({ data }: NodeProps) {
+  const d = data as ActionAssignManagerData;
+  const label =
+    d.mode === "round_robin"
+      ? `Round robin (${(d.userIds ?? []).length})`
+      : d.userName || d.userId || "Pick manager…";
+  return (
+    <NodeChrome title="Assign" tone="assign">
+      <p className="font-medium text-slate-900">Manager</p>
+      <p className="mt-1 line-clamp-2 text-[0.7rem] text-slate-500">{label}</p>
+    </NodeChrome>
+  );
+}
+
+export const automationNodeTypes = {
+  triggerLeadStatus: TriggerLeadStatusNode,
+  actionSms: ActionSmsNode,
+  actionAssignManager: ActionAssignManagerNode,
+};

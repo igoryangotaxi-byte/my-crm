@@ -14,6 +14,10 @@ const salesOperationPageMeta: Record<string, { titleKey: string; subtitleKey: st
     titleKey: "page.clients.title",
     subtitleKey: "page.clients.subtitle",
   },
+  "/sales-operation/b2b-clients/trips": {
+    titleKey: "page.b2bClientTrips.title",
+    subtitleKey: "page.b2bClientTrips.subtitle",
+  },
   "/sales-operation/b2b-clients": {
     titleKey: "page.b2bClients.title",
     subtitleKey: "page.b2bClients.subtitle",
@@ -25,6 +29,10 @@ const salesOperationPageMeta: Record<string, { titleKey: string; subtitleKey: st
   "/sales-operation/manager-analytics": {
     titleKey: "page.managerAnalytics.title",
     subtitleKey: "page.managerAnalytics.subtitle",
+  },
+  "/sales-operation/automation": {
+    titleKey: "page.automation.title",
+    subtitleKey: "page.automation.subtitle",
   },
 };
 

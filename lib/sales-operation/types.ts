@@ -24,6 +24,8 @@ export type SalesLead = {
   adName: string | null;
   formId: string | null;
   customFields: Record<string, unknown>;
+  assignedManagerUserId: string | null;
+  assignedManagerName: string | null;
   statusEnteredAt: string;
   createdAt: string;
   updatedAt: string;

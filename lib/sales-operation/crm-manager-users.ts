@@ -26,6 +26,21 @@ export function getSalesManagerUserOptions(users: AuthUser[]): CrmManagerUserOpt
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Internal approved users eligible for lead assignment automations. */
+export function getAssignableManagerUserOptions(users: AuthUser[]): CrmManagerUserOption[] {
+  return users
+    .filter(isInternalCrmUser)
+    .filter(
+      (user) =>
+        user.role === "Admin" ||
+        user.role === "Account Manager" ||
+        user.role === "Sales Manager" ||
+        user.role === "Team Lead",
+    )
+    .map((user) => ({ id: user.id, name: user.name, role: user.role }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export function getManagerUserOptionsForRole(
   users: AuthUser[],
   role: "account" | "sales",

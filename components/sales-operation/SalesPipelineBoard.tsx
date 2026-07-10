@@ -235,6 +235,11 @@ export function SalesLeadDetailSidebar({
           <p className="crm-label mb-1">{t("leadDetails")}</p>
           <h2 className="truncate text-lg font-semibold text-slate-900">{lead.fullName}</h2>
           <p className="text-xs text-muted">{t("statusEntered", { date: formatSalesDateTime(lead.statusEnteredAt) })}</p>
+          {lead.assignedManagerName ? (
+            <span className="mt-2 inline-flex max-w-full truncate rounded-full bg-emerald-50 px-2 py-0.5 text-[0.68rem] font-semibold text-emerald-800">
+              {t("manager.salesManager")}: {lead.assignedManagerName}
+            </span>
+          ) : null}
         </div>
         <button
           type="button"
@@ -570,15 +575,22 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
                   }`}
                 >
                   <p className="truncate text-xs font-semibold text-slate-900 lg:text-sm">{lead.fullName}</p>
-                  {lead.campaignName ? (
-                    <span className="mt-1.5 inline-flex max-w-full truncate rounded-full bg-red-50 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-red-700 lg:mt-2 lg:px-2 lg:text-[0.68rem]">
-                      {lead.campaignName}
-                    </span>
-                  ) : (
-                    <span className="mt-1.5 inline-flex rounded-full bg-slate-100 px-1.5 py-0.5 text-[0.6rem] font-medium text-slate-500 lg:mt-2 lg:px-2 lg:text-[0.68rem]">
-                      {t("noCampaign")}
-                    </span>
-                  )}
+                  <div className="mt-1.5 flex flex-wrap gap-1 lg:mt-2">
+                    {lead.campaignName ? (
+                      <span className="inline-flex max-w-full truncate rounded-full bg-red-50 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-red-700 lg:px-2 lg:text-[0.68rem]">
+                        {lead.campaignName}
+                      </span>
+                    ) : (
+                      <span className="inline-flex rounded-full bg-slate-100 px-1.5 py-0.5 text-[0.6rem] font-medium text-slate-500 lg:px-2 lg:text-[0.68rem]">
+                        {t("noCampaign")}
+                      </span>
+                    )}
+                    {lead.assignedManagerName ? (
+                      <span className="inline-flex max-w-full truncate rounded-full bg-emerald-50 px-1.5 py-0.5 text-[0.6rem] font-semibold text-emerald-800 lg:px-2 lg:text-[0.68rem]">
+                        {lead.assignedManagerName}
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="mt-1.5 text-[0.65rem] text-muted lg:mt-2 lg:text-xs">
                     {formatSalesDate(lead.statusEnteredAt)}
                   </p>

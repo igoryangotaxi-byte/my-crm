@@ -11,6 +11,7 @@ import {
   type SalesClientManagerDraft,
 } from "@/components/sales-operation/SalesClientManagerFields";
 import { formatSalesDateTime } from "@/lib/sales-operation/display";
+import { buildSalesOperationB2BClientTripsHref } from "@/lib/sales-operation/b2b-client-trips-href";
 import type { SalesClientMetricsSummary } from "@/lib/sales-operation/client-overview-metrics";
 import type { B2BClientRegistryEntry } from "@/lib/sales-operation/manager-types";
 import type { SalesClient, SalesClientNote } from "@/lib/sales-operation/types";
@@ -190,6 +191,19 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
           <p className="text-sm text-muted">
             {t("signedAt")}: {formatSalesDateTime(client.signedAt)}
           </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {client.accountManagerName ? (
+              <span className="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[0.7rem] font-semibold text-sky-800">
+                {t("manager.accountManager")}: {client.accountManagerName}
+              </span>
+            ) : null}
+            {client.salesManagerName || client.pendingSalesManagerName ? (
+              <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[0.7rem] font-semibold text-emerald-800">
+                {t("manager.salesManager")}:{" "}
+                {client.salesManagerName ?? client.pendingSalesManagerName}
+              </span>
+            ) : null}
+          </div>
         </div>
         {client.campaignName ? (
           <StatusBadge label={client.campaignName} tone="blue" />
@@ -220,7 +234,20 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
                 {client.corpClientName ?? client.corpClientId ?? "—"}
               </dd>
             </div>
+            <div>
+              <dt className="crm-label">{t("manager.accountManager")}</dt>
+              <dd className="text-slate-800">{client.accountManagerName ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="crm-label">{t("manager.salesManager")}</dt>
+              <dd className="text-slate-800">
+                {client.salesManagerName ?? client.pendingSalesManagerName ?? "—"}
+              </dd>
+            </div>
           </dl>
+          {!client.corpClientId ? (
+            <p className="mt-3 text-xs text-muted">{t("client.linkB2BHint")}</p>
+          ) : null}
         </article>
 
         <article className="rounded-3xl border border-white/70 bg-white/70 p-4">
@@ -323,7 +350,12 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="crm-section-title mb-0">{t("client.recentTrips")}</h2>
               <Link
-                href={`/dashboard/yango-client-trips?corpClientId=${encodeURIComponent(client.corpClientId)}&clientName=${encodeURIComponent(client.corpClientName ?? client.fullName)}&from=${range.from}&to=${range.to}`}
+                href={buildSalesOperationB2BClientTripsHref({
+                  corpClientId: client.corpClientId,
+                  clientName: client.corpClientName ?? client.fullName,
+                  from: range.from,
+                  to: range.to,
+                })}
                 className="text-sm font-semibold text-accent hover:underline"
               >
                 {t("client.viewAllTrips")}

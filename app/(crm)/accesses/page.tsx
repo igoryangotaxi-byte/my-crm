@@ -58,6 +58,7 @@ const accessSections: AccessSection[] = [
       { type: "page", key: "salesB2BClients", label: "B2B Clients Overview" },
       { type: "page", key: "salesAnalytics", label: "Analytics" },
       { type: "page", key: "salesManagerAnalytics", label: "Manager Analytics" },
+      { type: "page", key: "salesAutomation", label: "Automation" },
     ],
   },
   {

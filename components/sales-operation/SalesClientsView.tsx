@@ -3,13 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { Table } from "@/components/ui/Table";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import {
   filterSalesClientListRows,
   type SalesClientListRow,
 } from "@/lib/sales-operation/client-list";
+import { buildSalesOperationB2BClientTripsHref } from "@/lib/sales-operation/b2b-client-trips-href";
+import { getAccountManagerUserOptions } from "@/lib/sales-operation/crm-manager-users";
 import { formatSalesDateTime } from "@/lib/sales-operation/display";
+import type { B2BClientRegistryEntry } from "@/lib/sales-operation/manager-types";
 
 function defaultTripsRange() {
   const to = new Date();
@@ -27,10 +31,14 @@ function defaultTripsRange() {
 export function SalesClientsView() {
   const t = useTranslations("salesOperation");
   const router = useRouter();
+  const { users } = useAuth();
   const [rows, setRows] = useState<SalesClientListRow[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+
+  const accountOptions = useMemo(() => getAccountManagerUserOptions(users), [users]);
 
   const loadClients = useCallback(async () => {
     setLoading(true);
@@ -66,13 +74,83 @@ export function SalesClientsView() {
     }
     if (row.corpClientId) {
       const range = defaultTripsRange();
-      const params = new URLSearchParams({
-        corpClientId: row.corpClientId,
-        from: range.from,
-        to: range.to,
-        clientName: row.name,
-      });
-      router.push(`/dashboard/yango-client-trips?${params.toString()}`);
+      router.push(
+        buildSalesOperationB2BClientTripsHref({
+          corpClientId: row.corpClientId,
+          clientName: row.name,
+          from: range.from,
+          to: range.to,
+        }),
+      );
+    }
+  };
+
+  const assignAccountManager = async (row: SalesClientListRow, accountManagerUserId: string) => {
+    if (!row.corpClientId) return;
+    const previousUserId = row.accountManagerUserId;
+    const previousName = row.accountManagerName;
+    const nextName =
+      accountOptions.find((user) => user.id === accountManagerUserId)?.name ?? null;
+
+    setSavingKey(row.key);
+    setError(null);
+    setRows((prev) =>
+      prev.map((item) =>
+        item.key === row.key
+          ? {
+              ...item,
+              accountManagerUserId: accountManagerUserId || null,
+              accountManagerName: accountManagerUserId ? nextName : null,
+            }
+          : item,
+      ),
+    );
+
+    try {
+      const res = await fetch(
+        `/api/sales-operation/b2b-clients/${encodeURIComponent(row.corpClientId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            accountManagerUserId: accountManagerUserId || null,
+          }),
+        },
+      );
+      const data = (await res.json()) as {
+        ok?: boolean;
+        entry?: B2BClientRegistryEntry;
+        error?: string;
+      };
+      if (!res.ok || !data.ok || !data.entry) {
+        throw new Error(data.error ?? "Failed to assign account manager.");
+      }
+      setRows((prev) =>
+        prev.map((item) =>
+          item.key === row.key
+            ? {
+                ...item,
+                accountManagerUserId: data.entry?.accountManager.userId ?? null,
+                accountManagerName: data.entry?.accountManager.name ?? null,
+              }
+            : item,
+        ),
+      );
+    } catch (err) {
+      setRows((prev) =>
+        prev.map((item) =>
+          item.key === row.key
+            ? {
+                ...item,
+                accountManagerUserId: previousUserId,
+                accountManagerName: previousName,
+              }
+            : item,
+        ),
+      );
+      setError(err instanceof Error ? err.message : "Failed to assign account manager.");
+    } finally {
+      setSavingKey(null);
     }
   };
 
@@ -112,23 +190,49 @@ export function SalesClientsView() {
             key: "name",
             header: t("field.fullName"),
             render: (row) => (
-              <button
-                type="button"
-                onClick={() => openRow(row)}
-                className="text-left font-semibold text-slate-900 underline-offset-2 hover:underline"
-              >
-                <span className="block">{row.name}</span>
-                {row.source === "signed" ? (
-                  <span className="mt-0.5 block text-xs font-medium text-[color:var(--accent-strong)]">
-                    {t("clientsNeedsB2bLink")}
-                  </span>
-                ) : null}
-                {row.corpClientId ? (
-                  <span className="mt-0.5 block break-all text-xs font-normal text-slate-500">
-                    {row.corpClientId}
-                  </span>
-                ) : null}
-              </button>
+              <div className="flex min-w-[280px] items-start justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => openRow(row)}
+                  className="min-w-0 flex-1 text-left font-semibold text-slate-900 underline-offset-2 hover:underline"
+                >
+                  <span className="block">{row.name}</span>
+                  {row.source === "signed" ? (
+                    <span className="mt-0.5 block text-xs font-medium text-[color:var(--accent-strong)]">
+                      {t("clientsNeedsB2bLink")}
+                    </span>
+                  ) : null}
+                  {row.corpClientId ? (
+                    <span className="mt-0.5 block break-all text-xs font-normal text-slate-500">
+                      {row.corpClientId}
+                    </span>
+                  ) : null}
+                </button>
+                <label className="shrink-0 text-left">
+                  <span className="sr-only">{t("manager.accountManager")}</span>
+                  <select
+                    value={row.accountManagerUserId ?? ""}
+                    disabled={!row.corpClientId || savingKey === row.key}
+                    title={
+                      row.corpClientId
+                        ? t("manager.accountManager")
+                        : t("clientsNeedsB2bLink")
+                    }
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={(event) => {
+                      void assignAccountManager(row, event.target.value);
+                    }}
+                    className="crm-input h-8 max-w-[160px] px-2 text-xs text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <option value="">{t("manager.unassigned")}</option>
+                    {accountOptions.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
             ),
           },
           {

@@ -24,11 +24,12 @@ export const SALES_OPERATION_PAGE_KEYS = [
   "salesB2BClients",
   "salesAnalytics",
   "salesManagerAnalytics",
+  "salesAutomation",
 ] as const satisfies readonly AppPageKey[];
 
 export type SalesOperationPageKey = (typeof SALES_OPERATION_PAGE_KEYS)[number];
 
-export const CURRENT_PERMISSIONS_VERSION = 9;
+export const CURRENT_PERMISSIONS_VERSION = 10;
 
 export function isAppRole(value: unknown): value is AppRole {
   return typeof value === "string" && (APP_ROLES as readonly string[]).includes(value);
@@ -130,6 +131,7 @@ export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: SalesOpe
   { prefix: "/sales-operation/b2b-clients", page: "salesB2BClients" },
   { prefix: "/sales-operation/manager-analytics", page: "salesManagerAnalytics" },
   { prefix: "/sales-operation/analytics", page: "salesAnalytics" },
+  { prefix: "/sales-operation/automation", page: "salesAutomation" },
 ];
 
 export function resolveSalesOperationPageKey(pathname: string): SalesOperationPageKey {
@@ -138,6 +140,7 @@ export function resolveSalesOperationPageKey(pathname: string): SalesOperationPa
   if (pathname.startsWith("/sales-operation/b2b-clients")) return "salesB2BClients";
   if (pathname.startsWith("/sales-operation/manager-analytics")) return "salesManagerAnalytics";
   if (pathname.startsWith("/sales-operation/analytics")) return "salesAnalytics";
+  if (pathname.startsWith("/sales-operation/automation")) return "salesAutomation";
   return "salesPipeline";
 }
 

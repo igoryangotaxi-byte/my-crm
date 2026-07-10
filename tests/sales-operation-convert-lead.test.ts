@@ -112,6 +112,8 @@ describe("convert signed lead to client", () => {
     adName: "Fleet promo",
     formId: "form-1",
     customFields: { fleetSize: 12 },
+    assignedManagerUserId: null,
+    assignedManagerName: null,
     statusEnteredAt: "2026-05-01T10:00:00.000Z",
     createdAt: "2026-05-01T09:00:00.000Z",
     updatedAt: "2026-05-01T10:00:00.000Z",

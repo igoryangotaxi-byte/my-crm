@@ -1,4 +1,5 @@
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { listActiveOverviewB2BClients } from "@/lib/sales-operation/active-b2b-clients";
 import { listB2BClientRegistry } from "@/lib/sales-operation/b2b-client-registry";
 import { buildSalesClientListRows } from "@/lib/sales-operation/client-list";
 import { requireSalesOperationPage } from "@/lib/sales-operation/require-sales-access";
@@ -6,6 +7,7 @@ import { listSalesClients } from "@/lib/sales-operation/repository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   const auth = await requireSalesOperationPage(request, "salesSignedClients");
@@ -15,13 +17,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Keep this endpoint light: registry + signed clients only.
-    // Avoid scanning gp_fct_order_raw metrics (can take tens of seconds).
     const [clients, registry] = await Promise.all([listSalesClients(), listB2BClientRegistry()]);
-    const overviewClients = registry.map((entry) => ({
-      corpClientId: entry.corpClientId,
-      clientName: entry.clientName,
-    }));
+    const nameByCorpId = Object.fromEntries(
+      registry.map((entry) => [entry.corpClientId, entry.clientName]),
+    );
+    const overviewClients = await listActiveOverviewB2BClients(nameByCorpId);
     const rows = buildSalesClientListRows(clients, registry, overviewClients);
     return Response.json(
       { ok: true, clients, registry, overviewClients, rows },

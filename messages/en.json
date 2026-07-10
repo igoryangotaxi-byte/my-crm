@@ -42,7 +42,8 @@
       "clients": "Clients",
       "b2bClients": "B2B Clients Overview",
       "managerAnalytics": "Manager Analytics",
-      "analytics": "Analytics"
+      "analytics": "Analytics",
+      "automation": "Automation"
     },
     "loading": "Loading…",
     "addLead": "Add lead",
@@ -127,6 +128,10 @@
         "title": "B2B Clients Overview",
         "subtitle": "Yango B2B client performance — spend, decoupling, and trip metrics"
       },
+      "b2bClientTrips": {
+        "title": "B2B client trips",
+        "subtitle": "Trip list for the selected B2B client and period"
+      },
       "analytics": {
         "title": "Analytics",
         "subtitle": "Pipeline KPIs and campaign performance"
@@ -135,10 +140,47 @@
         "title": "Manager Analytics",
         "subtitle": "Account and Sales Manager portfolio performance"
       },
+      "automation": {
+        "title": "Automation",
+        "subtitle": "Workflows for lead status changes — SMS and manager assignment"
+      },
       "clientDetail": {
         "title": "Client profile",
         "subtitle": "Signed client details, managers, and B2B performance"
       }
+    },
+    "automation": {
+      "create": "New workflow",
+      "empty": "No workflows yet. Create one to automate SMS or manager assignment.",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "save": "Save workflow",
+      "saving": "Saving…",
+      "saved": "Saved",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this workflow permanently?",
+      "backToList": "All workflows",
+      "namePlaceholder": "Workflow name",
+      "palette": "Nodes",
+      "config": "Node settings",
+      "selectNode": "Select a node to configure.",
+      "addTrigger": "Lead status trigger",
+      "addSms": "Send SMS",
+      "addAssign": "Assign manager",
+      "fromStatus": "From status",
+      "toStatus": "To status",
+      "anyStatus": "Any",
+      "smsText": "SMS text",
+      "smsPlaceholders": "Placeholders: {{full_name}}, {{phone}}, {{company_name}}, {{status}}",
+      "assignMode": "Assignment mode",
+      "modeFixed": "Fixed manager",
+      "modeRoundRobin": "Round robin",
+      "manager": "Manager",
+      "managers": "Managers",
+      "loadError": "Failed to load automations.",
+      "saveError": "Failed to save workflow.",
+      "disabledBanner": "This workflow is disabled — it will not run on lead status changes. Turn on Enabled and save.",
+      "triggerHint": "Trigger: New → In Progress. Lead must have a phone for SMS."
     },
     "client": {
       "b2bPerformance": "B2B performance",

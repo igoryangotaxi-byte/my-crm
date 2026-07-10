@@ -112,6 +112,25 @@ describe("sales client list", () => {
     assert.equal(rows.filter((row) => row.source === "signed").length, 1);
   });
 
+  it("includes pipeline-linked clients even when corp is not in active overview", () => {
+    const rows = buildSalesClientListRows(
+      [
+        salesClient({
+          id: "s-linked-inactive",
+          fullName: "Pipeline Linked",
+          corpClientId: "corp-inactive",
+          companyName: "Inactive Co",
+        }),
+      ],
+      [registryEntry({ corpClientId: "corp-inactive", clientName: "Inactive Co DB" })],
+      [], // active overview empty (0 trips since 2026)
+    );
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.source, "linked");
+    assert.equal(rows[0]?.name, "Inactive Co DB");
+    assert.equal(rows[0]?.corpClientId, "corp-inactive");
+  });
+
   it("filters by name or corp client id", () => {
     const rows = buildSalesClientListRows(
       [salesClient({ id: "s2", fullName: "Signed Only" })],

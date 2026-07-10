@@ -31,6 +31,7 @@ describe("sales operation RBAC", () => {
     assert.equal(merged.salesOperation, true);
     assert.equal(merged.salesPipeline, true);
     assert.equal(merged.salesManagerAnalytics, true);
-    assert.equal(CURRENT_PERMISSIONS_VERSION, 9);
+    assert.equal(merged.salesAutomation, true);
+    assert.equal(CURRENT_PERMISSIONS_VERSION, 10);
   });
 });

@@ -22,6 +22,7 @@ export type AppPageKey =
   | "salesB2BClients"
   | "salesAnalytics"
   | "salesManagerAnalytics"
+  | "salesAutomation"
   | "accesses"
   | "notes";
 
@@ -111,6 +112,7 @@ const salesPagesAllTrue = {
   salesB2BClients: true,
   salesAnalytics: true,
   salesManagerAnalytics: true,
+  salesAutomation: true,
 } as const;
 
 const salesPagesAllFalse = {
@@ -120,6 +122,7 @@ const salesPagesAllFalse = {
   salesB2BClients: false,
   salesAnalytics: false,
   salesManagerAnalytics: false,
+  salesAutomation: false,
 } as const;
 
 export const defaultRolePermissions: RolePermissions = {

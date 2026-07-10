@@ -60,5 +60,9 @@ test("buildTieredTariffSuggestions returns empty when target decoupling already 
   const trips = [{ km: 5, clientPaid: 100, driverCost: 10, decouplingAbs: 90 }];
   const { suggestions, assumptions } = buildTieredTariffSuggestions(trips, 5);
   assert.equal(suggestions.length, 0);
-  assert.ok(assumptions.some((a) => a.includes("уже достигает")));
+  assert.ok(
+    assumptions.some(
+      (a) => a.includes("Целевой DR ниже текущего") || a.includes("Не удалось подобрать"),
+    ),
+  );
 });
