@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-07-10",
+    title: "Sales Automation + Clients AM assign (0.2.27)",
+    notes:
+      "13ecdc8c — App version 0.2.27. Sales Operation Automation canvas (status trigger → SMS + assign manager). Clients list: active B2B since 2026-01-01 + pipeline clients; inline Account Manager dropdown; click opens trips/detail. B2B trips under /sales-operation/b2b-clients/trips. Pipeline first-touch Sales Manager. SQL: supabase_sales_automation.sql, supabase_list_active_corp_clients.sql (run in Supabase).",
+  },
+  {
+    date: "2026-07-10",
     title: "Sales Operation CRM + Gett removal (0.2.26)",
     notes:
       "0a83da7a — App version 0.2.26. New Sales Operation module: pipeline, clients, B2B registry, analytics, WordPress form webhook. Removed Gett. Access delete removes Auth + profile. proposal_sent works without DB constraint change (compat). Faster clients list. SQL: supabase_sales_operation*.sql, supabase_b2b_client_managers.sql, supabase_auth_roles_account_sales_managers.sql.",
