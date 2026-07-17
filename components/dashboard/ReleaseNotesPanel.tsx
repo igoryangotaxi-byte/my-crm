@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-07-17",
+    title: "Sales pipeline fixes: layout, lead tabs, tasks, inline SMS (0.2.39)",
+    notes:
+      "App version 0.2.39. Four pipeline fixes: (1) The Pipeline page no longer runs off the screen — the board stays within the viewport and its columns scroll horizontally when they don't all fit. (2) The expanded lead card no longer jumps back to the first tab: background polling used to re-select 'Overview' every few seconds; the card now only re-initializes when you actually open a different lead. (3) New tasks created from a lead now default to being assigned to you, so they show up in My Tasks (you can still reassign). (4) The lead card gains an SMS bubble — a quick-action next to Call/Email/WhatsApp that opens an inline composer to text the lead directly (via the Inforu gateway); sent messages are logged on the lead's Activity timeline. New API: /leads/[id]/sms (POST).",
+  },
+  {
+    date: "2026-07-17",
     title: "Fix: SSO login now completes into the app (0.2.38)",
     notes:
       "App version 0.2.38. Fix for Google SSO: after signing in, the app kept returning to the login page. The client now treats the server session cookie as the source of truth — GET /api/auth returns the authenticated user id and the AuthProvider adopts it — so Google sign-in lands correctly on the dashboard instead of bouncing back to /login.",

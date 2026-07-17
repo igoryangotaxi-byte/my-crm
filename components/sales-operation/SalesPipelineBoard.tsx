@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -97,6 +97,11 @@ export function SalesLeadDetailSidebar({
   const [activityRefresh, setActivityRefresh] = useState(0);
   const bumpActivity = useCallback(() => setActivityRefresh((prev) => prev + 1), []);
   const [activeTab, setActiveTab] = useState<LeadDetailTab>("overview");
+  const initializedLeadIdRef = useRef<string | null>(null);
+  const [smsOpen, setSmsOpen] = useState(false);
+  const [smsText, setSmsText] = useState("");
+  const [smsSending, setSmsSending] = useState(false);
+  const [smsResult, setSmsResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   const loadLinkedClient = useCallback(async (leadId: string) => {
     setLoadingClient(true);
@@ -121,6 +126,18 @@ export function SalesLeadDetailSidebar({
   }, []);
 
   useEffect(() => {
+    const leadId = lead?.id ?? null;
+    // Background polling replaces the leads array (new object refs) with the same
+    // records. Only (re)initialize the sidebar when the opened lead actually changes,
+    // otherwise the active tab and in-progress edits get reset on every poll tick.
+    if (leadId === initializedLeadIdRef.current) {
+      return;
+    }
+    initializedLeadIdRef.current = leadId;
+    setSmsOpen(false);
+    setSmsText("");
+    setSmsResult(null);
+
     if (!lead) {
       setDraft(emptyDraft);
       setNotes([]);
@@ -287,6 +304,28 @@ export function SalesLeadDetailSidebar({
     }
   };
 
+  const sendSms = async () => {
+    if (!lead || !smsText.trim()) return;
+    setSmsSending(true);
+    setSmsResult(null);
+    try {
+      const res = await fetch(`/api/sales-operation/leads/${lead.id}/sms`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: smsText.trim() }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string; description?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Failed to send SMS.");
+      setSmsResult({ ok: true, message: t("sms.sent") });
+      setSmsText("");
+      bumpActivity();
+    } catch (err) {
+      setSmsResult({ ok: false, message: err instanceof Error ? err.message : t("sms.failed") });
+    } finally {
+      setSmsSending(false);
+    }
+  };
+
   if (!open || !lead) return null;
 
   return (
@@ -359,7 +398,61 @@ export function SalesLeadDetailSidebar({
               </a>
             );
           })()}
+          <button
+            type="button"
+            onClick={() => {
+              setSmsResult(null);
+              setSmsOpen((prev) => !prev);
+            }}
+            disabled={!lead.phone}
+            className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+              lead.phone
+                ? smsOpen
+                  ? "border-red-300 bg-red-50 text-red-700"
+                  : "border-border text-slate-700 hover:bg-slate-50"
+                : "cursor-not-allowed border-slate-100 text-slate-300"
+            }`}
+          >
+            {t("quick.sms")}
+          </button>
         </div>
+
+        {smsOpen && lead.phone ? (
+          <div className="mt-3 rounded-xl border border-red-200 bg-red-50/60 p-3">
+            <p className="mb-1 text-[11px] font-semibold text-slate-600">
+              {t("sms.to", { phone: lead.phone })}
+            </p>
+            <textarea
+              className="crm-input min-h-[64px] w-full px-3 py-2 text-sm"
+              placeholder={t("sms.placeholder")}
+              value={smsText}
+              maxLength={480}
+              onChange={(event) => setSmsText(event.target.value)}
+            />
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="text-[11px] text-muted">{smsText.trim().length}/480</span>
+              <div className="flex items-center gap-2">
+                {smsResult ? (
+                  <span
+                    className={`text-[11px] font-semibold ${
+                      smsResult.ok ? "text-emerald-700" : "text-rose-700"
+                    }`}
+                  >
+                    {smsResult.message}
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={smsSending || !smsText.trim()}
+                  onClick={() => void sendSms()}
+                  className="crm-button-primary rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+                >
+                  {smsSending ? t("sms.sending") : t("sms.send")}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-3 flex gap-1 overflow-x-auto">
           {LEAD_DETAIL_TABS.map((tab) => (

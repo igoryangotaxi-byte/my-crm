@@ -50,7 +50,7 @@ export function SalesLeadTasksSection({
   onTasksChanged?: () => void;
 }) {
   const t = useTranslations("salesOperation");
-  const { users } = useAuth();
+  const { users, currentUser } = useAuth();
   const [tasks, setTasks] = useState<SalesTask[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -85,7 +85,8 @@ export function SalesLeadTasksSection({
 
   const startAdd = () => {
     setEditingId(null);
-    setDraft(emptyDraft);
+    // Default the assignee to the current user so new tasks show up in "My tasks".
+    setDraft({ ...emptyDraft, assignedToUserId: currentUser?.id ?? "" });
     setShowForm(true);
     setError(null);
   };

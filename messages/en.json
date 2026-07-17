@@ -230,7 +230,16 @@
     "quick": {
       "call": "Call",
       "email": "Email",
-      "whatsapp": "WhatsApp"
+      "whatsapp": "WhatsApp",
+      "sms": "SMS"
+    },
+    "sms": {
+      "to": "SMS to {phone}",
+      "placeholder": "Type your message…",
+      "send": "Send SMS",
+      "sending": "Sending…",
+      "sent": "SMS sent",
+      "failed": "Failed to send"
     },
     "email": {
       "title": "Email",

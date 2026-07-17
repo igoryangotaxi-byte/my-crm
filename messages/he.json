@@ -251,7 +251,16 @@
     "quick": {
       "call": "התקשר",
       "email": "אימייל",
-      "whatsapp": "וואטסאפ"
+      "whatsapp": "וואטסאפ",
+      "sms": "SMS"
+    },
+    "sms": {
+      "to": "SMS אל {phone}",
+      "placeholder": "הקלד הודעה…",
+      "send": "שלח SMS",
+      "sending": "שולח…",
+      "sent": "ה-SMS נשלח",
+      "failed": "השליחה נכשלה"
     },
     "file": {
       "title": "קבצים",

@@ -14,12 +14,12 @@ export function SalesOperationAppShell({ children }: { children: React.ReactNode
       <div className="crm-make-shell relative flex min-h-screen overflow-x-hidden bg-background">
         <SalesOperationSidebar />
         <div
-          className={`make-shell-inner relative z-[1] flex flex-1 flex-col ${
+          className={`make-shell-inner relative z-[1] flex min-w-0 flex-1 flex-col ${
             language === "he" ? "min-h-screen pr-16" : "min-h-screen pl-16"
           }`}
         >
           <SalesOperationHeader />
-          <main className="make-shell-main flex-1 mx-3 px-5 py-5 lg:py-6">{children}</main>
+          <main className="make-shell-main min-w-0 flex-1 mx-3 px-5 py-5 lg:py-6">{children}</main>
         </div>
       </div>
     </RouteLoadingProvider>
