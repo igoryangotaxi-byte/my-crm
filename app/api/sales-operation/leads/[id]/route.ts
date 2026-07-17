@@ -39,7 +39,7 @@ export async function DELETE(request: Request, context: RouteContext) {
 
   const { id } = await context.params;
   try {
-    await deleteSalesLead(id);
+    await deleteSalesLead(id, { userId: auth.user.id, name: auth.user.name });
     return Response.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to delete lead.";
@@ -73,7 +73,14 @@ export async function PATCH(request: Request, context: RouteContext) {
     return Response.json({ ok: true, lead });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update lead.";
-    const status = message.includes("not found") ? 404 : message.includes("Invalid status") ? 400 : 500;
+    const isRequirement = error instanceof Error && error.name === "StageRequirementError";
+    const status = message.includes("not found")
+      ? 404
+      : isRequirement
+        ? 422
+        : message.includes("Invalid status")
+          ? 400
+          : 500;
     return Response.json({ ok: false, error: message }, { status });
   }
 }

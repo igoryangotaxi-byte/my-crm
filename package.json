@@ -1,6 +1,6 @@
 {
   "name": "my-crm",
-  "version": "0.2.27",
+  "version": "0.2.37",
   "private": true,
   "engines": {
     "node": ">=20.9.0"
@@ -13,7 +13,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:price-calculator": "tsx --test tests/price-calculator-formulas.test.ts tests/tariff-health-check.test.ts tests/transcript-mot-tariff-rules.test.ts tests/transcript-decoupling-fallback.test.ts tests/google-geocoding.test.ts tests/request-rides.test.ts tests/tenant-yango-bootstrap.test.ts tests/driver-price-comparison-calculated-fields.test.ts tests/driver-price-comparison-table.test.ts tests/gp-trips-import.test.ts tests/sales-operation-convert-lead.test.ts tests/sales-operation-status.test.ts tests/sales-operation-wpforms-webhook.test.ts tests/rbac-sales-operation.test.ts tests/sales-operation-client-update.test.ts tests/sales-operation-manager-analytics.test.ts tests/sales-operation-crm-manager-users.test.ts tests/sales-operation-client-list.test.ts tests/sales-operation-proposal-sent-compat.test.ts tests/sales-operation-automation.test.ts",
+    "test:price-calculator": "tsx --test tests/price-calculator-formulas.test.ts tests/tariff-health-check.test.ts tests/transcript-mot-tariff-rules.test.ts tests/transcript-decoupling-fallback.test.ts tests/google-geocoding.test.ts tests/request-rides.test.ts tests/tenant-yango-bootstrap.test.ts tests/driver-price-comparison-calculated-fields.test.ts tests/driver-price-comparison-table.test.ts tests/gp-trips-import.test.ts tests/sales-operation-convert-lead.test.ts tests/sales-operation-status.test.ts tests/sales-operation-wpforms-webhook.test.ts tests/rbac-sales-operation.test.ts tests/sales-operation-client-update.test.ts tests/sales-operation-manager-analytics.test.ts tests/sales-operation-crm-manager-users.test.ts tests/sales-operation-client-list.test.ts tests/sales-operation-proposal-sent-compat.test.ts tests/sales-operation-automation.test.ts tests/sales-operation-pipeline-config.test.ts tests/sales-operation-contacts.test.ts tests/sales-operation-tasks.test.ts tests/sales-operation-files.test.ts tests/sales-operation-notifications.test.ts tests/sales-operation-client-health.test.ts tests/sales-operation-analytics.test.ts tests/sales-operation-data-quality.test.ts tests/sales-operation-email.test.ts tests/google-sso.test.ts",
     "vercel:sync-fleet-env": "node scripts/vercel-sync-fleet-env.mjs",
     "vercel:sync-google-maps-env": "node scripts/vercel-sync-google-maps-env.mjs",
     "vercel:sync-yango-opticity-env": "node scripts/vercel-sync-yango-opticity-env.mjs",
@@ -51,9 +51,11 @@
     "csv-parse": "^6.2.1",
     "dotenv": "^17.4.2",
     "fast-xml-parser": "^5.7.1",
+    "google-auth-library": "^10.9.0",
     "maplibre-gl": "^5.24.0",
     "next": "16.2.4",
     "next-intl": "^4.11.0",
+    "nodemailer": "^9.0.3",
     "pg": "^8.20.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -63,6 +65,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^25.6.0",
+    "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.20.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

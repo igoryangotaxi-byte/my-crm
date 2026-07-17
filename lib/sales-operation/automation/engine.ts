@@ -2,6 +2,7 @@ import {
   findMatchingTriggers,
   pickRoundRobinUser,
   readAssignData,
+  readCreateTaskData,
   readSmsData,
   walkActionNodes,
 } from "@/lib/sales-operation/automation/graph";
@@ -16,6 +17,8 @@ import type {
   AutomationRunStep,
   SalesAutomation,
 } from "@/lib/sales-operation/automation/types";
+import { createNotification } from "@/lib/sales-operation/notifications";
+import { createSalesTask } from "@/lib/sales-operation/tasks";
 import type { SalesLead, SalesLeadStatus } from "@/lib/sales-operation/types";
 import { sendInforuSms } from "@/lib/sms/inforu";
 
@@ -32,6 +35,8 @@ type EngineDeps = {
   insertRun?: typeof insertAutomationRun;
   assignManager?: typeof setLeadAssignedManager;
   updateRoundRobin?: typeof updateAutomationRoundRobinState;
+  createTask?: typeof createSalesTask;
+  notify?: typeof createNotification;
 };
 
 async function executeAutomation(
@@ -39,7 +44,9 @@ async function executeAutomation(
   lead: SalesLead,
   fromStatus: SalesLeadStatus,
   toStatus: SalesLeadStatus,
-  deps: Required<Pick<EngineDeps, "sendSms" | "assignManager" | "updateRoundRobin">>,
+  deps: Required<
+    Pick<EngineDeps, "sendSms" | "assignManager" | "updateRoundRobin" | "createTask" | "notify">
+  >,
 ): Promise<AutomationRunStep[]> {
   const triggers = findMatchingTriggers(automation.graph.nodes, fromStatus, toStatus);
   if (triggers.length === 0) return [];
@@ -147,15 +154,23 @@ async function executeAutomation(
             continue;
           }
 
+          const resolvedName = userName?.trim() || userId;
           await deps.assignManager(lead.id, {
             userId,
-            name: userName?.trim() || userId,
+            name: resolvedName,
+          });
+          await deps.notify({
+            userId,
+            type: "lead_assigned",
+            title: `You were assigned a lead: ${lead.companyName || lead.fullName}`,
+            leadId: lead.id,
+            link: "/sales-operation/pipeline",
           });
           steps.push({
             nodeId: node.id,
             type: "actionAssignManager",
             ok: true,
-            message: `Assigned ${userName || userId}`,
+            message: `Assigned ${resolvedName}`,
           });
         } catch (error) {
           steps.push({
@@ -163,6 +178,53 @@ async function executeAutomation(
             type: "actionAssignManager",
             ok: false,
             message: error instanceof Error ? error.message : "Assign failed",
+          });
+        }
+        continue;
+      }
+
+      if (node.type === "actionCreateTask") {
+        const cfg = readCreateTaskData(node);
+        const title = applyAutomationTemplate(cfg.title, vars).trim();
+        if (!title) {
+          steps.push({
+            nodeId: node.id,
+            type: "actionCreateTask",
+            ok: true,
+            skipped: true,
+            message: "Empty task title.",
+          });
+          continue;
+        }
+        try {
+          const dueAt = new Date(
+            Date.now() + cfg.dueInDays * 24 * 60 * 60 * 1000,
+          ).toISOString();
+          const assignToOwner = cfg.assignToLeadOwner && Boolean(lead.assignedManagerUserId);
+          await deps.createTask(
+            lead.id,
+            {
+              title,
+              taskType: cfg.taskType,
+              priority: cfg.priority,
+              dueAt,
+              assignedToUserId: assignToOwner ? lead.assignedManagerUserId : null,
+              assignedToName: assignToOwner ? lead.assignedManagerName : null,
+            },
+            { userId: null, name: automation.name },
+          );
+          steps.push({
+            nodeId: node.id,
+            type: "actionCreateTask",
+            ok: true,
+            message: `Created task “${title}”`,
+          });
+        } catch (error) {
+          steps.push({
+            nodeId: node.id,
+            type: "actionCreateTask",
+            ok: false,
+            message: error instanceof Error ? error.message : "Create task failed",
           });
         }
       }
@@ -202,6 +264,8 @@ export async function runAutomationsForStatusChange(
   const insertRun = deps?.insertRun ?? insertAutomationRun;
   const assignManager = deps?.assignManager ?? setLeadAssignedManager;
   const updateRoundRobin = deps?.updateRoundRobin ?? updateAutomationRoundRobinState;
+  const createTask = deps?.createTask ?? createSalesTask;
+  const notify = deps?.notify ?? createNotification;
 
   let automations: SalesAutomation[];
   try {
@@ -217,6 +281,8 @@ export async function runAutomationsForStatusChange(
         sendSms,
         assignManager,
         updateRoundRobin,
+        createTask,
+        notify,
       });
       if (steps.length === 0) continue;
       await insertRun({

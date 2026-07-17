@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { ClientHealthBadge } from "@/components/sales-operation/ClientHealthBadge";
+import { computeClientHealth } from "@/lib/sales-operation/client-health";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import {
   SalesClientManagerFields,
@@ -126,6 +128,17 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
     void loadDetail();
   }, [loadDetail]);
 
+  const health = useMemo(() => {
+    if (!client?.corpClientId || !metrics) return null;
+    return computeClientHealth({
+      trips: metrics.trips,
+      gmv: metrics.gmv,
+      decouplingRate: metrics.decouplingRate,
+      lastTripAt: trips[0]?.scheduledAt ?? null,
+      signedAt: client.signedAt,
+    });
+  }, [client?.corpClientId, client?.signedAt, metrics, trips]);
+
   const saveManagers = async () => {
     if (!client) return;
     setSaving(true);
@@ -191,7 +204,8 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
           <p className="text-sm text-muted">
             {t("signedAt")}: {formatSalesDateTime(client.signedAt)}
           </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {health ? <ClientHealthBadge status={health.status} score={health.score} /> : null}
             {client.accountManagerName ? (
               <span className="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[0.7rem] font-semibold text-sky-800">
                 {t("manager.accountManager")}: {client.accountManagerName}
@@ -211,6 +225,37 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
       </div>
 
       {error ? <p className="text-sm text-rose-700">{error}</p> : null}
+
+      {health ? (
+        <article className="rounded-3xl border border-white/70 bg-white/70 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="crm-section-title mb-0">{t("health.title")}</h2>
+            <ClientHealthBadge status={health.status} score={health.score} />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-3 text-sm">
+            <span className="text-slate-700">
+              {t("health.lastTrip")}:{" "}
+              <span className="font-semibold">
+                {health.daysSinceLastTrip === null
+                  ? "—"
+                  : t("portfolio.daysAgo", { days: health.daysSinceLastTrip })}
+              </span>
+            </span>
+            {health.reasons.length > 0 ? (
+              <span className="flex flex-wrap gap-1.5">
+                {health.reasons.map((reason) => (
+                  <span
+                    key={reason}
+                    className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[0.7rem] font-medium text-slate-700"
+                  >
+                    {t(`health.reason.${reason}`)}
+                  </span>
+                ))}
+              </span>
+            ) : null}
+          </div>
+        </article>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <article className="rounded-3xl border border-white/70 bg-white/70 p-4">

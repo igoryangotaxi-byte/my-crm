@@ -8,11 +8,22 @@ import {
   normalizeCorpClientId,
   updateB2BClientManagers,
 } from "@/lib/sales-operation/b2b-client-registry";
+import {
+  buildSalesAnalyticsReport,
+  type SalesAnalyticsReport,
+} from "@/lib/sales-operation/analytics";
 import { convertSignedLeadToClient } from "@/lib/sales-operation/convert-lead-to-client";
+import { diffLeadFields, logAudit, summarizeChanges } from "@/lib/sales-operation/audit";
+import { createNotification } from "@/lib/sales-operation/notifications";
+import { listPipelineStages, listSegments } from "@/lib/sales-operation/pipeline-config";
 import { runAutomationsForStatusChange } from "@/lib/sales-operation/automation/engine";
 import type { UpdateSalesClientInput } from "@/lib/sales-operation/manager-types";
-import { assertValidStatusTransition } from "@/lib/sales-operation/status-transitions";
 import {
+  assertStageRequirements,
+  assertValidStatusTransition,
+} from "@/lib/sales-operation/status-transitions";
+import {
+  SALES_LEAD_COMPAT_STATUSES,
   SALES_LEAD_SOURCES,
   SALES_LEAD_STATUSES,
   type CreateSalesLeadInput,
@@ -20,6 +31,7 @@ import {
   type SalesClient,
   type SalesClientNote,
   type SalesLead,
+  type SalesLeadDealFields,
   type SalesLeadNote,
   type SalesLeadSource,
   type SalesLeadStatus,
@@ -49,15 +61,28 @@ function readCustomFields(row: Record<string, unknown>): Record<string, unknown>
     : {};
 }
 
+function isCompatStatus(value: string | null): value is SalesLeadStatus {
+  return Boolean(value) && (SALES_LEAD_COMPAT_STATUSES as readonly string[]).includes(value as string);
+}
+
+function readNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const num = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function readText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
 function mapLeadRow(row: Record<string, unknown>): SalesLead {
   const customFields = readCustomFields(row);
   const dbStatus = normalizeStatus(row.status);
   const override = getPipelineStatusOverride(customFields);
+  // Compat statuses (proposal_sent, negotiation) may be stored as in_progress + override
+  // when the DB check-constraint predates them.
   const status: SalesLeadStatus =
-    dbStatus === "proposal_sent" ||
-    (dbStatus === "in_progress" && override === "proposal_sent")
-      ? "proposal_sent"
-      : dbStatus;
+    dbStatus === "in_progress" && isCompatStatus(override) ? (override as SalesLeadStatus) : dbStatus;
 
   return {
     id: String(row.id),
@@ -77,6 +102,20 @@ function mapLeadRow(row: Record<string, unknown>): SalesLead {
       typeof row.assigned_manager_user_id === "string" ? row.assigned_manager_user_id : null,
     assignedManagerName:
       typeof row.assigned_manager_name === "string" ? row.assigned_manager_name : null,
+    legalName: readText(row.legal_name),
+    companyRegNumber: readText(row.company_reg_number),
+    website: readText(row.website),
+    segmentId: readText(row.segment_id),
+    subSegment: readText(row.sub_segment),
+    employeesCount: readNumber(row.employees_count),
+    estimatedMonthlyPotential: readNumber(row.estimated_monthly_potential),
+    estimatedMonthlyTrips: readNumber(row.estimated_monthly_trips),
+    expectedCloseDate: readText(row.expected_close_date),
+    probabilityOverride: readNumber(row.probability_override),
+    clientAddress: readText(row.client_address),
+    generalNotes: readText(row.general_notes),
+    isArchived: row.is_archived === true,
+    archivedAt: readText(row.archived_at),
     statusEnteredAt: String(row.status_entered_at ?? row.created_at ?? new Date().toISOString()),
     createdAt: String(row.created_at ?? new Date().toISOString()),
     updatedAt: String(row.updated_at ?? new Date().toISOString()),
@@ -88,12 +127,12 @@ function mapLeadRow(row: Record<string, unknown>): SalesLead {
 function encodeStatusForDb(
   status: SalesLeadStatus,
   customFields: Record<string, unknown>,
-  preferNativeProposalSent: boolean,
+  preferNativeCompatStatus: boolean,
 ): { status: SalesLeadStatus; customFields: Record<string, unknown> } {
-  if (status === "proposal_sent" && !preferNativeProposalSent) {
+  if (isCompatStatus(status) && !preferNativeCompatStatus) {
     return {
       status: "in_progress",
-      customFields: withPipelineStatusOverride(customFields, "proposal_sent"),
+      customFields: withPipelineStatusOverride(customFields, status),
     };
   }
   return {
@@ -102,9 +141,33 @@ function encodeStatusForDb(
   };
 }
 
-function eventStatusForDb(status: SalesLeadStatus, preferNativeProposalSent: boolean): SalesLeadStatus {
-  if (status === "proposal_sent" && !preferNativeProposalSent) return "in_progress";
+function eventStatusForDb(status: SalesLeadStatus, preferNativeCompatStatus: boolean): SalesLeadStatus {
+  if (isCompatStatus(status) && !preferNativeCompatStatus) return "in_progress";
   return status;
+}
+
+/** Sets snake_case deal columns on an update/insert payload only for provided fields. */
+function applyDealFieldsToPayload(
+  payload: Record<string, unknown>,
+  input: SalesLeadDealFields,
+): void {
+  if (input.legalName !== undefined) payload.legal_name = input.legalName?.trim() || null;
+  if (input.companyRegNumber !== undefined)
+    payload.company_reg_number = input.companyRegNumber?.trim() || null;
+  if (input.website !== undefined) payload.website = input.website?.trim() || null;
+  if (input.segmentId !== undefined) payload.segment_id = input.segmentId?.trim() || null;
+  if (input.subSegment !== undefined) payload.sub_segment = input.subSegment?.trim() || null;
+  if (input.employeesCount !== undefined) payload.employees_count = input.employeesCount ?? null;
+  if (input.estimatedMonthlyPotential !== undefined)
+    payload.estimated_monthly_potential = input.estimatedMonthlyPotential ?? null;
+  if (input.estimatedMonthlyTrips !== undefined)
+    payload.estimated_monthly_trips = input.estimatedMonthlyTrips ?? null;
+  if (input.expectedCloseDate !== undefined)
+    payload.expected_close_date = input.expectedCloseDate?.trim() || null;
+  if (input.probabilityOverride !== undefined)
+    payload.probability_override = input.probabilityOverride ?? null;
+  if (input.clientAddress !== undefined) payload.client_address = input.clientAddress?.trim() || null;
+  if (input.generalNotes !== undefined) payload.general_notes = input.generalNotes?.trim() || null;
 }
 
 function mapLeadNoteRow(row: Record<string, unknown>): SalesLeadNote {
@@ -194,18 +257,30 @@ function displayStatus(status: SalesLeadStatus): string {
     new: "New",
     in_progress: "In Progress",
     proposal_sent: "Proposal Sent",
+    negotiation: "Negotiation",
     signed: "Signed",
     rejected: "Rejected",
   };
   return labels[status];
 }
 
-export async function listSalesLeads(): Promise<SalesLead[]> {
+export type ListSalesLeadsOptions = {
+  /** "active" (default) hides archived, "archived" only archived, "all" both. */
+  archive?: "active" | "archived" | "all";
+};
+
+export async function listSalesLeads(
+  options: ListSalesLeadsOptions = {},
+): Promise<SalesLead[]> {
   const supabase = getSupabaseAdminClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("sales_leads")
     .select("*")
     .order("status_entered_at", { ascending: false });
+  const archive = options.archive ?? "active";
+  if (archive === "active") query = query.eq("is_archived", false);
+  else if (archive === "archived") query = query.eq("is_archived", true);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => mapLeadRow(row as Record<string, unknown>));
 }
@@ -223,9 +298,14 @@ export async function createSalesLead(
 ): Promise<SalesLead> {
   const supabase = getSupabaseAdminClient();
   const now = new Date().toISOString();
-  const status = input.status ? normalizeStatus(input.status) : "new";
-  const payload = {
-    status,
+  const requestedStatus = input.status ? normalizeStatus(input.status) : "new";
+  const encoded = encodeStatusForDb(
+    requestedStatus,
+    input.customFields ?? {},
+    proposalSentPersistedNatively,
+  );
+  const payload: Record<string, unknown> = {
+    status: encoded.status,
     source: input.source ? normalizeSource(input.source) : "manual",
     full_name: input.fullName.trim(),
     email: input.email?.trim() || null,
@@ -236,13 +316,20 @@ export async function createSalesLead(
     ad_id: input.adId?.trim() || null,
     ad_name: input.adName?.trim() || null,
     form_id: input.formId?.trim() || null,
-    custom_fields: input.customFields ?? {},
+    custom_fields: encoded.customFields,
     status_entered_at: now,
     created_by_user_id: actor.userId,
     created_by_name: actor.name,
     created_at: now,
     updated_at: now,
   };
+  if (input.assignedManagerUserId !== undefined) {
+    payload.assigned_manager_user_id = input.assignedManagerUserId || null;
+    payload.assigned_manager_name = input.assignedManagerUserId
+      ? input.assignedManagerName?.trim() || input.assignedManagerUserId
+      : null;
+  }
+  applyDealFieldsToPayload(payload, input);
 
   const { data, error } = await supabase.from("sales_leads").insert(payload).select("*").single();
   if (error || !data) throw new Error(error?.message ?? "Failed to create lead.");
@@ -251,10 +338,28 @@ export async function createSalesLead(
   await supabase.from("sales_lead_status_events").insert({
     lead_id: lead.id,
     from_status: null,
-    to_status: lead.status,
+    to_status: eventStatusForDb(lead.status, proposalSentPersistedNatively),
     changed_by_user_id: actor.userId,
     changed_by_name: actor.name,
     created_at: now,
+  });
+
+  if (lead.assignedManagerUserId && lead.assignedManagerUserId !== actor.userId) {
+    await createNotification({
+      userId: lead.assignedManagerUserId,
+      type: "lead_assigned",
+      title: `You were assigned a lead: ${lead.companyName || lead.fullName}`,
+      leadId: lead.id,
+      link: "/sales-operation/pipeline",
+    });
+  }
+
+  await logAudit({
+    entityType: "lead",
+    entityId: lead.id,
+    action: "created",
+    actor,
+    summary: lead.companyName || lead.fullName,
   });
 
   return lead;
@@ -273,7 +378,10 @@ export async function findSalesLeadByWpformsSubmissionId(
   return data ? mapLeadRow(data as Record<string, unknown>) : null;
 }
 
-export async function deleteSalesLead(id: string): Promise<void> {
+export async function deleteSalesLead(
+  id: string,
+  actor: { userId: string | null; name: string } = { userId: null, name: "System" },
+): Promise<void> {
   const supabase = getSupabaseAdminClient();
   const existing = await getSalesLeadById(id);
   if (!existing) throw new Error("Lead not found.");
@@ -290,6 +398,51 @@ export async function deleteSalesLead(id: string): Promise<void> {
 
   const { error } = await supabase.from("sales_leads").delete().eq("id", id);
   if (error) throw new Error(error.message);
+
+  await logAudit({
+    entityType: "lead",
+    entityId: id,
+    action: "deleted",
+    actor,
+    summary: existing.companyName || existing.fullName,
+  });
+}
+
+/** Soft-archives (or restores) a lead. Archived leads are hidden from the active board. */
+export async function setSalesLeadArchived(
+  id: string,
+  archived: boolean,
+  actor: { userId: string | null; name: string },
+): Promise<SalesLead> {
+  const supabase = getSupabaseAdminClient();
+  const existing = await getSalesLeadById(id);
+  if (!existing) throw new Error("Lead not found.");
+
+  const now = new Date().toISOString();
+  const payload: Record<string, unknown> = {
+    is_archived: archived,
+    archived_at: archived ? now : null,
+    archived_by_user_id: archived ? actor.userId : null,
+    archived_by_name: archived ? actor.name : null,
+    updated_at: now,
+  };
+  const { data, error } = await supabase
+    .from("sales_leads")
+    .update(payload)
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Failed to update lead.");
+
+  const lead = mapLeadRow(data as Record<string, unknown>);
+  await logAudit({
+    entityType: "lead",
+    entityId: id,
+    action: archived ? "archived" : "unarchived",
+    actor,
+    summary: lead.companyName || lead.fullName,
+  });
+  return lead;
 }
 
 export async function updateSalesLead(
@@ -305,6 +458,12 @@ export async function updateSalesLead(
   const nextStatus = input.status ? normalizeStatus(input.status) : existing.status;
   if (nextStatus !== existing.status) {
     assertValidStatusTransition(existing.status, nextStatus);
+    assertStageRequirements(nextStatus, {
+      estimatedMonthlyPotential:
+        input.estimatedMonthlyPotential !== undefined
+          ? input.estimatedMonthlyPotential
+          : existing.estimatedMonthlyPotential,
+    });
   }
 
   const baseCustomFields =
@@ -325,6 +484,7 @@ export async function updateSalesLead(
     if (input.adId !== undefined) payload.ad_id = input.adId?.trim() || null;
     if (input.adName !== undefined) payload.ad_name = input.adName?.trim() || null;
     if (input.formId !== undefined) payload.form_id = input.formId?.trim() || null;
+    applyDealFieldsToPayload(payload, input);
     if (nextStatus !== existing.status) {
       payload.status = encoded.status;
       payload.status_entered_at = now;
@@ -333,8 +493,8 @@ export async function updateSalesLead(
         payload.assigned_manager_user_id = actor.userId;
         payload.assigned_manager_name = actor.name || actor.userId;
       }
-    } else if (existing.status === "proposal_sent") {
-      // Keep DB encoding aligned for proposal leads when editing other fields.
+    } else if (isCompatStatus(existing.status)) {
+      // Keep DB encoding aligned for compat-status leads when editing other fields.
       payload.status = encoded.status;
     }
 
@@ -376,6 +536,18 @@ export async function updateSalesLead(
     } catch (error) {
       console.error("Sales automation engine error:", error);
     }
+  }
+
+  const changes = diffLeadFields(existing, lead);
+  if (Object.keys(changes).length > 0) {
+    await logAudit({
+      entityType: "lead",
+      entityId: lead.id,
+      action: nextStatus !== existing.status ? "status_changed" : "updated",
+      actor,
+      summary: summarizeChanges(changes),
+      changes,
+    });
   }
 
   return lead;
@@ -577,4 +749,13 @@ export async function getSalesAnalyticsSummary(): Promise<SalesAnalyticsSummary>
     })),
     topCampaignsChart: topCampaigns,
   };
+}
+
+export async function getSalesAnalyticsReport(): Promise<SalesAnalyticsReport> {
+  const [leads, stages, segments] = await Promise.all([
+    listSalesLeads(),
+    listPipelineStages(),
+    listSegments(),
+  ]);
+  return buildSalesAnalyticsReport(leads, stages, segments);
 }

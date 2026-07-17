@@ -34,7 +34,9 @@ import {
 } from "@/lib/supabase-auth-store";
 
 const AUTH_STORE_KEY = "appli:auth:store:v1";
-const DEFAULT_ADMIN_EMAIL = "ig-kuznetsov@yandex-team.ru";
+const DEFAULT_ADMIN_EMAIL = "ig-kuznetsov@appli.taxi";
+/** Shared seed-admin email, used to grant Admin on first Google SSO provisioning. */
+export const SEEDED_ADMIN_EMAIL = DEFAULT_ADMIN_EMAIL;
 const DEFAULT_ADMIN_PASSWORD = "123";
 const DEFAULT_ADMIN_NAME = "Igor Kuznetsov";
 const DEFAULT_LANGUAGE: AppLanguage = "en";

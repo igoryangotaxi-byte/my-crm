@@ -36,6 +36,15 @@ async function main() {
     "supabase_auth_roles_account_sales_managers.sql",
     "supabase_sales_automation.sql",
     "supabase_list_active_corp_clients.sql",
+    "supabase_sales_negotiation_status.sql",
+    "supabase_sales_pipeline_config.sql",
+    "supabase_sales_contacts.sql",
+    "supabase_sales_tasks.sql",
+    "supabase_sales_activities.sql",
+    "supabase_sales_files.sql",
+    "supabase_sales_notifications.sql",
+    "supabase_sales_data_quality.sql",
+    "supabase_sales_email.sql",
   ];
   const client = new Client({
     connectionString: resolveDatabaseUrl(),

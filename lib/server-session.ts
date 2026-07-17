@@ -71,6 +71,46 @@ export function verifySessionToken(token: string): SessionPayload | null {
   }
 }
 
+export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+
+export type SessionCookieOptions = {
+  name: string;
+  value: string;
+  httpOnly: true;
+  secure: boolean;
+  sameSite: "lax";
+  path: string;
+  maxAge: number;
+};
+
+/**
+ * Shared cookie config so every entry point (password login, Google SSO callback)
+ * writes an identical `crm_session_v1` cookie.
+ */
+export function buildSessionSetCookie(userId: string): SessionCookieOptions {
+  return {
+    name: SESSION_COOKIE_NAME,
+    value: createSessionToken(userId),
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: SESSION_MAX_AGE_SECONDS,
+  };
+}
+
+export function buildSessionClearCookie(): SessionCookieOptions {
+  return {
+    name: SESSION_COOKIE_NAME,
+    value: "",
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  };
+}
+
 export function getSessionUserIdFromRequest(request: Request): string | null {
   const cookieHeader = request.headers.get("cookie");
   const token = parseCookieHeader(cookieHeader, SESSION_COOKIE_NAME);

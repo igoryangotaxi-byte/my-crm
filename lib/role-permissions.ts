@@ -25,11 +25,12 @@ export const SALES_OPERATION_PAGE_KEYS = [
   "salesAnalytics",
   "salesManagerAnalytics",
   "salesAutomation",
+  "salesSettings",
 ] as const satisfies readonly AppPageKey[];
 
 export type SalesOperationPageKey = (typeof SALES_OPERATION_PAGE_KEYS)[number];
 
-export const CURRENT_PERMISSIONS_VERSION = 10;
+export const CURRENT_PERMISSIONS_VERSION = 11;
 
 export function isAppRole(value: unknown): value is AppRole {
   return typeof value === "string" && (APP_ROLES as readonly string[]).includes(value);
@@ -56,6 +57,9 @@ function migrateSalesSubPages(
   const legacySales = merged.salesOperation ?? false;
   for (const key of SALES_OPERATION_PAGE_KEYS) {
     if (key === "salesOperation") continue;
+    // salesSettings is Admin-only by default; keep the role default instead of
+    // inheriting the broad salesOperation flag.
+    if (key === "salesSettings") continue;
     if (storedVersion < CURRENT_PERMISSIONS_VERSION && stored?.[key] === undefined) {
       merged[key] = legacySales;
     } else if (merged[key] === undefined) {
@@ -132,6 +136,7 @@ export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: SalesOpe
   { prefix: "/sales-operation/manager-analytics", page: "salesManagerAnalytics" },
   { prefix: "/sales-operation/analytics", page: "salesAnalytics" },
   { prefix: "/sales-operation/automation", page: "salesAutomation" },
+  { prefix: "/sales-operation/settings", page: "salesSettings" },
 ];
 
 export function resolveSalesOperationPageKey(pathname: string): SalesOperationPageKey {
@@ -141,6 +146,7 @@ export function resolveSalesOperationPageKey(pathname: string): SalesOperationPa
   if (pathname.startsWith("/sales-operation/manager-analytics")) return "salesManagerAnalytics";
   if (pathname.startsWith("/sales-operation/analytics")) return "salesAnalytics";
   if (pathname.startsWith("/sales-operation/automation")) return "salesAutomation";
+  if (pathname.startsWith("/sales-operation/settings")) return "salesSettings";
   return "salesPipeline";
 }
 

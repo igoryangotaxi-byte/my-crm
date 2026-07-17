@@ -5,7 +5,20 @@ import { useTranslations } from "next-intl";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Table } from "@/components/ui/Table";
 import { getManagerUserOptionsForRole } from "@/lib/sales-operation/crm-manager-users";
+import { rowsToCsv } from "@/lib/sales-operation/analytics";
 import type { ManagerPortfolioSummary } from "@/lib/sales-operation/manager-types";
+
+function downloadCsv(filename: string, rows: Array<Array<unknown>>) {
+  const blob = new Blob([`\ufeff${rowsToCsv(rows)}`], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 function toDateInputValue(date: Date): string {
   const y = date.getFullYear();
@@ -134,7 +147,7 @@ export function ManagerAnalyticsView() {
             className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700"
           />
         </label>
-        <div className="flex items-end">
+        <div className="flex items-end gap-2">
           <button
             type="button"
             onClick={() => void loadSummary()}
@@ -142,6 +155,34 @@ export function ManagerAnalyticsView() {
             className="crm-button-primary h-9 rounded-xl px-4 text-sm font-semibold disabled:opacity-60"
           >
             {loading ? t("loading") : t("manager.refresh")}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              summary &&
+              downloadCsv(`manager-${summary.managerName || summary.managerUserId}.csv`, [
+                [
+                  t("field.company"),
+                  t("manager.requests"),
+                  t("manager.trips"),
+                  t("manager.gmv"),
+                  t("manager.decoupling"),
+                  t("manager.decouplingRate"),
+                ],
+                ...summary.clients.map((row) => [
+                  row.clientName,
+                  row.requests,
+                  row.trips,
+                  Math.round(row.gmv),
+                  Math.round(row.decoupling),
+                  `${row.decouplingRate.toFixed(1)}%`,
+                ]),
+              ])
+            }
+            disabled={!summary || summary.clients.length === 0}
+            className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+          >
+            {t("report.exportCsv")}
           </button>
         </div>
       </div>

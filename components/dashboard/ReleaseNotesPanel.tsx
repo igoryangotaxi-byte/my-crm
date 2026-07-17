@@ -6,6 +6,66 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-07-17",
+    title: "Authentication: Google Workspace SSO — @appli.taxi only (0.2.37)",
+    notes:
+      "App version 0.2.37. Sign-in is now Google Workspace SSO restricted to @appli.taxi accounts. The login page shows a single \"Sign in with Google\" button; email/password login and self-registration are removed. First sign-in with an @appli.taxi Google account auto-provisions an approved User (ig-kuznetsov@appli.taxi is Admin); personal Gmail and other domains are rejected. Two gates are enforced: the OAuth consent screen should be set to Internal (org-only) and the server re-verifies email_verified plus the workspace domain (hd claim) on every login. The existing admin was migrated to ig-kuznetsov@appli.taxi (Admin retained). New routes: /api/auth/google/start and /api/auth/google/callback. New env: GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, optional GOOGLE_OAUTH_REDIRECT_URI, GOOGLE_WORKSPACE_DOMAIN (default appli.taxi), AUTH_SESSION_SECRET. Requires a Google Cloud OAuth Web client whose authorized redirect URIs include the prod + localhost callback URLs.",
+  },
+  {
+    date: "2026-07-17",
+    title: "Sales Operation Phase 10: email integration — templates, thread, send (0.2.36)",
+    notes:
+      "App version 0.2.36. Roadmap Phase 10 (email): each lead now has an Email tab with a full outbound/inbound thread. Compose emails inline, optionally starting from a reusable template; personalization placeholders ({{lead.company}}, {{contact.firstName}}, {{manager.name}}, {{date.today}}, …) are filled in on send. Every message is recorded on the thread with status (Sent / Draft / Failed / Received) and also appears on the lead's Activity timeline. Email templates are managed in Sales Operation → Settings (name, subject, body, language, activate/deactivate). Outbound delivery uses SMTP and is compatible with Google Workspace (SMTP relay / app password) and Microsoft 365 (smtp.office365.com); until SMTP env vars are set, composed messages are saved to the thread as drafts but not delivered. Inbound emails can be attached to a lead via a secured webhook (/api/sales-operation/email/inbound). New API: /leads/[id]/email (GET/POST), /config/email-templates (GET/POST) + /[templateId] (PATCH/DELETE), /email/inbound (POST). SQL (applied to Supabase): supabase_sales_email.sql (templates + messages). New env (optional): SALES_SMTP_HOST/PORT/SECURE/USER/PASSWORD/FROM, SALES_EMAIL_INBOUND_SECRET.",
+  },
+  {
+    date: "2026-07-17",
+    title: "Sales Operation Phase 9: data quality — search, dedup, archive, audit (0.2.35)",
+    notes:
+      "App version 0.2.35. Roadmap Phase 9 (data quality): new global search box in the Sales Operation header that finds leads, clients and contacts by name, company, email or phone and jumps straight to the record. Duplicate detection while adding a lead — matches on email, phone and company (with normalized comparison) are surfaced live in the Add lead dialog so you can open the existing record instead of creating a duplicate. Required fields on creation: a lead now needs a name and at least an email or a phone. Soft archive: leads can be archived (hidden from the active board but kept in history) and restored, instead of only hard delete. Full audit log: every lead create/update/status-change/archive/delete is recorded with actor and a field-level diff; field edits and archive/restore now also appear in the lead's Activity timeline. New API: /sales-operation/search (GET), /leads/[id]/archive (POST/DELETE), /leads/duplicates (GET), /sales-operation/audit (GET). SQL (applied to Supabase): supabase_sales_data_quality.sql (audit log table + archive columns).",
+  },
+  {
+    date: "2026-07-17",
+    title: "Sales Operation Phase 8: analytics, reports & CSV export (0.2.34)",
+    notes:
+      "App version 0.2.34. Roadmap Phase 8 (analytics & reports): the Analytics page now includes a Daily report (new leads, moved forward, signed/rejected today), a pipeline funnel with stage-to-stage conversion, pipeline aging buckets (0–7 / 8–14 / 15–30 / 30+ days) plus average days per stage, win/loss stats (win rate, avg days to win/loss), breakdowns by source and by segment, and a weighted-pipeline forecast grouped by expected close month. CSV export for the funnel, source, segment and forecast tables, and a per-manager CSV export on Manager Analytics. New API: /sales-operation/analytics/report (GET). All metrics are computed deterministically from existing lead data — no SQL changes in this phase.",
+  },
+  {
+    date: "2026-07-17",
+    title: "Sales Operation Phase 7: client health, AM portfolio, handover (0.2.33)",
+    notes:
+      "App version 0.2.33. Roadmap Phase 7 (client success): each signed/B2B client now gets a deterministic health status (New / Healthy / Watch / At risk / Dormant) derived from trip recency, volume and decoupling — shown as a badge with reasons on the client profile. New AM Portfolio page (/sales-operation/portfolio) groups clients by account manager with per-group totals (GMV, trips), a health distribution, and a per-client table (health, trips, GMV, days since last trip) linking back to profiles. Handover on Signed: converting a lead to a client now auto-creates a high-priority onboarding task for the owning manager (due in 3 days), logs the handover on the activity feed, and notifies the owner. New API: /sales-operation/portfolio (GET). No SQL changes in this phase.",
+  },
+  {
+    date: "2026-07-17",
+    title: "Sales Operation Phase 6: notifications, automations, stage gates (0.2.32)",
+    notes:
+      "App version 0.2.32. Roadmap Phase 6 (notifications & automation): new in-app notification bell in the Sales Operation header with unread badge, dropdown, per-item + mark-all-read, polling every 60s. Notifications are generated when a task is assigned to someone, when a lead is assigned to a manager (manually or via automation). Automation editor gains a new Create task action node (title with placeholders, type, priority, due-in-days, assign to lead owner), and the Assign manager action now also notifies the assignee. Stage gate: moving a lead to Proposal sent / Negotiation now requires the estimated monthly potential (₪) to be set (returns 422 with a clear message). New API: /sales-operation/notifications (GET) and /notifications/read (POST). SQL (applied to Supabase): supabase_sales_notifications.sql.",
+  },
+  {
+    date: "2026-07-17",
+    title: "Sales Operation Phase 5: tabbed lead card + files (0.2.31)",
+    notes:
+      "App version 0.2.31. Roadmap Phase 5 (detail card): the lead drawer is now organized into tabs — Overview, Contacts, Activity, Tasks, Files — with a sticky header and quick actions (Call / Email / WhatsApp) built from the lead's phone and email. New Files tab: upload attachments to a private Supabase Storage bucket (sales-attachments, 25MB limit), download via short-lived signed URLs, and delete. New API: /leads/[id]/files (GET/POST multipart) and /files/[fileId] (DELETE). SQL (applied to Supabase): supabase_sales_files.sql (creates the private bucket + sales_files table).",
+  },
+  {
+    date: "2026-07-17",
+    title: "Sales Operation Phase 4: tasks, activity feed, My Tasks (0.2.30)",
+    notes:
+      "App version 0.2.30. Roadmap Phase 4 (tasks & activity): each lead gets tasks / next steps with type (call/email/meeting/whatsapp/to-do), priority, due date and assignee. New Tasks section in the lead sidebar with add/edit/complete/delete plus a mandatory next-step banner when no open task exists. Unified Activity feed on the lead merges manual activities, notes, status changes and task events into one chronological timeline (no backfill needed). New My Tasks page (/sales-operation/tasks) listing your tasks across all leads, grouped by Overdue / Today / Upcoming, with mine/all and open/done/all filters and one-click complete. New API: /leads/[id]/tasks (+[taskId]), /leads/[id]/activity, /sales-operation/tasks. SQL (applied to Supabase): supabase_sales_tasks.sql, supabase_sales_activities.sql.",
+  },
+  {
+    date: "2026-07-17",
+    title: "Sales Operation Phase 3: multi-contact model (0.2.29)",
+    notes:
+      "App version 0.2.29. Roadmap Phase 3 (contacts): each lead now supports multiple contacts with full name, job title, department, email, mobile/office phone, preferred channel, notes, primary and decision-maker flags. New Contacts section in the lead detail sidebar with add/edit/delete, one-click Make primary, and clickable email (mailto:) / phone (tel:) links. Dedup by email + mobile within a lead and a single-primary guarantee are enforced at the DB level. New API: /api/sales-operation/leads/[id]/contacts (GET/POST) and /contacts/[contactId] (PATCH/DELETE). SQL (applied to Supabase): supabase_sales_contacts.sql.",
+  },
+  {
+    date: "2026-07-17",
+    title: "Sales Operation Phase 1+2: stages, segments, pipeline UX (0.2.28)",
+    notes:
+      "App version 0.2.28. Roadmap Phase 1 (foundation): configurable pipeline stages + new Negotiation stage, business segments, richer lead/deal fields (legal name, segment, monthly potential ₪, expected close date, probability, etc.), admin Settings page (/sales-operation/settings), new Admin-only salesSettings permission (permissions v11). Phase 2 (pipeline UX): richer lead cards (company title, contact, potential ₪ + weighted, segment, owner, days in stage), column potential sums, collapsible columns, horizontal scroll for 6 stages, filters (search/owner/segment/campaign/source/potential) with per-user saved views, extended create-lead modal (company/segment/potential/owner). Negotiation degrades gracefully on old DB (in_progress + override). SQL (run in Supabase): supabase_sales_negotiation_status.sql, supabase_sales_pipeline_config.sql (or npm run db:apply:sales-operation).",
+  },
+  {
     date: "2026-07-10",
     title: "Sales Automation + Clients AM assign (0.2.27)",
     notes:

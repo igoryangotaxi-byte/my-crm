@@ -5,6 +5,7 @@ export const AUTOMATION_NODE_TYPES = [
   "triggerLeadStatus",
   "actionSms",
   "actionAssignManager",
+  "actionCreateTask",
 ] as const;
 export type AutomationNodeType = (typeof AUTOMATION_NODE_TYPES)[number];
 
@@ -30,10 +31,20 @@ export type ActionAssignManagerData = {
   userNames?: Record<string, string>;
 };
 
+export type ActionCreateTaskData = {
+  label?: string;
+  title: string;
+  taskType?: "call" | "email" | "meeting" | "whatsapp" | "todo" | "other";
+  priority?: "low" | "normal" | "high";
+  dueInDays?: number;
+  assignToLeadOwner?: boolean;
+};
+
 export type AutomationNodeData =
   | TriggerLeadStatusData
   | ActionSmsData
-  | ActionAssignManagerData;
+  | ActionAssignManagerData
+  | ActionCreateTaskData;
 
 export type AutomationGraph = {
   nodes: Node[];

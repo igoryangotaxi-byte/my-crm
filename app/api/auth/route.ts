@@ -5,7 +5,6 @@ import {
   loadAuthStore,
   saveAuthStore,
   updateAuthUserPassword,
-  verifyLoginCredentials,
 } from "@/lib/auth-store";
 import {
   discoverYangoTenantDefaultCostCenterId,
@@ -14,7 +13,7 @@ import {
 import { ensureRequestRideUserByPhone, listYangoClientUsers } from "@/lib/yango-api";
 import { removeMappedUserId, upsertMappedUserId } from "@/lib/request-rides-user-map";
 import { getRequestUser } from "@/lib/server-auth";
-import { createSessionToken, SESSION_COOKIE_NAME } from "@/lib/server-session";
+import { buildSessionClearCookie, buildSessionSetCookie } from "@/lib/server-session";
 import { buildAllPageAccess } from "@/lib/role-permissions";
 import {
   type AuthApiActionRequest,
@@ -49,28 +48,8 @@ function hasTenantEmployeesPermission(user: Awaited<ReturnType<typeof getRequest
   return Boolean(role?.permissions?.employees);
 }
 
-function applySessionCookie(response: NextResponse, userId: string) {
-  response.cookies.set({
-    name: SESSION_COOKIE_NAME,
-    value: createSessionToken(userId),
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
-}
-
 function clearSessionCookie(response: NextResponse) {
-  response.cookies.set({
-    name: SESSION_COOKIE_NAME,
-    value: "",
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 0,
-  });
+  response.cookies.set(buildSessionClearCookie());
 }
 
 function authStoreUnavailableResponse(error: unknown) {
@@ -338,34 +317,13 @@ export async function POST(request: Request) {
 
   switch (payload.action) {
     case "register": {
-      const email = payload.email.trim().toLowerCase();
-      const exists = store.users.some((user) => user.email.toLowerCase() === email);
-      if (exists) {
-        return NextResponse.json<AuthActionResponse>({
+      return NextResponse.json<AuthActionResponse>(
+        {
           ok: false,
-          message: "User with this email already exists",
-        });
-      }
-
-      const nextUser = await createAuthBackedUser({
-        name: payload.name.trim(),
-        email,
-        password: payload.password,
-        role: "User",
-        status: "pending",
-        accountType: "internal",
-        language: "en",
-      });
-      const nextStore: AuthStoreData = {
-        ...store,
-        users: [...store.users, nextUser],
-      };
-      await saveAuthStore(nextStore);
-      return NextResponse.json<AuthActionResponse>({
-        ok: true,
-        message: "Registration sent for admin approval",
-        data: sanitizeStore(nextStore),
-      });
+          message: "Registration is disabled. Sign in with your @appli.taxi Google account.",
+        },
+        { status: 410 },
+      );
     }
     case "createInternalUser": {
       if (!isInternalAdmin(sessionUser)) {
@@ -410,32 +368,13 @@ export async function POST(request: Request) {
       });
     }
     case "login": {
-      const user = await verifyLoginCredentials(payload.email, payload.password);
-      if (!user) {
-        return NextResponse.json<AuthActionResponse>({
+      return NextResponse.json<AuthActionResponse>(
+        {
           ok: false,
-          message: "Invalid email or password",
-        });
-      }
-      if (user.status === "pending") {
-        return NextResponse.json<AuthActionResponse>({
-          ok: false,
-          message: "Your account is pending approval by an admin",
-        });
-      }
-      if (user.status === "rejected") {
-        return NextResponse.json<AuthActionResponse>({
-          ok: false,
-          message: "Your account access was rejected by an admin",
-        });
-      }
-      const response = NextResponse.json<AuthActionResponse>({
-        ok: true,
-        userId: user.id,
-        data: sanitizeStore(store),
-      });
-      applySessionCookie(response, user.id);
-      return response;
+          message: "Password login is disabled. Sign in with your @appli.taxi Google account.",
+        },
+        { status: 410 },
+      );
     }
     case "logout": {
       const response = NextResponse.json<AuthActionResponse>({ ok: true });

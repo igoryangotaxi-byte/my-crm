@@ -1,4 +1,14 @@
 {
+  "login": {
+    "brand": "אפלי טקסי עוז",
+    "title": "כניסה ל-CRM",
+    "subtitle": "הכניסה מוגבלת לחשבונות Google של ‎@appli.taxi בלבד.",
+    "signInWithGoogle": "כניסה עם Google",
+    "errorDomain": "מותרים רק חשבונות ‎@appli.taxi.",
+    "errorOAuth": "הכניסה נכשלה. נסו שוב.",
+    "errorConfig": "כניסת Google אינה מוגדרת. פנו למנהל המערכת.",
+    "errorRejected": "הגישה לחשבון נדחתה על ידי מנהל."
+  },
   "layout": {
     "brand": "אפלי טקסי עוז",
     "searchPlaceholder": "חיפוש...",
@@ -39,11 +49,14 @@
     "backToCrm": "חזרה ל-CRM",
     "tab": {
       "pipeline": "צינור",
+      "tasks": "המשימות שלי",
       "clients": "לקוחות",
+      "portfolio": "תיק AM",
       "b2bClients": "סקירת לקוחות B2B",
       "managerAnalytics": "אנליטיקת מנהלים",
       "analytics": "אנליטיקה",
-      "automation": "אוטומציה"
+      "automation": "אוטומציה",
+      "settings": "הגדרות"
     },
     "loading": "טוען…",
     "addLead": "הוסף ליד",
@@ -52,6 +65,8 @@
     "deleteLead": "מחק ליד",
     "deleteLeadConfirm": "למחוק את הליד לצמיתות? ההערות יימחקו ולא ניתן לבטל פעולה זו.",
     "deleteLeadSignedHint": "לא ניתן למחוק ליד חתום כי הומר ללקוח.",
+    "archiveLead": "ארכיון",
+    "archiveLeadConfirm": "להעביר את הליד לארכיון? הוא יוסתר מהלוח הפעיל אך יישמר בהיסטוריה.",
     "deleting": "מוחק…",
     "cancel": "ביטול",
     "close": "סגור",
@@ -79,9 +94,201 @@
       "phone": "טלפון",
       "company": "חברה",
       "campaign": "קמפיין",
+      "segment": "סגמנט",
+      "potential": "פוטנציאל חודשי ₪",
+      "owner": "אחראי",
       "corpClient": "לקוח B2B",
       "corpClientSearch": "חיפוש לפי שם או corp_client_id…",
       "corpClientNoMatch": "לא נמצאו לקוחות התואמים לחיפוש."
+    },
+    "filter": {
+      "search": "חיפוש שם, חברה…",
+      "allOwners": "כל האחראים",
+      "allSegments": "כל הסגמנטים",
+      "allCampaigns": "כל הקמפיינים",
+      "allSources": "כל המקורות",
+      "minPotential": "מ-₪",
+      "maxPotential": "עד ₪",
+      "clear": "נקה מסננים"
+    },
+    "view": {
+      "saved": "תצוגות שמורות",
+      "save": "שמור תצוגה",
+      "namePrompt": "שם לתצוגה"
+    },
+    "column": {
+      "collapse": "כווץ עמודה",
+      "expand": "הרחב עמודה"
+    },
+    "card": {
+      "days": "{count} ימים בשלב",
+      "daysInStage": "ימים בשלב הנוכחי"
+    },
+    "task": {
+      "title": "משימות וצעדים הבאים",
+      "add": "הוסף משימה",
+      "empty": "אין עדיין משימות.",
+      "name": "משימה",
+      "description": "תיאור",
+      "due": "תאריך יעד",
+      "noDue": "אין תאריך יעד",
+      "assignee": "אחראי",
+      "unassigned": "לא משויך",
+      "save": "שמור משימה",
+      "edit": "עריכה",
+      "delete": "מחק",
+      "deleteConfirm": "למחוק את המשימה? לא ניתן לבטל.",
+      "noNextStep": "לא נקבע צעד הבא לליד זה.",
+      "scheduleNext": "קבע צעד הבא",
+      "type": {
+        "label": "סוג",
+        "none": "—",
+        "call": "שיחה",
+        "email": "אימייל",
+        "meeting": "פגישה",
+        "whatsapp": "וואטסאפ",
+        "todo": "משימה",
+        "other": "אחר"
+      },
+      "priority": {
+        "label": "עדיפות",
+        "low": "נמוכה",
+        "normal": "רגילה",
+        "high": "גבוהה"
+      }
+    },
+    "tasks": {
+      "scope": {
+        "mine": "המשימות שלי",
+        "all": "כל המשימות"
+      },
+      "status": {
+        "open": "פתוחות",
+        "done": "הושלמו",
+        "all": "הכול"
+      },
+      "bucket": {
+        "overdue": "באיחור",
+        "today": "היום",
+        "upcoming": "קרובות",
+        "no_due": "ללא תאריך יעד",
+        "done": "הושלמו"
+      },
+      "openCount": "{count} פתוחות",
+      "empty": "אין משימות התואמות לסינון.",
+      "noLead": "אין ליד מקושר"
+    },
+    "activity": {
+      "title": "פעילות",
+      "empty": "אין עדיין פעילות.",
+      "note": "נוספה הערה",
+      "statusChanged": "הועבר מ-{from} ל-{to}",
+      "statusCreated": "נוצר כ-{to}",
+      "taskCreated": "נוצרה משימה: {title}",
+      "taskCompleted": "משימה הושלמה: {title}",
+      "fieldChanged": "עודכן: {fields}",
+      "archived": "הליד הועבר לארכיון",
+      "unarchived": "הליד שוחזר",
+      "type": {
+        "call": "תועדה שיחה",
+        "email": "תועד אימייל",
+        "meeting": "תועדה פגישה",
+        "whatsapp": "תועד וואטסאפ",
+        "sms": "תועד SMS",
+        "field_changed": "עודכן",
+        "manual": "פעילות",
+        "other": "פעילות"
+      }
+    },
+    "search": {
+      "placeholder": "חיפוש…",
+      "searching": "מחפש…",
+      "empty": "לא נמצאו התאמות.",
+      "entity": {
+        "lead": "ליד",
+        "client": "לקוח",
+        "contact": "איש קשר"
+      }
+    },
+    "dedup": {
+      "warning": "{count, plural, one {נמצאה כפילות אפשרית אחת} other {נמצאו # כפילויות אפשריות}}",
+      "requiredHint": "ליד מחייב שם ולפחות אימייל או טלפון.",
+      "field": {
+        "email": "אימייל",
+        "phone": "טלפון",
+        "company": "חברה"
+      }
+    },
+    "detailTab": {
+      "overview": "סקירה",
+      "contacts": "אנשי קשר",
+      "activity": "פעילות",
+      "tasks": "משימות",
+      "files": "קבצים",
+      "email": "אימייל"
+    },
+    "email": {
+      "title": "אימייל",
+      "template": "תבנית",
+      "noTemplate": "ללא תבנית",
+      "to": "אל",
+      "subject": "נושא",
+      "body": "הודעה",
+      "send": "שלח אימייל",
+      "saveDraft": "שמור לשרשור",
+      "empty": "אין עדיין אימיילים.",
+      "notConfigured": "שליחת אימיילים עדיין לא מוגדרת — הודעות נשמרות בשרשור אך לא נשלחות. בקש ממנהל להגדיר SMTP.",
+      "variablesHint": "תגניות כמו {{lead.company}} מוחלפות בעת השליחה.",
+      "fromLabel": "מאת: {address}",
+      "toLabel": "אל: {address}",
+      "status": {
+        "sent": "נשלח",
+        "failed": "נכשל",
+        "logged": "טיוטה",
+        "received": "התקבל"
+      }
+    },
+    "quick": {
+      "call": "התקשר",
+      "email": "אימייל",
+      "whatsapp": "וואטסאפ"
+    },
+    "file": {
+      "title": "קבצים",
+      "empty": "אין עדיין קבצים.",
+      "dropHint": "לחץ להעלאת קבצים",
+      "uploading": "מעלה…",
+      "delete": "מחק",
+      "deleteConfirm": "למחוק את הקובץ? לא ניתן לבטל."
+    },
+    "contact": {
+      "title": "אנשי קשר",
+      "add": "הוסף איש קשר",
+      "empty": "אין עדיין אנשי קשר.",
+      "loading": "טוען אנשי קשר…",
+      "name": "שם מלא",
+      "jobTitle": "תפקיד",
+      "department": "מחלקה",
+      "email": "אימייל",
+      "mobile": "טלפון נייד",
+      "office": "טלפון משרד",
+      "preferredChannel": "ערוץ מועדף",
+      "notes": "הערות",
+      "primary": "ראשי",
+      "decisionMaker": "מקבל החלטות",
+      "makePrimary": "הפוך לראשי",
+      "save": "שמור איש קשר",
+      "edit": "עריכה",
+      "delete": "מחק",
+      "deleteConfirm": "למחוק את איש הקשר? לא ניתן לבטל פעולה זו.",
+      "channel": {
+        "none": "—",
+        "phone": "טלפון",
+        "email": "אימייל",
+        "whatsapp": "וואטסאפ",
+        "sms": "SMS",
+        "other": "אחר"
+      }
     },
     "manager": {
       "role": "תפקיד בפורטפוליו",
@@ -109,20 +316,65 @@
     "kpi": {
       "totalLeads": "סה״כ לידים",
       "conversion": "המרה לחתום",
-      "conversionHint": "לידים חתומים מתוך כל הלידים בצינור."
+      "conversionHint": "לידים חתומים מתוך כל הלידים בצינור.",
+      "signed": "חתום"
     },
     "chart": {
       "byStatus": "לידים לפי סטטוס",
       "topCampaigns": "קמפיינים מובילים"
+    },
+    "report": {
+      "dailyTitle": "דוח יומי",
+      "newLeads": "לידים חדשים",
+      "movedForward": "התקדמו",
+      "signedToday": "נחתמו",
+      "rejectedToday": "נדחו",
+      "winRate": "אחוז הצלחה",
+      "avgDaysToWin": "ימים ממוצע לחתימה",
+      "weightedPipeline": "צינור משוקלל",
+      "ofPotential": "מתוך פוטנציאל {value}",
+      "openDeals": "עסקאות פתוחות",
+      "funnelTitle": "משפך צינור",
+      "stage": "שלב",
+      "count": "כמות",
+      "conversion": "המרה",
+      "exportCsv": "ייצוא CSV",
+      "agingTitle": "התיישנות צינור (פתוחות)",
+      "agingBucket": {
+        "0-7": "0–7 ימים",
+        "8-14": "8–14 ימים",
+        "15-30": "15–30 ימים",
+        "30+": "30+ ימים"
+      },
+      "avgDays": "ימים ממוצע",
+      "avgDaysInStage": "ימים ממוצע בשלב",
+      "bySourceTitle": "לפי מקור",
+      "source": "מקור",
+      "bySegmentTitle": "לפי סגמנט",
+      "segment": "סגמנט",
+      "potential": "פוטנציאל",
+      "weighted": "משוקלל",
+      "forecastTitle": "תחזית לפי חודש סגירה צפוי",
+      "month": "חודש",
+      "unscheduled": "ללא תאריך",
+      "noForecast": "אין עסקאות פתוחות עם תאריך סגירה צפוי."
     },
     "page": {
       "pipeline": {
         "title": "צינור",
         "subtitle": "קנבן לידים — חדש, בטיפול, הצעה נשלחה, חתום, נדחה"
       },
+      "tasks": {
+        "title": "המשימות שלי",
+        "subtitle": "הצעדים הבאים שלך בכל הלידים — באיחור, היום וקרובים"
+      },
       "clients": {
         "title": "לקוחות",
         "subtitle": "לקוחות מ-B2B Overview ולידים חתומים שממתינים לקישור B2B"
+      },
+      "portfolio": {
+        "title": "תיק AM",
+        "subtitle": "לקוחות מקובצים לפי מנהל לקוח עם סטטוס בריאות"
       },
       "b2bClients": {
         "title": "סקירת לקוחות B2B",
@@ -144,10 +396,56 @@
         "title": "אוטומציה",
         "subtitle": "תהליכים לשינוי סטטוס ליד — SMS ושיבוץ מנהל"
       },
+      "settings": {
+        "title": "הגדרות",
+        "subtitle": "הגדרת שלבי הפייפליין וסגמנטים עסקיים"
+      },
       "clientDetail": {
         "title": "פרופיל לקוח",
         "subtitle": "פרטי לקוח חתום, מנהלים וביצועי B2B"
       }
+    },
+    "settings": {
+      "stagesTitle": "שלבי פייפליין",
+      "stagesSubtitle": "תוויות, סדר, סבירות זכייה ודגלי זכייה/הפסד/סופי. הסדר קובע את עמודות הלוח.",
+      "segmentsTitle": "סגמנטים עסקיים",
+      "segmentsSubtitle": "סגמנטים לסיווג לידים ולקוחות.",
+      "stageKey": "מפתח",
+      "stageLabel": "תווית",
+      "stageOrder": "סדר",
+      "stageProbability": "סבירות %",
+      "stageWon": "זכייה",
+      "stageLost": "הפסד",
+      "stageTerminal": "סופי",
+      "stageActive": "פעיל",
+      "save": "שמור",
+      "saving": "שומר…",
+      "saved": "נשמר.",
+      "addSegment": "הוסף סגמנט",
+      "segmentName": "שם סגמנט",
+      "segmentNamePlaceholder": "שם סגמנט חדש…",
+      "active": "פעיל",
+      "inactive": "לא פעיל",
+      "deactivate": "השבת",
+      "activate": "הפעל",
+      "noSegments": "אין סגמנטים עדיין.",
+      "loadError": "טעינת ההגדרות נכשלה.",
+      "saveError": "השמירה נכשלה.",
+      "migrationHint": "אם השינויים אינם נשמרים, החילו את supabase_sales_pipeline_config.sql ו-supabase_sales_negotiation_status.sql ב-Supabase.",
+      "emailTemplatesTitle": "תבניות אימייל",
+      "emailTemplatesSubtitle": "נושאים וגוף לשימוש חוזר באימיילים ללידים. השתמשו בתגניות לפרסון.",
+      "emailTemplatesEmpty": "אין עדיין תבניות.",
+      "emailTemplateName": "שם",
+      "emailTemplateLocale": "שפה",
+      "emailTemplateSubject": "נושא",
+      "emailTemplateBody": "גוף",
+      "emailTemplateVariables": "תגניות זמינות",
+      "emailTemplateAdd": "הוסף תבנית",
+      "emailTemplateEdit": "ערוך",
+      "emailTemplateDelete": "מחק",
+      "emailTemplateInactive": "לא פעילה",
+      "emailTemplateCancelEdit": "ביטול",
+      "emailTemplateDeleteConfirm": "למחוק את התבנית? לא ניתן לבטל."
     },
     "automation": {
       "create": "תהליך חדש",
@@ -167,6 +465,12 @@
       "addTrigger": "טריגר סטטוס ליד",
       "addSms": "שליחת SMS",
       "addAssign": "שיבוץ מנהל",
+      "addTask": "יצירת משימה",
+      "taskTitle": "כותרת המשימה",
+      "taskType": "סוג משימה",
+      "taskPriority": "עדיפות",
+      "taskDueInDays": "יעד (ימים)",
+      "taskAssignToOwner": "שיוך לבעל הליד",
       "fromStatus": "מסטטוס",
       "toStatus": "לסטטוס",
       "anyStatus": "הכל",
@@ -181,6 +485,42 @@
       "saveError": "שמירת התהליך נכשלה.",
       "disabledBanner": "התהליך כבוי — הוא לא ירוץ בשינוי סטטוס ליד. הפעילו Enabled.",
       "triggerHint": "טריגר: New → In Progress. ל-SMS נדרש טלפון בליד."
+    },
+    "notifications": {
+      "title": "התראות",
+      "markAllRead": "סמן הכל כנקרא",
+      "empty": "אין התראות עדיין."
+    },
+    "health": {
+      "title": "בריאות לקוח",
+      "lastTrip": "נסיעה אחרונה",
+      "status": {
+        "new": "חדש",
+        "healthy": "תקין",
+        "watch": "מעקב",
+        "at_risk": "בסיכון",
+        "dormant": "רדום"
+      },
+      "reason": {
+        "recentlySigned": "נחתם לאחרונה",
+        "noTrips": "אין נסיעות בטווח",
+        "staleTrips": "נסיעות נעצרו",
+        "decliningRecency": "פעילות מאטה",
+        "highDecoupling": "decoupling גבוה",
+        "lowVolume": "נפח נמוך",
+        "active": "פעיל"
+      }
+    },
+    "portfolio": {
+      "title": "תיק AM",
+      "subtitle": "לקוחות מקובצים לפי מנהל לקוח עם סטטוס בריאות",
+      "empty": "אין לקוחות להצגה בתקופה שנבחרה.",
+      "unassigned": "לא משויך",
+      "clientCount": "{count} לקוחות",
+      "daysAgo": "לפני {days} ימים",
+      "colClient": "לקוח",
+      "colHealth": "בריאות",
+      "colLastTrip": "נסיעה אחרונה"
     },
     "client": {
       "b2bPerformance": "ביצועי B2B",

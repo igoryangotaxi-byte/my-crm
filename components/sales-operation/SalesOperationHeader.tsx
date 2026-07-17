@@ -4,11 +4,21 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTranslations } from "next-intl";
+import { SalesNotificationsBell } from "@/components/sales-operation/SalesNotificationsBell";
+import { SalesGlobalSearch } from "@/components/sales-operation/SalesGlobalSearch";
 
 const salesOperationPageMeta: Record<string, { titleKey: string; subtitleKey: string }> = {
   "/sales-operation/pipeline": {
     titleKey: "page.pipeline.title",
     subtitleKey: "page.pipeline.subtitle",
+  },
+  "/sales-operation/tasks": {
+    titleKey: "page.tasks.title",
+    subtitleKey: "page.tasks.subtitle",
+  },
+  "/sales-operation/portfolio": {
+    titleKey: "page.portfolio.title",
+    subtitleKey: "page.portfolio.subtitle",
   },
   "/sales-operation/clients": {
     titleKey: "page.clients.title",
@@ -33,6 +43,10 @@ const salesOperationPageMeta: Record<string, { titleKey: string; subtitleKey: st
   "/sales-operation/automation": {
     titleKey: "page.automation.title",
     subtitleKey: "page.automation.subtitle",
+  },
+  "/sales-operation/settings": {
+    titleKey: "page.settings.title",
+    subtitleKey: "page.settings.subtitle",
   },
 };
 
@@ -78,6 +92,8 @@ export function SalesOperationHeader() {
       </div>
 
       <div className={`${language === "he" ? "mr-2" : "ml-2"} flex items-center gap-3`}>
+        <SalesGlobalSearch />
+        <SalesNotificationsBell />
         <div className="relative">
           <button
             type="button"

@@ -31,7 +31,7 @@ import {
   isSupabaseConfigured,
 } from "@/lib/supabase";
 
-const DEFAULT_ADMIN_EMAIL = "ig-kuznetsov@yandex-team.ru";
+const DEFAULT_ADMIN_EMAIL = "ig-kuznetsov@appli.taxi";
 const DEFAULT_ADMIN_PASSWORD = "123";
 const DEFAULT_ADMIN_NAME = "Igor Kuznetsov";
 const DEFAULT_LANGUAGE: AppLanguage = "en";

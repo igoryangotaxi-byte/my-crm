@@ -2,6 +2,7 @@ import type { Edge, Node } from "@xyflow/react";
 import type { SalesLeadStatus } from "@/lib/sales-operation/types";
 import type {
   ActionAssignManagerData,
+  ActionCreateTaskData,
   ActionSmsData,
   StatusMatch,
   TriggerLeadStatusData,
@@ -93,6 +94,32 @@ export function readAssignData(node: Node): ActionAssignManagerData {
       data.userNames && typeof data.userNames === "object" && !Array.isArray(data.userNames)
         ? (data.userNames as Record<string, string>)
         : {},
+  };
+}
+
+const TASK_TYPES = ["call", "email", "meeting", "whatsapp", "todo", "other"] as const;
+const TASK_PRIORITIES = ["low", "normal", "high"] as const;
+
+export function readCreateTaskData(node: Node): Required<
+  Pick<ActionCreateTaskData, "title" | "taskType" | "priority" | "dueInDays" | "assignToLeadOwner">
+> {
+  const data = (node.data ?? {}) as ActionCreateTaskData;
+  const taskType = (TASK_TYPES as readonly string[]).includes(data.taskType ?? "")
+    ? (data.taskType as (typeof TASK_TYPES)[number])
+    : "todo";
+  const priority = (TASK_PRIORITIES as readonly string[]).includes(data.priority ?? "")
+    ? (data.priority as (typeof TASK_PRIORITIES)[number])
+    : "normal";
+  const dueInDays =
+    typeof data.dueInDays === "number" && Number.isFinite(data.dueInDays) && data.dueInDays >= 0
+      ? Math.floor(data.dueInDays)
+      : 1;
+  return {
+    title: typeof data.title === "string" ? data.title : "",
+    taskType,
+    priority,
+    dueInDays,
+    assignToLeadOwner: data.assignToLeadOwner !== false,
   };
 }
 

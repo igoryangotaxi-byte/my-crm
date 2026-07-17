@@ -1,4 +1,14 @@
 {
+  "login": {
+    "brand": "Appli Taxi Oz",
+    "title": "Sign in to the CRM",
+    "subtitle": "Access is restricted to @appli.taxi Google accounts.",
+    "signInWithGoogle": "Sign in with Google",
+    "errorDomain": "Only @appli.taxi accounts are allowed.",
+    "errorOAuth": "Sign-in failed. Please try again.",
+    "errorConfig": "Google sign-in is not configured. Contact your administrator.",
+    "errorRejected": "Your account access was rejected by an admin."
+  },
   "layout": {
     "brand": "Appli Taxi Oz",
     "searchPlaceholder": "Search...",
@@ -39,11 +49,14 @@
     "backToCrm": "Back to CRM",
     "tab": {
       "pipeline": "Pipeline",
+      "tasks": "My Tasks",
       "clients": "Clients",
+      "portfolio": "AM Portfolio",
       "b2bClients": "B2B Clients Overview",
       "managerAnalytics": "Manager Analytics",
       "analytics": "Analytics",
-      "automation": "Automation"
+      "automation": "Automation",
+      "settings": "Settings"
     },
     "loading": "Loading…",
     "addLead": "Add lead",
@@ -52,6 +65,8 @@
     "deleteLead": "Delete lead",
     "deleteLeadConfirm": "Delete this lead permanently? Notes will be removed. This cannot be undone.",
     "deleteLeadSignedHint": "Signed leads cannot be deleted because they were converted to a client.",
+    "archiveLead": "Archive",
+    "archiveLeadConfirm": "Archive this lead? It will be hidden from the active board but kept in history.",
     "deleting": "Deleting…",
     "cancel": "Cancel",
     "close": "Close",
@@ -79,9 +94,201 @@
       "phone": "Phone",
       "company": "Company",
       "campaign": "Campaign",
+      "segment": "Segment",
+      "potential": "Monthly potential ₪",
+      "owner": "Owner",
       "corpClient": "B2B client",
       "corpClientSearch": "Search by name or corp_client_id…",
       "corpClientNoMatch": "No clients match this search."
+    },
+    "filter": {
+      "search": "Search name, company…",
+      "allOwners": "All owners",
+      "allSegments": "All segments",
+      "allCampaigns": "All campaigns",
+      "allSources": "All sources",
+      "minPotential": "Min ₪",
+      "maxPotential": "Max ₪",
+      "clear": "Clear filters"
+    },
+    "view": {
+      "saved": "Saved views",
+      "save": "Save view",
+      "namePrompt": "Name this view"
+    },
+    "column": {
+      "collapse": "Collapse column",
+      "expand": "Expand column"
+    },
+    "card": {
+      "days": "{count}d in stage",
+      "daysInStage": "Days in current stage"
+    },
+    "task": {
+      "title": "Tasks & next steps",
+      "add": "Add task",
+      "empty": "No tasks yet.",
+      "name": "Task",
+      "description": "Description",
+      "due": "Due date",
+      "noDue": "No due date",
+      "assignee": "Assignee",
+      "unassigned": "Unassigned",
+      "save": "Save task",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this task? This cannot be undone.",
+      "noNextStep": "No next step scheduled for this lead.",
+      "scheduleNext": "Schedule next step",
+      "type": {
+        "label": "Type",
+        "none": "—",
+        "call": "Call",
+        "email": "Email",
+        "meeting": "Meeting",
+        "whatsapp": "WhatsApp",
+        "todo": "To-do",
+        "other": "Other"
+      },
+      "priority": {
+        "label": "Priority",
+        "low": "Low",
+        "normal": "Normal",
+        "high": "High"
+      }
+    },
+    "tasks": {
+      "scope": {
+        "mine": "My tasks",
+        "all": "All tasks"
+      },
+      "status": {
+        "open": "Open",
+        "done": "Done",
+        "all": "All"
+      },
+      "bucket": {
+        "overdue": "Overdue",
+        "today": "Today",
+        "upcoming": "Upcoming",
+        "no_due": "No due date",
+        "done": "Completed"
+      },
+      "openCount": "{count} open",
+      "empty": "No tasks match this filter.",
+      "noLead": "No linked lead"
+    },
+    "activity": {
+      "title": "Activity",
+      "empty": "No activity yet.",
+      "note": "Note added",
+      "statusChanged": "Moved from {from} to {to}",
+      "statusCreated": "Created as {to}",
+      "taskCreated": "Task created: {title}",
+      "taskCompleted": "Task completed: {title}",
+      "fieldChanged": "Updated: {fields}",
+      "archived": "Lead archived",
+      "unarchived": "Lead restored",
+      "type": {
+        "call": "Call logged",
+        "email": "Email logged",
+        "meeting": "Meeting logged",
+        "whatsapp": "WhatsApp logged",
+        "sms": "SMS logged",
+        "field_changed": "Updated",
+        "manual": "Activity",
+        "other": "Activity"
+      }
+    },
+    "search": {
+      "placeholder": "Search…",
+      "searching": "Searching…",
+      "empty": "No matches found.",
+      "entity": {
+        "lead": "Lead",
+        "client": "Client",
+        "contact": "Contact"
+      }
+    },
+    "dedup": {
+      "warning": "{count, plural, one {# possible duplicate found} other {# possible duplicates found}}",
+      "requiredHint": "A lead requires a name and at least an email or a phone.",
+      "field": {
+        "email": "email",
+        "phone": "phone",
+        "company": "company"
+      }
+    },
+    "detailTab": {
+      "overview": "Overview",
+      "contacts": "Contacts",
+      "activity": "Activity",
+      "tasks": "Tasks",
+      "files": "Files",
+      "email": "Email"
+    },
+    "quick": {
+      "call": "Call",
+      "email": "Email",
+      "whatsapp": "WhatsApp"
+    },
+    "email": {
+      "title": "Email",
+      "template": "Template",
+      "noTemplate": "No template",
+      "to": "To",
+      "subject": "Subject",
+      "body": "Message",
+      "send": "Send email",
+      "saveDraft": "Save to thread",
+      "empty": "No emails yet.",
+      "notConfigured": "Email sending is not configured yet — messages are saved to the thread but not delivered. Ask an admin to set SMTP credentials.",
+      "variablesHint": "Placeholders like {{lead.company}} are filled in when sending.",
+      "fromLabel": "From: {address}",
+      "toLabel": "To: {address}",
+      "status": {
+        "sent": "Sent",
+        "failed": "Failed",
+        "logged": "Draft",
+        "received": "Received"
+      }
+    },
+    "file": {
+      "title": "Files",
+      "empty": "No files yet.",
+      "dropHint": "Click to upload files",
+      "uploading": "Uploading…",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this file? This cannot be undone."
+    },
+    "contact": {
+      "title": "Contacts",
+      "add": "Add contact",
+      "empty": "No contacts yet.",
+      "loading": "Loading contacts…",
+      "name": "Full name",
+      "jobTitle": "Job title",
+      "department": "Department",
+      "email": "Email",
+      "mobile": "Mobile phone",
+      "office": "Office phone",
+      "preferredChannel": "Preferred channel",
+      "notes": "Notes",
+      "primary": "Primary",
+      "decisionMaker": "Decision maker",
+      "makePrimary": "Make primary",
+      "save": "Save contact",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this contact? This cannot be undone.",
+      "channel": {
+        "none": "—",
+        "phone": "Phone",
+        "email": "Email",
+        "whatsapp": "WhatsApp",
+        "sms": "SMS",
+        "other": "Other"
+      }
     },
     "manager": {
       "role": "Portfolio role",
@@ -109,20 +316,65 @@
     "kpi": {
       "totalLeads": "Total leads",
       "conversion": "Signed conversion",
-      "conversionHint": "Signed leads divided by all leads in the pipeline."
+      "conversionHint": "Signed leads divided by all leads in the pipeline.",
+      "signed": "Signed"
     },
     "chart": {
       "byStatus": "Leads by status",
       "topCampaigns": "Top campaigns"
+    },
+    "report": {
+      "dailyTitle": "Daily report",
+      "newLeads": "New leads",
+      "movedForward": "Moved forward",
+      "signedToday": "Signed",
+      "rejectedToday": "Rejected",
+      "winRate": "Win rate",
+      "avgDaysToWin": "Avg days to win",
+      "weightedPipeline": "Weighted pipeline",
+      "ofPotential": "of {value} potential",
+      "openDeals": "Open deals",
+      "funnelTitle": "Pipeline funnel",
+      "stage": "Stage",
+      "count": "Count",
+      "conversion": "Conversion",
+      "exportCsv": "Export CSV",
+      "agingTitle": "Pipeline aging (open)",
+      "agingBucket": {
+        "0-7": "0–7 days",
+        "8-14": "8–14 days",
+        "15-30": "15–30 days",
+        "30+": "30+ days"
+      },
+      "avgDays": "Avg days",
+      "avgDaysInStage": "Avg days in stage",
+      "bySourceTitle": "By source",
+      "source": "Source",
+      "bySegmentTitle": "By segment",
+      "segment": "Segment",
+      "potential": "Potential",
+      "weighted": "Weighted",
+      "forecastTitle": "Forecast by expected close month",
+      "month": "Month",
+      "unscheduled": "Unscheduled",
+      "noForecast": "No open deals with an expected close date."
     },
     "page": {
       "pipeline": {
         "title": "Pipeline",
         "subtitle": "Lead kanban — New, In Progress, Proposal Sent, Signed, Rejected"
       },
+      "tasks": {
+        "title": "My Tasks",
+        "subtitle": "Your next steps across all leads — overdue, today, and upcoming"
+      },
       "clients": {
         "title": "Clients",
         "subtitle": "B2B Overview clients + signed leads awaiting B2B link"
+      },
+      "portfolio": {
+        "title": "AM Portfolio",
+        "subtitle": "Clients grouped by account manager with health status"
       },
       "b2bClients": {
         "title": "B2B Clients Overview",
@@ -144,10 +396,56 @@
         "title": "Automation",
         "subtitle": "Workflows for lead status changes — SMS and manager assignment"
       },
+      "settings": {
+        "title": "Settings",
+        "subtitle": "Configure pipeline stages and business segments"
+      },
       "clientDetail": {
         "title": "Client profile",
         "subtitle": "Signed client details, managers, and B2B performance"
       }
+    },
+    "settings": {
+      "stagesTitle": "Pipeline stages",
+      "stagesSubtitle": "Labels, order, win probability, and win/lost/terminal flags. Order controls the board columns.",
+      "segmentsTitle": "Business segments",
+      "segmentsSubtitle": "Segments used to classify leads and clients.",
+      "stageKey": "Key",
+      "stageLabel": "Label",
+      "stageOrder": "Order",
+      "stageProbability": "Probability %",
+      "stageWon": "Won",
+      "stageLost": "Lost",
+      "stageTerminal": "Terminal",
+      "stageActive": "Active",
+      "save": "Save",
+      "saving": "Saving…",
+      "saved": "Saved.",
+      "addSegment": "Add segment",
+      "segmentName": "Segment name",
+      "segmentNamePlaceholder": "New segment name…",
+      "active": "Active",
+      "inactive": "Inactive",
+      "deactivate": "Deactivate",
+      "activate": "Activate",
+      "noSegments": "No segments yet.",
+      "loadError": "Failed to load settings.",
+      "saveError": "Failed to save.",
+      "migrationHint": "If changes don't persist, apply supabase_sales_pipeline_config.sql and supabase_sales_negotiation_status.sql in Supabase.",
+      "emailTemplatesTitle": "Email templates",
+      "emailTemplatesSubtitle": "Reusable subjects and bodies for lead emails. Use placeholders to personalize.",
+      "emailTemplatesEmpty": "No templates yet.",
+      "emailTemplateName": "Name",
+      "emailTemplateLocale": "Language",
+      "emailTemplateSubject": "Subject",
+      "emailTemplateBody": "Body",
+      "emailTemplateVariables": "Available placeholders",
+      "emailTemplateAdd": "Add template",
+      "emailTemplateEdit": "Edit",
+      "emailTemplateDelete": "Delete",
+      "emailTemplateInactive": "inactive",
+      "emailTemplateCancelEdit": "Cancel",
+      "emailTemplateDeleteConfirm": "Delete this template? This cannot be undone."
     },
     "automation": {
       "create": "New workflow",
@@ -167,6 +465,12 @@
       "addTrigger": "Lead status trigger",
       "addSms": "Send SMS",
       "addAssign": "Assign manager",
+      "addTask": "Create task",
+      "taskTitle": "Task title",
+      "taskType": "Task type",
+      "taskPriority": "Priority",
+      "taskDueInDays": "Due in (days)",
+      "taskAssignToOwner": "Assign to lead owner",
       "fromStatus": "From status",
       "toStatus": "To status",
       "anyStatus": "Any",
@@ -181,6 +485,42 @@
       "saveError": "Failed to save workflow.",
       "disabledBanner": "This workflow is disabled — it will not run on lead status changes. Turn on Enabled and save.",
       "triggerHint": "Trigger: New → In Progress. Lead must have a phone for SMS."
+    },
+    "notifications": {
+      "title": "Notifications",
+      "markAllRead": "Mark all read",
+      "empty": "No notifications yet."
+    },
+    "health": {
+      "title": "Client health",
+      "lastTrip": "Last trip",
+      "status": {
+        "new": "New",
+        "healthy": "Healthy",
+        "watch": "Watch",
+        "at_risk": "At risk",
+        "dormant": "Dormant"
+      },
+      "reason": {
+        "recentlySigned": "Recently signed",
+        "noTrips": "No trips in range",
+        "staleTrips": "Trips stalled",
+        "decliningRecency": "Slowing activity",
+        "highDecoupling": "High decoupling",
+        "lowVolume": "Low volume",
+        "active": "Active"
+      }
+    },
+    "portfolio": {
+      "title": "AM Portfolio",
+      "subtitle": "Clients grouped by account manager with health status",
+      "empty": "No clients to show for the selected period.",
+      "unassigned": "Unassigned",
+      "clientCount": "{count} clients",
+      "daysAgo": "{days}d ago",
+      "colClient": "Client",
+      "colHealth": "Health",
+      "colLastTrip": "Last trip"
     },
     "client": {
       "b2bPerformance": "B2B performance",

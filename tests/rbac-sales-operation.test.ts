@@ -17,12 +17,23 @@ describe("sales operation RBAC", () => {
     }
   });
 
-  it("defaults sales operation on for Account Manager and Sales Manager", () => {
+  it("defaults sales operation on for Account Manager and Sales Manager (except Admin-only settings)", () => {
     for (const role of ["Account Manager", "Sales Manager"] as const) {
       const permissions = defaultRolePermissions[role];
       for (const key of SALES_OPERATION_PAGE_KEYS) {
+        if (key === "salesSettings") {
+          assert.equal(permissions[key], false, `${role} should not access settings by default`);
+          continue;
+        }
         assert.equal(permissions[key], true, `${role} should access ${key} by default`);
       }
+    }
+  });
+
+  it("keeps salesSettings Admin-only by default", () => {
+    assert.equal(defaultRolePermissions.Admin.salesSettings, true);
+    for (const role of ["User", "Team Lead", "Account Manager", "Sales Manager"] as const) {
+      assert.equal(defaultRolePermissions[role].salesSettings, false);
     }
   });
 
@@ -32,6 +43,8 @@ describe("sales operation RBAC", () => {
     assert.equal(merged.salesPipeline, true);
     assert.equal(merged.salesManagerAnalytics, true);
     assert.equal(merged.salesAutomation, true);
-    assert.equal(CURRENT_PERMISSIONS_VERSION, 10);
+    // salesSettings stays Admin-only even when inheriting the legacy flag.
+    assert.equal(merged.salesSettings, false);
+    assert.equal(CURRENT_PERMISSIONS_VERSION, 11);
   });
 });

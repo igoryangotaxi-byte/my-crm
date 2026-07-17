@@ -65,8 +65,6 @@ type AuthContextValue = {
   rolePermissions: RolePermissions;
   roleAreaAccess: RoleAreaAccess;
   roleDashboardBlockAccess: RoleDashboardBlockAccess;
-  login: (email: string, password: string) => Promise<AuthResult>;
-  register: (input: RegisterInput) => Promise<AuthResult>;
   createInternalUser: (input: CreateInternalUserInput) => Promise<AuthResult>;
   logout: () => void;
   updateUserStatus: (userId: string, status: UserStatus) => Promise<void>;
@@ -129,7 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const raw = localStorage.getItem(CURRENT_AREA_STORAGE_KEY);
     return raw === "b2c" ? "b2c" : "b2b";
   });
-  const [lastLoginEmail, setLastLoginEmail] = useState<string>(() => {
+  const [lastLoginEmail] = useState<string>(() => {
     if (typeof window === "undefined") {
       return "";
     }
@@ -305,46 +303,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyStoreData],
   );
 
-  const login = useCallback(
-    async (email: string, password: string): Promise<AuthResult> => {
-      const normalizedEmail = email.trim().toLowerCase();
-      const result = await runAction({
-        action: "login",
-        email: normalizedEmail,
-        password,
-      });
-      if (!result.ok) {
-        return { ok: false, message: result.message };
-      }
-
-      if (!result.userId) {
-        return { ok: false, message: "Login failed" };
-      }
-
-      setSessionUserId(result.userId);
-      setLastLoginEmail(normalizedEmail);
-      return { ok: true };
-    },
-    [runAction],
-  );
-
-  const register = useCallback(
-    async ({ name, email, password }: RegisterInput): Promise<AuthResult> => {
-      const result = await runAction({
-        action: "register",
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        password,
-      });
-      return {
-        ok: result.ok,
-        message:
-          result.message ?? (result.ok ? "Registration submitted" : "Registration failed"),
-      };
-    },
-    [runAction],
-  );
-
   const createInternalUser = useCallback(
     async ({ name, email, password, role }: CreateInternalUserInput): Promise<AuthResult> => {
       const result = await runAction({
@@ -490,8 +448,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       rolePermissions,
       roleAreaAccess,
       roleDashboardBlockAccess,
-      login,
-      register,
       createInternalUser,
       logout,
       updateUserStatus,
@@ -520,8 +476,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       rolePermissions,
       roleAreaAccess,
       roleDashboardBlockAccess,
-      login,
-      register,
       createInternalUser,
       logout,
       updateUserStatus,

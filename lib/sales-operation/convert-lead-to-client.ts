@@ -1,5 +1,8 @@
 import { getSupabaseAdminClient } from "@/lib/supabase";
 import { normalizeCorpClientId } from "@/lib/sales-operation/b2b-client-registry";
+import { logActivity } from "@/lib/sales-operation/activity";
+import { createNotification } from "@/lib/sales-operation/notifications";
+import { createSalesTask } from "@/lib/sales-operation/tasks";
 import type { SalesClient, SalesLead, SalesLeadNote } from "@/lib/sales-operation/types";
 
 type SupabaseAdmin = ReturnType<typeof getSupabaseAdminClient>;
@@ -120,5 +123,59 @@ export async function convertSignedLeadToClient(
     }
   }
 
+  await runSignedHandover(lead, actor);
+
   return client;
+}
+
+/**
+ * Handover when a lead is signed: create a high-priority onboarding task for the
+ * owning manager, log the handover on the activity feed, and notify the owner.
+ * Best-effort — failures here must never block the conversion.
+ */
+async function runSignedHandover(
+  lead: SalesLead,
+  actor: { userId: string | null; name: string },
+): Promise<void> {
+  const clientLabel = lead.companyName?.trim() || lead.fullName;
+  const ownerUserId = lead.assignedManagerUserId ?? actor.userId;
+  const ownerName = lead.assignedManagerName ?? actor.name;
+
+  try {
+    const dueAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+    await createSalesTask(
+      lead.id,
+      {
+        title: `Onboard new client: ${clientLabel}`,
+        taskType: "todo",
+        priority: "high",
+        dueAt,
+        assignedToUserId: ownerUserId,
+        assignedToName: ownerName,
+      },
+      { userId: actor.userId, name: actor.name },
+    );
+  } catch (error) {
+    console.error("Handover onboarding task failed:", error);
+  }
+
+  await logActivity({
+    leadId: lead.id,
+    type: "status_changed",
+    title: "Signed — handover to onboarding",
+    body: `Converted to client${ownerName ? ` · owner ${ownerName}` : ""}.`,
+    actor,
+  });
+
+  // Notify the owning manager when they did not perform the signing themselves.
+  if (ownerUserId && ownerUserId !== actor.userId) {
+    await createNotification({
+      userId: ownerUserId,
+      type: "system",
+      title: `Client signed: ${clientLabel}`,
+      body: "Onboarding handover created.",
+      leadId: lead.id,
+      link: "/sales-operation/clients",
+    });
+  }
 }

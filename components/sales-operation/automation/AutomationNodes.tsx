@@ -2,7 +2,12 @@
 
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { ReactNode } from "react";
-import type { ActionAssignManagerData, ActionSmsData, TriggerLeadStatusData } from "@/lib/sales-operation/automation/types";
+import type {
+  ActionAssignManagerData,
+  ActionCreateTaskData,
+  ActionSmsData,
+  TriggerLeadStatusData,
+} from "@/lib/sales-operation/automation/types";
 
 const shell =
   "min-w-[180px] max-w-[220px] rounded-2xl border border-white/70 bg-white/95 px-3 py-2.5 shadow-[0_10px_28px_rgba(15,23,42,0.12)]";
@@ -15,7 +20,7 @@ function NodeChrome({
   showSource = true,
 }: {
   title: string;
-  tone: "trigger" | "sms" | "assign";
+  tone: "trigger" | "sms" | "assign" | "task";
   children: ReactNode;
   showTarget?: boolean;
   showSource?: boolean;
@@ -25,7 +30,9 @@ function NodeChrome({
       ? "bg-red-50 text-red-700"
       : tone === "sms"
         ? "bg-sky-50 text-sky-800"
-        : "bg-emerald-50 text-emerald-800";
+        : tone === "task"
+          ? "bg-amber-50 text-amber-800"
+          : "bg-emerald-50 text-emerald-800";
 
   return (
     <div className={shell}>
@@ -90,8 +97,22 @@ export function ActionAssignManagerNode({ data }: NodeProps) {
   );
 }
 
+export function ActionCreateTaskNode({ data }: NodeProps) {
+  const d = data as ActionCreateTaskData;
+  const preview = (d.title ?? "").trim();
+  return (
+    <NodeChrome title="Task" tone="task">
+      <p className="font-medium text-slate-900">Create task</p>
+      <p className="mt-1 line-clamp-2 text-[0.7rem] text-slate-500">
+        {preview || "Configure task…"}
+      </p>
+    </NodeChrome>
+  );
+}
+
 export const automationNodeTypes = {
   triggerLeadStatus: TriggerLeadStatusNode,
   actionSms: ActionSmsNode,
   actionAssignManager: ActionAssignManagerNode,
+  actionCreateTask: ActionCreateTaskNode,
 };

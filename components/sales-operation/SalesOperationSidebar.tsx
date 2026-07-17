@@ -70,14 +70,57 @@ function AutomationIcon({ className = "h-4 w-4" }: IconProps) {
   );
 }
 
+function TasksIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth="1.8">
+      <path d="M4 6h11M4 12h11M4 18h7" strokeLinecap="round" />
+      <path d="m17.5 16.5 1.8 1.8 3.2-3.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PortfolioIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth="1.8">
+      <path d="M12 3v9l6 3" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="12" cy="12" r="9" />
+    </svg>
+  );
+}
+
+function SettingsIcon({ className = "h-4 w-4" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth="1.8">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
 const salesOperationItems: Array<{
   href: string;
-  labelKey: "pipeline" | "clients" | "b2bClients" | "analytics" | "managerAnalytics" | "automation";
+  labelKey:
+    | "pipeline"
+    | "tasks"
+    | "clients"
+    | "portfolio"
+    | "b2bClients"
+    | "analytics"
+    | "managerAnalytics"
+    | "automation"
+    | "settings";
   page: AppPageKey;
   icon: React.ComponentType<IconProps>;
 }> = [
   { href: "/sales-operation/pipeline", labelKey: "pipeline", page: "salesPipeline", icon: PipelineIcon },
+  { href: "/sales-operation/tasks", labelKey: "tasks", page: "salesPipeline", icon: TasksIcon },
   { href: "/sales-operation/clients", labelKey: "clients", page: "salesSignedClients", icon: ClientsIcon },
+  {
+    href: "/sales-operation/portfolio",
+    labelKey: "portfolio",
+    page: "salesSignedClients",
+    icon: PortfolioIcon,
+  },
   {
     href: "/sales-operation/b2b-clients",
     labelKey: "b2bClients",
@@ -96,6 +139,12 @@ const salesOperationItems: Array<{
     labelKey: "automation",
     page: "salesAutomation",
     icon: AutomationIcon,
+  },
+  {
+    href: "/sales-operation/settings",
+    labelKey: "settings",
+    page: "salesSettings",
+    icon: SettingsIcon,
   },
 ];
 

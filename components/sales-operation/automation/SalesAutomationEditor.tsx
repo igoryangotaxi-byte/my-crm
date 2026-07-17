@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { automationNodeTypes } from "@/components/sales-operation/automation/AutomationNodes";
 import type {
   ActionAssignManagerData,
+  ActionCreateTaskData,
   ActionSmsData,
   SalesAutomation,
   StatusMatch,
@@ -125,7 +126,9 @@ function EditorInner({ automationId }: EditorInnerProps) {
     setSelectedId(params.nodes[0]?.id ?? null);
   }, []);
 
-  const addNode = (type: "triggerLeadStatus" | "actionSms" | "actionAssignManager") => {
+  const addNode = (
+    type: "triggerLeadStatus" | "actionSms" | "actionAssignManager" | "actionCreateTask",
+  ) => {
     const center = rf.screenToFlowPosition({
       x: window.innerWidth / 2,
       y: window.innerHeight / 2,
@@ -138,6 +141,14 @@ function EditorInner({ automationId }: EditorInnerProps) {
       data = {
         text: "Hi {{full_name}}, your request status is {{status}}.",
       } satisfies ActionSmsData;
+    } else if (type === "actionCreateTask") {
+      data = {
+        title: "Follow up with {{full_name}}",
+        taskType: "call",
+        priority: "normal",
+        dueInDays: 1,
+        assignToLeadOwner: true,
+      } satisfies ActionCreateTaskData;
     } else {
       data = { mode: "fixed", userIds: [], userNames: {} } satisfies ActionAssignManagerData;
     }
@@ -320,6 +331,13 @@ function EditorInner({ automationId }: EditorInnerProps) {
           >
             {t("automation.addAssign")}
           </button>
+          <button
+            type="button"
+            className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-left text-xs font-semibold text-amber-900"
+            onClick={() => addNode("actionCreateTask")}
+          >
+            {t("automation.addTask")}
+          </button>
         </aside>
 
         <div className="crm-surface relative min-h-[22rem] overflow-hidden rounded-3xl">
@@ -473,6 +491,68 @@ function EditorInner({ automationId }: EditorInnerProps) {
                   </select>
                 </label>
               )}
+            </div>
+          ) : selectedNode.type === "actionCreateTask" ? (
+            <div className="space-y-3">
+              <label className="block space-y-1">
+                <span className="crm-label text-[0.65rem]">{t("automation.taskTitle")}</span>
+                <input
+                  className="crm-input w-full rounded-xl px-2 py-2 text-sm"
+                  value={String((selectedNode.data as ActionCreateTaskData).title ?? "")}
+                  onChange={(event) => updateSelectedData({ title: event.target.value })}
+                />
+                <span className="text-[0.7rem] text-muted">{t("automation.smsPlaceholders")}</span>
+              </label>
+              <label className="block space-y-1">
+                <span className="crm-label text-[0.65rem]">{t("automation.taskType")}</span>
+                <select
+                  className="crm-input w-full rounded-xl px-2 py-2 text-sm"
+                  value={String((selectedNode.data as ActionCreateTaskData).taskType ?? "call")}
+                  onChange={(event) => updateSelectedData({ taskType: event.target.value })}
+                >
+                  {["call", "email", "meeting", "whatsapp", "todo", "other"].map((type) => (
+                    <option key={type} value={type}>
+                      {t(`taskTypes.${type}`)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-1">
+                <span className="crm-label text-[0.65rem]">{t("automation.taskPriority")}</span>
+                <select
+                  className="crm-input w-full rounded-xl px-2 py-2 text-sm"
+                  value={String((selectedNode.data as ActionCreateTaskData).priority ?? "normal")}
+                  onChange={(event) => updateSelectedData({ priority: event.target.value })}
+                >
+                  {["low", "normal", "high"].map((priority) => (
+                    <option key={priority} value={priority}>
+                      {t(`taskPriorities.${priority}`)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-1">
+                <span className="crm-label text-[0.65rem]">{t("automation.taskDueInDays")}</span>
+                <input
+                  type="number"
+                  min={0}
+                  className="crm-input w-full rounded-xl px-2 py-2 text-sm"
+                  value={Number((selectedNode.data as ActionCreateTaskData).dueInDays ?? 1)}
+                  onChange={(event) =>
+                    updateSelectedData({ dueInDays: Math.max(0, Number(event.target.value) || 0) })
+                  }
+                />
+              </label>
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={(selectedNode.data as ActionCreateTaskData).assignToLeadOwner !== false}
+                  onChange={(event) =>
+                    updateSelectedData({ assignToLeadOwner: event.target.checked })
+                  }
+                />
+                {t("automation.taskAssignToOwner")}
+              </label>
             </div>
           ) : (
             <p className="text-xs text-muted">{t("automation.selectNode")}</p>

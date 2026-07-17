@@ -23,6 +23,7 @@ export type AppPageKey =
   | "salesAnalytics"
   | "salesManagerAnalytics"
   | "salesAutomation"
+  | "salesSettings"
   | "accesses"
   | "notes";
 
@@ -113,6 +114,8 @@ const salesPagesAllTrue = {
   salesAnalytics: true,
   salesManagerAnalytics: true,
   salesAutomation: true,
+  // Admin-only by default; overridden per-role below.
+  salesSettings: false,
 } as const;
 
 const salesPagesAllFalse = {
@@ -123,6 +126,7 @@ const salesPagesAllFalse = {
   salesAnalytics: false,
   salesManagerAnalytics: false,
   salesAutomation: false,
+  salesSettings: false,
 } as const;
 
 export const defaultRolePermissions: RolePermissions = {
@@ -138,6 +142,7 @@ export const defaultRolePermissions: RolePermissions = {
     heatMap: true,
     priceCalculator: true,
     ...salesPagesAllTrue,
+    salesSettings: true,
     accesses: true,
     notes: true,
   },
