@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-07-17",
+    title: "Fix: SSO login now completes into the app (0.2.38)",
+    notes:
+      "App version 0.2.38. Fix for Google SSO: after signing in, the app kept returning to the login page. The client now treats the server session cookie as the source of truth — GET /api/auth returns the authenticated user id and the AuthProvider adopts it — so Google sign-in lands correctly on the dashboard instead of bouncing back to /login.",
+  },
+  {
+    date: "2026-07-17",
     title: "Authentication: Google Workspace SSO — @appli.taxi only (0.2.37)",
     notes:
       "App version 0.2.37. Sign-in is now Google Workspace SSO restricted to @appli.taxi accounts. The login page shows a single \"Sign in with Google\" button; email/password login and self-registration are removed. First sign-in with an @appli.taxi Google account auto-provisions an approved User (ig-kuznetsov@appli.taxi is Admin); personal Gmail and other domains are rejected. Two gates are enforced: the OAuth consent screen should be set to Internal (org-only) and the server re-verifies email_verified plus the workspace domain (hd claim) on every login. The existing admin was migrated to ig-kuznetsov@appli.taxi (Admin retained). New routes: /api/auth/google/start and /api/auth/google/callback. New env: GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, optional GOOGLE_OAUTH_REDIRECT_URI, GOOGLE_WORKSPACE_DOMAIN (default appli.taxi), AUTH_SESSION_SECRET. Requires a Google Cloud OAuth Web client whose authorized redirect URIs include the prod + localhost callback URLs. (2ed9c396)",

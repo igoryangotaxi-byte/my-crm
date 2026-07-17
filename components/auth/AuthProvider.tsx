@@ -225,11 +225,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!response.ok) {
       throw new Error(`Failed to load auth state: HTTP ${response.status}`);
     }
-    const data = (await response.json()) as AuthStoreData;
+    const data = (await response.json()) as AuthStoreData & { currentUserId?: string };
     applyStoreData(data);
-    setSessionUserId((prev) =>
-      prev && data.users.some((user) => user.id === prev) ? prev : null,
-    );
+    const serverUserId = data.currentUserId ?? null;
+    setSessionUserId((prev) => {
+      if (serverUserId && data.users.some((user) => user.id === serverUserId)) {
+        return serverUserId;
+      }
+      return prev && data.users.some((user) => user.id === prev) ? prev : null;
+    });
   }, [applyStoreData]);
 
   useEffect(() => {

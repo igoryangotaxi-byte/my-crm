@@ -294,7 +294,7 @@ export async function GET(request: Request) {
   } catch (error) {
     return authStoreUnavailableResponse(error);
   }
-  return NextResponse.json(sanitizeStore(data));
+  return NextResponse.json({ ...sanitizeStore(data), currentUserId: user.id });
 }
 
 export async function POST(request: Request) {
