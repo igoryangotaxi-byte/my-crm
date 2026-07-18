@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { formatSalesDateTime } from "@/lib/sales-operation/display";
 import type { SalesFile } from "@/lib/sales-operation/types";
 
@@ -19,6 +20,7 @@ function formatBytes(bytes: number | null): string {
 
 export function SalesLeadFilesSection({ leadId }: { leadId: string }) {
   const t = useTranslations("salesOperation");
+  const confirm = useConfirm();
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<SalesFile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -68,7 +70,12 @@ export function SalesLeadFilesSection({ leadId }: { leadId: string }) {
   };
 
   const remove = async (file: SalesFile) => {
-    if (!window.confirm(t("file.deleteConfirm"))) return;
+    const ok = await confirm({
+      title: t("file.deleteConfirm"),
+      confirmLabel: t("file.delete"),
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       const res = await fetch(`/api/sales-operation/leads/${leadId}/files/${file.id}`, {
         method: "DELETE",
@@ -82,13 +89,13 @@ export function SalesLeadFilesSection({ leadId }: { leadId: string }) {
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-white/70 p-3">
+    <div className="so-card p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-slate-900">{t("file.title")}</p>
+        <p className="text-sm font-semibold text-[var(--so-text)]">{t("file.title")}</p>
         {loading ? <span className="text-xs text-muted">{t("loading")}</span> : null}
       </div>
 
-      <label className="mb-3 flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-border bg-slate-50/60 px-3 py-4 text-center text-xs font-medium text-slate-600 transition hover:bg-slate-100">
+      <label className="mb-3 flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-[var(--so-border-strong)] bg-[var(--so-surface-2)] px-3 py-4 text-center text-xs font-medium text-[var(--so-muted)] transition-colors hover:bg-[var(--so-surface-hover)]">
         <input
           ref={inputRef}
           type="file"
@@ -107,7 +114,7 @@ export function SalesLeadFilesSection({ leadId }: { leadId: string }) {
           files.map((file) => (
             <article
               key={file.id}
-              className="flex items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-2"
+              className="flex items-center justify-between gap-2 rounded-xl border border-[var(--so-border)] bg-[var(--so-surface-2)] px-3 py-2"
             >
               <div className="min-w-0">
                 {file.downloadUrl ? (
@@ -120,7 +127,7 @@ export function SalesLeadFilesSection({ leadId }: { leadId: string }) {
                     {file.fileName}
                   </a>
                 ) : (
-                  <span className="block truncate text-sm font-medium text-slate-800">
+                  <span className="block truncate text-sm font-medium text-[var(--so-text)]">
                     {file.fileName}
                   </span>
                 )}

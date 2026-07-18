@@ -1,9 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Check, Mail, MessageSquare, Pencil, Phone, Plus, Search, X } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { Button } from "@/components/ui/Button";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { Drawer, Modal } from "@/components/ui/Dialog";
+import { Tabs } from "@/components/ui/Tabs";
+import { useToast } from "@/components/ui/Toast";
+import { cn } from "@/lib/ui/cn";
 import {
   SalesClientManagerFields,
   type SalesClientManagerDraft,
@@ -36,6 +43,8 @@ import {
 
 type LeadDetailSidebarProps = {
   lead: SalesLead | null;
+  stages: PipelineStage[];
+  segments: SalesSegment[];
   open: boolean;
   onClose: () => void;
   onUpdated: (lead: SalesLead) => void;
@@ -48,6 +57,8 @@ const emptyDraft = {
   phone: "",
   companyName: "",
   campaignName: "",
+  segmentId: "",
+  estimatedMonthlyPotential: "",
   status: "new" as SalesLeadStatus,
 };
 
@@ -70,12 +81,15 @@ function whatsappHref(phone: string | null): string | null {
 
 export function SalesLeadDetailSidebar({
   lead,
+  stages,
+  segments,
   open,
   onClose,
   onUpdated,
   onDeleted,
 }: LeadDetailSidebarProps) {
   const t = useTranslations("salesOperation");
+  const confirm = useConfirm();
   const { users } = useAuth();
   const [draft, setDraft] = useState(emptyDraft);
   const [notes, setNotes] = useState<SalesLeadNote[]>([]);
@@ -102,6 +116,11 @@ export function SalesLeadDetailSidebar({
   const [smsText, setSmsText] = useState("");
   const [smsSending, setSmsSending] = useState(false);
   const [smsResult, setSmsResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [logOpen, setLogOpen] = useState(false);
+  const [logType, setLogType] = useState<"call" | "meeting" | "whatsapp">("call");
+  const [logText, setLogText] = useState("");
+  const [logSaving, setLogSaving] = useState(false);
+  const [logResult, setLogResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   const loadLinkedClient = useCallback(async (leadId: string) => {
     setLoadingClient(true);
@@ -137,6 +156,10 @@ export function SalesLeadDetailSidebar({
     setSmsOpen(false);
     setSmsText("");
     setSmsResult(null);
+    setLogOpen(false);
+    setLogType("call");
+    setLogText("");
+    setLogResult(null);
 
     if (!lead) {
       setDraft(emptyDraft);
@@ -150,6 +173,8 @@ export function SalesLeadDetailSidebar({
       phone: lead.phone ?? "",
       companyName: lead.companyName ?? "",
       campaignName: lead.campaignName ?? "",
+      segmentId: lead.segmentId ?? "",
+      estimatedMonthlyPotential: lead.estimatedMonthlyPotential?.toString() ?? "",
       status: lead.status,
     });
     setError(null);
@@ -180,6 +205,13 @@ export function SalesLeadDetailSidebar({
 
   const saveLead = async () => {
     if (!lead) return;
+    const potential = draft.estimatedMonthlyPotential.trim()
+      ? Number(draft.estimatedMonthlyPotential)
+      : null;
+    if (potential !== null && (!Number.isFinite(potential) || potential < 0)) {
+      setError(t("potential.invalid"));
+      return;
+    }
     if (!isValidStatusTransition(lead.status, draft.status)) {
       setError(
         lead.status === "new" && (draft.status === "signed" || draft.status === "rejected")
@@ -200,6 +232,8 @@ export function SalesLeadDetailSidebar({
           phone: draft.phone || null,
           companyName: draft.companyName || null,
           campaignName: draft.campaignName || null,
+          segmentId: draft.segmentId || null,
+          estimatedMonthlyPotential: potential,
           status: draft.status,
         }),
       });
@@ -218,7 +252,13 @@ export function SalesLeadDetailSidebar({
   };
 
   const deleteLead = async () => {
-    if (!lead || !window.confirm(t("deleteLeadConfirm"))) return;
+    if (!lead) return;
+    const ok = await confirm({
+      title: t("deleteLeadConfirm"),
+      confirmLabel: t("deleteLead"),
+      destructive: true,
+    });
+    if (!ok) return;
     setDeleting(true);
     setError(null);
     try {
@@ -235,7 +275,13 @@ export function SalesLeadDetailSidebar({
   };
 
   const archiveLead = async () => {
-    if (!lead || !window.confirm(t("archiveLeadConfirm"))) return;
+    if (!lead) return;
+    const ok = await confirm({
+      title: t("archiveLeadConfirm"),
+      confirmLabel: t("archiveLead"),
+      destructive: true,
+    });
+    if (!ok) return;
     setDeleting(true);
     setError(null);
     try {
@@ -326,101 +372,218 @@ export function SalesLeadDetailSidebar({
     }
   };
 
-  if (!open || !lead) return null;
+  const logLeadActivity = async () => {
+    if (!lead || !logText.trim()) return;
+    setLogSaving(true);
+    setLogResult(null);
+    try {
+      const res = await fetch(`/api/sales-operation/leads/${lead.id}/activity`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: logType,
+          title: t(`logActivity.${logType}`),
+          body: logText.trim(),
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? t("logActivity.failed"));
+      setLogResult({ ok: true, message: t("logActivity.saved") });
+      setLogText("");
+      bumpActivity();
+    } catch (err) {
+      setLogResult({
+        ok: false,
+        message: err instanceof Error ? err.message : t("logActivity.failed"),
+      });
+    } finally {
+      setLogSaving(false);
+    }
+  };
+
+  // Retain the last lead during the drawer close animation so exit transitions
+  // don't crash on a null lead after selection is cleared.
+  const lastLeadRef = useRef<SalesLead | null>(null);
+  if (lead) lastLeadRef.current = lead;
+  const d = lead ?? lastLeadRef.current;
+  if (!d) return null;
+
+  const wa = whatsappHref(d.phone);
+  const quickPill =
+    "so-focus-ring inline-flex items-center gap-1.5 rounded-[9px] border px-2.5 py-1.5 text-xs font-semibold transition-colors";
 
   return (
-    <aside className="fixed inset-y-0 right-0 z-[80] flex w-full max-w-[26rem] flex-col border-l border-white/50 bg-white/95 shadow-2xl backdrop-blur-xl">
-      <div className="sticky top-0 z-10 border-b border-border bg-white/95 px-5 py-4 backdrop-blur-xl">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="crm-label mb-1">{t("leadDetails")}</p>
-            <h2 className="truncate text-lg font-semibold text-slate-900">{lead.fullName}</h2>
-            {lead.companyName ? (
-              <p className="truncate text-sm text-slate-600">{lead.companyName}</p>
-            ) : null}
-            <p className="mt-0.5 text-xs text-muted">
-              {t("statusEntered", { date: formatSalesDateTime(lead.statusEnteredAt) })}
-            </p>
-            {lead.assignedManagerName ? (
-              <span className="mt-2 inline-flex max-w-full truncate rounded-full bg-emerald-50 px-2 py-0.5 text-[0.68rem] font-semibold text-emerald-800">
-                {t("manager.salesManager")}: {lead.assignedManagerName}
-              </span>
-            ) : null}
-          </div>
+    <Drawer
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      title={d.fullName}
+      description={d.companyName || t("leadDetails")}
+      width="30rem"
+      footer={
+        <div className="flex w-full items-center gap-2">
           <button
             type="button"
-            onClick={onClose}
-            className="crm-hover-lift inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700"
-            aria-label={t("close")}
+            disabled={saving || deleting}
+            onClick={() => void archiveLead()}
+            className="so-focus-ring flex-1 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            ×
+            {t("archiveLead")}
           </button>
+          <button
+            type="button"
+            disabled={saving || deleting || d.status === "signed"}
+            title={d.status === "signed" ? t("deleteLeadSignedHint") : undefined}
+            onClick={() => void deleteLead()}
+            className="so-focus-ring flex-1 rounded-[10px] border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {deleting ? t("deleting") : t("deleteLead")}
+          </button>
+          <Button className="flex-1" loading={saving} disabled={saving || deleting} onClick={() => void saveLead()}>
+            {t("saveLead")}
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-4 px-5 py-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-[var(--so-muted)]">
+            {t("statusEntered", { date: formatSalesDateTime(d.statusEnteredAt) })}
+          </span>
+          {d.assignedManagerName ? (
+            <span className="inline-flex max-w-full truncate rounded-full bg-emerald-50 px-2 py-0.5 text-[0.68rem] font-semibold text-emerald-800">
+              {d.assignedManagerName}
+            </span>
+          ) : null}
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           <a
-            href={lead.phone ? `tel:${lead.phone}` : undefined}
-            aria-disabled={!lead.phone}
-            className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold ${
-              lead.phone
-                ? "border-border text-slate-700 hover:bg-slate-50"
-                : "pointer-events-none border-slate-100 text-slate-300"
-            }`}
+            href={d.phone ? `tel:${d.phone}` : undefined}
+            aria-disabled={!d.phone}
+            className={cn(
+              quickPill,
+              d.phone
+                ? "border-[var(--so-border-strong)] text-[var(--so-text)] hover:bg-[var(--so-surface-hover)]"
+                : "pointer-events-none border-[var(--so-border)] text-[var(--so-muted-2)]",
+            )}
           >
+            <Phone className="h-3.5 w-3.5" />
             {t("quick.call")}
           </a>
           <a
-            href={lead.email ? `mailto:${lead.email}` : undefined}
-            aria-disabled={!lead.email}
-            className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold ${
-              lead.email
-                ? "border-border text-slate-700 hover:bg-slate-50"
-                : "pointer-events-none border-slate-100 text-slate-300"
-            }`}
+            href={d.email ? `mailto:${d.email}` : undefined}
+            aria-disabled={!d.email}
+            className={cn(
+              quickPill,
+              d.email
+                ? "border-[var(--so-border-strong)] text-[var(--so-text)] hover:bg-[var(--so-surface-hover)]"
+                : "pointer-events-none border-[var(--so-border)] text-[var(--so-muted-2)]",
+            )}
           >
+            <Mail className="h-3.5 w-3.5" />
             {t("quick.email")}
           </a>
-          {(() => {
-            const wa = whatsappHref(lead.phone);
-            return (
-              <a
-                href={wa ?? undefined}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-disabled={!wa}
-                className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold ${
-                  wa
-                    ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                    : "pointer-events-none border-slate-100 text-slate-300"
-                }`}
-              >
-                {t("quick.whatsapp")}
-              </a>
-            );
-          })()}
+          <a
+            href={wa ?? undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-disabled={!wa}
+            className={cn(
+              quickPill,
+              wa
+                ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                : "pointer-events-none border-[var(--so-border)] text-[var(--so-muted-2)]",
+            )}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            {t("quick.whatsapp")}
+          </a>
           <button
             type="button"
             onClick={() => {
               setSmsResult(null);
               setSmsOpen((prev) => !prev);
             }}
-            disabled={!lead.phone}
-            className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold ${
-              lead.phone
-                ? smsOpen
-                  ? "border-red-300 bg-red-50 text-red-700"
-                  : "border-border text-slate-700 hover:bg-slate-50"
-                : "cursor-not-allowed border-slate-100 text-slate-300"
-            }`}
+            disabled={!d.phone}
+            className={cn(
+              quickPill,
+              !d.phone
+                ? "cursor-not-allowed border-[var(--so-border)] text-[var(--so-muted-2)]"
+                : smsOpen
+                  ? "border-[var(--so-accent)] bg-[var(--so-accent-soft)] text-[var(--so-accent-strong)]"
+                  : "border-[var(--so-border-strong)] text-[var(--so-text)] hover:bg-[var(--so-surface-hover)]",
+            )}
           >
             {t("quick.sms")}
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              setLogResult(null);
+              setLogOpen((prev) => !prev);
+            }}
+            className={cn(
+              quickPill,
+              logOpen
+                ? "border-[var(--so-accent)] bg-[var(--so-accent-soft)] text-[var(--so-accent-strong)]"
+                : "border-[var(--so-border-strong)] text-[var(--so-text)] hover:bg-[var(--so-surface-hover)]",
+            )}
+          >
+            {t("quick.logActivity")}
+          </button>
         </div>
 
-        {smsOpen && lead.phone ? (
-          <div className="mt-3 rounded-xl border border-red-200 bg-red-50/60 p-3">
-            <p className="mb-1 text-[11px] font-semibold text-slate-600">
-              {t("sms.to", { phone: lead.phone })}
+        {logOpen ? (
+          <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-3">
+            <div className="mb-2 flex items-center gap-2">
+              <select
+                value={logType}
+                onChange={(event) =>
+                  setLogType(event.target.value as "call" | "meeting" | "whatsapp")
+                }
+                className="crm-input h-8 w-32 px-2 text-xs text-slate-700"
+              >
+                <option value="call">{t("logActivity.call")}</option>
+                <option value="meeting">{t("logActivity.meeting")}</option>
+                <option value="whatsapp">{t("logActivity.whatsapp")}</option>
+              </select>
+              <span className="text-[11px] text-[var(--so-muted)]">{t("logActivity.hint")}</span>
+            </div>
+            <textarea
+              className="crm-input min-h-[56px] w-full px-3 py-2 text-sm"
+              placeholder={t("logActivity.placeholder")}
+              value={logText}
+              maxLength={1000}
+              onChange={(event) => setLogText(event.target.value)}
+            />
+            <div className="mt-2 flex items-center justify-end gap-2">
+              {logResult ? (
+                <span
+                  className={`text-[11px] font-semibold ${
+                    logResult.ok ? "text-emerald-700" : "text-rose-700"
+                  }`}
+                >
+                  {logResult.message}
+                </span>
+              ) : null}
+              <Button
+                size="sm"
+                loading={logSaving}
+                disabled={logSaving || !logText.trim()}
+                onClick={() => void logLeadActivity()}
+              >
+                {t("logActivity.save")}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {smsOpen && d.phone ? (
+          <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-3">
+            <p className="mb-1 text-[11px] font-semibold text-[var(--so-muted)]">
+              {t("sms.to", { phone: d.phone })}
             </p>
             <textarea
               className="crm-input min-h-[64px] w-full px-3 py-2 text-sm"
@@ -430,7 +593,7 @@ export function SalesLeadDetailSidebar({
               onChange={(event) => setSmsText(event.target.value)}
             />
             <div className="mt-2 flex items-center justify-between gap-2">
-              <span className="text-[11px] text-muted">{smsText.trim().length}/480</span>
+              <span className="text-[11px] text-[var(--so-muted)]">{smsText.trim().length}/480</span>
               <div className="flex items-center gap-2">
                 {smsResult ? (
                   <span
@@ -441,196 +604,212 @@ export function SalesLeadDetailSidebar({
                     {smsResult.message}
                   </span>
                 ) : null}
-                <button
-                  type="button"
+                <Button
+                  size="sm"
+                  loading={smsSending}
                   disabled={smsSending || !smsText.trim()}
                   onClick={() => void sendSms()}
-                  className="crm-button-primary rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
                 >
-                  {smsSending ? t("sms.sending") : t("sms.send")}
-                </button>
+                  {t("sms.send")}
+                </Button>
               </div>
             </div>
           </div>
         ) : null}
 
-        <div className="mt-3 flex gap-1 overflow-x-auto">
-          {LEAD_DETAIL_TABS.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setActiveTab(tab)}
-              className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                activeTab === tab ? "bg-red-600 text-white" : "text-slate-600 hover:bg-slate-100"
-              }`}
-            >
-              {t(`detailTab.${tab}`)}
-            </button>
-          ))}
-        </div>
-      </div>
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          size="sm"
+          className="w-full max-w-full overflow-x-auto"
+          items={LEAD_DETAIL_TABS.map((tab) => ({ value: tab, label: t(`detailTab.${tab}`) }))}
+        />
 
-      <div className="flex-1 overflow-y-auto px-5 py-4">
         {activeTab === "overview" ? (
-        <div className="space-y-4">
-        <label className="block text-sm">
-          <span className="crm-label">{t("field.status")}</span>
-          <select
-            className="crm-input mt-1 h-10 w-full px-3 text-sm"
-            value={draft.status}
-            onChange={(event) =>
-              setDraft((prev) => ({ ...prev, status: event.target.value as SalesLeadStatus }))
-            }
-          >
-            {SALES_STATUS_COLUMNS.map((column) => (
-              <option key={column.status} value={column.status}>
-                {column.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          <div className="space-y-4">
+            <label className="block text-sm">
+              <span className="crm-label">{t("field.status")}</span>
+              <select
+                className="crm-input mt-1 h-10 w-full px-3 text-sm"
+                value={draft.status}
+                onChange={(event) =>
+                  setDraft((prev) => ({ ...prev, status: event.target.value as SalesLeadStatus }))
+                }
+              >
+                {stages
+                  .filter((stage) => stage.isActive || stage.key === d.status)
+                  .map((stage) => (
+                  <option key={stage.key} value={stage.key}>
+                    {stage.label}
+                    {!stage.isActive ? ` · ${t("settings.inactive")}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        {(
-          [
-            ["fullName", "field.fullName"],
-            ["email", "field.email"],
-            ["phone", "field.phone"],
-            ["companyName", "field.company"],
-            ["campaignName", "field.campaign"],
-          ] as const
-        ).map(([key, labelKey]) => (
-          <label key={key} className="block text-sm">
-            <span className="crm-label">{t(labelKey)}</span>
-            <input
-              className="crm-input mt-1 h-10 w-full px-3 text-sm"
-              value={draft[key]}
-              onChange={(event) => setDraft((prev) => ({ ...prev, [key]: event.target.value }))}
-            />
-          </label>
-        ))}
-
-        {lead.status === "signed" ? (
-          <div className="rounded-2xl border border-border bg-white/70 p-3">
-            <p className="mb-2 text-sm font-semibold text-slate-900">{t("clientDetails")}</p>
-            {loadingClient ? (
-              <p className="text-xs text-muted">{t("loading")}</p>
-            ) : linkedClient ? (
-              <>
-                <SalesClientManagerFields
-                  users={users}
-                  registry={registry}
-                  draft={managerDraft}
-                  onChange={setManagerDraft}
-                  pendingSalesManagerName={linkedClient.pendingSalesManagerName}
-                  assignedSalesManagerName={linkedClient.salesManagerName}
+            {(
+              [
+                ["fullName", "field.fullName"],
+                ["email", "field.email"],
+                ["phone", "field.phone"],
+                ["companyName", "field.company"],
+                ["campaignName", "field.campaign"],
+              ] as const
+            ).map(([key, labelKey]) => (
+              <label key={key} className="block text-sm">
+                <span className="crm-label">{t(labelKey)}</span>
+                <input
+                  className="crm-input mt-1 h-10 w-full px-3 text-sm"
+                  value={draft[key]}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, [key]: event.target.value }))}
                 />
-                <button
-                  type="button"
-                  disabled={savingManagers}
-                  onClick={() => void saveManagers()}
-                  className="crm-button-primary mt-3 w-full rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-60"
-                >
-                  {savingManagers ? t("saving") : t("manager.saveClientManagers")}
-                </button>
-              </>
-            ) : (
-              <p className="text-xs text-muted">{t("client.notConvertedYet")}</p>
-            )}
+              </label>
+            ))}
+
+            <label className="block text-sm">
+              <span className="crm-label">{t("field.segment")}</span>
+              <select
+                className="crm-input mt-1 h-10 w-full px-3 text-sm"
+                value={draft.segmentId}
+                onChange={(event) =>
+                  setDraft((prev) => ({ ...prev, segmentId: event.target.value }))
+                }
+              >
+                <option value="">—</option>
+                {segments
+                  .filter((segment) => segment.isActive || segment.id === d.segmentId)
+                  .map((segment) => (
+                    <option key={segment.id} value={segment.id}>
+                      {segment.name}
+                      {!segment.isActive ? ` · ${t("settings.inactive")}` : ""}
+                    </option>
+                  ))}
+              </select>
+            </label>
+
+            <label className="block text-sm">
+              <span className="crm-label">{t("field.potential")}</span>
+              <div className="relative mt-1">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-semibold text-[var(--so-muted)]">
+                  ₪
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="100"
+                  inputMode="decimal"
+                  className="crm-input h-10 w-full pl-8 pr-3 text-sm"
+                  value={draft.estimatedMonthlyPotential}
+                  onChange={(event) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      estimatedMonthlyPotential: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </label>
+
+            {d.status === "signed" ? (
+              <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-3">
+                <p className="mb-2 text-sm font-semibold text-[var(--so-text)]">{t("clientDetails")}</p>
+                {loadingClient ? (
+                  <p className="text-xs text-[var(--so-muted)]">{t("loading")}</p>
+                ) : linkedClient ? (
+                  <>
+                    <SalesClientManagerFields
+                      users={users}
+                      registry={registry}
+                      draft={managerDraft}
+                      onChange={setManagerDraft}
+                      pendingSalesManagerName={linkedClient.pendingSalesManagerName}
+                      assignedSalesManagerName={linkedClient.salesManagerName}
+                    />
+                    <Button
+                      className="mt-3 w-full"
+                      loading={savingManagers}
+                      disabled={savingManagers}
+                      onClick={() => void saveManagers()}
+                    >
+                      {t("manager.saveClientManagers")}
+                    </Button>
+                  </>
+                ) : (
+                  <p className="text-xs text-[var(--so-muted)]">{t("client.notConvertedYet")}</p>
+                )}
+              </div>
+            ) : null}
           </div>
         ) : null}
-        </div>
-        ) : null}
 
-        {activeTab === "contacts" ? <SalesLeadContactsSection leadId={lead.id} /> : null}
+        {activeTab === "contacts" ? <SalesLeadContactsSection leadId={d.id} /> : null}
 
         {activeTab === "tasks" ? (
-          <SalesLeadTasksSection leadId={lead.id} onTasksChanged={bumpActivity} />
+          <SalesLeadTasksSection leadId={d.id} onTasksChanged={bumpActivity} />
         ) : null}
 
-        {activeTab === "files" ? <SalesLeadFilesSection leadId={lead.id} /> : null}
+        {activeTab === "files" ? <SalesLeadFilesSection leadId={d.id} /> : null}
 
         {activeTab === "email" ? (
-          <SalesLeadEmailSection
-            leadId={lead.id}
-            defaultTo={lead.email}
-            onEmailSent={bumpActivity}
-          />
+          <SalesLeadEmailSection leadId={d.id} defaultTo={d.email} onEmailSent={bumpActivity} />
         ) : null}
 
         {activeTab === "activity" ? (
-        <div className="space-y-4">
-        <div className="rounded-2xl border border-border bg-white/70 p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-slate-900">{t("notes")}</p>
-            {loadingNotes ? <span className="text-xs text-muted">{t("loading")}</span> : null}
-          </div>
-          <div className="max-h-48 space-y-2 overflow-y-auto">
-            {notes.length === 0 ? (
-              <p className="text-xs text-muted">{t("noNotes")}</p>
-            ) : (
-              notes.map((note) => (
-                <article key={note.id} className="rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-2">
-                  <p className="text-xs text-muted">
-                    {note.authorName} · {formatSalesDateTime(note.createdAt)}
-                  </p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{note.body}</p>
-                </article>
-              ))
-            )}
-          </div>
-          <textarea
-            className="crm-input mt-3 min-h-[88px] w-full px-3 py-2 text-sm"
-            placeholder={t("notePlaceholder")}
-            value={noteBody}
-            onChange={(event) => setNoteBody(event.target.value)}
-          />
-          <button
-            type="button"
-            disabled={savingNote || !noteBody.trim()}
-            onClick={() => void saveNote()}
-            className="crm-button-primary mt-2 rounded-xl px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
-          >
-            {savingNote ? t("saving") : t("addNote")}
-          </button>
-        </div>
+          <div className="space-y-4">
+            <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-[var(--so-text)]">{t("notes")}</p>
+                {loadingNotes ? (
+                  <span className="text-xs text-[var(--so-muted)]">{t("loading")}</span>
+                ) : null}
+              </div>
+              <div className="max-h-48 space-y-2 overflow-y-auto">
+                {notes.length === 0 ? (
+                  <p className="text-xs text-[var(--so-muted)]">{t("noNotes")}</p>
+                ) : (
+                  notes.map((note) => (
+                    <article
+                      key={note.id}
+                      className="rounded-[10px] border border-[var(--so-border)] bg-[var(--so-surface)] px-3 py-2"
+                    >
+                      <p className="text-xs text-[var(--so-muted)]">
+                        {note.authorName} · {formatSalesDateTime(note.createdAt)}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--so-text)]">
+                        {note.body}
+                      </p>
+                    </article>
+                  ))
+                )}
+              </div>
+              <textarea
+                className="crm-input mt-3 min-h-[88px] w-full px-3 py-2 text-sm"
+                placeholder={t("notePlaceholder")}
+                value={noteBody}
+                onChange={(event) => setNoteBody(event.target.value)}
+              />
+              <Button
+                size="sm"
+                className="mt-2"
+                loading={savingNote}
+                disabled={savingNote || !noteBody.trim()}
+                onClick={() => void saveNote()}
+              >
+                {t("addNote")}
+              </Button>
+            </div>
 
-        <SalesLeadActivityFeed leadId={lead.id} refreshKey={activityRefresh} />
-        </div>
+            <SalesLeadActivityFeed
+              leadId={d.id}
+              refreshKey={activityRefresh}
+              stageLabels={Object.fromEntries(stages.map((stage) => [stage.key, stage.label]))}
+            />
+          </div>
         ) : null}
 
         {error ? <p className="text-sm text-rose-700">{error}</p> : null}
       </div>
-
-      <div className="space-y-2 border-t border-border px-5 py-4">
-        <button
-          type="button"
-          disabled={saving || deleting}
-          onClick={() => void saveLead()}
-          className="crm-button-primary w-full rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
-        >
-          {saving ? t("saving") : t("saveLead")}
-        </button>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={saving || deleting}
-            onClick={() => void archiveLead()}
-            className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {t("archiveLead")}
-          </button>
-          <button
-            type="button"
-            disabled={saving || deleting || lead.status === "signed"}
-            title={lead.status === "signed" ? t("deleteLeadSignedHint") : undefined}
-            onClick={() => void deleteLead()}
-            className="w-full rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {deleting ? t("deleting") : t("deleteLead")}
-          </button>
-        </div>
-      </div>
-    </aside>
+    </Drawer>
   );
 }
 
@@ -689,9 +868,171 @@ const emptyCreateDraft = {
   assignedManagerUserId: "",
 };
 
+type LeadCardProps = {
+  lead: SalesLead;
+  selected: boolean;
+  title: string;
+  contact: string | null;
+  potentialLabel: string | null;
+  segmentName: string | null;
+  dateLabel: string;
+  daysLabel: string;
+  daysTitle: string;
+  onSelect: (id: string) => void;
+  onDragStart: (id: string, event: React.DragEvent) => void;
+  onDragEnd: () => void;
+  onUpdatePotential: (id: string, value: number | null) => Promise<boolean>;
+};
+
+const LeadCard = memo(function LeadCard({
+  lead,
+  selected,
+  title,
+  contact,
+  potentialLabel,
+  segmentName,
+  dateLabel,
+  daysLabel,
+  daysTitle,
+  onSelect,
+  onDragStart,
+  onDragEnd,
+  onUpdatePotential,
+}: LeadCardProps) {
+  const t = useTranslations("salesOperation");
+  const [editingPotential, setEditingPotential] = useState(false);
+  const [potentialDraft, setPotentialDraft] = useState("");
+  const [savingPotential, setSavingPotential] = useState(false);
+
+  const openPotentialEditor = () => {
+    setPotentialDraft(lead.estimatedMonthlyPotential?.toString() ?? "");
+    setEditingPotential(true);
+  };
+
+  const savePotential = async () => {
+    const value = potentialDraft.trim() ? Number(potentialDraft) : null;
+    if (value !== null && (!Number.isFinite(value) || value < 0)) return;
+    setSavingPotential(true);
+    const saved = await onUpdatePotential(lead.id, value);
+    setSavingPotential(false);
+    if (saved) setEditingPotential(false);
+  };
+
+  return (
+    <div
+      role="group"
+      aria-label={title}
+      tabIndex={0}
+      draggable={!editingPotential}
+      onDragStart={(event) => onDragStart(lead.id, event)}
+      onDragEnd={onDragEnd}
+      onClick={() => onSelect(lead.id)}
+      onKeyDown={(event) => {
+        if (!editingPotential && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          onSelect(lead.id);
+        }
+      }}
+      className={cn(
+        "group w-full cursor-pointer rounded-[12px] border bg-[var(--so-surface)] p-3 text-left transition-[box-shadow,border-color,transform] duration-150",
+        "hover:-translate-y-px hover:shadow-[var(--so-shadow-md)] active:translate-y-0",
+        selected
+          ? "border-[var(--so-accent)] shadow-[0_0_0_1px_var(--so-accent)]"
+          : "border-[var(--so-border)] shadow-[var(--so-shadow-xs)] hover:border-[var(--so-border-strong)]",
+      )}
+    >
+      <p className="truncate text-sm font-semibold text-[var(--so-text)]">{title}</p>
+      {contact ? <p className="truncate text-xs text-[var(--so-muted)]">{contact}</p> : null}
+      <div className="mt-2 flex flex-wrap items-center gap-1">
+        {editingPotential ? (
+          <div
+            className="flex h-8 w-full items-center gap-1 rounded-[9px] border border-[var(--so-accent)] bg-[var(--so-surface)] p-1 shadow-[0_0_0_2px_var(--so-accent-soft)]"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <span className="pl-1 text-xs font-semibold text-[var(--so-muted)]">₪</span>
+            <input
+              autoFocus
+              type="number"
+              min="0"
+              step="100"
+              inputMode="decimal"
+              aria-label={t("field.potential")}
+              value={potentialDraft}
+              onChange={(event) => setPotentialDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void savePotential();
+                if (event.key === "Escape") setEditingPotential(false);
+              }}
+              className="min-w-0 flex-1 bg-transparent px-1 text-xs font-semibold text-[var(--so-text)] outline-none"
+            />
+            <button
+              type="button"
+              disabled={savingPotential}
+              aria-label={t("potential.save")}
+              onClick={() => void savePotential()}
+              className="so-focus-ring inline-flex h-6 w-6 items-center justify-center rounded-[6px] bg-[var(--so-accent)] text-white hover:bg-[var(--so-accent-strong)] disabled:opacity-50"
+            >
+              <Check className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              disabled={savingPotential}
+              aria-label={t("cancel")}
+              onClick={() => setEditingPotential(false)}
+              className="so-focus-ring inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[var(--so-muted)] hover:bg-[var(--so-surface-hover)]"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            aria-label={potentialLabel ? t("potential.edit") : t("potential.set")}
+            onKeyDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              openPotentialEditor();
+            }}
+            className={cn(
+              "so-focus-ring inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.68rem] font-semibold transition-colors",
+              potentialLabel
+                ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                : "border border-dashed border-[var(--so-border-strong)] text-[var(--so-muted)] hover:border-[var(--so-accent)] hover:bg-[var(--so-accent-soft)] hover:text-[var(--so-accent-strong)]",
+            )}
+          >
+            {potentialLabel ? <Pencil className="h-2.5 w-2.5" /> : <Plus className="h-2.5 w-2.5" />}
+            {potentialLabel ?? t("potential.set")}
+          </button>
+        )}
+        {segmentName ? (
+          <span className="inline-flex max-w-full truncate rounded-full bg-sky-50 px-2 py-0.5 text-[0.68rem] font-semibold text-sky-700">
+            {segmentName}
+          </span>
+        ) : null}
+        {lead.campaignName ? (
+          <span className="inline-flex max-w-full truncate rounded-full bg-[var(--so-accent-soft)] px-2 py-0.5 text-[0.68rem] font-semibold uppercase tracking-wide text-[var(--so-accent-strong)]">
+            {lead.campaignName}
+          </span>
+        ) : null}
+        {lead.assignedManagerName ? (
+          <span className="inline-flex max-w-full truncate rounded-full bg-emerald-50 px-2 py-0.5 text-[0.68rem] font-semibold text-emerald-800">
+            {lead.assignedManagerName}
+          </span>
+        ) : null}
+      </div>
+      <div className="mt-2 flex items-center justify-between text-xs text-[var(--so-muted)]">
+        <span>{dateLabel}</span>
+        <span title={daysTitle}>{daysLabel}</span>
+      </div>
+    </div>
+  );
+});
+
 export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
   const t = useTranslations("salesOperation");
   const { users, currentUser } = useAuth();
+  const toast = useToast();
   const [leads, setLeads] = useState<SalesLead[]>(initialLeads);
   const [stages, setStages] = useState<PipelineStage[]>(() => defaultPipelineStages());
   const [segments, setSegments] = useState<SalesSegment[]>([]);
@@ -741,7 +1082,7 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
       const stagesData = (await stagesRes.json()) as { ok?: boolean; stages?: PipelineStage[] };
       const segmentsData = (await segmentsRes.json()) as { ok?: boolean; segments?: SalesSegment[] };
       if (stagesRes.ok && stagesData.ok && stagesData.stages?.length) {
-        setStages(stagesData.stages.filter((stage) => stage.isActive));
+        setStages(stagesData.stages);
       }
       if (segmentsRes.ok && segmentsData.ok) setSegments(segmentsData.segments ?? []);
     } catch {
@@ -813,6 +1154,7 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
   // Load per-user pipeline preferences (filters, collapsed columns, saved views).
   useEffect(() => {
     if (!prefsKey) return;
+    let restored = false;
     try {
       const raw = window.localStorage.getItem(prefsKey);
       if (raw) {
@@ -824,12 +1166,18 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
         setFilters({ ...EMPTY_FILTERS, ...(parsed.filters ?? {}) });
         setCollapsed(parsed.collapsed ?? {});
         setSavedViews(Array.isArray(parsed.views) ? parsed.views : []);
+        restored = true;
       }
     } catch {
       // ignore malformed prefs
     }
+    // First-time non-admin users default to "my leads" so lead owners land on
+    // their own book. Still fully switchable; admins keep the full board.
+    if (!restored && currentUser?.id && currentUser.role !== "Admin") {
+      setFilters({ ...EMPTY_FILTERS, owner: currentUser.id });
+    }
     setPrefsLoaded(true);
-  }, [prefsKey]);
+  }, [prefsKey, currentUser]);
 
   // Persist preferences after they've been loaded (avoids clobbering on first mount).
   useEffect(() => {
@@ -850,6 +1198,16 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
     return map;
   }, [segments]);
 
+  const activeSegments = useMemo(
+    () => segments.filter((segment) => segment.isActive),
+    [segments],
+  );
+
+  const visibleStages = useMemo(() => {
+    const occupiedStatuses = new Set(leads.map((lead) => lead.status));
+    return stages.filter((stage) => stage.isActive || occupiedStatuses.has(stage.key as SalesLeadStatus));
+  }, [leads, stages]);
+
   const stageProbabilityByKey = useMemo(() => {
     const map: Record<string, number> = {};
     for (const stage of stages) map[stage.key] = stage.probability;
@@ -869,8 +1227,13 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
         map.set(lead.assignedManagerUserId, lead.assignedManagerName ?? lead.assignedManagerUserId);
       }
     }
+    // Ensure the current user is always selectable (so the "my leads" default and
+    // self-assignment stay visible even before they own any lead).
+    if (currentUser?.id && !map.has(currentUser.id)) {
+      map.set(currentUser.id, currentUser.name ?? currentUser.id);
+    }
     return [...map.entries()].map(([id, name]) => ({ id, name }));
-  }, [leads]);
+  }, [leads, currentUser]);
 
   const filtersActive = useMemo(
     () => Object.values(filters).some((value) => value.trim() !== ""),
@@ -900,7 +1263,7 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
   }, [leads, filters]);
 
   const leadsByStatus = useMemo(() => {
-    const map = Object.fromEntries(stages.map((stage) => [stage.key, [] as SalesLead[]])) as Record<
+    const map = Object.fromEntries(visibleStages.map((stage) => [stage.key, [] as SalesLead[]])) as Record<
       string,
       SalesLead[]
     >;
@@ -908,7 +1271,7 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
       (map[lead.status] ?? (map[lead.status] = [])).push(lead);
     }
     return map;
-  }, [filteredLeads, stages]);
+  }, [filteredLeads, visibleStages]);
 
   const selectedLead = leads.find((lead) => lead.id === selectedLeadId) ?? null;
 
@@ -945,6 +1308,39 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update status.");
       void loadLeads();
+    }
+  };
+
+  const updateLeadPotential = async (leadId: string, value: number | null): Promise<boolean> => {
+    const previousLead = leads.find((lead) => lead.id === leadId);
+    if (!previousLead) return false;
+
+    setLeads((prev) =>
+      prev.map((lead) =>
+        lead.id === leadId ? { ...lead, estimatedMonthlyPotential: value } : lead,
+      ),
+    );
+
+    try {
+      const res = await fetch(`/api/sales-operation/leads/${leadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estimatedMonthlyPotential: value }),
+      });
+      const data = (await res.json()) as { ok?: boolean; lead?: SalesLead; error?: string };
+      if (!res.ok || !data.ok || !data.lead) {
+        throw new Error(data.error ?? "Failed to update monthly potential.");
+      }
+      setLeads((prev) => prev.map((lead) => (lead.id === leadId ? data.lead! : lead)));
+      toast.success(t("potential.saved"));
+      return true;
+    } catch (err) {
+      setLeads((prev) => prev.map((lead) => (lead.id === leadId ? previousLead : lead)));
+      toast.error(
+        t("potential.saveFailed"),
+        err instanceof Error ? err.message : undefined,
+      );
+      return false;
     }
   };
 
@@ -1005,12 +1401,15 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
     <section className="crm-page flex h-[calc(100dvh-10.5rem)] min-h-[24rem] flex-col">
       {/* Filters + saved views */}
       <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2">
-        <input
-          className={`${inputClass} w-48`}
-          placeholder={t("filter.search")}
-          value={filters.search}
-          onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))}
-        />
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--so-muted-2)]" />
+          <input
+            className={`${inputClass} w-48 pl-8`}
+            placeholder={t("filter.search")}
+            value={filters.search}
+            onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))}
+          />
+        </div>
         <select
           className={inputClass}
           value={filters.owner}
@@ -1112,14 +1511,15 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
       {error ? <p className="shrink-0 text-sm text-rose-700">{error}</p> : null}
       {loading ? <p className="shrink-0 text-sm text-muted">{t("loading")}</p> : null}
 
-      <div className="flex min-h-0 flex-1 gap-2 overflow-x-auto pb-1 lg:gap-3">
-        {stages.map((stage) => {
+      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-1">
+        {visibleStages.map((stage) => {
           const columnLeads = leadsByStatus[stage.key] ?? [];
           const potentialSum = columnLeads.reduce(
             (sum, lead) => sum + (lead.estimatedMonthlyPotential ?? 0),
             0,
           );
           const isCollapsed = collapsed[stage.key] === true;
+          const isDropTarget = Boolean(draggingLeadId);
 
           if (isCollapsed) {
             return (
@@ -1127,7 +1527,7 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
                 key={stage.key}
                 type="button"
                 onClick={() => setCollapsed((prev) => ({ ...prev, [stage.key]: false }))}
-                className="flex w-10 shrink-0 flex-col items-center gap-2 rounded-2xl border border-white/70 bg-white/55 py-3 backdrop-blur-md"
+                className="flex w-11 shrink-0 flex-col items-center gap-2 rounded-[14px] border border-[var(--so-border)] bg-[var(--so-surface-2)] py-3 transition-colors hover:bg-[var(--so-surface-hover)]"
                 title={stage.label}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={(event) => {
@@ -1137,8 +1537,8 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
                   setDraggingLeadId(null);
                 }}
               >
-                <span className="text-xs font-semibold text-slate-500">{columnLeads.length}</span>
-                <span className="[writing-mode:vertical-rl] rotate-180 truncate text-xs font-semibold text-slate-700">
+                <span className="text-xs font-bold text-[var(--so-muted)]">{columnLeads.length}</span>
+                <span className="[writing-mode:vertical-rl] rotate-180 truncate text-xs font-semibold text-[var(--so-text)]">
                   {stage.label}
                 </span>
               </button>
@@ -1148,7 +1548,12 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
           return (
             <div
               key={stage.key}
-              className="flex min-h-0 w-[16rem] shrink-0 flex-col rounded-2xl border border-white/70 bg-white/55 p-2 backdrop-blur-md lg:rounded-3xl lg:p-3"
+              className={cn(
+                "flex min-h-0 w-[17rem] shrink-0 flex-col rounded-[16px] border bg-[var(--so-surface-2)] p-2.5 transition-colors",
+                isDropTarget
+                  ? "border-dashed border-[var(--so-accent)]/40"
+                  : "border-[var(--so-border)]",
+              )}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => {
                 event.preventDefault();
@@ -1157,11 +1562,11 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
                 setDraggingLeadId(null);
               }}
             >
-              <div className="mb-2 flex shrink-0 flex-col gap-1.5">
-                <div className="flex min-w-0 items-start justify-between gap-1">
+              <div className="mb-2.5 flex shrink-0 flex-col gap-1.5">
+                <div className="flex min-w-0 items-center justify-between gap-1">
                   <div className="flex min-w-0 items-center gap-1.5">
                     <StatusBadge label={stage.label} tone={toneForStage(stage.key)} compact title={stage.label} />
-                    <span className="shrink-0 text-xs font-semibold text-slate-500">
+                    <span className="shrink-0 rounded-full bg-[var(--so-surface)] px-1.5 text-xs font-bold text-[var(--so-muted)]">
                       {columnLeads.length}
                     </span>
                   </div>
@@ -1170,15 +1575,16 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
                       <button
                         type="button"
                         onClick={() => setShowCreate(true)}
-                        className="crm-button-primary rounded-lg px-2 py-0.5 text-[0.65rem] font-semibold lg:px-2.5 lg:py-1 lg:text-xs"
+                        title={t("addLead")}
+                        className="so-focus-ring inline-flex h-7 w-7 items-center justify-center rounded-[8px] bg-[var(--so-accent)] text-white transition-colors hover:bg-[var(--so-accent-strong)]"
                       >
-                        {t("addLead")}
+                        <Plus className="h-4 w-4" />
                       </button>
                     ) : null}
                     <button
                       type="button"
                       onClick={() => setCollapsed((prev) => ({ ...prev, [stage.key]: true }))}
-                      className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs font-semibold text-slate-500"
+                      className="so-focus-ring inline-flex h-7 w-7 items-center justify-center rounded-[8px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] text-xs font-semibold text-[var(--so-muted)] transition-colors hover:bg-[var(--so-surface-hover)]"
                       title={t("column.collapse")}
                     >
                       ⟨
@@ -1186,70 +1592,51 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
                   </div>
                 </div>
                 {potentialSum > 0 ? (
-                  <span className="text-[0.68rem] font-semibold text-slate-500">
+                  <span className="text-[0.68rem] font-semibold text-[var(--so-muted)]">
                     {formatIls(potentialSum)}
                   </span>
                 ) : null}
               </div>
 
               <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-0.5">
-                {columnLeads.map((lead) => {
-                  const title = lead.companyName?.trim() || lead.fullName;
-                  const showContact = Boolean(lead.companyName?.trim());
-                  const segmentName = lead.segmentId ? segmentNameById.get(lead.segmentId) : null;
-                  const weighted = computeWeightedPipelineValue(lead, stageProbabilityByKey);
-                  return (
-                    <button
-                      key={lead.id}
-                      type="button"
-                      draggable
-                      onDragStart={(event) => {
-                        setDraggingLeadId(lead.id);
-                        event.dataTransfer.setData("text/lead-id", lead.id);
-                        event.dataTransfer.effectAllowed = "move";
-                      }}
-                      onDragEnd={() => setDraggingLeadId(null)}
-                      onClick={() => setSelectedLeadId(lead.id)}
-                      className={`crm-hover-lift w-full rounded-xl border border-white/80 bg-white/90 p-2 text-left shadow-sm transition lg:rounded-2xl lg:p-3 ${
-                        selectedLeadId === lead.id ? "ring-2 ring-red-400/70" : ""
-                      }`}
-                    >
-                      <p className="truncate text-xs font-semibold text-slate-900 lg:text-sm">{title}</p>
-                      {showContact ? (
-                        <p className="truncate text-[0.65rem] text-slate-500 lg:text-xs">{lead.fullName}</p>
-                      ) : null}
-                      <div className="mt-1.5 flex flex-wrap gap-1 lg:mt-2">
-                        {lead.estimatedMonthlyPotential ? (
-                          <span className="inline-flex rounded-full bg-indigo-50 px-1.5 py-0.5 text-[0.6rem] font-semibold text-indigo-700 lg:px-2 lg:text-[0.68rem]">
-                            {formatIls(lead.estimatedMonthlyPotential)}
-                            {weighted > 0 ? ` · ~${formatIls(weighted)}` : ""}
-                          </span>
-                        ) : null}
-                        {segmentName ? (
-                          <span className="inline-flex max-w-full truncate rounded-full bg-sky-50 px-1.5 py-0.5 text-[0.6rem] font-semibold text-sky-700 lg:px-2 lg:text-[0.68rem]">
-                            {segmentName}
-                          </span>
-                        ) : null}
-                        {lead.campaignName ? (
-                          <span className="inline-flex max-w-full truncate rounded-full bg-red-50 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-red-700 lg:px-2 lg:text-[0.68rem]">
-                            {lead.campaignName}
-                          </span>
-                        ) : null}
-                        {lead.assignedManagerName ? (
-                          <span className="inline-flex max-w-full truncate rounded-full bg-emerald-50 px-1.5 py-0.5 text-[0.6rem] font-semibold text-emerald-800 lg:px-2 lg:text-[0.68rem]">
-                            {lead.assignedManagerName}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="mt-1.5 flex items-center justify-between text-[0.65rem] text-muted lg:mt-2 lg:text-xs">
-                        <span>{formatSalesDate(lead.statusEnteredAt)}</span>
-                        <span title={t("card.daysInStage")}>
-                          {t("card.days", { count: daysInStage(lead.statusEnteredAt) })}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
+                {columnLeads.length === 0 ? (
+                  <div className="rounded-[12px] border border-dashed border-[var(--so-border-strong)] py-6 text-center text-xs text-[var(--so-muted-2)]">
+                    {t("column.empty")}
+                  </div>
+                ) : (
+                  columnLeads.map((lead) => {
+                    const cardTitle = lead.companyName?.trim() || lead.fullName;
+                    const showContact = Boolean(lead.companyName?.trim());
+                    const segmentName = lead.segmentId ? segmentNameById.get(lead.segmentId) ?? null : null;
+                    const weighted = computeWeightedPipelineValue(lead, stageProbabilityByKey);
+                    const potentialLabel =
+                      lead.estimatedMonthlyPotential !== null
+                        ? `${formatIls(lead.estimatedMonthlyPotential)}${weighted > 0 ? ` · ~${formatIls(weighted)}` : ""}`
+                        : null;
+                    return (
+                      <LeadCard
+                        key={lead.id}
+                        lead={lead}
+                        selected={selectedLeadId === lead.id}
+                        title={cardTitle}
+                        contact={showContact ? lead.fullName : null}
+                        potentialLabel={potentialLabel}
+                        segmentName={segmentName}
+                        dateLabel={formatSalesDate(lead.statusEnteredAt)}
+                        daysLabel={t("card.days", { count: daysInStage(lead.statusEnteredAt) })}
+                        daysTitle={t("card.daysInStage")}
+                        onSelect={setSelectedLeadId}
+                        onDragStart={(id, event) => {
+                          setDraggingLeadId(id);
+                          event.dataTransfer.setData("text/lead-id", id);
+                          event.dataTransfer.effectAllowed = "move";
+                        }}
+                        onDragEnd={() => setDraggingLeadId(null)}
+                        onUpdatePotential={updateLeadPotential}
+                      />
+                    );
+                  })
+                )}
               </div>
             </div>
           );
@@ -1258,6 +1645,8 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
 
       <SalesLeadDetailSidebar
         lead={selectedLead}
+        stages={stages}
+        segments={segments}
         open={Boolean(selectedLead)}
         onClose={() => setSelectedLeadId(null)}
         onUpdated={(lead) => {
@@ -1269,18 +1658,36 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
         }}
       />
 
-      {showCreate ? (
-        <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/35 px-4 backdrop-blur-sm"
-          onClick={() => setShowCreate(false)}
-        >
-          <div
-            className="crm-modal-surface w-full max-w-lg rounded-3xl p-5"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold text-slate-900">{t("addLead")}</h3>
-            <div className="mt-4 grid gap-3">
-              {(
+      <Modal
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        title={t("addLead")}
+        className="max-w-lg"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setShowCreate(false)}
+              className="so-focus-ring rounded-[10px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-4 py-2 text-sm font-semibold text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)]"
+            >
+              {t("cancel")}
+            </button>
+            <Button
+              loading={creating}
+              disabled={
+                creating ||
+                !createDraft.fullName.trim() ||
+                (!createDraft.email.trim() && !createDraft.phone.trim())
+              }
+              onClick={() => void createLead()}
+            >
+              {t("createLead")}
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3">
+          {(
                 [
                   ["fullName", "field.fullName", true],
                   ["companyName", "field.company", false],
@@ -1312,7 +1719,7 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
                     }
                   >
                     <option value="">—</option>
-                    {segments.map((segment) => (
+                    {activeSegments.map((segment) => (
                       <option key={segment.id} value={segment.id}>
                         {segment.name}
                       </option>
@@ -1349,60 +1756,37 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
                       {user.name}
                     </option>
                   ))}
-                </select>
-              </label>
-            </div>
-            {createDuplicates.length > 0 ? (
-              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
-                <p className="text-xs font-semibold text-amber-800">
-                  {t("dedup.warning", { count: createDuplicates.length })}
-                </p>
-                <ul className="mt-1.5 space-y-1">
-                  {createDuplicates.slice(0, 4).map((dup) => (
-                    <li key={dup.leadId}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowCreate(false);
-                          setSelectedLeadId(dup.leadId);
-                        }}
-                        className="w-full truncate rounded-lg px-2 py-1 text-left text-xs text-amber-900 transition hover:bg-amber-100"
-                      >
-                        {dup.companyName || dup.fullName}
-                        <span className="ml-1 text-amber-600">
-                          · {dup.matchedOn.map((field) => t(`dedup.field.${field}`)).join(", ")}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            <p className="mt-3 text-xs text-muted">{t("dedup.requiredHint")}</p>
-            <div className="mt-2 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowCreate(false)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-              >
-                {t("cancel")}
-              </button>
-              <button
-                type="button"
-                disabled={
-                  creating ||
-                  !createDraft.fullName.trim() ||
-                  (!createDraft.email.trim() && !createDraft.phone.trim())
-                }
-                onClick={() => void createLead()}
-                className="crm-button-primary rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
-              >
-                {creating ? t("saving") : t("createLead")}
-              </button>
-            </div>
-          </div>
+            </select>
+          </label>
         </div>
-      ) : null}
+        {createDuplicates.length > 0 ? (
+          <div className="mt-4 rounded-[12px] border border-amber-200 bg-amber-50 p-3">
+            <p className="text-xs font-semibold text-amber-800">
+              {t("dedup.warning", { count: createDuplicates.length })}
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {createDuplicates.slice(0, 4).map((dup) => (
+                <li key={dup.leadId}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreate(false);
+                      setSelectedLeadId(dup.leadId);
+                    }}
+                    className="w-full truncate rounded-lg px-2 py-1 text-left text-xs text-amber-900 transition hover:bg-amber-100"
+                  >
+                    {dup.companyName || dup.fullName}
+                    <span className="ml-1 text-amber-600">
+                      · {dup.matchedOn.map((field) => t(`dedup.field.${field}`)).join(", ")}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        <p className="mt-3 text-xs text-[var(--so-muted)]">{t("dedup.requiredHint")}</p>
+      </Modal>
     </section>
   );
 }

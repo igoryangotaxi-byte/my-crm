@@ -28,9 +28,11 @@ function ActivityDot({ type }: { type: string }) {
 export function SalesLeadActivityFeed({
   leadId,
   refreshKey = 0,
+  stageLabels,
 }: {
   leadId: string;
   refreshKey?: number;
+  stageLabels?: Record<string, string>;
 }) {
   const t = useTranslations("salesOperation");
   const [activities, setActivities] = useState<SalesActivity[]>([]);
@@ -66,9 +68,9 @@ export function SalesLeadActivityFeed({
       case "status_changed": {
         const from = activity.meta.fromStatus as string | null;
         const to = activity.meta.toStatus as string | null;
-        const toLabel = to ? STATUS_LABELS[to] ?? to : "";
+        const toLabel = to ? stageLabels?.[to] ?? STATUS_LABELS[to] ?? to : "";
         if (from) {
-          const fromLabel = STATUS_LABELS[from] ?? from;
+          const fromLabel = stageLabels?.[from] ?? STATUS_LABELS[from] ?? from;
           return t("activity.statusChanged", { from: fromLabel, to: toLabel });
         }
         return t("activity.statusCreated", { to: toLabel });
@@ -91,9 +93,9 @@ export function SalesLeadActivityFeed({
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-white/70 p-3">
+    <div className="so-card p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-slate-900">{t("activity.title")}</p>
+        <p className="text-sm font-semibold text-[var(--so-text)]">{t("activity.title")}</p>
         {loading ? <span className="text-xs text-muted">{t("loading")}</span> : null}
       </div>
 
@@ -105,7 +107,7 @@ export function SalesLeadActivityFeed({
             <li key={activity.id} className="flex gap-2">
               <ActivityDot type={activity.type} />
               <div className="min-w-0 flex-1">
-                <p className="whitespace-pre-wrap text-xs text-slate-800">{describe(activity)}</p>
+                <p className="whitespace-pre-wrap text-xs text-[var(--so-text)]">{describe(activity)}</p>
                 <p className="text-[10px] text-muted">
                   {activity.actorName ?? "System"} · {formatSalesDateTime(activity.occurredAt)}
                 </p>

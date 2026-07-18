@@ -1,0 +1,251 @@
+/*
+ * Sales Operations — flat premium design system (2026).
+ * Scoped to [data-module="sales-operation"] so the rest of the CRM (which relies
+ * on the same crm and glass classes) keeps its existing glass identity untouched.
+ * Here we re-map those classes to a flat, Linear/Attio/Stripe-grade surface system
+ * while preserving the Yango red accent.
+ */
+
+/* Flat design tokens (--so-*) are defined on :root in app/globals.css so that
+ * portaled Radix content (menus/tooltips on <body>) can resolve them. This file
+ * only scopes the crm-* class overrides + helper classes to the module. */
+
+/* Clean, flat shell background — remove the ambient red glows inside the module. */
+[data-module="sales-operation"].crm-make-shell,
+[data-module="sales-operation"] .crm-make-shell {
+  background: var(--so-bg);
+}
+
+[data-module="sales-operation"].crm-make-shell::before,
+[data-module="sales-operation"].crm-make-shell::after {
+  display: none;
+  content: none;
+}
+
+/* Flat surfaces: solid fill, hairline border, subtle shadow, no blur. */
+[data-module="sales-operation"] .crm-surface,
+[data-module="sales-operation"] .glass-surface,
+[data-module="sales-operation"] .make-glass-card-static {
+  background: var(--so-surface);
+  border: 1px solid var(--so-border);
+  box-shadow: var(--so-shadow-sm);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Flatten leftover translucent whites that still appear in older sections. */
+[data-module="sales-operation"] .bg-white\/70,
+[data-module="sales-operation"] .bg-white\/60,
+[data-module="sales-operation"] .bg-white\/80,
+[data-module="sales-operation"] .bg-white\/85,
+[data-module="sales-operation"] .bg-white\/90,
+[data-module="sales-operation"] .bg-white\/95 {
+  background-color: var(--so-surface) !important;
+}
+
+[data-module="sales-operation"] .border-white\/70,
+[data-module="sales-operation"] .border-white\/50 {
+  border-color: var(--so-border) !important;
+}
+
+[data-module="sales-operation"] .crm-modal-surface {
+  background: var(--so-surface);
+  border: 1px solid var(--so-border);
+  box-shadow: var(--so-shadow-lg);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Restrained hover: no scale/translate jumps — just border + shadow. */
+[data-module="sales-operation"] .crm-hover-lift {
+  transition:
+    box-shadow var(--so-dur) var(--ease-ui),
+    border-color var(--so-dur) var(--ease-ui),
+    background-color var(--so-dur) var(--ease-ui),
+    transform var(--so-dur) var(--ease-ui);
+}
+
+[data-module="sales-operation"] .crm-hover-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--so-shadow-md);
+  border-color: var(--so-border-strong);
+}
+
+[data-module="sales-operation"] .crm-hover-lift:active {
+  transform: translateY(0);
+  box-shadow: var(--so-shadow-sm);
+}
+
+/* Inputs: flat white, hairline border, accent focus ring. */
+[data-module="sales-operation"] .crm-input {
+  border-radius: var(--so-radius);
+  border: 1px solid var(--so-border-strong);
+  background: var(--so-surface);
+  color: var(--so-text);
+  box-shadow: none;
+  transition: border-color 160ms var(--ease-ui), box-shadow 160ms var(--ease-ui);
+}
+
+[data-module="sales-operation"] .crm-input:hover:not(:focus) {
+  border-color: #cfd3db;
+}
+
+[data-module="sales-operation"] .crm-input:focus {
+  border-color: rgba(255, 45, 45, 0.5);
+  box-shadow: var(--so-focus-ring);
+  outline: none;
+}
+
+/* Primary button: solid accent (no gradient), crisp states. */
+[data-module="sales-operation"] .crm-button-primary {
+  background: var(--so-accent);
+  color: #fff;
+  border: 1px solid transparent;
+  box-shadow: var(--so-shadow-xs);
+  transition:
+    background-color 150ms var(--ease-ui),
+    box-shadow 150ms var(--ease-ui),
+    transform 120ms var(--ease-ui);
+}
+
+[data-module="sales-operation"] .crm-button-primary:hover {
+  background: var(--so-accent-strong);
+  filter: none;
+  box-shadow: var(--so-shadow-sm);
+}
+
+[data-module="sales-operation"] .crm-button-primary:active {
+  transform: translateY(0.5px);
+  box-shadow: var(--so-shadow-xs);
+}
+
+[data-module="sales-operation"] .crm-button-primary:focus-visible {
+  outline: none;
+  box-shadow: var(--so-focus-ring);
+}
+
+/* Status pills: flat tint, no hover scale. */
+[data-module="sales-operation"] .crm-status-pill:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Softer, calmer page entrance (replaces the left slide-in stagger). */
+[data-module="sales-operation"] .make-shell-inner > header,
+[data-module="sales-operation"] .make-shell-main .crm-page > *,
+[data-module="sales-operation"] .make-shell-main > *:not(.crm-page) {
+  animation-name: so-fade-in;
+  animation-duration: 0.34s;
+}
+
+@keyframes so-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Premium thin scrollbars inside the module. */
+[data-module="sales-operation"] *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+[data-module="sales-operation"] *::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.16);
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+[data-module="sales-operation"] *::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.28);
+  background-clip: content-box;
+}
+
+[data-module="sales-operation"] *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ------------------------------------------------------------------ */
+/* New flat primitive helper classes (used by the shared UI components) */
+/* ------------------------------------------------------------------ */
+
+.so-card {
+  background: var(--so-surface);
+  border: 1px solid var(--so-border);
+  border-radius: var(--so-radius-lg);
+  box-shadow: var(--so-shadow-sm);
+}
+
+.so-card-hover {
+  transition:
+    box-shadow var(--so-dur) var(--ease-ui),
+    border-color var(--so-dur) var(--ease-ui),
+    transform var(--so-dur) var(--ease-ui);
+}
+
+.so-card-hover:hover {
+  transform: translateY(-1px);
+  border-color: var(--so-border-strong);
+  box-shadow: var(--so-shadow-md);
+}
+
+.so-focus-ring:focus-visible {
+  outline: none;
+  box-shadow: var(--so-focus-ring);
+}
+
+/* Radix dialog/drawer overlay + content animation classes. */
+.so-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(15, 18, 24, 0.44);
+}
+
+.so-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: #eef0f3;
+}
+
+.so-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.65),
+    transparent
+  );
+  animation: so-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes so-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-module="sales-operation"] .make-shell-inner > header,
+  [data-module="sales-operation"] .make-shell-main .crm-page > *,
+  [data-module="sales-operation"] .make-shell-main > *:not(.crm-page) {
+    animation: none !important;
+  }
+
+  .so-shimmer::after {
+    animation: none !important;
+  }
+
+  [data-module="sales-operation"] .crm-hover-lift:hover {
+    transform: none;
+  }
+}

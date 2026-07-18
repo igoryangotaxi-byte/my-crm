@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { SkeletonCard } from "@/components/ui/Skeleton";
 import { SalesEmailTemplatesSettings } from "@/components/sales-operation/settings/SalesEmailTemplatesSettings";
 import type { PipelineStage, SalesSegment } from "@/lib/sales-operation/types";
 
@@ -106,16 +109,16 @@ export function SalesSettingsView() {
 
   return (
     <section className="crm-page space-y-4">
-      {error ? <p className="text-sm text-rose-700">{error}</p> : null}
-      {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
-      {loading ? <p className="text-sm text-muted">…</p> : null}
+      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+      {message ? <p className="text-sm text-emerald-600">{message}</p> : null}
+      {loading ? <SkeletonCard /> : null}
 
-      <div className="make-glass-card-static rounded-3xl p-4">
+      <div className="so-card">
         <h2 className="crm-section-title mb-1">{t("stagesTitle")}</h2>
-        <p className="mb-3 text-sm text-slate-600">{t("stagesSubtitle")}</p>
-        <div className="overflow-x-auto">
+        <p className="mb-3 text-sm text-[var(--so-muted)]">{t("stagesSubtitle")}</p>
+        <div className="overflow-x-auto rounded-[12px] border border-[var(--so-border)]">
           <table className="min-w-full text-sm">
-            <thead className="bg-white/60">
+            <thead className="bg-[var(--so-surface-2)]">
               <tr>
                 <th className="px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                   {t("stageOrder")}
@@ -144,9 +147,9 @@ export function SalesSettingsView() {
                 <th className="px-2 py-1.5" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="divide-y divide-[var(--so-border)]">
               {stages.map((stage) => (
-                <tr key={stage.key}>
+                <tr key={stage.key} className="transition-colors hover:bg-[var(--so-surface-hover)]">
                   <td className="px-2 py-1.5">
                     <input
                       type="number"
@@ -157,7 +160,7 @@ export function SalesSettingsView() {
                       className="crm-input h-8 w-16 px-2 text-sm"
                     />
                   </td>
-                  <td className="px-2 py-1.5 font-mono text-xs text-slate-500">{stage.key}</td>
+                  <td className="px-2 py-1.5 font-mono text-xs text-[var(--so-muted)]">{stage.key}</td>
                   <td className="px-2 py-1.5">
                     <input
                       value={stage.label}
@@ -210,26 +213,26 @@ export function SalesSettingsView() {
                     />
                   </td>
                   <td className="px-2 py-1.5 text-right">
-                    <button
-                      type="button"
+                    <Button
+                      size="sm"
+                      loading={savingKey === stage.key}
                       disabled={savingKey === stage.key}
                       onClick={() => void saveStage(stage)}
-                      className="crm-button-primary rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
                     >
-                      {savingKey === stage.key ? t("saving") : t("save")}
-                    </button>
+                      {t("save")}
+                    </Button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="mt-3 text-xs text-muted">{t("migrationHint")}</p>
+        <p className="mt-3 text-xs text-[var(--so-muted)]">{t("migrationHint")}</p>
       </div>
 
-      <div className="make-glass-card-static rounded-3xl p-4">
+      <div className="so-card">
         <h2 className="crm-section-title mb-1">{t("segmentsTitle")}</h2>
-        <p className="mb-3 text-sm text-slate-600">{t("segmentsSubtitle")}</p>
+        <p className="mb-3 text-sm text-[var(--so-muted)]">{t("segmentsSubtitle")}</p>
         <div className="mb-3 flex flex-wrap gap-2">
           <input
             value={newSegmentName}
@@ -237,33 +240,33 @@ export function SalesSettingsView() {
             placeholder={t("segmentNamePlaceholder")}
             className="crm-input h-9 w-64 px-3 text-sm"
           />
-          <button
-            type="button"
+          <Button
+            leftIcon={<Plus className="h-4 w-4" />}
+            loading={addingSegment}
             disabled={addingSegment || !newSegmentName.trim()}
             onClick={() => void addSegment()}
-            className="crm-button-primary rounded-lg px-4 py-1.5 text-sm font-semibold disabled:opacity-50"
           >
-            {addingSegment ? t("saving") : t("addSegment")}
-          </button>
+            {t("addSegment")}
+          </Button>
         </div>
         {segments.length === 0 ? (
-          <p className="text-sm text-muted">{t("noSegments")}</p>
+          <p className="text-sm text-[var(--so-muted)]">{t("noSegments")}</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {segments.map((segment) => (
               <div
                 key={segment.id}
-                className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm ${
+                className={`flex items-center gap-2 rounded-[10px] border px-3 py-1.5 text-sm ${
                   segment.isActive
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                    : "border-slate-200 bg-slate-50 text-slate-500"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-[var(--so-border-strong)] bg-[var(--so-surface-2)] text-[var(--so-muted)]"
                 }`}
               >
                 <span className="font-medium">{segment.name}</span>
                 <button
                   type="button"
                   onClick={() => void toggleSegmentActive(segment)}
-                  className="rounded-md border border-white/70 bg-white px-2 py-0.5 text-xs font-semibold text-slate-600"
+                  className="so-focus-ring rounded-[8px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-2 py-0.5 text-xs font-semibold text-[var(--so-muted)] transition-colors hover:bg-[var(--so-surface-hover)]"
                 >
                   {segment.isActive ? t("deactivate") : t("activate")}
                 </button>

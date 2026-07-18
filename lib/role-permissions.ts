@@ -131,9 +131,10 @@ export function mergeAllRoleDashboardBlockAccess(
 
 export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: SalesOperationPageKey }> = [
   { prefix: "/sales-operation/pipeline", page: "salesPipeline" },
-  { prefix: "/sales-operation/clients", page: "salesSignedClients" },
+  { prefix: "/sales-operation/portfolio", page: "salesSignedClients" },
   { prefix: "/sales-operation/b2b-clients", page: "salesB2BClients" },
   { prefix: "/sales-operation/manager-analytics", page: "salesManagerAnalytics" },
+  { prefix: "/sales-operation/performance", page: "salesSettings" },
   { prefix: "/sales-operation/analytics", page: "salesAnalytics" },
   { prefix: "/sales-operation/automation", page: "salesAutomation" },
   { prefix: "/sales-operation/settings", page: "salesSettings" },
@@ -141,9 +142,17 @@ export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: SalesOpe
 
 export function resolveSalesOperationPageKey(pathname: string): SalesOperationPageKey {
   if (pathname.startsWith("/sales-operation/pipeline")) return "salesPipeline";
-  if (pathname.startsWith("/sales-operation/clients")) return "salesSignedClients";
+  // Relocated client detail card lives under b2b-clients/[id]; it reads signed-client
+  // data and its API requires salesSignedClients, so gate the page the same way.
+  if (
+    pathname.startsWith("/sales-operation/b2b-clients/") &&
+    !pathname.startsWith("/sales-operation/b2b-clients/trips")
+  ) {
+    return "salesSignedClients";
+  }
   if (pathname.startsWith("/sales-operation/b2b-clients")) return "salesB2BClients";
   if (pathname.startsWith("/sales-operation/manager-analytics")) return "salesManagerAnalytics";
+  if (pathname.startsWith("/sales-operation/performance")) return "salesSettings";
   if (pathname.startsWith("/sales-operation/analytics")) return "salesAnalytics";
   if (pathname.startsWith("/sales-operation/automation")) return "salesAutomation";
   if (pathname.startsWith("/sales-operation/settings")) return "salesSettings";

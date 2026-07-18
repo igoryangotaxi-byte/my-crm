@@ -108,9 +108,9 @@ export function SalesLeadEmailSection({ leadId, defaultTo, onEmailSent }: Props)
   };
 
   return (
-    <div className="space-y-3 rounded-2xl border border-border bg-white/70 p-3">
+    <div className="so-card space-y-3 p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-slate-900">{t("email.title")}</p>
+        <p className="text-sm font-semibold text-[var(--so-text)]">{t("email.title")}</p>
         {loading ? <span className="text-xs text-muted">{t("loading")}</span> : null}
       </div>
 
@@ -120,7 +120,7 @@ export function SalesLeadEmailSection({ leadId, defaultTo, onEmailSent }: Props)
         </p>
       ) : null}
 
-      <div className="space-y-2 rounded-xl border border-border bg-white p-3">
+      <div className="space-y-2 rounded-xl border border-[var(--so-border)] bg-[var(--so-surface)] p-3">
         {templates.length > 0 ? (
           <label className="block text-sm">
             <span className="crm-label">{t("email.template")}</span>
@@ -187,10 +187,13 @@ export function SalesLeadEmailSection({ leadId, defaultTo, onEmailSent }: Props)
       ) : (
         <ol className="max-h-72 space-y-2 overflow-y-auto">
           {messages.map((message) => (
-            <li key={message.id} className="rounded-xl border border-border bg-white p-2.5">
+            <li
+              key={message.id}
+              className="rounded-xl border border-[var(--so-border)] bg-[var(--so-surface)] p-2.5"
+            >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-slate-900">
+                  <p className="truncate text-xs font-semibold text-[var(--so-text)]">
                     {message.subject || "(no subject)"}
                   </p>
                   <p className="truncate text-[0.7rem] text-muted">
@@ -201,14 +204,15 @@ export function SalesLeadEmailSection({ leadId, defaultTo, onEmailSent }: Props)
                 </div>
                 <span
                   className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.6rem] font-semibold ${
-                    STATUS_TONE[message.status] ?? "bg-slate-50 text-slate-600 border-slate-200"
+                    STATUS_TONE[message.status] ??
+                    "border-[var(--so-border)] bg-[var(--so-surface-2)] text-[var(--so-muted)]"
                   }`}
                 >
                   {t(`email.status.${message.status}`)}
                 </span>
               </div>
               {message.body ? (
-                <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-[0.72rem] text-slate-600">
+                <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-[0.72rem] text-[var(--so-muted)]">
                   {message.body}
                 </p>
               ) : null}

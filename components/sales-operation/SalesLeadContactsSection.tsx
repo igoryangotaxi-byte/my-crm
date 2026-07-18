@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import {
   SALES_CONTACT_CHANNELS,
   type CreateSalesContactInput,
@@ -67,6 +68,7 @@ function draftToPayload(draft: ContactDraft): CreateSalesContactInput {
 
 export function SalesLeadContactsSection({ leadId }: { leadId: string }) {
   const t = useTranslations("salesOperation");
+  const confirm = useConfirm();
   const [contacts, setContacts] = useState<SalesContact[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -158,7 +160,12 @@ export function SalesLeadContactsSection({ leadId }: { leadId: string }) {
   };
 
   const remove = async (contact: SalesContact) => {
-    if (!window.confirm(t("contact.deleteConfirm"))) return;
+    const ok = await confirm({
+      title: t("contact.deleteConfirm"),
+      confirmLabel: t("contact.delete"),
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       const res = await fetch(`/api/sales-operation/leads/${leadId}/contacts/${contact.id}`, {
         method: "DELETE",
@@ -172,16 +179,16 @@ export function SalesLeadContactsSection({ leadId }: { leadId: string }) {
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-white/70 p-3">
+    <div className="so-card p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-slate-900">{t("contact.title")}</p>
+        <p className="text-sm font-semibold text-[var(--so-text)]">{t("contact.title")}</p>
         {loading ? (
           <span className="text-xs text-muted">{t("contact.loading")}</span>
         ) : (
           <button
             type="button"
             onClick={startAdd}
-            className="rounded-lg border border-border px-2 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+            className="so-focus-ring rounded-[10px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-2.5 py-1 text-xs font-semibold text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)]"
           >
             {t("contact.add")}
           </button>
@@ -195,11 +202,11 @@ export function SalesLeadContactsSection({ leadId }: { leadId: string }) {
           contacts.map((contact) => (
             <article
               key={contact.id}
-              className="rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-2"
+              className="rounded-xl border border-[var(--so-border)] bg-[var(--so-surface-2)] px-3 py-2"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-900">
+                  <p className="truncate text-sm font-semibold text-[var(--so-text)]">
                     {contact.fullName}
                     {contact.jobTitle ? (
                       <span className="font-normal text-muted"> · {contact.jobTitle}</span>
@@ -248,7 +255,7 @@ export function SalesLeadContactsSection({ leadId }: { leadId: string }) {
                   </p>
                 ) : null}
                 {contact.notes ? (
-                  <p className="whitespace-pre-wrap text-slate-700">{contact.notes}</p>
+                  <p className="whitespace-pre-wrap text-[var(--so-muted)]">{contact.notes}</p>
                 ) : null}
               </div>
 
@@ -265,7 +272,7 @@ export function SalesLeadContactsSection({ leadId }: { leadId: string }) {
                 <button
                   type="button"
                   onClick={() => startEdit(contact)}
-                  className="text-[11px] font-semibold text-slate-600 hover:underline"
+                  className="text-[11px] font-semibold text-[var(--so-muted)] hover:underline"
                 >
                   {t("contact.edit")}
                 </button>
@@ -283,7 +290,7 @@ export function SalesLeadContactsSection({ leadId }: { leadId: string }) {
       </div>
 
       {showForm ? (
-        <div className="mt-3 space-y-2 rounded-xl border border-border bg-white p-3">
+        <div className="mt-3 space-y-2 rounded-xl border border-[var(--so-border)] bg-[var(--so-surface)] p-3">
           {(
             [
               ["fullName", "contact.name"],
@@ -335,7 +342,7 @@ export function SalesLeadContactsSection({ leadId }: { leadId: string }) {
           </label>
 
           <div className="flex flex-wrap gap-4">
-            <label className="flex items-center gap-2 text-sm text-slate-700">
+            <label className="flex items-center gap-2 text-sm text-[var(--so-muted)]">
               <input
                 type="checkbox"
                 checked={draft.isPrimary}
@@ -345,7 +352,7 @@ export function SalesLeadContactsSection({ leadId }: { leadId: string }) {
               />
               {t("contact.primary")}
             </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
+            <label className="flex items-center gap-2 text-sm text-[var(--so-muted)]">
               <input
                 type="checkbox"
                 checked={draft.isDecisionMaker}
@@ -369,7 +376,7 @@ export function SalesLeadContactsSection({ leadId }: { leadId: string }) {
             <button
               type="button"
               onClick={cancelForm}
-              className="rounded-xl border border-border px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              className="so-focus-ring rounded-[10px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-3 py-1.5 text-sm font-semibold text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)]"
             >
               {t("cancel")}
             </button>

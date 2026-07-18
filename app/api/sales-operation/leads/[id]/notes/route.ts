@@ -1,6 +1,9 @@
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { loadAuthStore } from "@/lib/auth-store";
 import { requireSalesOperationPage } from "@/lib/sales-operation/require-sales-access";
 import { createSalesLeadNote, listSalesLeadNotes } from "@/lib/sales-operation/repository";
+import { createNotification } from "@/lib/sales-operation/notifications";
+import { findMentionedUserIds } from "@/lib/sales-operation/mentions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,6 +47,28 @@ export async function POST(request: Request, context: RouteContext) {
       userId: auth.user.id,
       name: auth.user.name,
     });
+
+    // Best-effort @mention notifications for tagged colleagues.
+    try {
+      const store = await loadAuthStore();
+      const mentioned = findMentionedUserIds(
+        body.body,
+        store.users.map((user) => ({ id: user.id, name: user.name })),
+      ).filter((userId) => userId !== auth.user.id);
+      for (const userId of mentioned) {
+        await createNotification({
+          userId,
+          type: "mention",
+          title: `${auth.user.name} mentioned you in a note`,
+          body: body.body.slice(0, 160),
+          leadId: id,
+          link: `/sales-operation/pipeline?lead=${id}`,
+        });
+      }
+    } catch (mentionError) {
+      console.error("Failed to send mention notifications:", mentionError);
+    }
+
     return Response.json({ ok: true, note }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create note.";

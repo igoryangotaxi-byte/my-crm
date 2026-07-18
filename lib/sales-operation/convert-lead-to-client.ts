@@ -175,7 +175,7 @@ async function runSignedHandover(
       title: `Client signed: ${clientLabel}`,
       body: "Onboarding handover created.",
       leadId: lead.id,
-      link: "/sales-operation/clients",
+      link: "/sales-operation/b2b-clients",
     });
   }
 }

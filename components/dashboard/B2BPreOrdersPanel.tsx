@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useRef, useState } from "react";
+import { CheckSquare, Download, HandCoins, Split, Wallet, X } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { b2bDashboardOrderKey, type B2BOrdersListCursors } from "@/lib/b2b-orders-keys";
+import { StatTile } from "@/components/ui/StatTile";
+import { Button } from "@/components/ui/Button";
+import { Drawer } from "@/components/ui/Dialog";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type { GpTripsImportResult } from "@/lib/gp-trips-import";
 import {
@@ -1990,21 +1995,135 @@ export function B2BPreOrdersPanel({
       return factor * (a.decoupling - b.decoupling);
     });
 
+    const totalSpendVal = filteredRows.reduce((sum, row) => sum + row.spend, 0);
+    const totalDriversVal = filteredRows.reduce((sum, row) => sum + row.driversReceived, 0);
+    const totalDecouplingVal = filteredRows.reduce((sum, row) => sum + row.decoupling, 0);
+
+    // Within-period daily series (drives the sparkline shape).
+    const includedClientIds = new Set(filteredRows.map((row) => row.clientId));
+    const dayMap = new Map<string, { spend: number; drivers: number; decoupling: number }>();
+    for (const row of activeYangoRows) {
+      const clientId = normalizeCorpClientId(row.corpClientId) || "unknown";
+      if (!includedClientIds.has(clientId)) continue;
+      const day = getScheduledDateKey(row.scheduledAt);
+      if (!day) continue;
+      const bucket = dayMap.get(day) ?? { spend: 0, drivers: 0, decoupling: 0 };
+      bucket.spend += row.clientPaid;
+      bucket.drivers += row.driverReceived;
+      bucket.decoupling += row.clientPaid - row.driverReceived;
+      dayMap.set(day, bucket);
+    }
+    const days = [...dayMap.keys()].sort();
+    const spendSeries = days.map((day) => dayMap.get(day)!.spend);
+    const driversSeries = days.map((day) => dayMap.get(day)!.drivers);
+    const decouplingSeries = days.map((day) => dayMap.get(day)!.decoupling);
+
+    // Real previous-period comparison: same length window, immediately preceding.
+    const prevTotals = { spend: 0, drivers: 0, decoupling: 0 };
+    let prevHasData = false;
+    if (yangoFromDate && yangoToDate && yangoToDate >= yangoFromDate) {
+      const dayMs = 86_400_000;
+      const fromTs = new Date(`${yangoFromDate}T00:00:00Z`).getTime();
+      const toTs = new Date(`${yangoToDate}T00:00:00Z`).getTime();
+      if (Number.isFinite(fromTs) && Number.isFinite(toTs)) {
+        const lengthDays = Math.round((toTs - fromTs) / dayMs) + 1;
+        const prevToTs = fromTs - dayMs;
+        const prevFromTs = prevToTs - (lengthDays - 1) * dayMs;
+        const prevFromKey = new Date(prevFromTs).toISOString().slice(0, 10);
+        const prevToKey = new Date(prevToTs).toISOString().slice(0, 10);
+        for (const row of normalizedYangoRows) {
+          const dateKey = getScheduledDateKey(row.scheduledAt);
+          if (!dateKey || dateKey < prevFromKey || dateKey > prevToKey) continue;
+          const clientId = normalizeCorpClientId(row.corpClientId) || "unknown";
+          if (selectedClientSet.size > 0 && !selectedClientSet.has(clientId)) continue;
+          const registryEntry = registryByCorpId.get(clientId);
+          const amId = registryEntry?.accountManager.userId ?? null;
+          const smId = registryEntry?.salesManager.userId ?? null;
+          if (yangoAccountManagerFilter !== "all" && (amId ?? "") !== yangoAccountManagerFilter) {
+            continue;
+          }
+          if (yangoSalesManagerFilter !== "all" && (smId ?? "") !== yangoSalesManagerFilter) {
+            continue;
+          }
+          prevHasData = true;
+          prevTotals.spend += row.clientPaid;
+          prevTotals.drivers += row.driverReceived;
+          prevTotals.decoupling += row.clientPaid - row.driverReceived;
+        }
+      }
+    }
+    const pctDelta = (curr: number, prev: number): number | null => {
+      if (!prevHasData || prev === 0) return null;
+      return ((curr - prev) / Math.abs(prev)) * 100;
+    };
+
     return {
-      totalSpend: filteredRows.reduce((sum, row) => sum + row.spend, 0),
-      totalDriversReceived: filteredRows.reduce((sum, row) => sum + row.driversReceived, 0),
-      totalDecoupling: filteredRows.reduce((sum, row) => sum + row.decoupling, 0),
+      totalSpend: totalSpendVal,
+      totalDriversReceived: totalDriversVal,
+      totalDecoupling: totalDecouplingVal,
+      spendSeries,
+      driversSeries,
+      decouplingSeries,
+      spendDelta: pctDelta(totalSpendVal, prevTotals.spend),
+      driversDelta: pctDelta(totalDriversVal, prevTotals.drivers),
+      decouplingDelta: pctDelta(totalDecouplingVal, prevTotals.decoupling),
+      hasPrevPeriod: prevHasData,
       rows: filteredRows,
     };
   }, [
     activeYangoRows,
+    normalizedYangoRows,
     normalizedCorpClientNameMap,
     registryByCorpId,
+    selectedClientSet,
     yangoAccountManagerFilter,
     yangoClientSortDir,
     yangoClientSortKey,
+    yangoFromDate,
+    yangoToDate,
     yangoSalesManagerFilter,
   ]);
+
+  const [selectedYangoClients, setSelectedYangoClients] = useState<Set<string>>(new Set());
+  const visibleClientIds = useMemo(
+    () => decouplingData.rows.map((row) => row.clientId),
+    [decouplingData.rows],
+  );
+  const selectedVisibleCount = useMemo(
+    () => visibleClientIds.filter((id) => selectedYangoClients.has(id)).length,
+    [visibleClientIds, selectedYangoClients],
+  );
+  const allVisibleSelected =
+    visibleClientIds.length > 0 && selectedVisibleCount === visibleClientIds.length;
+
+  const toggleSelectAllVisible = useCallback(() => {
+    setSelectedYangoClients((prev) => {
+      const next = new Set(prev);
+      if (visibleClientIds.every((id) => next.has(id))) {
+        for (const id of visibleClientIds) next.delete(id);
+      } else {
+        for (const id of visibleClientIds) next.add(id);
+      }
+      return next;
+    });
+  }, [visibleClientIds]);
+
+  const toggleSelectClient = useCallback((clientId: string) => {
+    setSelectedYangoClients((prev) => {
+      const next = new Set(prev);
+      if (next.has(clientId)) next.delete(clientId);
+      else next.add(clientId);
+      return next;
+    });
+  }, []);
+
+  const yangoTableParentRef = useRef<HTMLDivElement>(null);
+  const yangoRowVirtualizer = useVirtualizer({
+    count: decouplingData.rows.length,
+    getScrollElement: () => yangoTableParentRef.current,
+    estimateSize: () => 64,
+    overscan: 12,
+  });
 
   const openOrderModal = useCallback(async (row: B2BDashboardOrder) => {
     setSelectedOrder(row);
@@ -2275,8 +2394,10 @@ export function B2BPreOrdersPanel({
     [],
   );
 
-  const exportYangoClientsCsv = () => {
-    if (decouplingData.rows.length === 0) return;
+  const exportYangoClientsCsv = (
+    rowsToExport: typeof decouplingData.rows = decouplingData.rows,
+  ) => {
+    if (rowsToExport.length === 0) return;
     const escapeCsv = (value: string | number) => {
       const text = String(value);
       if (text.includes(",") || text.includes("\"") || text.includes("\n")) {
@@ -2296,7 +2417,7 @@ export function B2BPreOrdersPanel({
       "decoupling_rate_percent",
       "last_trip_date",
     ];
-    const rowsCsv = decouplingData.rows.map((row) =>
+    const rowsCsv = rowsToExport.map((row) =>
       [
         row.clientName,
         row.clientId,
@@ -2562,12 +2683,8 @@ export function B2BPreOrdersPanel({
       ) : null}
 
       {showYangoClientsOverview ? (
-          <section className="mb-2 rounded-3xl border border-white/70 bg-white/70 p-4">
+          <section className="mb-2 rounded-[16px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-sm)]">
             <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h3 className="crm-section-title">B2B Clients Overview</h3>
-                <p className="crm-subtitle">B2B block with independent filters and compare mode</p>
-              </div>
               <div className="grid w-full gap-2 sm:w-auto sm:grid-flow-col sm:auto-cols-max sm:items-end">
                 <label className="text-xs text-muted">
                   From
@@ -2675,27 +2792,75 @@ export function B2BPreOrdersPanel({
             ) : null}
 
             <div className="mb-4 grid gap-3 md:grid-cols-3">
-              <article className={YANGO_NUMERIC_CARD_CLASS}>
-                <p className="text-sm text-muted">Client Spend</p>
-                <p className="mt-1 text-2xl font-semibold text-slate-900">
-                  {formatMoney(decouplingData.totalSpend)}
-                </p>
-              </article>
-              <article className={YANGO_NUMERIC_CARD_CLASS}>
-                <p className="text-sm text-muted">Drivers Recieved</p>
-                <p className="mt-1 text-2xl font-semibold text-slate-900">
-                  {formatMoney(decouplingData.totalDriversReceived)}
-                </p>
-              </article>
-              <article className={YANGO_NUMERIC_CARD_CLASS}>
-                <p className="text-sm text-muted">ABS Decoupling</p>
-                <p className="mt-1 text-2xl font-semibold text-slate-900">
-                  {formatMoney(decouplingData.totalDecoupling)}
-                </p>
-              </article>
+              <StatTile
+                label="Client Spend"
+                value={formatMoney(decouplingData.totalSpend)}
+                icon={<Wallet className="h-4 w-4" />}
+                spark={decouplingData.spendSeries}
+                delta={
+                  decouplingData.spendDelta !== null
+                    ? { value: decouplingData.spendDelta, label: "vs prev" }
+                    : undefined
+                }
+              />
+              <StatTile
+                label="Drivers Received"
+                value={formatMoney(decouplingData.totalDriversReceived)}
+                icon={<HandCoins className="h-4 w-4" />}
+                sparkTone="#0ea5e9"
+                spark={decouplingData.driversSeries}
+                delta={
+                  decouplingData.driversDelta !== null
+                    ? { value: decouplingData.driversDelta, label: "vs prev" }
+                    : undefined
+                }
+              />
+              <StatTile
+                label="ABS Decoupling"
+                value={formatMoney(decouplingData.totalDecoupling)}
+                icon={<Split className="h-4 w-4" />}
+                tone={decouplingData.totalDecoupling < 0 ? "danger" : "default"}
+                sparkTone={decouplingData.totalDecoupling < 0 ? "#e11d48" : "var(--so-accent)"}
+                spark={decouplingData.decouplingSeries}
+                delta={
+                  decouplingData.decouplingDelta !== null
+                    ? { value: decouplingData.decouplingDelta, label: "vs prev", invert: true }
+                    : undefined
+                }
+              />
             </div>
 
-            <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="min-h-[34px]">
+                {selectedVisibleCount > 0 ? (
+                  <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-[var(--so-accent)]/40 bg-[var(--so-accent-soft)] px-2.5 py-1.5">
+                    <span className="text-xs font-semibold text-[var(--so-accent-strong)]">
+                      {selectedVisibleCount} selected
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        exportYangoClientsCsv(
+                          decouplingData.rows.filter((row) => selectedYangoClients.has(row.clientId)),
+                        )
+                      }
+                      className="so-focus-ring inline-flex items-center gap-1 rounded-[8px] bg-[var(--so-accent)] px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-[var(--so-accent-strong)]"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Export selected
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedYangoClients(new Set())}
+                      className="so-focus-ring inline-flex items-center gap-1 rounded-[8px] px-2 py-1 text-xs font-semibold text-[var(--so-accent-strong)] transition-colors hover:bg-white/60"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      Clear
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
               <input
                 ref={gpUploadInputRef}
                 type="file"
@@ -2708,24 +2873,42 @@ export function B2BPreOrdersPanel({
                   type="button"
                   onClick={() => gpUploadInputRef.current?.click()}
                   disabled={gpUploading}
-                  className="rounded-lg border border-border/80 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="so-focus-ring rounded-[10px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {gpUploading ? "Uploading…" : "Upload Data"}
                 </button>
               ) : null}
               <button
                 type="button"
-                onClick={exportYangoClientsCsv}
+                onClick={() => exportYangoClientsCsv()}
                 disabled={decouplingData.rows.length === 0}
-                className="rounded-lg border border-border/80 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="so-focus-ring rounded-[10px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Export clients CSV
               </button>
+              </div>
             </div>
-            <div className="overflow-auto rounded-2xl border border-border/70 bg-white/80">
+            <div
+              ref={yangoTableParentRef}
+              className="max-h-[70vh] overflow-auto rounded-[14px] border border-[var(--so-border)] bg-[var(--so-surface)]"
+            >
               <table className="min-w-full text-xs">
-                <thead className="bg-[#f6f6f8] text-slate-600">
+                <thead className="sticky top-0 z-[1] bg-[var(--so-surface-2)] text-[0.6875rem] font-bold uppercase tracking-wide text-[var(--so-muted)]">
                   <tr>
+                    <th className="w-9 px-3 py-2 text-left">
+                      <button
+                        type="button"
+                        onClick={toggleSelectAllVisible}
+                        aria-label="Select all"
+                        className={`so-focus-ring flex h-4 w-4 items-center justify-center rounded-[4px] border transition-colors ${
+                          allVisibleSelected
+                            ? "border-[var(--so-accent)] bg-[var(--so-accent)] text-white"
+                            : "border-[var(--so-border-strong)] bg-[var(--so-surface)] hover:border-[var(--so-accent)]"
+                        }`}
+                      >
+                        {allVisibleSelected ? <CheckSquare className="h-3 w-3" /> : null}
+                      </button>
+                    </th>
                     <th className="px-3 py-2 text-left">
                       <button
                         type="button"
@@ -2809,15 +2992,53 @@ export function B2BPreOrdersPanel({
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border/70">
-                  {decouplingData.rows.map((row) => (
+                <tbody>
+                  {(() => {
+                    const virtualItems = yangoRowVirtualizer.getVirtualItems();
+                    const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
+                    const paddingBottom =
+                      virtualItems.length > 0
+                        ? yangoRowVirtualizer.getTotalSize() -
+                          virtualItems[virtualItems.length - 1].end
+                        : 0;
+                    return (
+                      <>
+                        {paddingTop > 0 ? (
+                          <tr aria-hidden>
+                            <td colSpan={10} style={{ height: paddingTop }} />
+                          </tr>
+                        ) : null}
+                        {virtualItems.map((virtualRow) => {
+                          const row = decouplingData.rows[virtualRow.index];
+                          const selected = selectedYangoClients.has(row.clientId);
+                          return (
                     <tr
                       key={row.clientId}
-                      className={`crm-hover-lift ${
-                        row.decoupling < 0 ? "bg-rose-50/70 hover:bg-rose-50/90" : "hover:bg-white/65"
+                      data-index={virtualRow.index}
+                      ref={yangoRowVirtualizer.measureElement}
+                      className={`border-b border-[var(--so-border)] transition-colors ${
+                        selected
+                          ? "bg-[var(--so-accent-soft)]"
+                          : row.decoupling < 0
+                            ? "bg-rose-50/70 hover:bg-rose-50"
+                            : "hover:bg-[var(--so-surface-hover)]"
                       }`}
                     >
-                      <td className="px-3 py-2 text-slate-700">
+                      <td className="px-3 py-2 align-top">
+                        <button
+                          type="button"
+                          onClick={() => toggleSelectClient(row.clientId)}
+                          aria-label="Select row"
+                          className={`so-focus-ring mt-0.5 flex h-4 w-4 items-center justify-center rounded-[4px] border transition-colors ${
+                            selected
+                              ? "border-[var(--so-accent)] bg-[var(--so-accent)] text-white"
+                              : "border-[var(--so-border-strong)] bg-[var(--so-surface)] hover:border-[var(--so-accent)]"
+                          }`}
+                        >
+                          {selected ? <CheckSquare className="h-3 w-3" /> : null}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2 align-top text-[var(--so-text)]">
                         <div className="px-1 py-0.5">
                           <Link
                             href={buildYangoClientTripsHref({
@@ -2826,51 +3047,67 @@ export function B2BPreOrdersPanel({
                               from: yangoFromDate,
                               to: yangoToDate,
                             })}
-                            className="group/client block rounded-lg transition hover:bg-slate-50"
+                            className="group/client block rounded-lg transition-colors"
                           >
-                            <div className="font-medium text-slate-900 group-hover/client:text-red-600">
+                            <div className="font-semibold text-[var(--so-text)] group-hover/client:text-[var(--so-accent-strong)]">
                               {row.clientName}
                             </div>
                             {row.clientName !== row.clientId ? (
-                              <div className="text-[11px] text-slate-500">{row.clientId}</div>
+                              <div className="text-[11px] text-[var(--so-muted-2)]">{row.clientId}</div>
                             ) : null}
                           </Link>
-                          <a
-                            href={`https://corp-admin-frontend.taxi.yandex-team.ru/corp-clients?search=${encodeURIComponent(
-                              row.clientId,
-                            )}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-1 inline-flex text-[11px] font-medium text-slate-500 transition hover:text-red-600"
-                          >
-                            Open in corp admin
-                          </a>
-                          {isB2bClientsOverview ? (
-                            <button
-                              type="button"
-                              onClick={() => openRegistryClientSidebar(row.clientId)}
-                              className="mt-1 inline-flex text-[11px] font-semibold text-red-700 transition hover:text-red-800"
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <a
+                              href={`https://corp-admin-frontend.taxi.yandex-team.ru/corp-clients?search=${encodeURIComponent(
+                                row.clientId,
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex text-[11px] font-medium text-[var(--so-muted)] transition-colors hover:text-[var(--so-accent-strong)]"
                             >
-                              Edit managers
-                            </button>
-                          ) : null}
+                              Open in corp admin
+                            </a>
+                            {isB2bClientsOverview ? (
+                              <>
+                                <span className="text-[11px] text-[var(--so-muted-2)]" aria-hidden>
+                                  ·
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => openRegistryClientSidebar(row.clientId)}
+                                  className="inline-flex text-[11px] font-semibold text-[var(--so-accent-strong)] transition-colors hover:underline"
+                                >
+                                  Edit managers
+                                </button>
+                              </>
+                            ) : null}
+                          </div>
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-slate-700">{row.accountManagerName ?? "—"}</td>
-                      <td className="px-3 py-2 text-slate-700">{row.salesManagerName ?? "—"}</td>
-                      <td className="px-3 py-2 text-right text-slate-900">{row.requests.toLocaleString("en-US")}</td>
-                      <td className="px-3 py-2 text-right text-slate-900">{row.trips.toLocaleString("en-US")}</td>
-                      <td className="px-3 py-2 text-right text-slate-900">{formatMoney(row.spend)}</td>
-                      <td className="px-3 py-2 text-right text-slate-900">{formatMoney(row.decoupling)}</td>
-                      <td className="px-3 py-2 text-right text-slate-900">{formatPercent(row.rate)}</td>
-                      <td className="px-3 py-2 text-right text-slate-900">
+                      <td className="px-3 py-2 align-top text-[var(--so-muted)]">{row.accountManagerName ?? "—"}</td>
+                      <td className="px-3 py-2 align-top text-[var(--so-muted)]">{row.salesManagerName ?? "—"}</td>
+                      <td className="px-3 py-2 text-right align-top tabular-nums text-[var(--so-text)]">{row.requests.toLocaleString("en-US")}</td>
+                      <td className="px-3 py-2 text-right align-top tabular-nums text-[var(--so-text)]">{row.trips.toLocaleString("en-US")}</td>
+                      <td className="px-3 py-2 text-right align-top tabular-nums text-[var(--so-text)]">{formatMoney(row.spend)}</td>
+                      <td className="px-3 py-2 text-right align-top tabular-nums text-[var(--so-text)]">{formatMoney(row.decoupling)}</td>
+                      <td className="px-3 py-2 text-right align-top tabular-nums text-[var(--so-text)]">{formatPercent(row.rate)}</td>
+                      <td className="px-3 py-2 text-right align-top tabular-nums text-[var(--so-text)]">
                         {row.lastTripDate ? formatDateTimeCell(row.lastTripDate) : "n/a"}
                       </td>
                     </tr>
-                  ))}
+                          );
+                        })}
+                        {paddingBottom > 0 ? (
+                          <tr aria-hidden>
+                            <td colSpan={10} style={{ height: paddingBottom }} />
+                          </tr>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                   {decouplingData.rows.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-3 py-6 text-center text-muted">
+                      <td colSpan={10} className="px-3 py-6 text-center text-[var(--so-muted)]">
                         No client rows for selected filters.
                       </td>
                     </tr>
@@ -2881,24 +3118,27 @@ export function B2BPreOrdersPanel({
           </section>
       ) : null}
 
-      {isB2bClientsOverview && selectedRegistryClientId ? (
-        <aside className="fixed inset-y-0 right-0 z-[80] flex w-full max-w-[24rem] flex-col border-l border-white/50 bg-white/95 shadow-2xl backdrop-blur-xl">
-          <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
-            <div>
-              <p className="crm-label mb-1">B2B client managers</p>
-              <h2 className="text-lg font-semibold text-slate-900">{selectedRegistryClientId}</h2>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSelectedRegistryClientId(null)}
-              className="crm-hover-lift inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-700"
-              aria-label="Close"
+      {isB2bClientsOverview ? (
+        <Drawer
+          open={Boolean(selectedRegistryClientId)}
+          onOpenChange={(open) => {
+            if (!open) setSelectedRegistryClientId(null);
+          }}
+          title="B2B client managers"
+          description={selectedRegistryClientId ?? undefined}
+          footer={
+            <Button
+              className="w-full"
+              loading={managerSaving}
+              disabled={managerSaving}
+              onClick={() => void saveRegistryManagers()}
             >
-              ×
-            </button>
-          </div>
-          <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4 text-sm">
-            {managerSaveError ? <p className="text-sm text-rose-700">{managerSaveError}</p> : null}
+              Save managers
+            </Button>
+          }
+        >
+          <div className="space-y-3 px-5 py-4 text-sm">
+            {managerSaveError ? <p className="text-sm text-rose-600">{managerSaveError}</p> : null}
             <label className="block">
               <span className="crm-label">Account Manager</span>
               <select
@@ -2906,7 +3146,7 @@ export function B2BPreOrdersPanel({
                 onChange={(event) =>
                   setManagerDraft((prev) => ({ ...prev, accountManagerUserId: event.target.value }))
                 }
-                className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700"
+                className="crm-input mt-1 block h-9 w-full px-2.5 text-sm"
               >
                 <option value="">Unassigned</option>
                 {accountManagerOptions.map((user) => (
@@ -2923,26 +3163,18 @@ export function B2BPreOrdersPanel({
                 onChange={(event) =>
                   setManagerDraft((prev) => ({ ...prev, salesManagerUserId: event.target.value }))
                 }
-                className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700"
+                className="crm-input mt-1 block h-9 w-full px-2.5 text-sm"
               >
                 <option value="">Unassigned</option>
                 {salesManagerOptions.map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.name} ({user.role})
-                      </option>
-                    ))}
+                  <option key={user.id} value={user.id}>
+                    {user.name} ({user.role})
+                  </option>
+                ))}
               </select>
             </label>
-            <button
-              type="button"
-              onClick={() => void saveRegistryManagers()}
-              disabled={managerSaving}
-              className="crm-button-primary w-full rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-60"
-            >
-              {managerSaving ? "Saving…" : "Save managers"}
-            </button>
           </div>
-        </aside>
+        </Drawer>
       ) : null}
     </section>
 

@@ -25,7 +25,8 @@ export function assertValidStatusTransition(from: SalesLeadStatus, to: SalesLead
 
 /**
  * Data-quality gates required before a lead can enter a given stage.
- * These only trigger on the transition itself, so historical records are untouched.
+ * Currently no stage has blocking requirements — leads move freely through
+ * the pipeline. The machinery is kept so gates can be reintroduced per-stage.
  */
 export type StageRequirementInput = {
   estimatedMonthlyPotential?: number | null;
@@ -37,17 +38,10 @@ const REQUIREMENT_MESSAGES: Record<string, string> = {
 };
 
 export function validateStageRequirements(
-  to: SalesLeadStatus,
-  lead: StageRequirementInput,
+  _to: SalesLeadStatus,
+  _lead: StageRequirementInput,
 ): string[] {
-  const missing: string[] = [];
-  if (to === "proposal_sent" || to === "negotiation") {
-    const potential = lead.estimatedMonthlyPotential;
-    if (!(typeof potential === "number" && Number.isFinite(potential) && potential > 0)) {
-      missing.push("estimatedMonthlyPotential");
-    }
-  }
-  return missing;
+  return [];
 }
 
 export class StageRequirementError extends Error {

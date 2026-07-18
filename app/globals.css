@@ -11,6 +11,32 @@
   --shadow-soft: 0 18px 40px rgba(13, 17, 23, 0.14);
   --shadow-lift: 0 22px 44px rgba(13, 17, 23, 0.24);
   --ease-ui: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Sales Operations flat design tokens — defined globally so portaled
+   * (Radix) content on <body> can resolve them; only crm-* class overrides
+   * are scoped to [data-module="sales-operation"]. */
+  --so-bg: #f5f6f8;
+  --so-surface: #ffffff;
+  --so-surface-2: #fafbfc;
+  --so-surface-hover: #f7f8fa;
+  --so-border: #e9ebf0;
+  --so-border-strong: #dfe2e8;
+  --so-text: #14161a;
+  --so-muted: #6b7280;
+  --so-muted-2: #8a919e;
+  --so-radius-sm: 8px;
+  --so-radius: 12px;
+  --so-radius-lg: 16px;
+  --so-radius-xl: 20px;
+  --so-shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --so-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --so-shadow-md: 0 2px 4px rgba(16, 24, 40, 0.04), 0 8px 20px rgba(16, 24, 40, 0.08);
+  --so-shadow-lg: 0 12px 32px rgba(16, 24, 40, 0.12), 0 3px 8px rgba(16, 24, 40, 0.06);
+  --so-accent: var(--accent);
+  --so-accent-strong: var(--accent-strong);
+  --so-accent-soft: rgba(255, 45, 45, 0.08);
+  --so-focus-ring: 0 0 0 3px rgba(255, 45, 45, 0.18);
+  --so-dur: 200ms;
 }
 
 @theme inline {
@@ -975,6 +1001,30 @@ details.rr-make-panel[open] > .rr-make-panel-body-clip > .rr-make-panel-body {
 
   .rr-primary-submit-wrap:hover {
     transform: none;
+  }
+}
+
+/* Popover/menu/tooltip entrance for portaled Radix content (rendered on <body>,
+ * outside the sales-operation scope). Additive + namespaced — safe globally. */
+@keyframes so-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.so-pop {
+  animation: so-pop-in 140ms var(--ease-ui);
+  transform-origin: var(--radix-popper-transform-origin, top center);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .so-pop {
+    animation: none;
   }
 }
 

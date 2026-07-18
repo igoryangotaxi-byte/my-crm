@@ -1,20 +1,17 @@
-"use client";
+import { Skeleton, SkeletonCard } from "@/components/ui/Skeleton";
 
 export default function SalesOperationLoading() {
   return (
-    <div className="crm-page">
-      <section className="glass-surface rounded-3xl p-5">
-        <div className="animate-pulse space-y-4">
-          <div className="h-6 w-44 rounded-lg bg-slate-200/80" />
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="h-24 rounded-2xl bg-slate-200/80" />
-            <div className="h-24 rounded-2xl bg-slate-200/80" />
-            <div className="h-24 rounded-2xl bg-slate-200/80" />
-          </div>
-          <div className="h-64 rounded-2xl bg-slate-200/70" />
-        </div>
-        <p className="mt-4 text-xs text-slate-500">Loading sales operation...</p>
-      </section>
+    <div data-module="sales-operation" className="crm-page">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <SkeletonCard key={i} />
+        ))}
+      </div>
+      <div className="rounded-[16px] border border-[var(--so-border)] bg-[var(--so-surface)] p-5 shadow-[var(--so-shadow-sm)]">
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="mt-4 h-64 w-full rounded-[12px]" />
+      </div>
     </div>
   );
 }

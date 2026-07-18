@@ -49,14 +49,27 @@
     "backToCrm": "Back to CRM",
     "tab": {
       "pipeline": "Pipeline",
-      "tasks": "My Tasks",
-      "clients": "Clients",
+      "mySpace": "My Space",
       "portfolio": "AM Portfolio",
       "b2bClients": "B2B Clients Overview",
+      "analyticsGroup": "Analytics",
+      "analyticsOverview": "Overview",
       "managerAnalytics": "Manager Analytics",
+      "performance": "Team Performance",
       "analytics": "Analytics",
       "automation": "Automation",
       "settings": "Settings"
+    },
+    "collapse": "Collapse",
+    "table": {
+      "search": "Search…",
+      "columns": "Columns",
+      "empty": "No results",
+      "page": "Page",
+      "of": "of",
+      "prev": "Prev",
+      "next": "Next",
+      "results": "results"
     },
     "loading": "Loading…",
     "addLead": "Add lead",
@@ -78,12 +91,8 @@
     "notePlaceholder": "Write a note…",
     "addNote": "Add note",
     "noCampaign": "No campaign",
-    "noClients": "No clients yet.",
-    "clientsSearchLabel": "Search clients",
-    "clientsSearchPlaceholder": "Search by name or corp_client_id…",
-    "clientsNoMatch": "No clients match this search.",
-    "clientsCount": "{count} of {total}",
     "clientsNeedsB2bLink": "Not linked to B2B client",
+    "signedAwaitingLinkTitle": "Signed clients awaiting B2B link",
     "signedAt": "Signed at",
     "statusEntered": "In column since {date}",
     "analyticsError": "Failed to load analytics.",
@@ -100,6 +109,14 @@
       "corpClient": "B2B client",
       "corpClientSearch": "Search by name or corp_client_id…",
       "corpClientNoMatch": "No clients match this search."
+    },
+    "potential": {
+      "set": "Set potential",
+      "edit": "Edit monthly potential",
+      "save": "Save potential",
+      "saved": "Monthly potential updated",
+      "saveFailed": "Could not update monthly potential",
+      "invalid": "Monthly potential must be zero or greater."
     },
     "filter": {
       "search": "Search name, company…",
@@ -118,7 +135,8 @@
     },
     "column": {
       "collapse": "Collapse column",
-      "expand": "Expand column"
+      "expand": "Expand column",
+      "empty": "No leads"
     },
     "card": {
       "days": "{count}d in stage",
@@ -178,6 +196,37 @@
       "empty": "No tasks match this filter.",
       "noLead": "No linked lead"
     },
+    "mySpace": {
+      "privacyHint": "Private to you — only visible with your account.",
+      "tab": {
+        "tasks": "My Tasks",
+        "assigned": "Assigned",
+        "notes": "Notes",
+        "scorecard": "Scorecard"
+      },
+      "tasks": {
+        "newTitle": "New personal task",
+        "titlePlaceholder": "What do you need to do?",
+        "descriptionPlaceholder": "Details (optional)",
+        "dueLabel": "Due date",
+        "add": "Add task",
+        "empty": "No personal tasks yet. Create one above.",
+        "created": "Task created",
+        "deleted": "Task deleted"
+      },
+      "notes": {
+        "newTitle": "New note",
+        "titlePlaceholder": "Title (optional)",
+        "bodyPlaceholder": "Write a note…",
+        "add": "Save note",
+        "empty": "No notes yet.",
+        "pin": "Pin",
+        "unpin": "Unpin",
+        "deleteConfirm": "Delete this note? This cannot be undone.",
+        "created": "Note saved",
+        "deleted": "Note deleted"
+      }
+    },
     "activity": {
       "title": "Activity",
       "empty": "No activity yet.",
@@ -231,7 +280,8 @@
       "call": "Call",
       "email": "Email",
       "whatsapp": "WhatsApp",
-      "sms": "SMS"
+      "sms": "SMS",
+      "logActivity": "Log"
     },
     "sms": {
       "to": "SMS to {phone}",
@@ -240,6 +290,17 @@
       "sending": "Sending…",
       "sent": "SMS sent",
       "failed": "Failed to send"
+    },
+    "logActivity": {
+      "call": "Call",
+      "meeting": "Meeting",
+      "whatsapp": "WhatsApp",
+      "hint": "Record an interaction for reporting",
+      "placeholder": "What happened? (notes)",
+      "save": "Log activity",
+      "saving": "Logging…",
+      "saved": "Activity logged",
+      "failed": "Failed to log activity"
     },
     "email": {
       "title": "Email",
@@ -368,18 +429,45 @@
       "unscheduled": "Unscheduled",
       "noForecast": "No open deals with an expected close date."
     },
+    "kpiMetric": {
+      "signed_count": "Signed",
+      "conversion_pct": "Conversion %",
+      "leads_worked": "Leads worked",
+      "activities_logged": "Activities",
+      "tasks_completed": "Tasks done",
+      "avg_cycle_days": "Avg cycle (days)",
+      "avg_response_hours": "Response (hrs)",
+      "weighted_forecast": "Weighted forecast",
+      "gmv": "GMV",
+      "trips": "Trips"
+    },
+    "performance": {
+      "periodType": "Period",
+      "month": "Month",
+      "quarter": "Quarter",
+      "manager": "Manager",
+      "metric": "Metric",
+      "actual": "Actual",
+      "target": "Target",
+      "attainment": "Attainment",
+      "overallAttainment": "Overall attainment",
+      "editTargetHint": "Enter a target to track attainment. Changes save automatically.",
+      "targetSaved": "Target saved.",
+      "targetSaveFailed": "Failed to save target.",
+      "noManagers": "No managers with activity in this period.",
+      "myScorecardTitle": "My scorecard",
+      "myScorecardSubtitle": "Your KPI actuals vs targets for the selected period",
+      "noTargets": "No targets set for this period yet.",
+      "loadError": "Failed to load performance data."
+    },
     "page": {
       "pipeline": {
         "title": "Pipeline",
         "subtitle": "Lead kanban — New, In Progress, Proposal Sent, Signed, Rejected"
       },
       "tasks": {
-        "title": "My Tasks",
-        "subtitle": "Your next steps across all leads — overdue, today, and upcoming"
-      },
-      "clients": {
-        "title": "Clients",
-        "subtitle": "B2B Overview clients + signed leads awaiting B2B link"
+        "title": "My Space",
+        "subtitle": "Your personal tasks, assigned work, notes, and scorecard"
       },
       "portfolio": {
         "title": "AM Portfolio",
@@ -400,6 +488,10 @@
       "managerAnalytics": {
         "title": "Manager Analytics",
         "subtitle": "Account and Sales Manager portfolio performance"
+      },
+      "performance": {
+        "title": "Team Performance",
+        "subtitle": "KPI actuals vs admin-set targets, per manager and period"
       },
       "automation": {
         "title": "Automation",
@@ -464,6 +556,7 @@
       "save": "Save workflow",
       "saving": "Saving…",
       "saved": "Saved",
+      "edit": "Edit",
       "delete": "Delete",
       "deleteConfirm": "Delete this workflow permanently?",
       "backToList": "All workflows",
@@ -526,6 +619,7 @@
       "empty": "No clients to show for the selected period.",
       "unassigned": "Unassigned",
       "clientCount": "{count} clients",
+      "groupsLabel": "portfolios",
       "daysAgo": "{days}d ago",
       "colClient": "Client",
       "colHealth": "Health",

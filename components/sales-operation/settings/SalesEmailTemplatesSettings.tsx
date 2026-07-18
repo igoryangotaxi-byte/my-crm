@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { EMAIL_TEMPLATE_VARIABLES } from "@/lib/sales-operation/email-render";
 import type { SalesEmailLocale, SalesEmailTemplate } from "@/lib/sales-operation/types";
 
@@ -9,6 +10,7 @@ const emptyDraft = { name: "", subject: "", body: "", locale: "en" as SalesEmail
 
 export function SalesEmailTemplatesSettings() {
   const t = useTranslations("salesOperation.settings");
+  const confirm = useConfirm();
   const [templates, setTemplates] = useState<SalesEmailTemplate[]>([]);
   const [draft, setDraft] = useState(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -69,7 +71,12 @@ export function SalesEmailTemplatesSettings() {
   };
 
   const remove = async (id: string) => {
-    if (!window.confirm(t("emailTemplateDeleteConfirm"))) return;
+    const ok = await confirm({
+      title: t("emailTemplateDeleteConfirm"),
+      confirmLabel: t("emailTemplateDelete"),
+      destructive: true,
+    });
+    if (!ok) return;
     setError(null);
     try {
       const res = await fetch(`/api/sales-operation/config/email-templates/${id}`, {
@@ -85,13 +92,13 @@ export function SalesEmailTemplatesSettings() {
   };
 
   return (
-    <div className="make-glass-card-static rounded-3xl p-4">
+    <div className="so-card p-4">
       <h2 className="crm-section-title mb-1">{t("emailTemplatesTitle")}</h2>
-      <p className="mb-3 text-sm text-slate-600">{t("emailTemplatesSubtitle")}</p>
+      <p className="mb-3 text-sm text-[var(--so-muted)]">{t("emailTemplatesSubtitle")}</p>
 
       {error ? <p className="mb-2 text-sm text-rose-700">{error}</p> : null}
 
-      <div className="grid gap-2 rounded-2xl border border-border bg-white/70 p-3 md:grid-cols-2">
+      <div className="grid gap-2 rounded-2xl border border-[var(--so-border)] bg-[var(--so-surface-2)] p-3 md:grid-cols-2">
         <label className="block text-sm">
           <span className="crm-label">{t("emailTemplateName")}</span>
           <input
@@ -149,7 +156,7 @@ export function SalesEmailTemplatesSettings() {
             <button
               type="button"
               onClick={resetForm}
-              className="rounded-lg border border-slate-200 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700"
+              className="so-focus-ring rounded-[10px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-4 py-1.5 text-sm font-semibold text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)]"
             >
               {t("emailTemplateCancelEdit")}
             </button>
@@ -164,10 +171,10 @@ export function SalesEmailTemplatesSettings() {
           {templates.map((template) => (
             <li
               key={template.id}
-              className="flex items-start justify-between gap-2 rounded-xl border border-border bg-white px-3 py-2"
+              className="flex items-start justify-between gap-2 rounded-xl border border-[var(--so-border)] bg-[var(--so-surface)] px-3 py-2"
             >
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900">
+                <p className="text-sm font-semibold text-[var(--so-text)]">
                   {template.name}
                   <span className="ml-2 text-[0.65rem] uppercase text-muted">{template.locale}</span>
                   {!template.isActive ? (
@@ -176,13 +183,13 @@ export function SalesEmailTemplatesSettings() {
                     </span>
                   ) : null}
                 </p>
-                <p className="truncate text-xs text-slate-500">{template.subject}</p>
+                <p className="truncate text-xs text-[var(--so-muted-2)]">{template.subject}</p>
               </div>
               <div className="flex shrink-0 gap-1.5">
                 <button
                   type="button"
                   onClick={() => edit(template)}
-                  className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600"
+                  className="so-focus-ring rounded-[10px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-2.5 py-1 text-xs font-semibold text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)]"
                 >
                   {t("emailTemplateEdit")}
                 </button>

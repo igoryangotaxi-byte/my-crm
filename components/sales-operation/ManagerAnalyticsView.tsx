@@ -2,8 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Download } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { Table } from "@/components/ui/Table";
+import { DataTable } from "@/components/ui/DataTable";
+import { StatTile } from "@/components/ui/StatTile";
+import { Button } from "@/components/ui/Button";
+import { dataTableLabels } from "@/lib/ui/data-table-labels";
 import { getManagerUserOptionsForRole } from "@/lib/sales-operation/crm-manager-users";
 import { rowsToCsv } from "@/lib/sales-operation/analytics";
 import type { ManagerPortfolioSummary } from "@/lib/sales-operation/manager-types";
@@ -102,25 +106,26 @@ export function ManagerAnalyticsView() {
   }, [loadSummary]);
 
   return (
-    <section className="crm-page">
-      <div className="mb-4 grid gap-3 rounded-3xl border border-white/70 bg-white/70 p-4 md:grid-cols-2 lg:grid-cols-5">
-        <label className="text-xs text-muted">
+    <>
+      <section className="crm-page">
+      <div className="mb-4 grid gap-3 rounded-[16px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-sm)] md:grid-cols-2 lg:grid-cols-5">
+        <label className="text-xs text-[var(--so-muted)]">
           {t("manager.role")}
           <select
             value={role}
             onChange={(event) => setRole(event.target.value as "account" | "sales")}
-            className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700"
+            className="crm-input mt-1 block h-9 w-full px-2.5 text-sm"
           >
             <option value="account">{t("manager.accountManager")}</option>
             <option value="sales">{t("manager.salesManager")}</option>
           </select>
         </label>
-        <label className="text-xs text-muted">
+        <label className="text-xs text-[var(--so-muted)]">
           {t("manager.manager")}
           <select
             value={managerUserId}
             onChange={(event) => setManagerUserId(event.target.value)}
-            className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700"
+            className="crm-input mt-1 block h-9 w-full px-2.5 text-sm"
           >
             {managerOptions.map((user) => (
               <option key={user.id} value={user.id}>
@@ -129,35 +134,31 @@ export function ManagerAnalyticsView() {
             ))}
           </select>
         </label>
-        <label className="text-xs text-muted">
+        <label className="text-xs text-[var(--so-muted)]">
           {t("manager.from")}
           <input
             type="date"
             value={from}
             onChange={(event) => setFrom(event.target.value)}
-            className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700"
+            className="crm-input mt-1 block h-9 w-full px-2.5 text-sm"
           />
         </label>
-        <label className="text-xs text-muted">
+        <label className="text-xs text-[var(--so-muted)]">
           {t("manager.to")}
           <input
             type="date"
             value={to}
             onChange={(event) => setTo(event.target.value)}
-            className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700"
+            className="crm-input mt-1 block h-9 w-full px-2.5 text-sm"
           />
         </label>
         <div className="flex items-end gap-2">
-          <button
-            type="button"
-            onClick={() => void loadSummary()}
-            disabled={loading}
-            className="crm-button-primary h-9 rounded-xl px-4 text-sm font-semibold disabled:opacity-60"
-          >
-            {loading ? t("loading") : t("manager.refresh")}
-          </button>
-          <button
-            type="button"
+          <Button loading={loading} disabled={loading} onClick={() => void loadSummary()}>
+            {t("manager.refresh")}
+          </Button>
+          <Button
+            variant="secondary"
+            leftIcon={<Download className="h-4 w-4" />}
             onClick={() =>
               summary &&
               downloadCsv(`manager-${summary.managerName || summary.managerUserId}.csv`, [
@@ -180,85 +181,90 @@ export function ManagerAnalyticsView() {
               ])
             }
             disabled={!summary || summary.clients.length === 0}
-            className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
           >
             {t("report.exportCsv")}
-          </button>
+          </Button>
         </div>
       </div>
 
-      {error ? <p className="mb-3 text-sm text-rose-700">{error}</p> : null}
+      {error ? <p className="mb-3 text-sm text-rose-600">{error}</p> : null}
 
       {summary ? (
         <>
           <div className="mb-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <article className="rounded-2xl border border-border bg-white/80 p-4">
-              <p className="text-sm text-muted">{t("manager.clientCount")}</p>
-              <p className="mt-1 text-2xl font-semibold text-slate-900">{summary.clientCount}</p>
-            </article>
-            <article className="rounded-2xl border border-border bg-white/80 p-4">
-              <p className="text-sm text-muted">{t("manager.trips")}</p>
-              <p className="mt-1 text-2xl font-semibold text-slate-900">
-                {summary.trips.toLocaleString("en-US")}
-              </p>
-            </article>
-            <article className="rounded-2xl border border-border bg-white/80 p-4">
-              <p className="text-sm text-muted">{t("manager.gmv")}</p>
-              <p className="mt-1 text-2xl font-semibold text-slate-900">{formatMoney(summary.gmv)}</p>
-            </article>
-            <article className="rounded-2xl border border-border bg-white/80 p-4">
-              <p className="text-sm text-muted">{t("manager.decouplingRate")}</p>
-              <p className="mt-1 text-2xl font-semibold text-slate-900">
-                {formatPercent(summary.decouplingRate)}
-              </p>
-            </article>
+            <StatTile label={t("manager.clientCount")} value={summary.clientCount} />
+            <StatTile label={t("manager.trips")} value={summary.trips.toLocaleString("en-US")} />
+            <StatTile label={t("manager.gmv")} value={formatMoney(summary.gmv)} />
+            <StatTile label={t("manager.decouplingRate")} value={formatPercent(summary.decouplingRate)} />
           </div>
 
-          <Table
-            emptyText={t("manager.noClients")}
+          <DataTable
             rows={summary.clients}
+            getRowKey={(row) => `${row.corpClientId}-${row.clientName}`}
+            searchable
+            getSearchText={(row) => `${row.clientName} ${row.corpClientId}`}
+            pageSize={20}
+            labels={dataTableLabels(t, { empty: t("manager.noClients") })}
             columns={[
               {
                 key: "client",
                 header: t("field.company"),
+                sortable: true,
+                sortValue: (row) => row.clientName,
                 render: (row) => (
                   <div>
-                    <p className="font-semibold text-slate-900">{row.clientName}</p>
-                    <p className="text-xs text-muted">{row.corpClientId}</p>
+                    <p className="font-semibold text-[var(--so-text)]">{row.clientName}</p>
+                    <p className="text-xs text-[var(--so-muted)]">{row.corpClientId}</p>
                   </div>
                 ),
               },
               {
                 key: "requests",
                 header: t("manager.requests"),
+                align: "right",
+                sortable: true,
+                sortValue: (row) => row.requests,
                 render: (row) => row.requests.toLocaleString("en-US"),
               },
               {
                 key: "trips",
                 header: t("manager.trips"),
+                align: "right",
+                sortable: true,
+                sortValue: (row) => row.trips,
                 render: (row) => row.trips.toLocaleString("en-US"),
               },
               {
                 key: "gmv",
                 header: t("manager.gmv"),
+                align: "right",
+                sortable: true,
+                sortValue: (row) => row.gmv,
                 render: (row) => formatMoney(row.gmv),
               },
               {
                 key: "decoupling",
                 header: t("manager.decoupling"),
+                align: "right",
+                sortable: true,
+                sortValue: (row) => row.decoupling,
                 render: (row) => formatMoney(row.decoupling),
               },
               {
                 key: "rate",
                 header: t("manager.decouplingRate"),
+                align: "right",
+                sortable: true,
+                sortValue: (row) => row.decouplingRate,
                 render: (row) => formatPercent(row.decouplingRate),
               },
             ]}
           />
         </>
       ) : loading ? (
-        <p className="text-sm text-muted">{t("loading")}</p>
+        <p className="text-sm text-[var(--so-muted)]">{t("loading")}</p>
       ) : null}
-    </section>
+      </section>
+    </>
   );
 }

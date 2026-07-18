@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { formatSalesDateTime } from "@/lib/sales-operation/display";
 import { sortTasks, taskDueBucket } from "@/lib/sales-operation/task-utils";
 import {
@@ -50,6 +51,7 @@ export function SalesLeadTasksSection({
   onTasksChanged?: () => void;
 }) {
   const t = useTranslations("salesOperation");
+  const confirm = useConfirm();
   const { users, currentUser } = useAuth();
   const [tasks, setTasks] = useState<SalesTask[]>([]);
   const [loading, setLoading] = useState(false);
@@ -163,7 +165,12 @@ export function SalesLeadTasksSection({
   };
 
   const remove = async (task: SalesTask) => {
-    if (!window.confirm(t("task.deleteConfirm"))) return;
+    const ok = await confirm({
+      title: t("task.deleteConfirm"),
+      confirmLabel: t("task.delete"),
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       const res = await fetch(`/api/sales-operation/leads/${leadId}/tasks/${task.id}`, {
         method: "DELETE",
@@ -180,22 +187,22 @@ export function SalesLeadTasksSection({
   const bucketTone: Record<string, string> = {
     overdue: "text-rose-700",
     today: "text-amber-700",
-    upcoming: "text-slate-600",
-    no_due: "text-slate-400",
-    done: "text-slate-400",
+    upcoming: "text-[var(--so-muted)]",
+    no_due: "text-[var(--so-muted-2)]",
+    done: "text-[var(--so-muted-2)]",
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-white/70 p-3">
+    <div className="so-card p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-slate-900">{t("task.title")}</p>
+        <p className="text-sm font-semibold text-[var(--so-text)]">{t("task.title")}</p>
         {loading ? (
           <span className="text-xs text-muted">{t("loading")}</span>
         ) : (
           <button
             type="button"
             onClick={startAdd}
-            className="rounded-lg border border-border px-2 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+            className="so-focus-ring rounded-[10px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-2.5 py-1 text-xs font-semibold text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)]"
           >
             {t("task.add")}
           </button>
@@ -225,8 +232,8 @@ export function SalesLeadTasksSection({
             return (
               <article
                 key={task.id}
-                className={`rounded-xl border border-slate-200/80 px-3 py-2 ${
-                  done ? "bg-slate-50/60" : "bg-slate-50"
+                className={`rounded-xl border border-[var(--so-border)] px-3 py-2 ${
+                  done ? "bg-[var(--so-surface-hover)]" : "bg-[var(--so-surface-2)]"
                 }`}
               >
                 <div className="flex items-start gap-2">
@@ -239,7 +246,7 @@ export function SalesLeadTasksSection({
                   <div className="min-w-0 flex-1">
                     <p
                       className={`truncate text-sm font-medium ${
-                        done ? "text-slate-400 line-through" : "text-slate-900"
+                        done ? "text-[var(--so-muted-2)] line-through" : "text-[var(--so-text)]"
                       }`}
                     >
                       {task.title}
@@ -254,12 +261,12 @@ export function SalesLeadTasksSection({
                       {task.dueAt ? (
                         <span className={bucketTone[bucket]}>{formatSalesDateTime(task.dueAt)}</span>
                       ) : (
-                        <span className="text-slate-400">{t("task.noDue")}</span>
+                        <span className="text-[var(--so-muted-2)]">{t("task.noDue")}</span>
                       )}
                       {task.assignedToName ? ` · ${task.assignedToName}` : ""}
                     </p>
                     {task.description ? (
-                      <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-600">
+                      <p className="mt-0.5 whitespace-pre-wrap text-xs text-[var(--so-muted)]">
                         {task.description}
                       </p>
                     ) : null}
@@ -269,7 +276,7 @@ export function SalesLeadTasksSection({
                   <button
                     type="button"
                     onClick={() => startEdit(task)}
-                    className="text-[11px] font-semibold text-slate-600 hover:underline"
+                    className="text-[11px] font-semibold text-[var(--so-muted)] hover:underline"
                   >
                     {t("task.edit")}
                   </button>
@@ -288,7 +295,7 @@ export function SalesLeadTasksSection({
       </div>
 
       {showForm ? (
-        <div className="mt-3 space-y-2 rounded-xl border border-border bg-white p-3">
+        <div className="mt-3 space-y-2 rounded-xl border border-[var(--so-border)] bg-[var(--so-surface)] p-3">
           <label className="block text-sm">
             <span className="crm-label">{t("task.name")}</span>
             <input
@@ -391,7 +398,7 @@ export function SalesLeadTasksSection({
             <button
               type="button"
               onClick={cancelForm}
-              className="rounded-xl border border-border px-3 py-1.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              className="so-focus-ring rounded-[10px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-3 py-1.5 text-sm font-semibold text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)]"
             >
               {t("cancel")}
             </button>

@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { automationNodeTypes } from "@/components/sales-operation/automation/AutomationNodes";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import type {
   ActionAssignManagerData,
   ActionCreateTaskData,
@@ -30,7 +31,8 @@ import type {
   StatusMatch,
   TriggerLeadStatusData,
 } from "@/lib/sales-operation/automation/types";
-import { SALES_LEAD_STATUSES, type SalesLeadStatus } from "@/lib/sales-operation/types";
+import { defaultPipelineStages } from "@/lib/sales-operation/display";
+import type { PipelineStage, SalesLeadStatus } from "@/lib/sales-operation/types";
 import type { CrmManagerUserOption } from "@/lib/sales-operation/crm-manager-users";
 
 function newId() {
@@ -45,6 +47,7 @@ type EditorInnerProps = {
 
 function EditorInner({ automationId }: EditorInnerProps) {
   const t = useTranslations("salesOperation");
+  const confirm = useConfirm();
   const router = useRouter();
   const rf = useReactFlow();
   const [name, setName] = useState("");
@@ -53,6 +56,7 @@ function EditorInner({ automationId }: EditorInnerProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [managers, setManagers] = useState<CrmManagerUserOption[]>([]);
+  const [stages, setStages] = useState<PipelineStage[]>(() => defaultPipelineStages());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saved" | "error">("idle");
@@ -74,9 +78,10 @@ function EditorInner({ automationId }: EditorInnerProps) {
       setLoading(true);
       setError(null);
       try {
-        const [autoRes, mgrRes] = await Promise.all([
+        const [autoRes, mgrRes, stagesRes] = await Promise.all([
           fetch(`/api/sales-operation/automations/${automationId}`, { cache: "no-store" }),
           fetch("/api/sales-operation/automations/managers", { cache: "no-store" }),
+          fetch("/api/sales-operation/config/stages", { cache: "no-store" }),
         ]);
         const autoData = (await autoRes.json()) as {
           ok?: boolean;
@@ -88,14 +93,47 @@ function EditorInner({ automationId }: EditorInnerProps) {
           managers?: CrmManagerUserOption[];
           error?: string;
         };
+        const stagesData = (await stagesRes.json()) as {
+          ok?: boolean;
+          stages?: PipelineStage[];
+        };
         if (!autoRes.ok || !autoData.ok || !autoData.automation) {
           throw new Error(autoData.error ?? "Failed to load automations.");
         }
         if (cancelled) return;
         const automation = autoData.automation;
+        const loadedStages =
+          stagesRes.ok && stagesData.ok && stagesData.stages?.length
+            ? stagesData.stages
+            : defaultPipelineStages();
+        const labelByStatus = Object.fromEntries(
+          loadedStages.map((stage) => [stage.key, stage.label]),
+        );
         setName(automation.name);
         setEnabled(automation.enabled);
-        setNodes(automation.graph.nodes ?? []);
+        setStages(loadedStages);
+        setNodes(
+          (automation.graph.nodes ?? []).map((node) =>
+            node.type === "triggerLeadStatus"
+              ? {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    fromStatusLabel:
+                      String(node.data.fromStatus ?? "*") === "*"
+                        ? t("automation.anyStatus")
+                        : labelByStatus[String(node.data.fromStatus)] ??
+                          String(node.data.fromStatus ?? ""),
+                    toStatusLabel:
+                      String(node.data.toStatus ?? "*") === "*"
+                        ? t("automation.anyStatus")
+                        : labelByStatus[String(node.data.toStatus)] ??
+                          String(node.data.toStatus ?? ""),
+                  },
+                }
+              : node,
+          ),
+        );
         setEdges(automation.graph.edges ?? []);
         setPendingViewport(automation.graph.viewport ?? null);
         if (mgrRes.ok && mgrData.ok) {
@@ -136,7 +174,12 @@ function EditorInner({ automationId }: EditorInnerProps) {
     const id = newId();
     let data: Record<string, unknown> = {};
     if (type === "triggerLeadStatus") {
-      data = { fromStatus: "*", toStatus: "in_progress" } satisfies TriggerLeadStatusData;
+      data = {
+        fromStatus: "*",
+        toStatus: "in_progress",
+        fromStatusLabel: t("automation.anyStatus"),
+        toStatusLabel: stages.find((stage) => stage.key === "in_progress")?.label ?? "In Progress",
+      };
     } else if (type === "actionSms") {
       data = {
         text: "Hi {{full_name}}, your request status is {{status}}.",
@@ -201,7 +244,12 @@ function EditorInner({ automationId }: EditorInnerProps) {
   };
 
   const deleteWorkflow = async () => {
-    if (!window.confirm(t("automation.deleteConfirm"))) return;
+    const ok = await confirm({
+      title: t("automation.deleteConfirm"),
+      confirmLabel: t("automation.delete"),
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       const res = await fetch(`/api/sales-operation/automations/${automationId}`, {
         method: "DELETE",
@@ -214,9 +262,13 @@ function EditorInner({ automationId }: EditorInnerProps) {
     }
   };
 
-  const statusOptions: Array<{ value: StatusMatch; label: string }> = [
+  const statusOptions: Array<{ value: StatusMatch; label: string; disabled?: boolean }> = [
     { value: "*", label: t("automation.anyStatus") },
-    ...SALES_LEAD_STATUSES.map((status) => ({ value: status as SalesLeadStatus, label: status })),
+    ...stages.map((stage) => ({
+      value: stage.key as SalesLeadStatus,
+      label: stage.label,
+      disabled: !stage.isActive,
+    })),
   ];
 
   if (loading) {
@@ -380,12 +432,18 @@ function EditorInner({ automationId }: EditorInnerProps) {
                 <select
                   className="crm-input w-full rounded-xl px-2 py-2 text-sm"
                   value={String((selectedNode.data as TriggerLeadStatusData).fromStatus ?? "*")}
-                  onChange={(event) =>
-                    updateSelectedData({ fromStatus: event.target.value as StatusMatch })
-                  }
+                  onChange={(event) => {
+                    const fromStatus = event.target.value as StatusMatch;
+                    updateSelectedData({
+                      fromStatus,
+                      fromStatusLabel:
+                        statusOptions.find((option) => option.value === fromStatus)?.label ??
+                        String(fromStatus),
+                    });
+                  }}
                 >
                   {statusOptions.map((opt) => (
-                    <option key={`from-${opt.value}`} value={opt.value}>
+                    <option key={`from-${opt.value}`} value={opt.value} disabled={opt.disabled}>
                       {opt.label}
                     </option>
                   ))}
@@ -396,12 +454,18 @@ function EditorInner({ automationId }: EditorInnerProps) {
                 <select
                   className="crm-input w-full rounded-xl px-2 py-2 text-sm"
                   value={String((selectedNode.data as TriggerLeadStatusData).toStatus ?? "*")}
-                  onChange={(event) =>
-                    updateSelectedData({ toStatus: event.target.value as StatusMatch })
-                  }
+                  onChange={(event) => {
+                    const toStatus = event.target.value as StatusMatch;
+                    updateSelectedData({
+                      toStatus,
+                      toStatusLabel:
+                        statusOptions.find((option) => option.value === toStatus)?.label ??
+                        String(toStatus),
+                    });
+                  }}
                 >
                   {statusOptions.map((opt) => (
-                    <option key={`to-${opt.value}`} value={opt.value}>
+                    <option key={`to-${opt.value}`} value={opt.value} disabled={opt.disabled}>
                       {opt.label}
                     </option>
                   ))}

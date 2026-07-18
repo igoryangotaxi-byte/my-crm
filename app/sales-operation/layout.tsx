@@ -1,5 +1,6 @@
 "use client";
 
+import "./sales-operation.css";
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";

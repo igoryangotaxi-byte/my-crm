@@ -45,6 +45,8 @@ async function main() {
     "supabase_sales_notifications.sql",
     "supabase_sales_data_quality.sql",
     "supabase_sales_email.sql",
+    "supabase_sales_kpi_targets.sql",
+    "supabase_sales_personal_space.sql",
   ];
   const client = new Client({
     connectionString: resolveDatabaseUrl(),

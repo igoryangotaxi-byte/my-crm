@@ -163,6 +163,50 @@ export type UpdateSalesTaskInput = Partial<
   CreateSalesTaskInput & { status: SalesTaskStatus }
 >;
 
+export type PersonalTask = {
+  id: string;
+  userId: string;
+  userEmail: string | null;
+  title: string;
+  description: string | null;
+  status: SalesTaskStatus;
+  priority: SalesTaskPriority;
+  dueAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreatePersonalTaskInput = {
+  title: string;
+  description?: string | null;
+  priority?: SalesTaskPriority;
+  dueAt?: string | null;
+};
+
+export type UpdatePersonalTaskInput = Partial<
+  CreatePersonalTaskInput & { status: SalesTaskStatus }
+>;
+
+export type PersonalNote = {
+  id: string;
+  userId: string;
+  userEmail: string | null;
+  title: string | null;
+  body: string;
+  pinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreatePersonalNoteInput = {
+  title?: string | null;
+  body: string;
+  pinned?: boolean;
+};
+
+export type UpdatePersonalNoteInput = Partial<CreatePersonalNoteInput>;
+
 export const SALES_ACTIVITY_TYPES = [
   "call",
   "email",
@@ -196,6 +240,7 @@ export const SALES_NOTIFICATION_TYPES = [
   "task_assigned",
   "lead_assigned",
   "task_due",
+  "mention",
   "automation",
   "system",
 ] as const;

@@ -1,5 +1,5 @@
-import { SalesMyTasksView } from "@/components/sales-operation/SalesMyTasksView";
+import { MySpaceView } from "@/components/sales-operation/MySpaceView";
 
 export default function SalesOperationTasksPage() {
-  return <SalesMyTasksView />;
+  return <MySpaceView />;
 }

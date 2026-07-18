@@ -49,14 +49,27 @@
     "backToCrm": "חזרה ל-CRM",
     "tab": {
       "pipeline": "צינור",
-      "tasks": "המשימות שלי",
-      "clients": "לקוחות",
+      "mySpace": "המרחב שלי",
       "portfolio": "תיק AM",
       "b2bClients": "סקירת לקוחות B2B",
+      "analyticsGroup": "אנליטיקה",
+      "analyticsOverview": "סקירה",
       "managerAnalytics": "אנליטיקת מנהלים",
+      "performance": "ביצועי צוות",
       "analytics": "אנליטיקה",
       "automation": "אוטומציה",
       "settings": "הגדרות"
+    },
+    "collapse": "צמצם",
+    "table": {
+      "search": "חיפוש…",
+      "columns": "עמודות",
+      "empty": "אין תוצאות",
+      "page": "עמוד",
+      "of": "מתוך",
+      "prev": "הקודם",
+      "next": "הבא",
+      "results": "תוצאות"
     },
     "loading": "טוען…",
     "addLead": "הוסף ליד",
@@ -78,12 +91,8 @@
     "notePlaceholder": "כתוב הערה…",
     "addNote": "הוסף הערה",
     "noCampaign": "ללא קמפיין",
-    "noClients": "אין לקוחות עדיין.",
-    "clientsSearchLabel": "חיפוש לקוחות",
-    "clientsSearchPlaceholder": "חיפוש לפי שם או corp_client_id…",
-    "clientsNoMatch": "לא נמצאו לקוחות התואמים לחיפוש.",
-    "clientsCount": "{count} מתוך {total}",
     "clientsNeedsB2bLink": "לא מקושר ללקוח B2B",
+    "signedAwaitingLinkTitle": "לקוחות חתומים הממתינים לקישור B2B",
     "signedAt": "נחתם ב",
     "statusEntered": "בעמודה מאז {date}",
     "analyticsError": "טעינת האנליטיקה נכשלה.",
@@ -100,6 +109,14 @@
       "corpClient": "לקוח B2B",
       "corpClientSearch": "חיפוש לפי שם או corp_client_id…",
       "corpClientNoMatch": "לא נמצאו לקוחות התואמים לחיפוש."
+    },
+    "potential": {
+      "set": "הגדר פוטנציאל",
+      "edit": "ערוך פוטנציאל חודשי",
+      "save": "שמור פוטנציאל",
+      "saved": "הפוטנציאל החודשי עודכן",
+      "saveFailed": "לא ניתן לעדכן את הפוטנציאל החודשי",
+      "invalid": "הפוטנציאל החודשי חייב להיות אפס או יותר."
     },
     "filter": {
       "search": "חיפוש שם, חברה…",
@@ -118,7 +135,8 @@
     },
     "column": {
       "collapse": "כווץ עמודה",
-      "expand": "הרחב עמודה"
+      "expand": "הרחב עמודה",
+      "empty": "אין לידים"
     },
     "card": {
       "days": "{count} ימים בשלב",
@@ -177,6 +195,37 @@
       "openCount": "{count} פתוחות",
       "empty": "אין משימות התואמות לסינון.",
       "noLead": "אין ליד מקושר"
+    },
+    "mySpace": {
+      "privacyHint": "פרטי לך — נראה רק מהחשבון שלך.",
+      "tab": {
+        "tasks": "המשימות שלי",
+        "assigned": "שהוקצו",
+        "notes": "הערות",
+        "scorecard": "כרטיס ביצועים"
+      },
+      "tasks": {
+        "newTitle": "משימה אישית חדשה",
+        "titlePlaceholder": "מה צריך לעשות?",
+        "descriptionPlaceholder": "פרטים (רשות)",
+        "dueLabel": "תאריך יעד",
+        "add": "הוסף משימה",
+        "empty": "אין עדיין משימות אישיות. צור אחת למעלה.",
+        "created": "המשימה נוצרה",
+        "deleted": "המשימה נמחקה"
+      },
+      "notes": {
+        "newTitle": "הערה חדשה",
+        "titlePlaceholder": "כותרת (רשות)",
+        "bodyPlaceholder": "כתוב הערה…",
+        "add": "שמור הערה",
+        "empty": "אין עדיין הערות.",
+        "pin": "הצמד",
+        "unpin": "בטל הצמדה",
+        "deleteConfirm": "למחוק הערה זו? לא ניתן לבטל.",
+        "created": "ההערה נשמרה",
+        "deleted": "ההערה נמחקה"
+      }
     },
     "activity": {
       "title": "פעילות",
@@ -252,7 +301,8 @@
       "call": "התקשר",
       "email": "אימייל",
       "whatsapp": "וואטסאפ",
-      "sms": "SMS"
+      "sms": "SMS",
+      "logActivity": "תיעוד"
     },
     "sms": {
       "to": "SMS אל {phone}",
@@ -261,6 +311,17 @@
       "sending": "שולח…",
       "sent": "ה-SMS נשלח",
       "failed": "השליחה נכשלה"
+    },
+    "logActivity": {
+      "call": "שיחה",
+      "meeting": "פגישה",
+      "whatsapp": "וואטסאפ",
+      "hint": "תעד אינטראקציה לצורכי דיווח",
+      "placeholder": "מה קרה? (הערות)",
+      "save": "תעד פעילות",
+      "saving": "מתעד…",
+      "saved": "הפעילות תועדה",
+      "failed": "תיעוד הפעילות נכשל"
     },
     "file": {
       "title": "קבצים",
@@ -368,18 +429,45 @@
       "unscheduled": "ללא תאריך",
       "noForecast": "אין עסקאות פתוחות עם תאריך סגירה צפוי."
     },
+    "kpiMetric": {
+      "signed_count": "נחתמו",
+      "conversion_pct": "המרה %",
+      "leads_worked": "לידים בטיפול",
+      "activities_logged": "פעילויות",
+      "tasks_completed": "משימות שהושלמו",
+      "avg_cycle_days": "מחזור ממוצע (ימים)",
+      "avg_response_hours": "תגובה (שעות)",
+      "weighted_forecast": "תחזית משוקללת",
+      "gmv": "GMV",
+      "trips": "נסיעות"
+    },
+    "performance": {
+      "periodType": "תקופה",
+      "month": "חודש",
+      "quarter": "רבעון",
+      "manager": "מנהל",
+      "metric": "מדד",
+      "actual": "בפועל",
+      "target": "יעד",
+      "attainment": "השגה",
+      "overallAttainment": "השגה כוללת",
+      "editTargetHint": "הזן יעד למעקב אחר השגה. השינויים נשמרים אוטומטית.",
+      "targetSaved": "היעד נשמר.",
+      "targetSaveFailed": "שמירת היעד נכשלה.",
+      "noManagers": "אין מנהלים עם פעילות בתקופה זו.",
+      "myScorecardTitle": "כרטיס הביצועים שלי",
+      "myScorecardSubtitle": "ביצועי ה-KPI שלך בפועל מול יעדים לתקופה שנבחרה",
+      "noTargets": "לא הוגדרו יעדים לתקופה זו עדיין.",
+      "loadError": "טעינת נתוני הביצועים נכשלה."
+    },
     "page": {
       "pipeline": {
         "title": "צינור",
         "subtitle": "קנבן לידים — חדש, בטיפול, הצעה נשלחה, חתום, נדחה"
       },
       "tasks": {
-        "title": "המשימות שלי",
-        "subtitle": "הצעדים הבאים שלך בכל הלידים — באיחור, היום וקרובים"
-      },
-      "clients": {
-        "title": "לקוחות",
-        "subtitle": "לקוחות מ-B2B Overview ולידים חתומים שממתינים לקישור B2B"
+        "title": "המרחב שלי",
+        "subtitle": "המשימות האישיות שלך, עבודה שהוקצתה, הערות וכרטיס ביצועים"
       },
       "portfolio": {
         "title": "תיק AM",
@@ -400,6 +488,10 @@
       "managerAnalytics": {
         "title": "אנליטיקת מנהלים",
         "subtitle": "ביצועי פורטפוליו Account Manager ו-Sales Manager"
+      },
+      "performance": {
+        "title": "ביצועי צוות",
+        "subtitle": "ביצועי KPI בפועל מול יעדים שהוגדרו על ידי מנהל, לפי מנהל ותקופה"
       },
       "automation": {
         "title": "אוטומציה",
@@ -464,6 +556,7 @@
       "save": "שמור תהליך",
       "saving": "שומר…",
       "saved": "נשמר",
+      "edit": "עריכה",
       "delete": "מחק",
       "deleteConfirm": "למחוק את התהליך לצמיתות?",
       "backToList": "כל התהליכים",
@@ -526,6 +619,7 @@
       "empty": "אין לקוחות להצגה בתקופה שנבחרה.",
       "unassigned": "לא משויך",
       "clientCount": "{count} לקוחות",
+      "groupsLabel": "תיקים",
       "daysAgo": "לפני {days} ימים",
       "colClient": "לקוח",
       "colHealth": "בריאות",

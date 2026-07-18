@@ -2,11 +2,9 @@ import { SalesClientDetailView } from "@/components/sales-operation/SalesClientD
 
 export const dynamic = "force-dynamic";
 
-type SalesClientDetailPageProps = {
-  params: Promise<{ id: string }>;
-};
+type PageProps = { params: Promise<{ id: string }> };
 
-export default async function SalesOperationClientDetailPage({ params }: SalesClientDetailPageProps) {
+export default async function SalesOperationB2BClientDetailPage({ params }: PageProps) {
   const { id } = await params;
   return <SalesClientDetailView clientId={id} />;
 }

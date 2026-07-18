@@ -4,10 +4,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
+import { Plus, Workflow } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { SkeletonCard } from "@/components/ui/Skeleton";
 import type { SalesAutomationListItem } from "@/lib/sales-operation/automation/types";
 
 export function SalesAutomationListView() {
   const t = useTranslations("salesOperation");
+  const confirm = useConfirm();
   const router = useRouter();
   const [items, setItems] = useState<SalesAutomationListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +86,12 @@ export function SalesAutomationListView() {
   };
 
   const deleteWorkflow = async (item: SalesAutomationListItem) => {
-    if (!window.confirm(t("automation.deleteConfirm"))) return;
+    const ok = await confirm({
+      title: t("automation.deleteConfirm"),
+      confirmLabel: t("automation.delete"),
+      destructive: true,
+    });
+    if (!ok) return;
     setError(null);
     try {
       const res = await fetch(`/api/sales-operation/automations/${item.id}`, { method: "DELETE" });
@@ -96,43 +107,59 @@ export function SalesAutomationListView() {
     <section className="crm-page space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="crm-subtitle">{t("page.automation.subtitle")}</p>
-        <button
-          type="button"
-          className="crm-button-primary rounded-xl px-4 py-2 text-sm font-semibold"
-          onClick={() => void createWorkflow()}
+        <Button
+          leftIcon={<Plus className="h-4 w-4" />}
+          loading={creating}
           disabled={creating}
+          onClick={() => void createWorkflow()}
         >
-          {creating ? t("saving") : t("automation.create")}
-        </button>
+          {t("automation.create")}
+        </Button>
       </div>
 
       {error ? (
-        <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <p className="rounded-[12px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {error}
         </p>
       ) : null}
 
       {loading ? (
-        <div className="crm-surface rounded-3xl p-8 text-sm text-muted">{t("loading")}</div>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
       ) : items.length === 0 ? (
-        <article className="crm-surface rounded-3xl p-8 text-sm text-slate-600">
-          {t("automation.empty")}
-        </article>
+        <div className="so-card">
+          <EmptyState
+            icon={<Workflow className="h-5 w-5" />}
+            title={t("automation.empty")}
+            action={
+              <Button
+                variant="secondary"
+                leftIcon={<Plus className="h-4 w-4" />}
+                onClick={() => void createWorkflow()}
+              >
+                {t("automation.create")}
+              </Button>
+            }
+          />
+        </div>
       ) : (
         <ul className="space-y-3">
           {items.map((item) => (
             <li
               key={item.id}
-              className="crm-surface crm-hover-lift flex flex-wrap items-center justify-between gap-3 rounded-3xl px-5 py-4"
+              className="so-card so-card-hover flex flex-wrap items-center justify-between gap-3 px-5 py-4"
             >
               <div className="min-w-0">
                 <Link
                   href={`/sales-operation/automation/${item.id}`}
-                  className="truncate text-base font-semibold text-slate-900 hover:text-red-700"
+                  className="truncate text-base font-semibold text-[var(--so-text)] transition-colors hover:text-[var(--so-accent-strong)]"
                 >
                   {item.name}
                 </Link>
-                <p className="mt-0.5 text-xs text-muted">
+                <p className="mt-0.5 text-xs text-[var(--so-muted)]">
                   {item.enabled ? t("automation.enabled") : t("automation.disabled")}
                 </p>
               </div>
@@ -140,24 +167,24 @@ export function SalesAutomationListView() {
                 <button
                   type="button"
                   onClick={() => void toggleEnabled(item)}
-                  className={`rounded-xl border px-3 py-1.5 text-xs font-semibold ${
+                  className={`so-focus-ring rounded-[10px] border px-3 py-1.5 text-xs font-semibold transition-colors ${
                     item.enabled
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                      : "border-slate-200 bg-white text-slate-700"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-[var(--so-border-strong)] bg-[var(--so-surface)] text-[var(--so-muted)]"
                   }`}
                 >
                   {item.enabled ? t("automation.enabled") : t("automation.disabled")}
                 </button>
                 <Link
                   href={`/sales-operation/automation/${item.id}`}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800"
+                  className="so-focus-ring rounded-[10px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)]"
                 >
-                  Edit
+                  {t("automation.edit")}
                 </Link>
                 <button
                   type="button"
                   onClick={() => void deleteWorkflow(item)}
-                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-800"
+                  className="so-focus-ring rounded-[10px] border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-100"
                 >
                   {t("automation.delete")}
                 </button>

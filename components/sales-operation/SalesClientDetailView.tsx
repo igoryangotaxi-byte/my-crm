@@ -8,6 +8,9 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { ClientHealthBadge } from "@/components/sales-operation/ClientHealthBadge";
 import { computeClientHealth } from "@/lib/sales-operation/client-health";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { Button } from "@/components/ui/Button";
+import { StatTile } from "@/components/ui/StatTile";
+import { PageHeader } from "@/components/ui/PageHeader";
 import {
   SalesClientManagerFields,
   type SalesClientManagerDraft,
@@ -181,10 +184,10 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
         <p className="text-sm text-rose-700">{error ?? "Client not found."}</p>
         <button
           type="button"
-          onClick={() => router.push("/sales-operation/clients")}
+          onClick={() => router.push("/sales-operation/b2b-clients")}
           className="mt-3 text-sm font-semibold text-accent hover:underline"
         >
-          ← {t("tab.clients")}
+          ← {t("tab.b2bClients")}
         </button>
       </section>
     );
@@ -192,19 +195,15 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
 
   return (
     <section className="crm-page space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <Link
-            href="/sales-operation/clients"
-            className="text-sm font-medium text-accent hover:underline"
-          >
-            ← {t("tab.clients")}
-          </Link>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">{client.fullName}</h1>
-          <p className="text-sm text-muted">
-            {t("signedAt")}: {formatSalesDateTime(client.signedAt)}
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      <PageHeader
+        breadcrumbs={[
+          { label: t("tab.b2bClients"), href: "/sales-operation/b2b-clients" },
+          { label: client.fullName },
+        ]}
+        title={client.fullName}
+        subtitle={`${t("signedAt")}: ${formatSalesDateTime(client.signedAt)}`}
+        meta={
+          <>
             {health ? <ClientHealthBadge status={health.status} score={health.score} /> : null}
             {client.accountManagerName ? (
               <span className="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[0.7rem] font-semibold text-sky-800">
@@ -217,25 +216,25 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
                 {client.salesManagerName ?? client.pendingSalesManagerName}
               </span>
             ) : null}
-          </div>
-        </div>
-        {client.campaignName ? (
-          <StatusBadge label={client.campaignName} tone="blue" />
-        ) : null}
-      </div>
+          </>
+        }
+        actions={
+          client.campaignName ? <StatusBadge label={client.campaignName} tone="blue" /> : null
+        }
+      />
 
-      {error ? <p className="text-sm text-rose-700">{error}</p> : null}
+      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
 
       {health ? (
-        <article className="rounded-3xl border border-white/70 bg-white/70 p-4">
+        <article className="so-card">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="crm-section-title mb-0">{t("health.title")}</h2>
             <ClientHealthBadge status={health.status} score={health.score} />
           </div>
           <div className="mt-3 flex flex-wrap gap-3 text-sm">
-            <span className="text-slate-700">
+            <span className="text-[var(--so-muted)]">
               {t("health.lastTrip")}:{" "}
-              <span className="font-semibold">
+              <span className="font-semibold text-[var(--so-text)]">
                 {health.daysSinceLastTrip === null
                   ? "—"
                   : t("portfolio.daysAgo", { days: health.daysSinceLastTrip })}
@@ -246,7 +245,7 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
                 {health.reasons.map((reason) => (
                   <span
                     key={reason}
-                    className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[0.7rem] font-medium text-slate-700"
+                    className="inline-flex rounded-full bg-[var(--so-surface-2)] px-2 py-0.5 text-[0.7rem] font-medium text-[var(--so-muted)]"
                   >
                     {t(`health.reason.${reason}`)}
                   </span>
@@ -258,44 +257,44 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <article className="rounded-3xl border border-white/70 bg-white/70 p-4">
+        <article className="so-card">
           <h2 className="crm-section-title mb-3">{t("clientDetails")}</h2>
           <dl className="grid gap-2 text-sm">
             <div>
               <dt className="crm-label">{t("field.email")}</dt>
-              <dd className="text-slate-800">{client.email ?? "—"}</dd>
+              <dd className="text-[var(--so-text)]">{client.email ?? "—"}</dd>
             </div>
             <div>
               <dt className="crm-label">{t("field.phone")}</dt>
-              <dd className="text-slate-800">{client.phone ?? "—"}</dd>
+              <dd className="text-[var(--so-text)]">{client.phone ?? "—"}</dd>
             </div>
             <div>
               <dt className="crm-label">{t("field.company")}</dt>
-              <dd className="text-slate-800">{client.companyName ?? "—"}</dd>
+              <dd className="text-[var(--so-text)]">{client.companyName ?? "—"}</dd>
             </div>
             <div>
               <dt className="crm-label">{t("field.corpClient")}</dt>
-              <dd className="text-slate-800">
+              <dd className="text-[var(--so-text)]">
                 {client.corpClientName ?? client.corpClientId ?? "—"}
               </dd>
             </div>
             <div>
               <dt className="crm-label">{t("manager.accountManager")}</dt>
-              <dd className="text-slate-800">{client.accountManagerName ?? "—"}</dd>
+              <dd className="text-[var(--so-text)]">{client.accountManagerName ?? "—"}</dd>
             </div>
             <div>
               <dt className="crm-label">{t("manager.salesManager")}</dt>
-              <dd className="text-slate-800">
+              <dd className="text-[var(--so-text)]">
                 {client.salesManagerName ?? client.pendingSalesManagerName ?? "—"}
               </dd>
             </div>
           </dl>
           {!client.corpClientId ? (
-            <p className="mt-3 text-xs text-muted">{t("client.linkB2BHint")}</p>
+            <p className="mt-3 text-xs text-[var(--so-muted)]">{t("client.linkB2BHint")}</p>
           ) : null}
         </article>
 
-        <article className="rounded-3xl border border-white/70 bg-white/70 p-4">
+        <article className="so-card">
           <h2 className="crm-section-title mb-3">{t("manager.editManagers")}</h2>
           <SalesClientManagerFields
             users={users}
@@ -305,29 +304,32 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
             pendingSalesManagerName={client.pendingSalesManagerName}
             assignedSalesManagerName={client.salesManagerName}
           />
-          <button
-            type="button"
-            onClick={() => void saveManagers()}
+          <Button
+            className="mt-3"
+            loading={saving}
             disabled={saving}
-            className="crm-button-primary mt-3 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-60"
+            onClick={() => void saveManagers()}
           >
-            {saving ? t("saving") : t("saveLead")}
-          </button>
+            {t("saveLead")}
+          </Button>
         </article>
       </div>
 
-      <article className="rounded-3xl border border-white/70 bg-white/70 p-4">
+      <article className="so-card">
         <h2 className="crm-section-title mb-3">{t("notes")}</h2>
         {notes.length === 0 ? (
-          <p className="text-sm text-muted">{t("noNotes")}</p>
+          <p className="text-sm text-[var(--so-muted)]">{t("noNotes")}</p>
         ) : (
           <div className="space-y-2">
             {notes.map((note) => (
-              <div key={note.id} className="rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-2">
-                <p className="text-xs text-muted">
+              <div
+                key={note.id}
+                className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] px-3 py-2"
+              >
+                <p className="text-xs text-[var(--so-muted)]">
                   {note.authorName} · {formatSalesDateTime(note.createdAt)}
                 </p>
-                <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{note.body}</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--so-text)]">{note.body}</p>
               </div>
             ))}
           </div>
@@ -336,11 +338,11 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
 
       {client.corpClientId ? (
         <>
-          <article className="rounded-3xl border border-white/70 bg-white/70 p-4">
+          <article className="so-card">
             <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
               <h2 className="crm-section-title mb-0">{t("client.b2bPerformance")}</h2>
               <div className="flex flex-wrap items-end gap-2">
-                <label className="text-xs text-muted">
+                <label className="text-xs text-[var(--so-muted)]">
                   {t("manager.from")}
                   <input
                     type="date"
@@ -349,7 +351,7 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
                     className="crm-input mt-1 block h-9 px-2.5 text-sm"
                   />
                 </label>
-                <label className="text-xs text-muted">
+                <label className="text-xs text-[var(--so-muted)]">
                   {t("manager.to")}
                   <input
                     type="date"
@@ -358,40 +360,27 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
                     className="crm-input mt-1 block h-9 px-2.5 text-sm"
                   />
                 </label>
-                <button
-                  type="button"
-                  onClick={() => void loadDetail()}
-                  className="crm-button-primary h-9 rounded-lg px-3 text-sm font-semibold"
-                >
+                <Button variant="secondary" onClick={() => void loadDetail()}>
                   {t("manager.refresh")}
-                </button>
+                </Button>
               </div>
             </div>
             {metrics ? (
               <div className="grid gap-3 md:grid-cols-4">
-                <div className="rounded-2xl border border-border bg-white/80 p-3">
-                  <p className="text-xs text-muted">{t("manager.requests")}</p>
-                  <p className="text-xl font-semibold">{metrics.requests.toLocaleString("en-US")}</p>
-                </div>
-                <div className="rounded-2xl border border-border bg-white/80 p-3">
-                  <p className="text-xs text-muted">{t("manager.trips")}</p>
-                  <p className="text-xl font-semibold">{metrics.trips.toLocaleString("en-US")}</p>
-                </div>
-                <div className="rounded-2xl border border-border bg-white/80 p-3">
-                  <p className="text-xs text-muted">{t("manager.gmv")}</p>
-                  <p className="text-xl font-semibold">{formatMoney(metrics.gmv)}</p>
-                </div>
-                <div className="rounded-2xl border border-border bg-white/80 p-3">
-                  <p className="text-xs text-muted">{t("manager.decouplingRate")}</p>
-                  <p className="text-xl font-semibold">{formatPercent(metrics.decouplingRate)}</p>
-                </div>
+                <StatTile label={t("manager.requests")} value={metrics.requests.toLocaleString("en-US")} />
+                <StatTile label={t("manager.trips")} value={metrics.trips.toLocaleString("en-US")} />
+                <StatTile label={t("manager.gmv")} value={formatMoney(metrics.gmv)} />
+                <StatTile
+                  label={t("manager.decouplingRate")}
+                  value={formatPercent(metrics.decouplingRate)}
+                />
               </div>
             ) : (
-              <p className="text-sm text-muted">{t("client.noB2BMetrics")}</p>
+              <p className="text-sm text-[var(--so-muted)]">{t("client.noB2BMetrics")}</p>
             )}
           </article>
 
-          <article className="rounded-3xl border border-white/70 bg-white/70 p-4">
+          <article className="so-card">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="crm-section-title mb-0">{t("client.recentTrips")}</h2>
               <Link
@@ -407,22 +396,22 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
               </Link>
             </div>
             {trips.length === 0 ? (
-              <p className="text-sm text-muted">{t("client.noTripsInRange")}</p>
+              <p className="text-sm text-[var(--so-muted)]">{t("client.noTripsInRange")}</p>
             ) : (
-              <div className="overflow-auto rounded-2xl border border-border/70">
+              <div className="overflow-auto rounded-[12px] border border-[var(--so-border)]">
                 <table className="min-w-full text-xs">
-                  <thead className="bg-slate-50 text-slate-600">
+                  <thead className="bg-[var(--so-surface-2)] text-[var(--so-muted)]">
                     <tr>
-                      <th className="px-3 py-2 text-left">{t("client.tripDate")}</th>
-                      <th className="px-3 py-2 text-left">{t("client.orderId")}</th>
-                      <th className="px-3 py-2 text-right">{t("manager.gmv")}</th>
-                      <th className="px-3 py-2 text-right">{t("manager.decoupling")}</th>
-                      <th className="px-3 py-2 text-left">{t("field.status")}</th>
+                      <th className="px-3 py-2 text-left font-semibold">{t("client.tripDate")}</th>
+                      <th className="px-3 py-2 text-left font-semibold">{t("client.orderId")}</th>
+                      <th className="px-3 py-2 text-right font-semibold">{t("manager.gmv")}</th>
+                      <th className="px-3 py-2 text-right font-semibold">{t("manager.decoupling")}</th>
+                      <th className="px-3 py-2 text-left font-semibold">{t("field.status")}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border/70">
+                  <tbody className="divide-y divide-[var(--so-border)]">
                     {trips.map((trip) => (
-                      <tr key={trip.orderId}>
+                      <tr key={trip.orderId} className="transition-colors hover:bg-[var(--so-surface-hover)]">
                         <td className="px-3 py-2">{formatDateTime(trip.scheduledAt)}</td>
                         <td className="px-3 py-2 font-mono text-[11px]">{trip.orderId}</td>
                         <td className="px-3 py-2 text-right">{formatMoney(trip.clientPaid)}</td>
@@ -439,7 +428,7 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
           </article>
         </>
       ) : (
-        <article className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <article className="rounded-[16px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           {t("client.linkB2BHint")}
         </article>
       )}

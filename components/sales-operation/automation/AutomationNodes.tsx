@@ -10,7 +10,7 @@ import type {
 } from "@/lib/sales-operation/automation/types";
 
 const shell =
-  "min-w-[180px] max-w-[220px] rounded-2xl border border-white/70 bg-white/95 px-3 py-2.5 shadow-[0_10px_28px_rgba(15,23,42,0.12)]";
+  "min-w-[180px] max-w-[220px] rounded-[14px] border border-[var(--so-border)] bg-[var(--so-surface)] px-3 py-2.5 shadow-[var(--so-shadow-sm)]";
 
 function NodeChrome({
   title,
@@ -46,7 +46,7 @@ function NodeChrome({
       <p className={`mb-1 inline-flex rounded-lg px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide ${badge}`}>
         {title}
       </p>
-      <div className="text-xs text-slate-700">{children}</div>
+      <div className="text-xs text-[var(--so-muted)]">{children}</div>
       {showSource ? (
         <Handle
           type="source"
@@ -59,12 +59,15 @@ function NodeChrome({
 }
 
 export function TriggerLeadStatusNode({ data }: NodeProps) {
-  const d = data as TriggerLeadStatusData;
+  const d = data as TriggerLeadStatusData & {
+    fromStatusLabel?: string;
+    toStatusLabel?: string;
+  };
   return (
     <NodeChrome title="Trigger" tone="trigger" showTarget={false}>
-      <p className="font-medium text-slate-900">Lead status</p>
-      <p className="mt-1 text-[0.7rem] text-slate-500">
-        {d.fromStatus ?? "*"} → {d.toStatus ?? "*"}
+      <p className="font-medium text-[var(--so-text)]">Lead status</p>
+      <p className="mt-1 text-[0.7rem] text-[var(--so-muted-2)]">
+        {d.fromStatusLabel ?? d.fromStatus ?? "*"} → {d.toStatusLabel ?? d.toStatus ?? "*"}
       </p>
     </NodeChrome>
   );
@@ -75,8 +78,8 @@ export function ActionSmsNode({ data }: NodeProps) {
   const preview = (d.text ?? "").trim();
   return (
     <NodeChrome title="SMS" tone="sms">
-      <p className="font-medium text-slate-900">InforU SMS</p>
-      <p className="mt-1 line-clamp-2 text-[0.7rem] text-slate-500">
+      <p className="font-medium text-[var(--so-text)]">InforU SMS</p>
+      <p className="mt-1 line-clamp-2 text-[0.7rem] text-[var(--so-muted-2)]">
         {preview || "Configure message…"}
       </p>
     </NodeChrome>
@@ -91,8 +94,8 @@ export function ActionAssignManagerNode({ data }: NodeProps) {
       : d.userName || d.userId || "Pick manager…";
   return (
     <NodeChrome title="Assign" tone="assign">
-      <p className="font-medium text-slate-900">Manager</p>
-      <p className="mt-1 line-clamp-2 text-[0.7rem] text-slate-500">{label}</p>
+      <p className="font-medium text-[var(--so-text)]">Manager</p>
+      <p className="mt-1 line-clamp-2 text-[0.7rem] text-[var(--so-muted-2)]">{label}</p>
     </NodeChrome>
   );
 }
@@ -102,8 +105,8 @@ export function ActionCreateTaskNode({ data }: NodeProps) {
   const preview = (d.title ?? "").trim();
   return (
     <NodeChrome title="Task" tone="task">
-      <p className="font-medium text-slate-900">Create task</p>
-      <p className="mt-1 line-clamp-2 text-[0.7rem] text-slate-500">
+      <p className="font-medium text-[var(--so-text)]">Create task</p>
+      <p className="mt-1 line-clamp-2 text-[0.7rem] text-[var(--so-muted-2)]">
         {preview || "Configure task…"}
       </p>
     </NodeChrome>

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Bell } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type { SalesNotification } from "@/lib/sales-operation/types";
 
@@ -102,58 +103,55 @@ export function SalesNotificationsBell() {
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="relative flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50"
+        className="so-focus-ring relative flex h-9 w-9 items-center justify-center rounded-[10px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] text-[var(--so-muted)] transition-colors hover:bg-[var(--so-surface-hover)] hover:text-[var(--so-text)]"
         aria-label={t("notifications.title")}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-        </svg>
+        <Bell className="h-[18px] w-[18px]" />
         {unread > 0 ? (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[0.6rem] font-bold text-white">
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--so-accent)] px-1 text-[0.6rem] font-bold text-white">
             {unread > 9 ? "9+" : unread}
           </span>
         ) : null}
       </button>
       {open ? (
         <div
-          className={`crm-surface absolute z-30 mt-2 max-h-[26rem] w-80 overflow-y-auto rounded-2xl p-2 ${
+          className={`absolute z-30 mt-2 max-h-[26rem] w-80 overflow-y-auto rounded-[14px] border border-[var(--so-border)] bg-[var(--so-surface)] p-2 shadow-[var(--so-shadow-lg)] ${
             language === "he" ? "left-0" : "right-0"
           }`}
         >
           <div className="flex items-center justify-between px-2 py-1.5">
-            <p className="text-sm font-semibold text-slate-900">{t("notifications.title")}</p>
+            <p className="text-sm font-semibold text-[var(--so-text)]">{t("notifications.title")}</p>
             {unread > 0 ? (
               <button
                 type="button"
                 onClick={() => void onMarkAll()}
-                className="text-xs font-semibold text-red-700 hover:underline"
+                className="text-xs font-semibold text-[var(--so-accent-strong)] hover:underline"
               >
                 {t("notifications.markAllRead")}
               </button>
             ) : null}
           </div>
           {items.length === 0 ? (
-            <p className="px-2 py-6 text-center text-xs text-muted">{t("notifications.empty")}</p>
+            <p className="px-2 py-6 text-center text-xs text-[var(--so-muted)]">{t("notifications.empty")}</p>
           ) : (
-            <ul className="space-y-1">
+            <ul className="space-y-0.5">
               {items.map((item) => (
                 <li key={item.id}>
                   <button
                     type="button"
                     onClick={() => void onItemClick(item)}
-                    className={`w-full rounded-xl px-2.5 py-2 text-left transition hover:bg-slate-50 ${
-                      item.isRead ? "" : "bg-red-50/60"
+                    className={`so-focus-ring w-full rounded-[10px] px-2.5 py-2 text-left transition-colors hover:bg-[var(--so-surface-hover)] ${
+                      item.isRead ? "" : "bg-[var(--so-accent-soft)]"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-xs font-semibold text-slate-900">{item.title}</p>
-                      <span className="shrink-0 text-[0.65rem] text-muted">
+                      <p className="text-xs font-semibold text-[var(--so-text)]">{item.title}</p>
+                      <span className="shrink-0 text-[0.65rem] text-[var(--so-muted-2)]">
                         {timeAgo(item.createdAt)}
                       </span>
                     </div>
                     {item.body ? (
-                      <p className="mt-0.5 line-clamp-2 text-[0.7rem] text-slate-500">{item.body}</p>
+                      <p className="mt-0.5 line-clamp-2 text-[0.7rem] text-[var(--so-muted)]">{item.body}</p>
                     ) : null}
                   </button>
                 </li>
