@@ -6,6 +6,24 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-07-18",
+    title: "Sales Operation: premium redesign, free pipeline moves & config everywhere (0.2.42)",
+    notes:
+      "App version 0.2.42. A large, additive UX pass over the whole Sales Operation module plus two workflow fixes. (1) Pipeline movement is free again: leads no longer bounce back when dropped into Negotiation/Proposal sent — the blocking \"monthly potential required\" gate was removed, while the safe transitions are kept (no New→Signed/Rejected shortcut, Signed stays terminal). (2) Estimated monthly potential (₪) is now editable where the work happens: inline on each pipeline card (set/edit with optimistic save, toast + rollback on error) and in the lead's Overview panel, not only in the Add-lead dialog. (3) Settings for Pipeline stages and Business segments now drive the whole module: renamed/reordered stages and segments appear consistently on the board, lead detail, activity history, analytics and the automation editor; inactive segments can't be assigned to new leads; a stage that still holds leads stays visible instead of hiding them. (4) Premium 2026 UI refresh across the module — flat surfaces (no glass/gradients), consistent tokens, unified toast + confirm dialogs, page headers with breadcrumbs, richer KPI tiles with sparklines and previous-period deltas, virtualized B2B tables with bulk actions, skeleton/empty states, and accessible focus/keyboard behavior. No existing APIs, routes or data structures were changed; all changes are backward-compatible. (fec39e8c)",
+  },
+  {
+    date: "2026-07-17",
+    title: "Sales Operation: KPIs, targets & Team Performance (0.2.41)",
+    notes:
+      "App version 0.2.41. New KPI/performance layer inspired by Monday CRM, built additively on existing data. (1) Per-manager KPI attribution computed from the pipeline + B2B Overview: signed count, conversion %, leads worked, activities logged, tasks completed, avg cycle days, avg response hours, weighted forecast, GMV and trips. New API: /sales-operation/analytics/kpi (GET). (2) Admin-set targets per manager with a flexible period (month or quarter). New table sales_kpi_targets (applied to Supabase) and API /sales-operation/kpi-targets (GET/POST) + /[id] (DELETE); write requires Settings access, managers can read their own. (3) New admin \"Team Performance\" page (/sales-operation/performance) with an actual-vs-target matrix, inline target editing, attainment % color coding, period switcher and CSV export; and a \"My Scorecard\" section on Manager Analytics showing each manager their own KPIs vs targets. (4) Lifecycle polish: a \"Log\" quick-action on the lead card to record call/meeting/whatsapp activities (feeds activity KPIs), a daily task-due reminder cron (/api/sales-operation/cron/task-reminders, protected by CRON_SECRET) that emits task_due notifications for overdue/soon-due tasks, a default \"my leads\" filter for non-admins on the pipeline board (still switchable), and @mention notifications in notes. No existing endpoints or tables were repurposed.",
+  },
+  {
+    date: "2026-07-17",
+    title: "Sales Operation: Clients merged into B2B Client Overview (0.2.40)",
+    notes:
+      "App version 0.2.40. The standalone Clients section has been removed and its useful parts folded into B2B Client Overview. B2B Client Overview now also shows a \"Signed clients awaiting B2B link\" table for signed pipeline clients that aren't yet tied to a corp client, each linking to its client profile. The client profile card (details, health, notes, B2B performance, recent trips) moved to /sales-operation/b2b-clients/[id]; links from AM Portfolio and Global Search now open it there. The Clients item was dropped from the sidebar. Manager assignment, search and trip metrics remain in B2B Client Overview.",
+  },
+  {
     date: "2026-07-17",
     title: "Sales pipeline fixes: layout, lead tabs, tasks, inline SMS (0.2.39)",
     notes:
