@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-07-19",
+    title: "Sales Operation: My Space task hub & pipeline stage gates (0.2.43)",
+    notes:
+      "App version 0.2.43. Two additive workflow upgrades. (1) My Space becomes a full task hub: a new \"Created by Me\" tab alongside My Tasks / Assigned, and clicking any task opens a right-side detail Drawer with an editable result summary, a full activity timeline (create / status / reassign / due / summary / follow-up), a Reassign action (assignee + due + comment, notifies the new owner) and a Create-follow-up action (chained via parent task). The same Drawer opens from a lead's Tasks tab, so there's one editor everywhere. (2) Pipeline stage gates are back and server-enforced — no more optimistic drag-and-drop bounce. Moving a lead forward pre-flights on the server and, if requirements are missing, opens a Stage Gate modal that only asks for what's needed: New→In Progress needs a reachable contact + monthly potential; In Progress→Proposal Sent needs a pricing/proposal; Proposal Sent→Negotiation creates a follow-up task in the same step; Negotiation→Signed needs a contract number or Client ID plus an Account Manager. Backward and Rejected moves stay free; Signed remains terminal. Signing now also orchestrates handover: convert to client + an \"Onboard Client\" task for the owner and a \"First Client Call\" task for the selected Account Manager. Lead Overview gains pricing/proposal, proposal amount, contract number and Corp Client ID fields. New API: /leads/[id]/transition (POST, with preflight + structured 422), /tasks/[id] (GET/PATCH), /tasks/[id]/follow-up (POST), /tasks?scope=created. SQL (applied to Supabase): supabase_sales_task_hub.sql (result_summary, parent_task_id, sales_task_events) and supabase_sales_stage_gates.sql (pricing_proposal, pricing_amount, contract_number, corp_client_id on leads). Backward-compatible; EN/HE translations included. (dfe779f8)",
+  },
+  {
     date: "2026-07-18",
     title: "Sales Operation: premium redesign, free pipeline moves & config everywhere (0.2.42)",
     notes:
