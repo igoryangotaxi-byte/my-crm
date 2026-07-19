@@ -6,6 +6,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { formatSalesDateTime } from "@/lib/sales-operation/display";
 import { sortTasks, taskDueBucket } from "@/lib/sales-operation/task-utils";
+import { TaskDetailDrawer } from "@/components/sales-operation/tasks/TaskDetailDrawer";
 import {
   SALES_TASK_PRIORITIES,
   SALES_TASK_TYPES,
@@ -60,6 +61,7 @@ export function SalesLeadTasksSection({
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<TaskDraft>(emptyDraft);
+  const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -243,7 +245,11 @@ export function SalesLeadTasksSection({
                     checked={done}
                     onChange={() => void setStatus(task, done ? "open" : "done")}
                   />
-                  <div className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left"
+                    onClick={() => setDrawerTaskId(task.id)}
+                  >
                     <p
                       className={`truncate text-sm font-medium ${
                         done ? "text-[var(--so-muted-2)] line-through" : "text-[var(--so-text)]"
@@ -270,12 +276,12 @@ export function SalesLeadTasksSection({
                         {task.description}
                       </p>
                     ) : null}
-                  </div>
+                  </button>
                 </div>
                 <div className="mt-1 flex gap-2 pl-6">
                   <button
                     type="button"
-                    onClick={() => startEdit(task)}
+                    onClick={() => setDrawerTaskId(task.id)}
                     className="text-[11px] font-semibold text-[var(--so-muted)] hover:underline"
                   >
                     {t("task.edit")}
@@ -407,6 +413,19 @@ export function SalesLeadTasksSection({
       ) : null}
 
       {error ? <p className="mt-2 text-xs text-rose-700">{error}</p> : null}
+
+      <TaskDetailDrawer
+        open={Boolean(drawerTaskId)}
+        onOpenChange={(next) => {
+          if (!next) setDrawerTaskId(null);
+        }}
+        kind="lead"
+        taskId={drawerTaskId}
+        onChanged={() => {
+          void load();
+          onTasksChanged?.();
+        }}
+      />
     </div>
   );
 }

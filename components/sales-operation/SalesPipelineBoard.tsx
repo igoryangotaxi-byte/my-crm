@@ -21,6 +21,10 @@ import { SalesLeadActivityFeed } from "@/components/sales-operation/SalesLeadAct
 import { SalesLeadFilesSection } from "@/components/sales-operation/SalesLeadFilesSection";
 import { SalesLeadEmailSection } from "@/components/sales-operation/SalesLeadEmailSection";
 import {
+  StageGateModal,
+  type StageGateConfirmPayload,
+} from "@/components/sales-operation/StageGateModal";
+import {
   computeWeightedPipelineValue,
   defaultPipelineStages,
   formatSalesDate,
@@ -28,7 +32,10 @@ import {
   SALES_STATUS_COLUMNS,
   type StatusTone,
 } from "@/lib/sales-operation/display";
-import { isValidStatusTransition } from "@/lib/sales-operation/status-transitions";
+import {
+  isValidStatusTransition,
+  type StageMissingField,
+} from "@/lib/sales-operation/status-transitions";
 import type { DuplicateMatch } from "@/lib/sales-operation/dedup";
 import type { B2BClientRegistryEntry } from "@/lib/sales-operation/manager-types";
 import {
@@ -49,6 +56,7 @@ type LeadDetailSidebarProps = {
   onClose: () => void;
   onUpdated: (lead: SalesLead) => void;
   onDeleted: (leadId: string) => void;
+  onRequestStageTransition?: (lead: SalesLead, toStatus: SalesLeadStatus) => void;
 };
 
 const emptyDraft = {
@@ -59,6 +67,10 @@ const emptyDraft = {
   campaignName: "",
   segmentId: "",
   estimatedMonthlyPotential: "",
+  pricingProposal: "",
+  pricingAmount: "",
+  contractNumber: "",
+  corpClientId: "",
   status: "new" as SalesLeadStatus,
 };
 
@@ -87,6 +99,7 @@ export function SalesLeadDetailSidebar({
   onClose,
   onUpdated,
   onDeleted,
+  onRequestStageTransition,
 }: LeadDetailSidebarProps) {
   const t = useTranslations("salesOperation");
   const confirm = useConfirm();
@@ -175,6 +188,10 @@ export function SalesLeadDetailSidebar({
       campaignName: lead.campaignName ?? "",
       segmentId: lead.segmentId ?? "",
       estimatedMonthlyPotential: lead.estimatedMonthlyPotential?.toString() ?? "",
+      pricingProposal: lead.pricingProposal ?? "",
+      pricingAmount: lead.pricingAmount?.toString() ?? "",
+      contractNumber: lead.contractNumber ?? "",
+      corpClientId: lead.corpClientId ?? "",
       status: lead.status,
     });
     setError(null);
@@ -220,9 +237,46 @@ export function SalesLeadDetailSidebar({
       );
       return;
     }
+    if (draft.status !== lead.status && onRequestStageTransition) {
+      // Persist non-status fields first, then route status change through stage gates.
+      setSaving(true);
+      setError(null);
+      try {
+        const pricingAmount = draft.pricingAmount.trim() ? Number(draft.pricingAmount) : null;
+        const res = await fetch(`/api/sales-operation/leads/${lead.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fullName: draft.fullName,
+            email: draft.email || null,
+            phone: draft.phone || null,
+            companyName: draft.companyName || null,
+            campaignName: draft.campaignName || null,
+            segmentId: draft.segmentId || null,
+            estimatedMonthlyPotential: potential,
+            pricingProposal: draft.pricingProposal.trim() || null,
+            pricingAmount:
+              pricingAmount !== null && Number.isFinite(pricingAmount) ? pricingAmount : null,
+            contractNumber: draft.contractNumber.trim() || null,
+            corpClientId: draft.corpClientId.trim() || null,
+          }),
+        });
+        const data = (await res.json()) as { ok?: boolean; lead?: SalesLead; error?: string };
+        if (!res.ok || !data.ok || !data.lead) throw new Error(data.error ?? "Failed to save lead.");
+        onUpdated(data.lead);
+        bumpActivity();
+        onRequestStageTransition(data.lead, draft.status);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to save lead.");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
+      const pricingAmount = draft.pricingAmount.trim() ? Number(draft.pricingAmount) : null;
       const res = await fetch(`/api/sales-operation/leads/${lead.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -234,6 +288,11 @@ export function SalesLeadDetailSidebar({
           campaignName: draft.campaignName || null,
           segmentId: draft.segmentId || null,
           estimatedMonthlyPotential: potential,
+          pricingProposal: draft.pricingProposal.trim() || null,
+          pricingAmount:
+            pricingAmount !== null && Number.isFinite(pricingAmount) ? pricingAmount : null,
+          contractNumber: draft.contractNumber.trim() || null,
+          corpClientId: draft.corpClientId.trim() || null,
           status: draft.status,
         }),
       });
@@ -710,6 +769,53 @@ export function SalesLeadDetailSidebar({
               </div>
             </label>
 
+            <label className="block text-sm">
+              <span className="crm-label">{t("field.pricingProposal")}</span>
+              <textarea
+                className="crm-input mt-1 min-h-[72px] w-full px-3 py-2 text-sm"
+                value={draft.pricingProposal}
+                onChange={(event) =>
+                  setDraft((prev) => ({ ...prev, pricingProposal: event.target.value }))
+                }
+              />
+            </label>
+
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block text-sm">
+                <span className="crm-label">{t("field.pricingAmount")}</span>
+                <input
+                  type="number"
+                  min="0"
+                  className="crm-input mt-1 h-10 w-full px-3 text-sm"
+                  value={draft.pricingAmount}
+                  onChange={(event) =>
+                    setDraft((prev) => ({ ...prev, pricingAmount: event.target.value }))
+                  }
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="crm-label">{t("field.contractNumber")}</span>
+                <input
+                  className="crm-input mt-1 h-10 w-full px-3 text-sm"
+                  value={draft.contractNumber}
+                  onChange={(event) =>
+                    setDraft((prev) => ({ ...prev, contractNumber: event.target.value }))
+                  }
+                />
+              </label>
+            </div>
+
+            <label className="block text-sm">
+              <span className="crm-label">{t("field.corpClientId")}</span>
+              <input
+                className="crm-input mt-1 h-10 w-full px-3 text-sm"
+                value={draft.corpClientId}
+                onChange={(event) =>
+                  setDraft((prev) => ({ ...prev, corpClientId: event.target.value }))
+                }
+              />
+            </label>
+
             {d.status === "signed" ? (
               <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-3">
                 <p className="mb-2 text-sm font-semibold text-[var(--so-text)]">{t("clientDetails")}</p>
@@ -1049,6 +1155,11 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [createDuplicates, setCreateDuplicates] = useState<DuplicateMatch[]>([]);
   const [deepLinkApplied, setDeepLinkApplied] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
+  const [gateLead, setGateLead] = useState<SalesLead | null>(null);
+  const [gateToStatus, setGateToStatus] = useState<SalesLeadStatus | null>(null);
+  const [gateMissing, setGateMissing] = useState<StageMissingField[]>([]);
+  const [gateLoading, setGateLoading] = useState(false);
 
   const prefsKey = currentUser?.id ? `sales-pipeline:v1:${currentUser.id}` : null;
 
@@ -1275,6 +1386,64 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
 
   const selectedLead = leads.find((lead) => lead.id === selectedLeadId) ?? null;
 
+  const applyTransition = async (
+    leadId: string,
+    toStatus: SalesLeadStatus,
+    payload?: StageGateConfirmPayload,
+  ): Promise<SalesLead | null> => {
+    if (payload?.contact) {
+      const contactRes = await fetch(`/api/sales-operation/leads/${leadId}/contacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: payload.contact.fullName,
+          email: payload.contact.email,
+          mobilePhone: payload.contact.mobilePhone,
+          isPrimary: true,
+        }),
+      });
+      const contactData = (await contactRes.json()) as { ok?: boolean; error?: string };
+      if (!contactRes.ok || !contactData.ok) {
+        // 409 already exists is acceptable — continue transition.
+        if (contactRes.status !== 409) {
+          throw new Error(contactData.error ?? "Failed to create contact.");
+        }
+      }
+    }
+
+    const res = await fetch(`/api/sales-operation/leads/${leadId}/transition`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        toStatus,
+        fields: payload?.fields,
+        accountManagerUserId: payload?.accountManagerUserId,
+        accountManagerName: payload?.accountManagerName,
+        followUpTask: payload?.followUpTask,
+      }),
+    });
+    const data = (await res.json()) as {
+      ok?: boolean;
+      lead?: SalesLead;
+      error?: string;
+      code?: string;
+      missing?: StageMissingField[];
+    };
+    if (res.status === 422 && data.code === "STAGE_REQUIREMENTS") {
+      const lead = leads.find((item) => item.id === leadId) ?? null;
+      setGateLead(lead);
+      setGateToStatus(toStatus);
+      setGateMissing(data.missing ?? []);
+      setGateOpen(true);
+      return null;
+    }
+    if (!res.ok || !data.ok || !data.lead) {
+      throw new Error(data.error ?? "Failed to update status.");
+    }
+    setLeads((prev) => prev.map((item) => (item.id === leadId ? data.lead! : item)));
+    return data.lead;
+  };
+
   const moveLeadToStatus = async (leadId: string, status: SalesLeadStatus) => {
     const lead = leads.find((item) => item.id === leadId);
     if (!lead || lead.status === status) return;
@@ -1288,26 +1457,34 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
       return;
     }
 
-    setLeads((prev) =>
-      prev.map((item) =>
-        item.id === leadId
-          ? { ...item, status, statusEnteredAt: new Date().toISOString() }
-          : item,
-      ),
-    );
-
     try {
-      const res = await fetch(`/api/sales-operation/leads/${leadId}`, {
-        method: "PATCH",
+      // Preflight without optimistic move.
+      const preflightRes = await fetch(`/api/sales-operation/leads/${leadId}/transition`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ toStatus: status, preflightOnly: true }),
       });
-      const data = (await res.json()) as { ok?: boolean; lead?: SalesLead; error?: string };
-      if (!res.ok || !data.ok || !data.lead) throw new Error(data.error ?? "Failed to update status.");
-      setLeads((prev) => prev.map((item) => (item.id === leadId ? data.lead! : item)));
+      const preflight = (await preflightRes.json()) as {
+        ok?: boolean;
+        missing?: StageMissingField[];
+        lead?: SalesLead;
+        error?: string;
+      };
+      if (!preflightRes.ok) {
+        throw new Error(preflight.error ?? "Failed to validate stage move.");
+      }
+      if (!preflight.ok && (preflight.missing?.length ?? 0) > 0) {
+        setGateLead(preflight.lead ?? lead);
+        setGateToStatus(status);
+        setGateMissing(preflight.missing ?? []);
+        setGateOpen(true);
+        return;
+      }
+
+      const updated = await applyTransition(leadId, status);
+      if (updated) toast.success(t("stageGate.moved", { status: updated.status }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update status.");
-      void loadLeads();
     }
   };
 
@@ -1655,6 +1832,33 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
         onDeleted={(leadId) => {
           setLeads((prev) => prev.filter((item) => item.id !== leadId));
           setSelectedLeadId(null);
+        }}
+        onRequestStageTransition={(lead, toStatus) => {
+          void moveLeadToStatus(lead.id, toStatus);
+        }}
+      />
+
+      <StageGateModal
+        open={gateOpen}
+        onOpenChange={setGateOpen}
+        lead={gateLead}
+        toStatus={gateToStatus}
+        missing={gateMissing}
+        loading={gateLoading}
+        onConfirm={async (payload) => {
+          if (!gateLead || !gateToStatus) return;
+          setGateLoading(true);
+          try {
+            const updated = await applyTransition(gateLead.id, gateToStatus, payload);
+            if (updated) {
+              setGateOpen(false);
+              toast.success(t("stageGate.moved", { status: updated.status }));
+            }
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to update status.");
+          } finally {
+            setGateLoading(false);
+          }
         }}
       />
 

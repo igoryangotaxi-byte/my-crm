@@ -1,6 +1,6 @@
 {
   "name": "my-crm",
-  "version": "0.2.42",
+  "version": "0.2.43",
   "private": true,
   "engines": {
     "node": ">=20.9.0"
@@ -42,7 +42,9 @@
     "env:pull:development": "vercel env pull .env.local --environment development --yes",
     "env:merge-from-backup": "node scripts/merge-env-local-from-backup.mjs",
     "sync:tenant-cost-centers": "tsx scripts/sync-tenant-cost-centers-from-yango.ts",
-    "sync:yango-tokens-to-kv": "tsx scripts/sync-yango-env-tokens-to-kv.ts"
+    "sync:yango-tokens-to-kv": "tsx scripts/sync-yango-env-tokens-to-kv.ts",
+    "presentations:capture:so": "node scripts/presentations/capture-so-screenshots.mjs",
+    "presentations:build:so-onboarding": "node scripts/presentations/generate-sales-operation-onboarding-pptx.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.19",
@@ -79,6 +81,9 @@
     "@types/react-dom": "^19.2.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
+    "playwright": "^1.61.1",
+    "pptxgenjs": "^4.0.1",
+    "sharp": "^0.35.3",
     "tailwindcss": "^4",
     "tsx": "^4.20.6",
     "typescript": "^6.0.3",

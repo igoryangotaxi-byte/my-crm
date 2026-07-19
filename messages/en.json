@@ -106,6 +106,10 @@
       "segment": "Segment",
       "potential": "Monthly potential ₪",
       "owner": "Owner",
+      "pricingProposal": "Pricing / proposal",
+      "pricingAmount": "Proposal amount ₪",
+      "contractNumber": "Contract number",
+      "corpClientId": "Corp Client ID",
       "corpClient": "B2B client",
       "corpClientSearch": "Search by name or corp_client_id…",
       "corpClientNoMatch": "No clients match this search."
@@ -196,11 +200,87 @@
       "empty": "No tasks match this filter.",
       "noLead": "No linked lead"
     },
+    "taskHub": {
+      "title": "Task details",
+      "loading": "Loading task…",
+      "saved": "Task saved",
+      "cancel": "Cancel",
+      "assignee": "Assignee",
+      "linkedLead": "Open lead",
+      "status": "Status",
+      "statusCancelled": "Cancelled",
+      "summary": "Result summary",
+      "summaryPlaceholder": "What was the outcome?",
+      "timeline": {
+        "title": "Timeline",
+        "empty": "No history yet.",
+        "type": {
+          "created": "Created",
+          "status_changed": "Status changed",
+          "reassigned": "Reassigned",
+          "due_changed": "Due date changed",
+          "summary_updated": "Summary updated",
+          "follow_up_created": "Follow-up created",
+          "comment": "Comment",
+          "updated": "Updated"
+        }
+      },
+      "reassign": {
+        "action": "Reassign",
+        "title": "Reassign task",
+        "assignee": "New assignee",
+        "due": "Due date",
+        "comment": "Comment",
+        "commentPlaceholder": "Why are you reassigning?",
+        "confirm": "Reassign",
+        "done": "Task reassigned"
+      },
+      "followUp": {
+        "action": "Follow-up",
+        "title": "Create follow-up task",
+        "name": "Title",
+        "description": "Description",
+        "due": "Due date",
+        "assignee": "Assignee",
+        "confirm": "Create follow-up",
+        "done": "Follow-up created",
+        "defaultTitle": "Follow-up with client",
+        "chain": "Follow-up chain"
+      }
+    },
+    "stageGate": {
+      "title": "Move to {status}",
+      "description": "Fill the required fields to continue.",
+      "confirm": "Confirm move",
+      "fillRequired": "Please complete the required fields.",
+      "moved": "Lead moved to {status}",
+      "contactSection": "Client contact",
+      "contactName": "Full name",
+      "contactEmail": "Email",
+      "contactPhone": "Phone",
+      "pricingPlaceholder": "Describe the proposal sent to the client…",
+      "pricingAmount": "Proposal amount (optional)",
+      "followUpSection": "Follow-up task",
+      "signedSection": "Contract or Client ID",
+      "contractNumber": "Contract number",
+      "corpClientId": "Corp Client ID",
+      "corpClientPlaceholder": "Search or enter Client ID",
+      "or": "or",
+      "fields": {
+        "contact": "Client contact",
+        "estimatedMonthlyPotential": "Monthly potential (₪)",
+        "pricingProposal": "Pricing / proposal",
+        "followUpTask": "Follow-up task",
+        "contractOrClientId": "Contract or Client ID",
+        "accountManager": "Account Manager"
+      }
+    },
     "mySpace": {
       "privacyHint": "Private to you — only visible with your account.",
       "tab": {
         "tasks": "My Tasks",
         "assigned": "Assigned",
+        "created": "Created by Me",
         "notes": "Notes",
         "scorecard": "Scorecard"
       },

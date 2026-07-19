@@ -47,8 +47,10 @@ export async function convertSignedLeadToClient(
   lead: SalesLead,
   leadNotes: SalesLeadNote[],
   actor: { userId: string | null; name: string },
+  options?: { onboardTitle?: string; skipDefaultOnboardingTask?: boolean },
 ): Promise<SalesClient> {
   const now = new Date().toISOString();
+  const corpFromLead = lead.corpClientId ? normalizeCorpClientId(lead.corpClientId) : "";
   const clientPayload = {
     lead_id: lead.id,
     full_name: lead.fullName,
@@ -61,6 +63,7 @@ export async function convertSignedLeadToClient(
     ad_name: lead.adName,
     form_id: lead.formId,
     custom_fields: lead.customFields,
+    corp_client_id: corpFromLead || null,
     signed_at: lead.statusEnteredAt || now,
     pending_sales_manager_user_id: actor.userId,
     pending_sales_manager_name: actor.name,
@@ -123,7 +126,7 @@ export async function convertSignedLeadToClient(
     }
   }
 
-  await runSignedHandover(lead, actor);
+  await runSignedHandover(lead, actor, options);
 
   return client;
 }
@@ -136,27 +139,31 @@ export async function convertSignedLeadToClient(
 async function runSignedHandover(
   lead: SalesLead,
   actor: { userId: string | null; name: string },
+  options?: { onboardTitle?: string; skipDefaultOnboardingTask?: boolean },
 ): Promise<void> {
   const clientLabel = lead.companyName?.trim() || lead.fullName;
   const ownerUserId = lead.assignedManagerUserId ?? actor.userId;
   const ownerName = lead.assignedManagerName ?? actor.name;
 
-  try {
-    const dueAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
-    await createSalesTask(
-      lead.id,
-      {
-        title: `Onboard new client: ${clientLabel}`,
-        taskType: "todo",
-        priority: "high",
-        dueAt,
-        assignedToUserId: ownerUserId,
-        assignedToName: ownerName,
-      },
-      { userId: actor.userId, name: actor.name },
-    );
-  } catch (error) {
-    console.error("Handover onboarding task failed:", error);
+  if (!options?.skipDefaultOnboardingTask) {
+    try {
+      const dueAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+      await createSalesTask(
+        lead.id,
+        {
+          title: options?.onboardTitle?.trim() || "Onboard Client",
+          description: `Onboard ${clientLabel}. Fill Summary with onboarding results when done.`,
+          taskType: "todo",
+          priority: "high",
+          dueAt,
+          assignedToUserId: ownerUserId,
+          assignedToName: ownerName,
+        },
+        { userId: actor.userId, name: actor.name },
+      );
+    } catch (error) {
+      console.error("Handover onboarding task failed:", error);
+    }
   }
 
   await logActivity({

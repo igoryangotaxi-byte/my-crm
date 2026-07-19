@@ -18,10 +18,7 @@ import { createNotification } from "@/lib/sales-operation/notifications";
 import { listPipelineStages, listSegments } from "@/lib/sales-operation/pipeline-config";
 import { runAutomationsForStatusChange } from "@/lib/sales-operation/automation/engine";
 import type { UpdateSalesClientInput } from "@/lib/sales-operation/manager-types";
-import {
-  assertStageRequirements,
-  assertValidStatusTransition,
-} from "@/lib/sales-operation/status-transitions";
+import { assertValidStatusTransition } from "@/lib/sales-operation/status-transitions";
 import {
   SALES_LEAD_COMPAT_STATUSES,
   SALES_LEAD_SOURCES,
@@ -114,6 +111,10 @@ function mapLeadRow(row: Record<string, unknown>): SalesLead {
     probabilityOverride: readNumber(row.probability_override),
     clientAddress: readText(row.client_address),
     generalNotes: readText(row.general_notes),
+    pricingProposal: readText(row.pricing_proposal),
+    pricingAmount: readNumber(row.pricing_amount),
+    contractNumber: readText(row.contract_number),
+    corpClientId: readText(row.corp_client_id),
     isArchived: row.is_archived === true,
     archivedAt: readText(row.archived_at),
     statusEnteredAt: String(row.status_entered_at ?? row.created_at ?? new Date().toISOString()),
@@ -168,6 +169,12 @@ function applyDealFieldsToPayload(
     payload.probability_override = input.probabilityOverride ?? null;
   if (input.clientAddress !== undefined) payload.client_address = input.clientAddress?.trim() || null;
   if (input.generalNotes !== undefined) payload.general_notes = input.generalNotes?.trim() || null;
+  if (input.pricingProposal !== undefined)
+    payload.pricing_proposal = input.pricingProposal?.trim() || null;
+  if (input.pricingAmount !== undefined) payload.pricing_amount = input.pricingAmount ?? null;
+  if (input.contractNumber !== undefined)
+    payload.contract_number = input.contractNumber?.trim() || null;
+  if (input.corpClientId !== undefined) payload.corp_client_id = input.corpClientId?.trim() || null;
 }
 
 function mapLeadNoteRow(row: Record<string, unknown>): SalesLeadNote {
@@ -449,6 +456,7 @@ export async function updateSalesLead(
   id: string,
   input: UpdateSalesLeadInput,
   actor: { userId: string | null; name: string },
+  options?: { skipStageRequirements?: boolean },
 ): Promise<SalesLead> {
   const supabase = getSupabaseAdminClient();
   const existing = await getSalesLeadById(id);
@@ -458,12 +466,29 @@ export async function updateSalesLead(
   const nextStatus = input.status ? normalizeStatus(input.status) : existing.status;
   if (nextStatus !== existing.status) {
     assertValidStatusTransition(existing.status, nextStatus);
-    assertStageRequirements(nextStatus, {
-      estimatedMonthlyPotential:
-        input.estimatedMonthlyPotential !== undefined
-          ? input.estimatedMonthlyPotential
-          : existing.estimatedMonthlyPotential,
-    });
+    // Full stage gates (contacts, pricing, AM…) are enforced by transitionSalesLead.
+    // Plain PATCH still blocks commercial forward moves unless skipStageRequirements.
+    if (!options?.skipStageRequirements) {
+      const { assertStageRequirements: assertGates } = await import(
+        "@/lib/sales-operation/status-transitions"
+      );
+      // Lightweight defense: require potential / pricing / contract fields present on the lead.
+      // Contact / follow-up / AM must go through the transition endpoint.
+      assertGates(existing.status, nextStatus, {
+        estimatedMonthlyPotential:
+          input.estimatedMonthlyPotential !== undefined
+            ? input.estimatedMonthlyPotential
+            : existing.estimatedMonthlyPotential,
+        pricingProposal:
+          input.pricingProposal !== undefined ? input.pricingProposal : existing.pricingProposal,
+        contractNumber:
+          input.contractNumber !== undefined ? input.contractNumber : existing.contractNumber,
+        corpClientId: input.corpClientId !== undefined ? input.corpClientId : existing.corpClientId,
+        hasContact: true,
+        followUpTaskProvided: nextStatus !== "negotiation",
+        accountManagerUserId: nextStatus === "signed" ? null : "ok",
+      });
+    }
   }
 
   const baseCustomFields =
@@ -527,7 +552,9 @@ export async function updateSalesLead(
 
   if (nextStatus === "signed" && existing.status !== "signed") {
     const notes = await listSalesLeadNotes(lead.id);
-    await convertSignedLeadToClient(supabase, lead, notes, actor);
+    await convertSignedLeadToClient(supabase, lead, notes, actor, {
+      onboardTitle: "Onboard Client",
+    });
   }
 
   if (nextStatus !== existing.status) {

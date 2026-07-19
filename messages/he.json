@@ -106,6 +106,10 @@
       "segment": "סגמנט",
       "potential": "פוטנציאל חודשי ₪",
       "owner": "אחראי",
+      "pricingProposal": "תמחור / הצעה",
+      "pricingAmount": "סכום הצעה ₪",
+      "contractNumber": "מספר חוזה",
+      "corpClientId": "מזהה לקוח תאגידי",
       "corpClient": "לקוח B2B",
       "corpClientSearch": "חיפוש לפי שם או corp_client_id…",
       "corpClientNoMatch": "לא נמצאו לקוחות התואמים לחיפוש."
@@ -196,11 +200,87 @@
       "empty": "אין משימות התואמות לסינון.",
       "noLead": "אין ליד מקושר"
     },
+    "taskHub": {
+      "title": "פרטי משימה",
+      "loading": "טוען משימה…",
+      "saved": "המשימה נשמרה",
+      "cancel": "ביטול",
+      "assignee": "אחראי",
+      "linkedLead": "פתח ליד",
+      "status": "סטטוס",
+      "statusCancelled": "בוטלה",
+      "summary": "סיכום תוצאה",
+      "summaryPlaceholder": "מה הייתה התוצאה?",
+      "timeline": {
+        "title": "ציר זמן",
+        "empty": "אין עדיין היסטוריה.",
+        "type": {
+          "created": "נוצרה",
+          "status_changed": "הסטטוס השתנה",
+          "reassigned": "הועברה",
+          "due_changed": "תאריך היעד השתנה",
+          "summary_updated": "הסיכום עודכן",
+          "follow_up_created": "נוצרה משימת המשך",
+          "comment": "הערה",
+          "updated": "עודכנה"
+        }
+      },
+      "reassign": {
+        "action": "העבר",
+        "title": "העברת משימה",
+        "assignee": "אחראי חדש",
+        "due": "תאריך יעד",
+        "comment": "הערה",
+        "commentPlaceholder": "למה מעבירים?",
+        "confirm": "העבר",
+        "done": "המשימה הועברה"
+      },
+      "followUp": {
+        "action": "המשך",
+        "title": "יצירת משימת המשך",
+        "name": "כותרת",
+        "description": "תיאור",
+        "due": "תאריך יעד",
+        "assignee": "אחראי",
+        "confirm": "צור משימת המשך",
+        "done": "משימת ההמשך נוצרה",
+        "defaultTitle": "מעקב עם הלקוח",
+        "chain": "שרשרת מעקב"
+      }
+    },
+    "stageGate": {
+      "title": "העברה ל-{status}",
+      "description": "יש למלא את השדות הנדרשים כדי להמשיך.",
+      "confirm": "אשר העברה",
+      "fillRequired": "נא להשלים את השדות הנדרשים.",
+      "moved": "הליד הועבר ל-{status}",
+      "contactSection": "איש קשר",
+      "contactName": "שם מלא",
+      "contactEmail": "אימייל",
+      "contactPhone": "טלפון",
+      "pricingPlaceholder": "תארו את ההצעה שנשלחה ללקוח…",
+      "pricingAmount": "סכום הצעה (רשות)",
+      "followUpSection": "משימת מעקב",
+      "signedSection": "חוזה או מזהה לקוח",
+      "contractNumber": "מספר חוזה",
+      "corpClientId": "מזהה לקוח תאגידי",
+      "corpClientPlaceholder": "חפש או הזן מזהה לקוח",
+      "or": "או",
+      "fields": {
+        "contact": "איש קשר",
+        "estimatedMonthlyPotential": "פוטנציאל חודשי (₪)",
+        "pricingProposal": "תמחור / הצעה",
+        "followUpTask": "משימת מעקב",
+        "contractOrClientId": "חוזה או מזהה לקוח",
+        "accountManager": "מנהל חשבון"
+      }
+    },
     "mySpace": {
       "privacyHint": "פרטי לך — נראה רק מהחשבון שלך.",
       "tab": {
         "tasks": "המשימות שלי",
         "assigned": "שהוקצו",
+        "created": "שנוצרו על ידי",
         "notes": "הערות",
         "scorecard": "כרטיס ביצועים"
       },

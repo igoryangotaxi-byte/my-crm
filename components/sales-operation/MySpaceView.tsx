@@ -19,6 +19,7 @@ import {
 import { formatSalesDateTime } from "@/lib/sales-operation/display";
 import { sortTasks, taskDueBucket, type TaskDueBucket } from "@/lib/sales-operation/task-utils";
 import { MyScorecardSection } from "@/components/sales-operation/MyScorecardSection";
+import { TaskDetailDrawer } from "@/components/sales-operation/tasks/TaskDetailDrawer";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -34,7 +35,7 @@ import type {
   SalesTaskWithLead,
 } from "@/lib/sales-operation/types";
 
-type SpaceTab = "tasks" | "assigned" | "notes" | "scorecard";
+type SpaceTab = "tasks" | "assigned" | "created" | "notes" | "scorecard";
 
 const BUCKET_ORDER: TaskDueBucket[] = ["overdue", "today", "upcoming", "no_due", "done"];
 
@@ -49,6 +50,7 @@ const bucketTone: Record<TaskDueBucket, string> = {
 const TAB_ICONS: Record<SpaceTab, React.ReactNode> = {
   tasks: <ListChecks className="h-4 w-4" />,
   assigned: <Inbox className="h-4 w-4" />,
+  created: <ListChecks className="h-4 w-4" />,
   notes: <StickyNote className="h-4 w-4" />,
   scorecard: <Gauge className="h-4 w-4" />,
 };
@@ -125,7 +127,8 @@ export function MySpaceView() {
   const t = useTranslations("salesOperation");
   const [tab, setTab] = useState<SpaceTab>("tasks");
 
-  const tabs: SpaceTab[] = ["tasks", "assigned", "notes", "scorecard"];
+  const tabs: SpaceTab[] = ["tasks", "assigned", "created", "notes", "scorecard"];
+  const showPrivacyHint = tab === "tasks" || tab === "notes";
 
   return (
     <div className="pb-8">
@@ -139,14 +142,17 @@ export function MySpaceView() {
             icon: TAB_ICONS[value],
           }))}
         />
-        <span className="inline-flex items-center gap-1.5 text-xs text-[var(--so-muted)]">
-          <Lock className="h-3.5 w-3.5" />
-          {t("mySpace.privacyHint")}
-        </span>
+        {showPrivacyHint ? (
+          <span className="inline-flex items-center gap-1.5 text-xs text-[var(--so-muted)]">
+            <Lock className="h-3.5 w-3.5" />
+            {t("mySpace.privacyHint")}
+          </span>
+        ) : null}
       </div>
 
       {tab === "tasks" ? <PersonalTasksSection /> : null}
-      {tab === "assigned" ? <AssignedTasksSection /> : null}
+      {tab === "assigned" ? <LeadTasksSection scope="mine" /> : null}
+      {tab === "created" ? <LeadTasksSection scope="created" showAssignee /> : null}
       {tab === "notes" ? <PersonalNotesSection /> : null}
       {tab === "scorecard" ? <MyScorecardSection /> : null}
     </div>
@@ -161,6 +167,7 @@ function PersonalTasksSection() {
   const [statusFilter, setStatusFilter] = useState<"open" | "done" | "all">("open");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [drawerTask, setDrawerTask] = useState<PersonalTask | null>(null);
 
   const [expanded, setExpanded] = useState(false);
   const [title, setTitle] = useState("");
@@ -396,9 +403,23 @@ function PersonalTasksSection() {
             return (
               <article
                 key={task.id}
-                className="group flex items-start gap-3 rounded-[14px] border border-[var(--so-border)] bg-[var(--so-surface)] px-4 py-3 shadow-[var(--so-shadow-xs)] transition-colors hover:border-[var(--so-border-strong)]"
+                role="button"
+                tabIndex={0}
+                onClick={() => setDrawerTask(task)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setDrawerTask(task);
+                  }
+                }}
+                className="group flex cursor-pointer items-start gap-3 rounded-[14px] border border-[var(--so-border)] bg-[var(--so-surface)] px-4 py-3 shadow-[var(--so-shadow-xs)] transition-colors hover:border-[var(--so-border-strong)]"
               >
-                <Checkbox checked={done} onChange={() => void toggleTask(task)} />
+                <div
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  <Checkbox checked={done} onChange={() => void toggleTask(task)} />
+                </div>
                 <div className="min-w-0 flex-1">
                   <p
                     className={cn(
@@ -428,7 +449,10 @@ function PersonalTasksSection() {
                   )}
                   <button
                     type="button"
-                    onClick={() => void deleteTask(task)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void deleteTask(task);
+                    }}
                     aria-label={t("task.delete")}
                     className="so-focus-ring inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-semibold text-[var(--so-muted-2)] opacity-0 transition-opacity hover:text-rose-600 focus-visible:opacity-100 group-hover:opacity-100"
                   >
@@ -440,25 +464,44 @@ function PersonalTasksSection() {
           })}
         </div>
       )}
+
+      <TaskDetailDrawer
+        open={Boolean(drawerTask)}
+        onOpenChange={(next) => {
+          if (!next) setDrawerTask(null);
+        }}
+        kind="personal"
+        taskId={drawerTask?.id ?? null}
+        seedPersonalTask={drawerTask}
+        onChanged={() => void load()}
+      />
     </section>
   );
 }
 
-function AssignedTasksSection() {
+function LeadTasksSection({
+  scope,
+  showAssignee = false,
+}: {
+  scope: "mine" | "created";
+  showAssignee?: boolean;
+}) {
   const t = useTranslations("salesOperation");
   const { error: toastError } = useToast();
   const [tasks, setTasks] = useState<SalesTaskWithLead[]>([]);
   const [statusFilter, setStatusFilter] = useState<"open" | "done" | "all">("open");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/sales-operation/tasks?scope=mine&status=${statusFilter}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `/api/sales-operation/tasks?scope=${scope}&status=${statusFilter}`,
+        { cache: "no-store" },
+      );
       const data = (await res.json()) as {
         ok?: boolean;
         tasks?: SalesTaskWithLead[];
@@ -471,7 +514,7 @@ function AssignedTasksSection() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, [scope, statusFilter]);
 
   useEffect(() => {
     void load();
@@ -500,7 +543,7 @@ function AssignedTasksSection() {
         }),
     );
     try {
-      const res = await fetch(`/api/sales-operation/leads/${task.leadId}/tasks/${task.id}`, {
+      const res = await fetch(`/api/sales-operation/tasks/${task.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: nextStatus }),
@@ -553,9 +596,23 @@ function AssignedTasksSection() {
                   return (
                     <article
                       key={task.id}
-                      className="flex items-start gap-3 rounded-[14px] border border-[var(--so-border)] bg-[var(--so-surface)] px-4 py-3 shadow-[var(--so-shadow-xs)] transition-colors hover:border-[var(--so-border-strong)]"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setDrawerTaskId(task.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setDrawerTaskId(task.id);
+                        }
+                      }}
+                      className="flex cursor-pointer items-start gap-3 rounded-[14px] border border-[var(--so-border)] bg-[var(--so-surface)] px-4 py-3 shadow-[var(--so-shadow-xs)] transition-colors hover:border-[var(--so-border-strong)]"
                     >
-                      <Checkbox checked={done} onChange={() => void completeTask(task)} />
+                      <div
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        <Checkbox checked={done} onChange={() => void completeTask(task)} />
+                      </div>
                       <div className="min-w-0 flex-1">
                         <p
                           className={cn(
@@ -575,7 +632,11 @@ function AssignedTasksSection() {
                         <p className="mt-0.5 text-xs text-[var(--so-muted)]">
                           {task.leadCompanyName || task.leadName || t("tasks.noLead")}
                           {task.taskType ? ` · ${t(`task.type.${task.taskType}`)}` : ""}
-                          {task.assignedToName ? ` · ${task.assignedToName}` : ""}
+                          {showAssignee && task.assignedToName
+                            ? ` · ${task.assignedToName}`
+                            : !showAssignee && task.assignedToName
+                              ? ` · ${task.assignedToName}`
+                              : ""}
                         </p>
                       </div>
                       <div className="shrink-0 text-right">
@@ -595,6 +656,16 @@ function AssignedTasksSection() {
           ))}
         </div>
       )}
+
+      <TaskDetailDrawer
+        open={Boolean(drawerTaskId)}
+        onOpenChange={(next) => {
+          if (!next) setDrawerTaskId(null);
+        }}
+        kind="lead"
+        taskId={drawerTaskId}
+        onChanged={() => void load()}
+      />
     </section>
   );
 }

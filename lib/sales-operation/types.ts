@@ -66,6 +66,10 @@ export type SalesLead = {
   probabilityOverride: number | null;
   clientAddress: string | null;
   generalNotes: string | null;
+  pricingProposal: string | null;
+  pricingAmount: number | null;
+  contractNumber: string | null;
+  corpClientId: string | null;
   // Phase 9 — soft archive (additive, defaults keep leads active).
   isArchived: boolean;
   archivedAt: string | null;
@@ -139,6 +143,8 @@ export type SalesTask = {
   completedByName: string | null;
   createdByUserId: string | null;
   createdByName: string | null;
+  resultSummary: string | null;
+  parentTaskId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -149,6 +155,30 @@ export type SalesTaskWithLead = SalesTask & {
   leadStatus: SalesLeadStatus;
 };
 
+export const SALES_TASK_EVENT_TYPES = [
+  "created",
+  "status_changed",
+  "reassigned",
+  "due_changed",
+  "summary_updated",
+  "follow_up_created",
+  "comment",
+  "updated",
+] as const;
+export type SalesTaskEventType = (typeof SALES_TASK_EVENT_TYPES)[number];
+
+export type SalesTaskEvent = {
+  id: string;
+  taskId: string;
+  leadId: string | null;
+  eventType: SalesTaskEventType;
+  body: string | null;
+  changes: Record<string, unknown> | null;
+  actorUserId: string | null;
+  actorName: string;
+  createdAt: string;
+};
+
 export type CreateSalesTaskInput = {
   title: string;
   description?: string | null;
@@ -157,10 +187,11 @@ export type CreateSalesTaskInput = {
   dueAt?: string | null;
   assignedToUserId?: string | null;
   assignedToName?: string | null;
+  parentTaskId?: string | null;
 };
 
 export type UpdateSalesTaskInput = Partial<
-  CreateSalesTaskInput & { status: SalesTaskStatus }
+  CreateSalesTaskInput & { status: SalesTaskStatus; resultSummary: string | null }
 >;
 
 export type PersonalTask = {
@@ -383,6 +414,10 @@ export type SalesLeadDealFields = {
   probabilityOverride?: number | null;
   clientAddress?: string | null;
   generalNotes?: string | null;
+  pricingProposal?: string | null;
+  pricingAmount?: number | null;
+  contractNumber?: string | null;
+  corpClientId?: string | null;
 };
 
 export type CreateSalesLeadInput = SalesLeadDealFields & {

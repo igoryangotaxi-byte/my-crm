@@ -14,7 +14,9 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const scope = url.searchParams.get("scope") === "all" ? "all" : "mine";
+  const scopeParam = url.searchParams.get("scope");
+  const scope =
+    scopeParam === "all" || scopeParam === "created" ? scopeParam : "mine";
   const statusParam = url.searchParams.get("status") ?? "open";
 
   let statuses: SalesTaskStatus[];
@@ -29,6 +31,7 @@ export async function GET(request: Request) {
   try {
     const tasks = await listSalesTasksWithLead({
       assignedToUserId: scope === "mine" ? auth.user.id : null,
+      createdByUserId: scope === "created" ? auth.user.id : null,
       statuses,
     });
     return Response.json(

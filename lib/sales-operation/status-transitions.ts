@@ -10,6 +10,27 @@ export function normalizeSalesLeadStatus(value: unknown): SalesLeadStatus {
 /** Signed leads are terminal — they cannot move to another status. */
 const TERMINAL_STATUSES = new Set<SalesLeadStatus>(["signed"]);
 
+/** Forward pipeline order used for commercial stage gates. */
+export const STAGE_ORDER: SalesLeadStatus[] = [
+  "new",
+  "in_progress",
+  "proposal_sent",
+  "negotiation",
+  "signed",
+];
+
+export function stageIndex(status: SalesLeadStatus): number {
+  return STAGE_ORDER.indexOf(status);
+}
+
+export function isForwardTransition(from: SalesLeadStatus, to: SalesLeadStatus): boolean {
+  if (to === "rejected") return false;
+  const fromIdx = stageIndex(from);
+  const toIdx = stageIndex(to);
+  if (fromIdx < 0 || toIdx < 0) return false;
+  return toIdx > fromIdx;
+}
+
 export function isValidStatusTransition(from: SalesLeadStatus, to: SalesLeadStatus): boolean {
   if (from === to) return true;
   if (TERMINAL_STATUSES.has(from)) return false;
@@ -23,37 +44,97 @@ export function assertValidStatusTransition(from: SalesLeadStatus, to: SalesLead
   }
 }
 
-/**
- * Data-quality gates required before a lead can enter a given stage.
- * Currently no stage has blocking requirements — leads move freely through
- * the pipeline. The machinery is kept so gates can be reintroduced per-stage.
- */
-export type StageRequirementInput = {
+export type StageMissingField = {
+  key: string;
+  label: string;
+};
+
+export type StageRequirementContext = {
   estimatedMonthlyPotential?: number | null;
+  pricingProposal?: string | null;
+  contractNumber?: string | null;
+  corpClientId?: string | null;
+  /** True when lead has reachable contact (active contact or lead email/phone + name). */
+  hasContact?: boolean;
+  /** True when a follow-up task is being created as part of this transition. */
+  followUpTaskProvided?: boolean;
+  /** Account manager selected for Signed transition. */
+  accountManagerUserId?: string | null;
 };
 
-const REQUIREMENT_MESSAGES: Record<string, string> = {
-  estimatedMonthlyPotential:
-    "Set the estimated monthly potential (₪) before moving to this stage.",
+const FIELD_LABELS: Record<string, string> = {
+  contact: "Client contact person & details",
+  estimatedMonthlyPotential: "Monthly potential (₪)",
+  pricingProposal: "Pricing / proposal sent to client",
+  followUpTask: "Follow-up with client task",
+  contractOrClientId: "Contract number or Client ID",
+  accountManager: "Account Manager",
 };
 
+/**
+ * Evaluate commercial stage gates for a forward transition.
+ * Returns missing field keys (empty = ok).
+ */
 export function validateStageRequirements(
-  _to: SalesLeadStatus,
-  _lead: StageRequirementInput,
+  from: SalesLeadStatus,
+  to: SalesLeadStatus,
+  ctx: StageRequirementContext,
 ): string[] {
-  return [];
+  if (!isForwardTransition(from, to) && to !== "rejected") {
+    // Same stage or backward — no commercial gates.
+    if (from === to) return [];
+    if (!isForwardTransition(from, to)) return [];
+  }
+  if (!isForwardTransition(from, to)) return [];
+
+  const missing: string[] = [];
+  const toIdx = stageIndex(to);
+
+  // Gates accumulate for skips: entering a stage requires all gates up to that stage.
+  if (toIdx >= stageIndex("in_progress")) {
+    if (!ctx.hasContact) missing.push("contact");
+    const potential = ctx.estimatedMonthlyPotential;
+    if (!(typeof potential === "number" && Number.isFinite(potential) && potential > 0)) {
+      missing.push("estimatedMonthlyPotential");
+    }
+  }
+  if (toIdx >= stageIndex("proposal_sent")) {
+    if (!(typeof ctx.pricingProposal === "string" && ctx.pricingProposal.trim())) {
+      missing.push("pricingProposal");
+    }
+  }
+  if (toIdx >= stageIndex("negotiation") && to === "negotiation") {
+    // Follow-up required specifically when entering negotiation.
+    if (!ctx.followUpTaskProvided) missing.push("followUpTask");
+  }
+  if (to === "signed") {
+    const hasContract = Boolean(ctx.contractNumber?.trim());
+    const hasClientId = Boolean(ctx.corpClientId?.trim());
+    if (!hasContract && !hasClientId) missing.push("contractOrClientId");
+    if (!ctx.accountManagerUserId?.trim()) missing.push("accountManager");
+  }
+
+  return missing;
 }
 
 export class StageRequirementError extends Error {
-  readonly missing: string[];
-  constructor(missing: string[]) {
-    super(missing.map((key) => REQUIREMENT_MESSAGES[key] ?? key).join(" "));
+  readonly missing: StageMissingField[];
+  constructor(missingKeys: string[]) {
+    const fields = missingKeys.map((key) => ({
+      key,
+      label: FIELD_LABELS[key] ?? key,
+    }));
+    super(fields.map((f) => f.label).join(". ") + ".");
     this.name = "StageRequirementError";
-    this.missing = missing;
+    this.missing = fields;
   }
 }
 
-export function assertStageRequirements(to: SalesLeadStatus, lead: StageRequirementInput): void {
-  const missing = validateStageRequirements(to, lead);
+export function assertStageRequirements(
+  from: SalesLeadStatus,
+  to: SalesLeadStatus,
+  ctx: StageRequirementContext,
+): void {
+  const missing = validateStageRequirements(from, to, ctx);
   if (missing.length > 0) throw new StageRequirementError(missing);
 }

@@ -58,30 +58,36 @@ describe("sales operation notifications (Phase 6)", () => {
 });
 
 describe("sales operation stage requirements (Phase 6)", () => {
-  it("does not block pipeline movement — leads move freely across stages", () => {
-    assert.deepEqual(validateStageRequirements("proposal_sent", {}), []);
-    assert.deepEqual(
-      validateStageRequirements("negotiation", { estimatedMonthlyPotential: 0 }),
-      [],
+  it("enforces commercial gates on forward stage moves", () => {
+    assert.ok(
+      validateStageRequirements("in_progress", "proposal_sent", {
+        hasContact: true,
+        estimatedMonthlyPotential: 1000,
+        pricingProposal: "",
+      }).includes("pricingProposal"),
     );
-    assert.deepEqual(validateStageRequirements("in_progress", {}), []);
-    assert.deepEqual(validateStageRequirements("signed", {}), []);
-    assert.deepEqual(validateStageRequirements("rejected", {}), []);
-  });
-
-  it("assertStageRequirements is a no-op while gates are disabled", () => {
-    assert.doesNotThrow(() =>
-      assertStageRequirements("proposal_sent", { estimatedMonthlyPotential: null }),
-    );
-    assert.doesNotThrow(() =>
-      assertStageRequirements("negotiation", { estimatedMonthlyPotential: 0 }),
+    assert.ok(
+      validateStageRequirements("proposal_sent", "negotiation", {
+        hasContact: true,
+        estimatedMonthlyPotential: 1000,
+        pricingProposal: "Offer",
+        followUpTaskProvided: false,
+      }).includes("followUpTask"),
     );
   });
 
-  it("StageRequirementError still carries missing field keys for future gates", () => {
+  it("does not gate rejected transitions", () => {
+    assert.doesNotThrow(() =>
+      assertStageRequirements("proposal_sent", "rejected", {
+        estimatedMonthlyPotential: null,
+      }),
+    );
+  });
+
+  it("StageRequirementError carries structured missing fields", () => {
     const error = new StageRequirementError(["estimatedMonthlyPotential"]);
     assert.equal(error.name, "StageRequirementError");
-    assert.ok(error.missing.includes("estimatedMonthlyPotential"));
+    assert.ok(error.missing.some((item) => item.key === "estimatedMonthlyPotential"));
     assert.ok(error.message.length > 0);
   });
 });

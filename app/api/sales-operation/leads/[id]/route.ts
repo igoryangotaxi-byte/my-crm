@@ -74,6 +74,10 @@ export async function PATCH(request: Request, context: RouteContext) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update lead.";
     const isRequirement = error instanceof Error && error.name === "StageRequirementError";
+    const missing =
+      isRequirement && error instanceof Error && "missing" in error
+        ? (error as { missing: unknown }).missing
+        : undefined;
     const status = message.includes("not found")
       ? 404
       : isRequirement
@@ -81,6 +85,13 @@ export async function PATCH(request: Request, context: RouteContext) {
         : message.includes("Invalid status")
           ? 400
           : 500;
-    return Response.json({ ok: false, error: message }, { status });
+    return Response.json(
+      {
+        ok: false,
+        error: message,
+        ...(isRequirement ? { code: "STAGE_REQUIREMENTS", missing } : {}),
+      },
+      { status },
+    );
   }
 }
