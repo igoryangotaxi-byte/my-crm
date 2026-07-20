@@ -40,7 +40,7 @@ export async function createNotification(input: CreateNotificationInput): Promis
   try {
     if (!input.userId || !input.title.trim()) return;
     const supabase = getSupabaseAdminClient();
-    await supabase.from("sales_notifications").insert({
+    const { error } = await supabase.from("sales_notifications").insert({
       user_id: input.userId,
       type: input.type,
       title: input.title.trim(),
@@ -50,6 +50,9 @@ export async function createNotification(input: CreateNotificationInput): Promis
       is_read: false,
       created_at: new Date().toISOString(),
     });
+    if (error) {
+      console.error("Failed to create sales notification:", error.message);
+    }
   } catch (error) {
     console.error("Failed to create sales notification:", error);
   }

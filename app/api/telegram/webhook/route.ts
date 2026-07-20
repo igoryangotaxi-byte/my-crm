@@ -90,12 +90,13 @@ export async function POST(request: Request) {
     }
 
     if (existing.status !== parsed.status) {
+      const statusLabel = feedbackStatusLabel(updated.status);
       await createNotification({
         userId: updated.createdByUserId,
         type: "system",
-        title: `Feedback: ${feedbackStatusLabel(updated.status)}`,
-        body: updated.title,
-        link: updated.pathname || "/",
+        title: updated.title,
+        body: `Feedback status → ${statusLabel}`,
+        link: updated.pathname || "/sales-operation/pipeline",
       });
     }
 

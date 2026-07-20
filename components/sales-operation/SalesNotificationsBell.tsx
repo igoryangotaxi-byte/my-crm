@@ -59,6 +59,7 @@ export function SalesNotificationsBell() {
 
   useEffect(() => {
     if (!open) return;
+    void load();
     const onClick = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setOpen(false);
@@ -66,7 +67,7 @@ export function SalesNotificationsBell() {
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
-  }, [open]);
+  }, [open, load]);
 
   const markRead = useCallback(async (ids?: string[], all?: boolean) => {
     try {
