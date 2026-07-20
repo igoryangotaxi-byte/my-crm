@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-07-20",
+    title: "Global feedback widget → Telegram (0.2.44)",
+    notes:
+      "App version 0.2.44. Authenticated users get a floating feedback button (bottom-right) on every screen except login/unsubscribe. Submit title + description → stored in feedback_requests and posted to a Telegram chat with ToDo / In Progress / Done buttons. Status taps update the row, edit the Telegram message, notify the author in-app, and show a badge on the FAB until the author opens the widget. New API: /api/feedback (GET/POST), /api/feedback/seen (POST), /api/telegram/webhook (POST). SQL (applied): supabase_feedback_requests.sql. Env (Vercel Production): TELEGRAM_BOT_TOKEN, TELEGRAM_FEEDBACK_CHAT_ID, TELEGRAM_WEBHOOK_SECRET. Webhook: npm run telegram:set-webhook → https://applitaxi.space/api/telegram/webhook. (f501fc06)",
+  },
+  {
     date: "2026-07-19",
     title: "Sales Operation: My Space task hub & pipeline stage gates (0.2.43)",
     notes:
