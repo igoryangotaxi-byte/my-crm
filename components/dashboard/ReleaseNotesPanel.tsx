@@ -9,7 +9,7 @@ const releaseItems: ReleaseItem[] = [
     date: "2026-07-20",
     title: "Feedback status updates in the notifications bell (0.2.45)",
     notes:
-      "App version 0.2.45. Telegram feedback status changes now show clearly in the Sales Operation notifications bell: the feedback title as the headline and the new status in the body (e.g. Feedback status → Done). Opening the bell refreshes the list immediately so updates appear without waiting for the 60s poll.",
+      "App version 0.2.45. Telegram feedback status changes now show clearly in the Sales Operation notifications bell: the feedback title as the headline and the new status in the body (e.g. Feedback status → Done). Opening the bell refreshes the list immediately so updates appear without waiting for the 60s poll. (9e86650e)",
   },
   {
     date: "2026-07-20",
