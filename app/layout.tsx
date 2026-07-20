@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import "./globals.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -44,7 +45,10 @@ export default function RootLayout({
       className={`${yangoText.variable} ${yangoHeadline.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          {children}
+          <FeedbackWidget />
+        </AuthProvider>
       </body>
     </html>
   );

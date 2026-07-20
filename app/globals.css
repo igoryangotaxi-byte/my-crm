@@ -1028,6 +1028,19 @@ details.rr-make-panel[open] > .rr-make-panel-body-clip > .rr-make-panel-body {
   }
 }
 
+/* Dialog overlay / focus — needed for FeedbackWidget Modal outside SO routes */
+.so-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(15, 18, 24, 0.44);
+}
+
+.so-focus-ring:focus-visible {
+  outline: none;
+  box-shadow: var(--so-focus-ring);
+}
+
 /* Keep MapLibre markers/popups above map canvas and interactive overlays */
 .maplibregl-canvas-container,
 .maplibregl-canvas {
