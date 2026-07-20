@@ -5,7 +5,9 @@
  *   TELEGRAM_WEBHOOK_URL=https://applitaxi.space/api/telegram/webhook \
  *   node scripts/telegram-set-webhook.mjs
  */
-require("dotenv").config({ path: ".env.local", quiet: true });
+import dotenv from "dotenv";
+
+dotenv.config({ path: ".env.local", quiet: true });
 
 async function main() {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
