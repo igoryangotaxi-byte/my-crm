@@ -23,6 +23,10 @@ export type UpdateSalesClientInput = {
   accountManagerName?: string | null;
   salesManagerUserId?: string | null;
   salesManagerName?: string | null;
+  fullName?: string;
+  email?: string | null;
+  phone?: string | null;
+  companyName?: string | null;
 };
 
 export type ManagerPortfolioClientRow = {

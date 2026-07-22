@@ -50,6 +50,8 @@
     "tab": {
       "pipeline": "צינור",
       "mySpace": "המרחב שלי",
+      "mySpaceTasks": "משימות",
+      "calendar": "יומן",
       "portfolio": "תיק AM",
       "b2bClients": "סקירת לקוחות B2B",
       "analyticsGroup": "אנליטיקה",
@@ -105,6 +107,12 @@
       "campaign": "קמפיין",
       "segment": "סגמנט",
       "potential": "פוטנציאל חודשי ₪",
+      "monthlyTrips": "נסיעות חודשיות משוערות",
+      "website": "אתר",
+      "address": "כתובת",
+      "expectedCloseDate": "תאריך סגירה צפוי",
+      "generalNotes": "הערות כלליות",
+      "legalName": "שם משפטי",
       "owner": "אחראי",
       "pricingProposal": "תמחור / הצעה",
       "pricingAmount": "סכום הצעה ₪",
@@ -121,6 +129,14 @@
       "saved": "הפוטנציאל החודשי עודכן",
       "saveFailed": "לא ניתן לעדכן את הפוטנציאל החודשי",
       "invalid": "הפוטנציאל החודשי חייב להיות אפס או יותר."
+    },
+    "owner": {
+      "set": "שייך אחראי",
+      "edit": "שנה אחראי",
+      "save": "שמור אחראי",
+      "saved": "האחראי עודכן",
+      "saveFailed": "לא ניתן לעדכן את האחראי",
+      "moving": "מעביר…"
     },
     "filter": {
       "search": "חיפוש שם, חברה…",
@@ -282,6 +298,7 @@
         "assigned": "שהוקצו",
         "created": "שנוצרו על ידי",
         "notes": "הערות",
+        "calendar": "יומן",
         "scorecard": "כרטיס ביצועים"
       },
       "tasks": {
@@ -305,6 +322,69 @@
         "deleteConfirm": "למחוק הערה זו? לא ניתן לבטל.",
         "created": "ההערה נשמרה",
         "deleted": "ההערה נמחקה"
+      }
+    },
+    "calendar": {
+      "connect": "חבר Google Calendar",
+      "disconnect": "נתק Google",
+      "connected": "Google Calendar חובר",
+      "connectFailed": "לא ניתן לחבר את Google Calendar",
+      "disconnected": "Google Calendar נותק",
+      "legendMeeting": "פגישות",
+      "legendTask": "משימות אישיות",
+      "legendLeadTask": "משימות ליד",
+      "newMeeting": "קבע פגישה",
+      "meetingTitle": "כותרת פגישה",
+      "add": "הוסף פגישה",
+      "meetingCreated": "הפגישה נוצרה",
+      "meetingSynced": "הפגישה נוצרה וסונכרנה ל-Google Calendar",
+      "meetingFailed": "לא ניתן ליצור פגישה",
+      "taskEditor": "משימה",
+      "reschedule": "שנה מועד",
+      "completeTask": "סמן כבוצע",
+      "taskCompleted": "המשימה הושלמה",
+      "taskRescheduled": "מועד המשימה עודכן",
+      "taskUpdateFailed": "לא ניתן לעדכן את המשימה",
+      "startsAt": "התחלה",
+      "endsAt": "סיום",
+      "notes": "הערות / סדר יום",
+      "notesPlaceholder": "סדר יום, החלטות, המשכים…",
+      "addNote": "הוסף הערה",
+      "addNotePlaceholder": "כתוב הערה להוספה…",
+      "appendNote": "הוסף הערה",
+      "meetingSaved": "הפגישה נשמרה",
+      "meetingSaveFailed": "לא ניתן לשמור את הפגישה",
+      "meetingDeleted": "הפגישה נמחקה",
+      "meetingDeleteFailed": "לא ניתן למחוק את הפגישה",
+      "deleteMeeting": "מחק פגישה",
+      "deleteMeetingTitle": "למחוק את הפגישה?",
+      "deleteMeetingConfirm": "הפגישה תוסר מהיומן. אם היא מסונכרנת, היא תימחק גם מ-Google Calendar.",
+      "syncedWithGoogle": "מסונכרן עם Google",
+      "openClient": "פתח פרופיל לקוח",
+      "updatedAt": "עודכן"
+    },
+    "clientProfile": {
+      "saved": "פרופיל הלקוח נשמר",
+      "emptyActivity": "אין עדיין פעילות — הוסף הערה, משימה, מייל או פגישה למטה.",
+      "submit": "הוסף",
+      "activityAdded": "נוסף לפעילות",
+      "mailSent": "המייל נשלח",
+      "meetingSynced": "הפגישה נוצרה וסונכרנה ל-Google Calendar",
+      "mailTo": "אל",
+      "mailSubject": "נושא",
+      "titlePlaceholder": "כותרת",
+      "dealSection": "פרטי עסקה",
+      "bubble": {
+        "task": "משימה",
+        "note": "הערה",
+        "mail": "מייל",
+        "meeting": "פגישה"
+      },
+      "placeholder": {
+        "task": "מה צריך לעשות?",
+        "note": "כתוב הערה…",
+        "mail": "גוף המייל…",
+        "meeting": "אג'נדה לפגישה (רשות)…"
       }
     },
     "activity": {
@@ -548,6 +628,10 @@
       "tasks": {
         "title": "המרחב שלי",
         "subtitle": "המשימות האישיות שלך, עבודה שהוקצתה, הערות וכרטיס ביצועים"
+      },
+      "calendar": {
+        "title": "יומן",
+        "subtitle": "פגישות מסונכרנות עם Google Calendar, משימות אישיות באפליקציה"
       },
       "portfolio": {
         "title": "תיק AM",

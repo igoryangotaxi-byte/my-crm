@@ -60,6 +60,7 @@ export async function POST(request: Request) {
     "supabase_auth_roles_account_sales_managers.sql",
     "supabase_sales_automation.sql",
     "supabase_list_active_corp_clients.sql",
+    "supabase_sales_client_activity.sql",
   ];
   const client = new Client({
     connectionString: resolveDatabaseUrl(),

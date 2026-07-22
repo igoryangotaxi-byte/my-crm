@@ -30,6 +30,9 @@ function mapPersonalTaskRow(row: Record<string, unknown>): PersonalTask {
     priority: normalizeTaskPriority(row.priority),
     dueAt: readText(row.due_at),
     completedAt: readText(row.completed_at),
+    clientId: typeof row.client_id === "string" ? row.client_id : null,
+    leadId: typeof row.lead_id === "string" ? row.lead_id : null,
+    sourceClientId: typeof row.source_client_id === "string" ? row.source_client_id : null,
     createdAt: String(row.created_at ?? new Date().toISOString()),
     updatedAt: String(row.updated_at ?? new Date().toISOString()),
   };
@@ -43,6 +46,9 @@ function mapPersonalNoteRow(row: Record<string, unknown>): PersonalNote {
     title: readText(row.title),
     body: String(row.body ?? ""),
     pinned: Boolean(row.pinned),
+    clientId: typeof row.client_id === "string" ? row.client_id : null,
+    sourceClientNoteId:
+      typeof row.source_client_note_id === "string" ? row.source_client_note_id : null,
     createdAt: String(row.created_at ?? new Date().toISOString()),
     updatedAt: String(row.updated_at ?? new Date().toISOString()),
   };
@@ -83,6 +89,9 @@ export async function createPersonalTask(
     status: "open",
     priority: normalizeTaskPriority(input.priority),
     due_at: input.dueAt?.trim() || null,
+    client_id: input.clientId?.trim() || null,
+    lead_id: input.leadId?.trim() || null,
+    source_client_id: input.sourceClientId?.trim() || null,
     created_at: now,
     updated_at: now,
   };
@@ -168,6 +177,8 @@ export async function createPersonalNote(
     title: input.title?.trim() || null,
     body,
     pinned: Boolean(input.pinned),
+    client_id: input.clientId?.trim() || null,
+    source_client_note_id: input.sourceClientNoteId?.trim() || null,
     created_at: now,
     updated_at: now,
   };

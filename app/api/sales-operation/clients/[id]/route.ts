@@ -110,6 +110,10 @@ export async function PATCH(request: Request, context: RouteContext) {
       ),
       salesManagerUserId: body.salesManagerUserId,
       salesManagerName: resolveManagerName(body.salesManagerUserId, body.salesManagerName, store.users),
+      fullName: body.fullName,
+      email: body.email,
+      phone: body.phone,
+      companyName: body.companyName,
     });
     return Response.json({ ok: true, client }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

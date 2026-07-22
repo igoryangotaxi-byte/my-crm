@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { formatSalesDateTime } from "@/lib/sales-operation/display";
+import { getPlatformStaffUserOptions } from "@/lib/sales-operation/crm-manager-users";
 import { sortTasks, taskDueBucket } from "@/lib/sales-operation/task-utils";
 import { TaskDetailDrawer } from "@/components/sales-operation/tasks/TaskDetailDrawer";
 import {
@@ -34,6 +35,15 @@ const emptyDraft: TaskDraft = {
   assignedToUserId: "",
 };
 
+function defaultDueAtLocal(): string {
+  const date = new Date();
+  date.setHours(date.getHours() + 2, 0, 0, 0);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours(),
+  )}:${pad(date.getMinutes())}`;
+}
+
 function toLocalInput(iso: string | null): string {
   if (!iso) return "";
   const date = new Date(iso);
@@ -54,6 +64,7 @@ export function SalesLeadTasksSection({
   const t = useTranslations("salesOperation");
   const confirm = useConfirm();
   const { users, currentUser } = useAuth();
+  const staffOptions = useMemo(() => getPlatformStaffUserOptions(users), [users]);
   const [tasks, setTasks] = useState<SalesTask[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -89,8 +100,12 @@ export function SalesLeadTasksSection({
 
   const startAdd = () => {
     setEditingId(null);
-    // Default the assignee to the current user so new tasks show up in "My tasks".
-    setDraft({ ...emptyDraft, assignedToUserId: currentUser?.id ?? "" });
+    // Default assignee = current user; default due so the task lands on their calendar.
+    setDraft({
+      ...emptyDraft,
+      assignedToUserId: currentUser?.id ?? "",
+      dueAt: defaultDueAtLocal(),
+    });
     setShowForm(true);
     setError(null);
   };
@@ -373,7 +388,7 @@ export function SalesLeadTasksSection({
               }
             >
               <option value="">{t("task.unassigned")}</option>
-              {users.map((user) => (
+              {staffOptions.map((user) => (
                 <option key={user.id} value={user.id}>
                   {user.name}
                 </option>

@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Dialog";
-import { getAccountManagerUserOptions } from "@/lib/sales-operation/crm-manager-users";
+import { getAccountManagerUserOptions, getPlatformStaffUserOptions } from "@/lib/sales-operation/crm-manager-users";
 import { formatSalesStatus } from "@/lib/sales-operation/display";
 import type { StageMissingField } from "@/lib/sales-operation/status-transitions";
 import type { B2BClientRegistryEntry } from "@/lib/sales-operation/manager-types";
@@ -51,6 +51,7 @@ export function StageGateModal({
   const tg = useTranslations("salesOperation.stageGate");
   const { users, currentUser } = useAuth();
   const amOptions = useMemo(() => getAccountManagerUserOptions(users), [users]);
+  const staffOptions = useMemo(() => getPlatformStaffUserOptions(users), [users]);
 
   const missingKeys = useMemo(() => new Set(missing.map((m) => m.key)), [missing]);
 
@@ -311,7 +312,7 @@ export function StageGateModal({
                 value={followUpAssignee}
                 onChange={(e) => setFollowUpAssignee(e.target.value)}
               >
-                {users.map((user) => (
+                {staffOptions.map((user) => (
                   <option key={user.id} value={user.id}>
                     {user.name}
                   </option>

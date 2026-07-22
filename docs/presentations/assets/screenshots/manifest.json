@@ -1,0 +1,62 @@
+[
+  {
+    "name": "pipeline",
+    "path": "/sales-operation/pipeline",
+    "file": "screenshots/pipeline.png",
+    "ok": true
+  },
+  {
+    "name": "my-space",
+    "path": "/sales-operation/tasks",
+    "file": "screenshots/my-space.png",
+    "ok": true
+  },
+  {
+    "name": "portfolio",
+    "path": "/sales-operation/portfolio",
+    "file": "screenshots/portfolio.png",
+    "ok": true
+  },
+  {
+    "name": "b2b-clients",
+    "path": "/sales-operation/b2b-clients",
+    "file": "screenshots/b2b-clients.png",
+    "ok": true
+  },
+  {
+    "name": "analytics",
+    "path": "/sales-operation/analytics",
+    "file": "screenshots/analytics.png",
+    "ok": true
+  },
+  {
+    "name": "manager-analytics",
+    "path": "/sales-operation/manager-analytics",
+    "file": "screenshots/manager-analytics.png",
+    "ok": true
+  },
+  {
+    "name": "performance",
+    "path": "/sales-operation/performance",
+    "file": "screenshots/performance.png",
+    "ok": true
+  },
+  {
+    "name": "automation",
+    "path": "/sales-operation/automation",
+    "file": "screenshots/automation.png",
+    "ok": true
+  },
+  {
+    "name": "settings",
+    "path": "/sales-operation/settings",
+    "file": "screenshots/settings.png",
+    "ok": true
+  },
+  {
+    "name": "pipeline-lead",
+    "path": "/sales-operation/pipeline",
+    "file": "screenshots/pipeline-lead.png",
+    "ok": true
+  }
+]

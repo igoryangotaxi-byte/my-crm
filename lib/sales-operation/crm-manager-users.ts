@@ -6,8 +6,17 @@ export type CrmManagerUserOption = {
   role: AppRole;
 };
 
+/** Approved internal users with platform access (excludes pending/rejected and client-portal accounts). */
 export function isInternalCrmUser(user: AuthUser): boolean {
   return user.status === "approved" && (user.accountType ?? "internal") !== "client";
+}
+
+/** All platform staff — for assignees, owners, filters, and general employee pickers. */
+export function getPlatformStaffUserOptions(users: AuthUser[]): CrmManagerUserOption[] {
+  return users
+    .filter(isInternalCrmUser)
+    .map((user) => ({ id: user.id, name: user.name, role: user.role }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function getAccountManagerUserOptions(users: AuthUser[]): CrmManagerUserOption[] {

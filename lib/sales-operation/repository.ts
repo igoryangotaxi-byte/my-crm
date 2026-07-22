@@ -514,13 +514,24 @@ export async function updateSalesLead(
       payload.status = encoded.status;
       payload.status_entered_at = now;
       // First-touch Sales Manager: assign acting user when empty.
-      if (!existing.assignedManagerUserId && actor.userId) {
+      // Explicit reassignment below wins when the client sends assignedManagerUserId.
+      if (
+        input.assignedManagerUserId === undefined &&
+        !existing.assignedManagerUserId &&
+        actor.userId
+      ) {
         payload.assigned_manager_user_id = actor.userId;
         payload.assigned_manager_name = actor.name || actor.userId;
       }
     } else if (isCompatStatus(existing.status)) {
       // Keep DB encoding aligned for compat-status leads when editing other fields.
       payload.status = encoded.status;
+    }
+    if (input.assignedManagerUserId !== undefined) {
+      payload.assigned_manager_user_id = input.assignedManagerUserId || null;
+      payload.assigned_manager_name = input.assignedManagerUserId
+        ? input.assignedManagerName?.trim() || input.assignedManagerUserId
+        : null;
     }
 
     const { data, error } = await supabase
@@ -535,6 +546,20 @@ export async function updateSalesLead(
 
   const preferNative = proposalSentPersistedNatively;
   const lead = await writeUpdate(preferNative);
+
+  if (
+    lead.assignedManagerUserId &&
+    lead.assignedManagerUserId !== existing.assignedManagerUserId &&
+    lead.assignedManagerUserId !== actor.userId
+  ) {
+    await createNotification({
+      userId: lead.assignedManagerUserId,
+      type: "lead_assigned",
+      title: `You were assigned a lead: ${lead.companyName || lead.fullName}`,
+      leadId: lead.id,
+      link: "/sales-operation/pipeline",
+    });
+  }
 
   if (nextStatus !== existing.status) {
     const { error: eventError } = await supabase.from("sales_lead_status_events").insert({
@@ -664,6 +689,11 @@ export async function updateSalesClient(
   const now = new Date().toISOString();
   const clientPayload: Record<string, unknown> = { updated_at: now };
 
+  if (input.fullName !== undefined) clientPayload.full_name = input.fullName.trim();
+  if (input.email !== undefined) clientPayload.email = input.email?.trim() || null;
+  if (input.phone !== undefined) clientPayload.phone = input.phone?.trim() || null;
+  if (input.companyName !== undefined) clientPayload.company_name = input.companyName?.trim() || null;
+
   if (input.corpClientId !== undefined) {
     const normalized = input.corpClientId ? normalizeCorpClientId(input.corpClientId) : null;
     if (normalized) {
@@ -727,7 +757,56 @@ export async function updateSalesClient(
 
   const refreshed = await getSalesClientById(id);
   if (!refreshed) throw new Error("Client not found after update.");
+
+  // Keep the linked lead contact fields in sync when client profile is edited.
+  if (
+    refreshed.leadId &&
+    (input.fullName !== undefined ||
+      input.email !== undefined ||
+      input.phone !== undefined ||
+      input.companyName !== undefined)
+  ) {
+    const leadPatch: Record<string, unknown> = { updated_at: now };
+    if (input.fullName !== undefined) leadPatch.full_name = input.fullName.trim();
+    if (input.email !== undefined) leadPatch.email = input.email?.trim() || null;
+    if (input.phone !== undefined) leadPatch.phone = input.phone?.trim() || null;
+    if (input.companyName !== undefined) leadPatch.company_name = input.companyName?.trim() || null;
+    const { error: leadError } = await supabase
+      .from("sales_leads")
+      .update(leadPatch)
+      .eq("id", refreshed.leadId);
+    if (leadError) {
+      console.error("Failed to sync lead fields from client update:", leadError.message);
+    }
+  }
+
   return refreshed;
+}
+
+export async function createSalesClientNote(input: {
+  clientId: string;
+  body: string;
+  authorUserId: string | null;
+  authorName: string;
+}): Promise<SalesClientNote> {
+  const body = input.body.trim();
+  if (!body) throw new Error("Note body is required.");
+  const supabase = getSupabaseAdminClient();
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("sales_client_notes")
+    .insert({
+      client_id: input.clientId,
+      author_user_id: input.authorUserId,
+      author_name: input.authorName,
+      body,
+      created_at: now,
+      updated_at: now,
+    })
+    .select("*")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Failed to create client note.");
+  return mapClientNoteRow(data as Record<string, unknown>);
 }
 
 export async function listSalesClientNotes(clientId: string): Promise<SalesClientNote[]> {

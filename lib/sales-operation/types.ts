@@ -204,6 +204,9 @@ export type PersonalTask = {
   priority: SalesTaskPriority;
   dueAt: string | null;
   completedAt: string | null;
+  clientId: string | null;
+  leadId: string | null;
+  sourceClientId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -213,6 +216,9 @@ export type CreatePersonalTaskInput = {
   description?: string | null;
   priority?: SalesTaskPriority;
   dueAt?: string | null;
+  clientId?: string | null;
+  leadId?: string | null;
+  sourceClientId?: string | null;
 };
 
 export type UpdatePersonalTaskInput = Partial<
@@ -226,6 +232,8 @@ export type PersonalNote = {
   title: string | null;
   body: string;
   pinned: boolean;
+  clientId: string | null;
+  sourceClientNoteId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -234,6 +242,8 @@ export type CreatePersonalNoteInput = {
   title?: string | null;
   body: string;
   pinned?: boolean;
+  clientId?: string | null;
+  sourceClientNoteId?: string | null;
 };
 
 export type UpdatePersonalNoteInput = Partial<CreatePersonalNoteInput>;

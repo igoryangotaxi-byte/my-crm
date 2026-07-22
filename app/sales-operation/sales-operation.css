@@ -149,6 +149,38 @@
   }
 }
 
+@keyframes so-lead-move-pulse {
+  0%,
+  100% {
+    opacity: 0.62;
+  }
+  50% {
+    opacity: 0.92;
+  }
+}
+
+@keyframes so-lead-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.so-lead-moving {
+  animation: so-lead-move-pulse 0.9s var(--ease-ui) infinite;
+  border-style: dashed !important;
+  pointer-events: none;
+  cursor: wait;
+}
+
+.so-lead-arrive {
+  animation: so-lead-arrive 280ms var(--ease-ui) both;
+}
+
 /* Premium thin scrollbars inside the module. */
 [data-module="sales-operation"] *::-webkit-scrollbar {
   width: 10px;

@@ -77,6 +77,7 @@ export function TaskDetailDrawer({
   const [reassignOpen, setReassignOpen] = useState(false);
   const [followUpOpen, setFollowUpOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [quickNote, setQuickNote] = useState("");
 
   const load = useCallback(async () => {
     if (!taskId || !open) return;
@@ -104,8 +105,16 @@ export function TaskDetailDrawer({
         setResultSummary(data.task.resultSummary ?? "");
         setPersonalTask(null);
       } else {
-        const task = seedPersonalTask?.id === taskId ? seedPersonalTask : null;
-        if (!task) throw new Error("Task not found.");
+        const task =
+          seedPersonalTask?.id === taskId
+            ? seedPersonalTask
+            : personalTask?.id === taskId
+              ? personalTask
+              : null;
+        if (!task) {
+          onOpenChange(false);
+          return;
+        }
         setPersonalTask(task);
         setLeadTask(null);
         setEvents([]);
@@ -117,6 +126,7 @@ export function TaskDetailDrawer({
         setDueAt(toLocalInput(task.dueAt));
         setTaskType("");
         setResultSummary("");
+        setQuickNote("");
       }
     } catch (err) {
       toastError(err instanceof Error ? err.message : "Failed to load task.");
@@ -129,6 +139,14 @@ export function TaskDetailDrawer({
   useEffect(() => {
     void load();
   }, [load]);
+
+  const appendNote = () => {
+    if (!quickNote.trim()) return;
+    const stamp = new Date().toLocaleString();
+    const block = `[${stamp}]\n${quickNote.trim()}`;
+    setDescription((prev) => (prev.trim() ? `${prev.trim()}\n\n${block}` : block));
+    setQuickNote("");
+  };
 
   const save = async () => {
     if (!taskId) return;
@@ -327,6 +345,38 @@ export function TaskDetailDrawer({
                   onChange={(e) => setDescription(e.target.value)}
                 />
               </label>
+
+              <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-3">
+                <p className="mb-2 text-xs font-semibold text-[var(--so-muted)]">
+                  {t("calendar.addNote")}
+                </p>
+                <textarea
+                  className="crm-input min-h-[72px] w-full px-3 py-2 text-sm"
+                  value={quickNote}
+                  onChange={(e) => setQuickNote(e.target.value)}
+                  placeholder={t("calendar.addNotePlaceholder")}
+                />
+                <div className="mt-2 flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={!quickNote.trim()}
+                    onClick={appendNote}
+                  >
+                    {t("calendar.appendNote")}
+                  </Button>
+                </div>
+              </div>
+
+              {kind === "personal" && personalTask?.clientId ? (
+                <Link
+                  href={`/sales-operation/b2b-clients/${personalTask.clientId}`}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--so-accent-strong)] hover:underline"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  {t("calendar.openClient")}
+                </Link>
+              ) : null}
 
               {kind === "lead" ? (
                 <>

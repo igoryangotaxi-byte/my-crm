@@ -55,7 +55,14 @@ export async function globalSearch(query: string, limit = 20): Promise<SearchRes
       title: client.companyName || client.fullName,
       subtitle: compact([client.fullName, client.email, client.phone]),
       href: `/sales-operation/b2b-clients/${client.id}`,
-      haystack: compact([client.fullName, client.companyName, client.email, client.phone]),
+      haystack: compact([
+        client.fullName,
+        client.companyName,
+        client.email,
+        client.phone,
+        client.corpClientId,
+        client.corpClientName,
+      ]),
     });
   }
 

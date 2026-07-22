@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Dialog";
+import { getPlatformStaffUserOptions } from "@/lib/sales-operation/crm-manager-users";
 
 export function ReassignTaskModal({
   open,
@@ -26,6 +27,7 @@ export function ReassignTaskModal({
 }) {
   const t = useTranslations("salesOperation.taskHub");
   const { users } = useAuth();
+  const staffOptions = useMemo(() => getPlatformStaffUserOptions(users), [users]);
   const [userId, setUserId] = useState("");
   const [dueAt, setDueAt] = useState(currentDueAt?.slice(0, 16) ?? "");
   const [comment, setComment] = useState("");
@@ -69,7 +71,7 @@ export function ReassignTaskModal({
             onChange={(e) => setUserId(e.target.value)}
           >
             <option value="">—</option>
-            {users.map((user) => (
+            {staffOptions.map((user) => (
               <option key={user.id} value={user.id}>
                 {user.name}
               </option>

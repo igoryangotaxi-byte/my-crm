@@ -1,0 +1,25 @@
+{
+  "base": "http://localhost:3000",
+  "userId": "user-admin-1",
+  "candidate": {
+    "id": "695f9dce-4df7-4182-bef2-61ec1da93825",
+    "label": "Gal Taxi LTD",
+    "fromStatus": "proposal_sent",
+    "toStatus": "negotiation",
+    "missing": [
+      {
+        "key": "estimatedMonthlyPotential",
+        "label": "Monthly potential (₪)"
+      },
+      {
+        "key": "pricingProposal",
+        "label": "Pricing / proposal sent to client"
+      },
+      {
+        "key": "followUpTask",
+        "label": "Follow-up with client task"
+      }
+    ]
+  },
+  "capturedAt": "2026-07-19T17:45:00.006Z"
+}

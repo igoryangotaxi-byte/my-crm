@@ -50,6 +50,8 @@
     "tab": {
       "pipeline": "Pipeline",
       "mySpace": "My Space",
+      "mySpaceTasks": "Tasks",
+      "calendar": "Calendar",
       "portfolio": "AM Portfolio",
       "b2bClients": "B2B Clients Overview",
       "analyticsGroup": "Analytics",
@@ -105,6 +107,12 @@
       "campaign": "Campaign",
       "segment": "Segment",
       "potential": "Monthly potential ₪",
+      "monthlyTrips": "Est. monthly trips",
+      "website": "Website",
+      "address": "Address",
+      "expectedCloseDate": "Expected close",
+      "generalNotes": "General notes",
+      "legalName": "Legal name",
       "owner": "Owner",
       "pricingProposal": "Pricing / proposal",
       "pricingAmount": "Proposal amount ₪",
@@ -121,6 +129,14 @@
       "saved": "Monthly potential updated",
       "saveFailed": "Could not update monthly potential",
       "invalid": "Monthly potential must be zero or greater."
+    },
+    "owner": {
+      "set": "Assign owner",
+      "edit": "Change owner",
+      "save": "Save owner",
+      "saved": "Owner updated",
+      "saveFailed": "Could not update owner",
+      "moving": "Moving…"
     },
     "filter": {
       "search": "Search name, company…",
@@ -282,6 +298,7 @@
         "assigned": "Assigned",
         "created": "Created by Me",
         "notes": "Notes",
+        "calendar": "Calendar",
         "scorecard": "Scorecard"
       },
       "tasks": {
@@ -305,6 +322,69 @@
         "deleteConfirm": "Delete this note? This cannot be undone.",
         "created": "Note saved",
         "deleted": "Note deleted"
+      }
+    },
+    "calendar": {
+      "connect": "Connect Google Calendar",
+      "disconnect": "Disconnect Google",
+      "connected": "Google Calendar connected",
+      "connectFailed": "Could not connect Google Calendar",
+      "disconnected": "Google Calendar disconnected",
+      "legendMeeting": "Meetings",
+      "legendTask": "Personal tasks",
+      "legendLeadTask": "Lead tasks",
+      "newMeeting": "Schedule a meeting",
+      "meetingTitle": "Meeting title",
+      "add": "Add meeting",
+      "meetingCreated": "Meeting created",
+      "meetingSynced": "Meeting created and synced to Google Calendar",
+      "meetingFailed": "Could not create meeting",
+      "taskPanel": "Task",
+      "reschedule": "Reschedule",
+      "completeTask": "Mark done",
+      "taskCompleted": "Task completed",
+      "taskRescheduled": "Task rescheduled",
+      "taskUpdateFailed": "Could not update task",
+      "startsAt": "Starts",
+      "endsAt": "Ends",
+      "notes": "Notes / agenda",
+      "notesPlaceholder": "Agenda, decisions, follow-ups…",
+      "addNote": "Add a note",
+      "addNotePlaceholder": "Write a note to append…",
+      "appendNote": "Append note",
+      "meetingSaved": "Meeting saved",
+      "meetingSaveFailed": "Could not save meeting",
+      "meetingDeleted": "Meeting deleted",
+      "meetingDeleteFailed": "Could not delete meeting",
+      "deleteMeeting": "Delete meeting",
+      "deleteMeetingTitle": "Delete this meeting?",
+      "deleteMeetingConfirm": "This removes the meeting from the calendar. If synced, it will also be removed from Google Calendar.",
+      "syncedWithGoogle": "Synced with Google",
+      "openClient": "Open client profile",
+      "updatedAt": "Updated"
+    },
+    "clientProfile": {
+      "saved": "Client profile saved",
+      "emptyActivity": "No activity yet — add a note, task, email or meeting below.",
+      "submit": "Add",
+      "activityAdded": "Added to activity",
+      "mailSent": "Email sent",
+      "meetingSynced": "Meeting created and synced to Google Calendar",
+      "mailTo": "To",
+      "mailSubject": "Subject",
+      "titlePlaceholder": "Title",
+      "dealSection": "Deal details",
+      "bubble": {
+        "task": "Task",
+        "note": "Note",
+        "mail": "Mail",
+        "meeting": "Meeting"
+      },
+      "placeholder": {
+        "task": "What needs to be done?",
+        "note": "Write a note…",
+        "mail": "Email body…",
+        "meeting": "Meeting agenda (optional)…"
       }
     },
     "activity": {
@@ -548,6 +628,10 @@
       "tasks": {
         "title": "My Space",
         "subtitle": "Your personal tasks, assigned work, notes, and scorecard"
+      },
+      "calendar": {
+        "title": "Calendar",
+        "subtitle": "Meetings synced with Google Calendar, personal tasks in-app"
       },
       "portfolio": {
         "title": "AM Portfolio",

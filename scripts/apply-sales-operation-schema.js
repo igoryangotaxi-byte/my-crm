@@ -50,6 +50,7 @@ async function main() {
     "supabase_sales_task_hub.sql",
     "supabase_sales_stage_gates.sql",
     "supabase_feedback_requests.sql",
+    "supabase_sales_client_activity.sql",
   ];
   const client = new Client({
     connectionString: resolveDatabaseUrl(),

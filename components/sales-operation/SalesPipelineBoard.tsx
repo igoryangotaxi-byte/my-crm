@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Check, Mail, MessageSquare, Pencil, Phone, Plus, Search, X } from "lucide-react";
+import { Check, Loader2, Mail, MessageSquare, Pencil, Phone, Plus, Search, X } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Button } from "@/components/ui/Button";
@@ -24,6 +24,7 @@ import {
   StageGateModal,
   type StageGateConfirmPayload,
 } from "@/components/sales-operation/StageGateModal";
+import { getPlatformStaffUserOptions } from "@/lib/sales-operation/crm-manager-users";
 import {
   computeWeightedPipelineValue,
   defaultPipelineStages,
@@ -71,6 +72,7 @@ const emptyDraft = {
   pricingAmount: "",
   contractNumber: "",
   corpClientId: "",
+  assignedManagerUserId: "",
   status: "new" as SalesLeadStatus,
 };
 
@@ -104,6 +106,7 @@ export function SalesLeadDetailSidebar({
   const t = useTranslations("salesOperation");
   const confirm = useConfirm();
   const { users } = useAuth();
+  const staffOptions = useMemo(() => getPlatformStaffUserOptions(users), [users]);
   const [draft, setDraft] = useState(emptyDraft);
   const [notes, setNotes] = useState<SalesLeadNote[]>([]);
   const [linkedClient, setLinkedClient] = useState<SalesClient | null>(null);
@@ -192,6 +195,7 @@ export function SalesLeadDetailSidebar({
       pricingAmount: lead.pricingAmount?.toString() ?? "",
       contractNumber: lead.contractNumber ?? "",
       corpClientId: lead.corpClientId ?? "",
+      assignedManagerUserId: lead.assignedManagerUserId ?? "",
       status: lead.status,
     });
     setError(null);
@@ -243,6 +247,7 @@ export function SalesLeadDetailSidebar({
       setError(null);
       try {
         const pricingAmount = draft.pricingAmount.trim() ? Number(draft.pricingAmount) : null;
+        const ownerName = users.find((user) => user.id === draft.assignedManagerUserId)?.name;
         const res = await fetch(`/api/sales-operation/leads/${lead.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -259,6 +264,8 @@ export function SalesLeadDetailSidebar({
               pricingAmount !== null && Number.isFinite(pricingAmount) ? pricingAmount : null,
             contractNumber: draft.contractNumber.trim() || null,
             corpClientId: draft.corpClientId.trim() || null,
+            assignedManagerUserId: draft.assignedManagerUserId || null,
+            assignedManagerName: draft.assignedManagerUserId ? ownerName ?? null : null,
           }),
         });
         const data = (await res.json()) as { ok?: boolean; lead?: SalesLead; error?: string };
@@ -277,6 +284,7 @@ export function SalesLeadDetailSidebar({
     setError(null);
     try {
       const pricingAmount = draft.pricingAmount.trim() ? Number(draft.pricingAmount) : null;
+      const ownerName = users.find((user) => user.id === draft.assignedManagerUserId)?.name;
       const res = await fetch(`/api/sales-operation/leads/${lead.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -293,6 +301,8 @@ export function SalesLeadDetailSidebar({
             pricingAmount !== null && Number.isFinite(pricingAmount) ? pricingAmount : null,
           contractNumber: draft.contractNumber.trim() || null,
           corpClientId: draft.corpClientId.trim() || null,
+          assignedManagerUserId: draft.assignedManagerUserId || null,
+          assignedManagerName: draft.assignedManagerUserId ? ownerName ?? null : null,
           status: draft.status,
         }),
       });
@@ -510,11 +520,6 @@ export function SalesLeadDetailSidebar({
           <span className="text-xs text-[var(--so-muted)]">
             {t("statusEntered", { date: formatSalesDateTime(d.statusEnteredAt) })}
           </span>
-          {d.assignedManagerName ? (
-            <span className="inline-flex max-w-full truncate rounded-full bg-emerald-50 px-2 py-0.5 text-[0.68rem] font-semibold text-emerald-800">
-              {d.assignedManagerName}
-            </span>
-          ) : null}
         </div>
 
         <div className="flex flex-wrap gap-1.5">
@@ -701,6 +706,24 @@ export function SalesLeadDetailSidebar({
                   <option key={stage.key} value={stage.key}>
                     {stage.label}
                     {!stage.isActive ? ` · ${t("settings.inactive")}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block text-sm">
+              <span className="crm-label">{t("field.owner")}</span>
+              <select
+                className="crm-input mt-1 h-10 w-full px-3 text-sm"
+                value={draft.assignedManagerUserId}
+                onChange={(event) =>
+                  setDraft((prev) => ({ ...prev, assignedManagerUserId: event.target.value }))
+                }
+              >
+                <option value="">{t("manager.unassigned")}</option>
+                {staffOptions.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name}
                   </option>
                 ))}
               </select>
@@ -977,6 +1000,8 @@ const emptyCreateDraft = {
 type LeadCardProps = {
   lead: SalesLead;
   selected: boolean;
+  moving?: boolean;
+  justArrived?: boolean;
   title: string;
   contact: string | null;
   potentialLabel: string | null;
@@ -984,15 +1009,19 @@ type LeadCardProps = {
   dateLabel: string;
   daysLabel: string;
   daysTitle: string;
+  ownerOptions: Array<{ id: string; name: string }>;
   onSelect: (id: string) => void;
   onDragStart: (id: string, event: React.DragEvent) => void;
   onDragEnd: () => void;
   onUpdatePotential: (id: string, value: number | null) => Promise<boolean>;
+  onUpdateOwner: (id: string, userId: string | null, userName: string | null) => Promise<boolean>;
 };
 
 const LeadCard = memo(function LeadCard({
   lead,
   selected,
+  moving = false,
+  justArrived = false,
   title,
   contact,
   potentialLabel,
@@ -1000,15 +1029,20 @@ const LeadCard = memo(function LeadCard({
   dateLabel,
   daysLabel,
   daysTitle,
+  ownerOptions,
   onSelect,
   onDragStart,
   onDragEnd,
   onUpdatePotential,
+  onUpdateOwner,
 }: LeadCardProps) {
   const t = useTranslations("salesOperation");
   const [editingPotential, setEditingPotential] = useState(false);
   const [potentialDraft, setPotentialDraft] = useState("");
   const [savingPotential, setSavingPotential] = useState(false);
+  const [editingOwner, setEditingOwner] = useState(false);
+  const [ownerDraft, setOwnerDraft] = useState("");
+  const [savingOwner, setSavingOwner] = useState(false);
 
   const openPotentialEditor = () => {
     setPotentialDraft(lead.estimatedMonthlyPotential?.toString() ?? "");
@@ -1024,30 +1058,67 @@ const LeadCard = memo(function LeadCard({
     if (saved) setEditingPotential(false);
   };
 
+  const openOwnerEditor = () => {
+    setOwnerDraft(lead.assignedManagerUserId ?? "");
+    setEditingOwner(true);
+  };
+
+  const saveOwner = async () => {
+    const userId = ownerDraft.trim() || null;
+    const userName = userId
+      ? ownerOptions.find((user) => user.id === userId)?.name ?? userId
+      : null;
+    setSavingOwner(true);
+    const saved = await onUpdateOwner(lead.id, userId, userName);
+    setSavingOwner(false);
+    if (saved) setEditingOwner(false);
+  };
+
+  const editing = editingPotential || editingOwner;
+
   return (
     <div
       role="group"
       aria-label={title}
+      aria-busy={moving || undefined}
       tabIndex={0}
-      draggable={!editingPotential}
-      onDragStart={(event) => onDragStart(lead.id, event)}
+      draggable={!editing && !moving}
+      onDragStart={(event) => {
+        if (moving || editing) {
+          event.preventDefault();
+          return;
+        }
+        onDragStart(lead.id, event);
+      }}
       onDragEnd={onDragEnd}
-      onClick={() => onSelect(lead.id)}
+      onClick={() => {
+        if (!moving) onSelect(lead.id);
+      }}
       onKeyDown={(event) => {
-        if (!editingPotential && (event.key === "Enter" || event.key === " ")) {
+        if (!editing && !moving && (event.key === "Enter" || event.key === " ")) {
           event.preventDefault();
           onSelect(lead.id);
         }
       }}
       className={cn(
-        "group w-full cursor-pointer rounded-[12px] border bg-[var(--so-surface)] p-3 text-left transition-[box-shadow,border-color,transform] duration-150",
+        "group w-full cursor-pointer rounded-[12px] border bg-[var(--so-surface)] p-3 text-left transition-[box-shadow,border-color,transform,opacity] duration-150",
         "hover:-translate-y-px hover:shadow-[var(--so-shadow-md)] active:translate-y-0",
         selected
           ? "border-[var(--so-accent)] shadow-[0_0_0_1px_var(--so-accent)]"
           : "border-[var(--so-border)] shadow-[var(--so-shadow-xs)] hover:border-[var(--so-border-strong)]",
+        moving && "so-lead-moving",
+        justArrived && !moving && "so-lead-arrive",
       )}
     >
-      <p className="truncate text-sm font-semibold text-[var(--so-text)]">{title}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-w-0 truncate text-sm font-semibold text-[var(--so-text)]">{title}</p>
+        {moving ? (
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--so-accent-soft)] px-1.5 py-0.5 text-[0.62rem] font-semibold text-[var(--so-accent-strong)]">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            {t("owner.moving")}
+          </span>
+        ) : null}
+      </div>
       {contact ? <p className="truncate text-xs text-[var(--so-muted)]">{contact}</p> : null}
       <div className="mt-2 flex flex-wrap items-center gap-1">
         {editingPotential ? (
@@ -1094,6 +1165,7 @@ const LeadCard = memo(function LeadCard({
         ) : (
           <button
             type="button"
+            disabled={moving}
             aria-label={potentialLabel ? t("potential.edit") : t("potential.set")}
             onKeyDown={(event) => event.stopPropagation()}
             onClick={(event) => {
@@ -1121,11 +1193,74 @@ const LeadCard = memo(function LeadCard({
             {lead.campaignName}
           </span>
         ) : null}
-        {lead.assignedManagerName ? (
-          <span className="inline-flex max-w-full truncate rounded-full bg-emerald-50 px-2 py-0.5 text-[0.68rem] font-semibold text-emerald-800">
-            {lead.assignedManagerName}
-          </span>
-        ) : null}
+        {editingOwner ? (
+          <div
+            className="flex h-8 w-full items-center gap-1 rounded-[9px] border border-emerald-400 bg-[var(--so-surface)] p-1 shadow-[0_0_0_2px_rgba(16,185,129,0.18)]"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <select
+              autoFocus
+              aria-label={t("field.owner")}
+              value={ownerDraft}
+              onChange={(event) => setOwnerDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void saveOwner();
+                if (event.key === "Escape") setEditingOwner(false);
+              }}
+              className="min-w-0 flex-1 bg-transparent px-1 text-xs font-semibold text-[var(--so-text)] outline-none"
+            >
+              <option value="">{t("manager.unassigned")}</option>
+              {ownerOptions.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={savingOwner}
+              aria-label={t("owner.save")}
+              onClick={() => void saveOwner()}
+              className="so-focus-ring inline-flex h-6 w-6 items-center justify-center rounded-[6px] bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              <Check className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              disabled={savingOwner}
+              aria-label={t("cancel")}
+              onClick={() => setEditingOwner(false)}
+              className="so-focus-ring inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[var(--so-muted)] hover:bg-[var(--so-surface-hover)]"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            disabled={moving}
+            aria-label={lead.assignedManagerName ? t("owner.edit") : t("owner.set")}
+            onKeyDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              openOwnerEditor();
+            }}
+            className={cn(
+              "so-focus-ring inline-flex max-w-full items-center gap-1 truncate rounded-full px-2 py-0.5 text-[0.68rem] font-semibold transition-colors",
+              lead.assignedManagerName
+                ? "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                : "border border-dashed border-emerald-300 text-emerald-700 hover:bg-emerald-50",
+            )}
+          >
+            {lead.assignedManagerName ? (
+              <Pencil className="h-2.5 w-2.5 shrink-0" />
+            ) : (
+              <Plus className="h-2.5 w-2.5 shrink-0" />
+            )}
+            <span className="truncate">{lead.assignedManagerName ?? t("owner.set")}</span>
+          </button>
+        )}
       </div>
       <div className="mt-2 flex items-center justify-between text-xs text-[var(--so-muted)]">
         <span>{dateLabel}</span>
@@ -1138,6 +1273,7 @@ const LeadCard = memo(function LeadCard({
 export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
   const t = useTranslations("salesOperation");
   const { users, currentUser } = useAuth();
+  const staffOptions = useMemo(() => getPlatformStaffUserOptions(users), [users]);
   const toast = useToast();
   const [leads, setLeads] = useState<SalesLead[]>(initialLeads);
   const [stages, setStages] = useState<PipelineStage[]>(() => defaultPipelineStages());
@@ -1146,6 +1282,9 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
   const [error, setError] = useState<string | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
+  const [pendingMoves, setPendingMoves] = useState<Record<string, SalesLead>>({});
+  const [arrivedLeadIds, setArrivedLeadIds] = useState<Record<string, true>>({});
+  const arrivedTimersRef = useRef<Record<string, number>>({});
   const [showCreate, setShowCreate] = useState(false);
   const [createDraft, setCreateDraft] = useState(emptyCreateDraft);
   const [creating, setCreating] = useState(false);
@@ -1331,20 +1470,10 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
     return [...set].sort();
   }, [leads]);
 
-  const ownerOptions = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const lead of leads) {
-      if (lead.assignedManagerUserId) {
-        map.set(lead.assignedManagerUserId, lead.assignedManagerName ?? lead.assignedManagerUserId);
-      }
-    }
-    // Ensure the current user is always selectable (so the "my leads" default and
-    // self-assignment stay visible even before they own any lead).
-    if (currentUser?.id && !map.has(currentUser.id)) {
-      map.set(currentUser.id, currentUser.name ?? currentUser.id);
-    }
-    return [...map.entries()].map(([id, name]) => ({ id, name }));
-  }, [leads, currentUser]);
+  const ownerOptions = useMemo(
+    () => getPlatformStaffUserOptions(users).map((user) => ({ id: user.id, name: user.name })),
+    [users],
+  );
 
   const filtersActive = useMemo(
     () => Object.values(filters).some((value) => value.trim() !== ""),
@@ -1385,6 +1514,61 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
   }, [filteredLeads, visibleStages]);
 
   const selectedLead = leads.find((lead) => lead.id === selectedLeadId) ?? null;
+
+  useEffect(() => {
+    const timers = arrivedTimersRef.current;
+    return () => {
+      for (const timer of Object.values(timers)) window.clearTimeout(timer);
+    };
+  }, []);
+
+  const clearPendingMove = useCallback((leadId: string) => {
+    setPendingMoves((prev) => {
+      if (!(leadId in prev)) return prev;
+      const next = { ...prev };
+      delete next[leadId];
+      return next;
+    });
+  }, []);
+
+  const markLeadArrived = useCallback((leadId: string) => {
+    setArrivedLeadIds((prev) => ({ ...prev, [leadId]: true }));
+    if (arrivedTimersRef.current[leadId]) {
+      window.clearTimeout(arrivedTimersRef.current[leadId]);
+    }
+    arrivedTimersRef.current[leadId] = window.setTimeout(() => {
+      setArrivedLeadIds((prev) => {
+        if (!(leadId in prev)) return prev;
+        const next = { ...prev };
+        delete next[leadId];
+        return next;
+      });
+      delete arrivedTimersRef.current[leadId];
+    }, 320);
+  }, []);
+
+  const applyOptimisticMove = useCallback((lead: SalesLead, toStatus: SalesLeadStatus) => {
+    setPendingMoves((prev) => ({ ...prev, [lead.id]: lead }));
+    setLeads((prev) =>
+      prev.map((item) =>
+        item.id === lead.id
+          ? { ...item, status: toStatus, statusEnteredAt: new Date().toISOString() }
+          : item,
+      ),
+    );
+  }, []);
+
+  const revertOptimisticMove = useCallback((leadId: string, snapshot: SalesLead) => {
+    setPendingMoves((prev) => {
+      if (!(leadId in prev)) return prev;
+      const next = { ...prev };
+      delete next[leadId];
+      return next;
+    });
+    setLeads((leadsPrev) =>
+      leadsPrev.map((item) => (item.id === leadId ? snapshot : item)),
+    );
+  }, []);
 
   const applyTransition = async (
     leadId: string,
@@ -1430,7 +1614,10 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
       missing?: StageMissingField[];
     };
     if (res.status === 422 && data.code === "STAGE_REQUIREMENTS") {
-      const lead = leads.find((item) => item.id === leadId) ?? null;
+      const lead =
+        pendingMoves[leadId] ??
+        leads.find((item) => item.id === leadId) ??
+        null;
       setGateLead(lead);
       setGateToStatus(toStatus);
       setGateMissing(data.missing ?? []);
@@ -1441,10 +1628,13 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
       throw new Error(data.error ?? "Failed to update status.");
     }
     setLeads((prev) => prev.map((item) => (item.id === leadId ? data.lead! : item)));
+    clearPendingMove(leadId);
+    markLeadArrived(leadId);
     return data.lead;
   };
 
   const moveLeadToStatus = async (leadId: string, status: SalesLeadStatus) => {
+    if (pendingMoves[leadId]) return;
     const lead = leads.find((item) => item.id === leadId);
     if (!lead || lead.status === status) return;
 
@@ -1457,8 +1647,10 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
       return;
     }
 
+    const snapshot = lead;
+    applyOptimisticMove(lead, status);
+
     try {
-      // Preflight without optimistic move.
       const preflightRes = await fetch(`/api/sales-operation/leads/${leadId}/transition`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1474,7 +1666,8 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
         throw new Error(preflight.error ?? "Failed to validate stage move.");
       }
       if (!preflight.ok && (preflight.missing?.length ?? 0) > 0) {
-        setGateLead(preflight.lead ?? lead);
+        revertOptimisticMove(leadId, snapshot);
+        setGateLead(preflight.lead ?? snapshot);
         setGateToStatus(status);
         setGateMissing(preflight.missing ?? []);
         setGateOpen(true);
@@ -1482,9 +1675,59 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
       }
 
       const updated = await applyTransition(leadId, status);
-      if (updated) toast.success(t("stageGate.moved", { status: updated.status }));
+      if (!updated) {
+        revertOptimisticMove(leadId, snapshot);
+        return;
+      }
+      toast.success(t("stageGate.moved", { status: updated.status }));
     } catch (err) {
+      revertOptimisticMove(leadId, snapshot);
       setError(err instanceof Error ? err.message : "Failed to update status.");
+    }
+  };
+
+  const updateLeadOwner = async (
+    leadId: string,
+    userId: string | null,
+    userName: string | null,
+  ): Promise<boolean> => {
+    const previousLead = leads.find((lead) => lead.id === leadId);
+    if (!previousLead) return false;
+    if (
+      (previousLead.assignedManagerUserId ?? null) === userId &&
+      (previousLead.assignedManagerName ?? null) === userName
+    ) {
+      return true;
+    }
+
+    setLeads((prev) =>
+      prev.map((lead) =>
+        lead.id === leadId
+          ? { ...lead, assignedManagerUserId: userId, assignedManagerName: userName }
+          : lead,
+      ),
+    );
+
+    try {
+      const res = await fetch(`/api/sales-operation/leads/${leadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assignedManagerUserId: userId,
+          assignedManagerName: userName,
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; lead?: SalesLead; error?: string };
+      if (!res.ok || !data.ok || !data.lead) {
+        throw new Error(data.error ?? "Failed to update owner.");
+      }
+      setLeads((prev) => prev.map((lead) => (lead.id === leadId ? data.lead! : lead)));
+      toast.success(t("owner.saved"));
+      return true;
+    } catch (err) {
+      setLeads((prev) => prev.map((lead) => (lead.id === leadId ? previousLead : lead)));
+      toast.error(t("owner.saveFailed"), err instanceof Error ? err.message : undefined);
+      return false;
     }
   };
 
@@ -1795,6 +2038,8 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
                         key={lead.id}
                         lead={lead}
                         selected={selectedLeadId === lead.id}
+                        moving={Boolean(pendingMoves[lead.id])}
+                        justArrived={Boolean(arrivedLeadIds[lead.id])}
                         title={cardTitle}
                         contact={showContact ? lead.fullName : null}
                         potentialLabel={potentialLabel}
@@ -1802,6 +2047,7 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
                         dateLabel={formatSalesDate(lead.statusEnteredAt)}
                         daysLabel={t("card.days", { count: daysInStage(lead.statusEnteredAt) })}
                         daysTitle={t("card.daysInStage")}
+                        ownerOptions={ownerOptions}
                         onSelect={setSelectedLeadId}
                         onDragStart={(id, event) => {
                           setDraggingLeadId(id);
@@ -1810,6 +2056,7 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
                         }}
                         onDragEnd={() => setDraggingLeadId(null)}
                         onUpdatePotential={updateLeadPotential}
+                        onUpdateOwner={updateLeadOwner}
                       />
                     );
                   })
@@ -1848,13 +2095,18 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
         onConfirm={async (payload) => {
           if (!gateLead || !gateToStatus) return;
           setGateLoading(true);
+          const snapshot = gateLead;
+          applyOptimisticMove(gateLead, gateToStatus);
           try {
             const updated = await applyTransition(gateLead.id, gateToStatus, payload);
             if (updated) {
               setGateOpen(false);
               toast.success(t("stageGate.moved", { status: updated.status }));
+            } else {
+              revertOptimisticMove(gateLead.id, snapshot);
             }
           } catch (err) {
+            revertOptimisticMove(gateLead.id, snapshot);
             setError(err instanceof Error ? err.message : "Failed to update status.");
           } finally {
             setGateLoading(false);
@@ -1955,7 +2207,7 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
                   }
                 >
                   <option value="">{t("manager.unassigned")}</option>
-                  {users.map((user) => (
+                  {staffOptions.map((user) => (
                     <option key={user.id} value={user.id}>
                       {user.name}
                     </option>

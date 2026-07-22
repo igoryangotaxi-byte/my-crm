@@ -1971,6 +1971,12 @@ export function B2BPreOrdersPanel({
       if (yangoSalesManagerFilter !== "all" && (row.salesManagerUserId ?? "") !== yangoSalesManagerFilter) {
         return false;
       }
+      const query = yangoClientSearch.trim().toLowerCase();
+      if (query) {
+        const name = row.clientName.toLowerCase();
+        const id = row.clientId.toLowerCase();
+        if (!name.includes(query) && !id.includes(query)) return false;
+      }
       return true;
     });
 
@@ -2082,6 +2088,7 @@ export function B2BPreOrdersPanel({
     yangoFromDate,
     yangoToDate,
     yangoSalesManagerFilter,
+    yangoClientSearch,
   ]);
 
   const [selectedYangoClients, setSelectedYangoClients] = useState<Set<string>>(new Set());
@@ -2250,6 +2257,37 @@ export function B2BPreOrdersPanel({
       salesManagerUserId: entry?.salesManager.userId ?? "",
     });
     setManagerSaveError(null);
+  };
+
+  const [openingClientId, setOpeningClientId] = useState<string | null>(null);
+  const openClientProfile = async (corpClientId: string, clientName: string) => {
+    if (!isB2bClientsOverview) {
+      router.push(
+        buildYangoClientTripsHref({
+          corpClientId,
+          clientName,
+          from: yangoFromDate,
+          to: yangoToDate,
+        }),
+      );
+      return;
+    }
+    setOpeningClientId(corpClientId);
+    try {
+      const res = await fetch("/api/sales-operation/b2b-clients/ensure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ corpClientId, clientName }),
+      });
+      const data = (await res.json()) as { ok?: boolean; clientId?: string; error?: string };
+      if (!res.ok || !data.ok || !data.clientId) {
+        throw new Error(data.error ?? "Failed to open client profile.");
+      }
+      router.push(`/sales-operation/b2b-clients/${data.clientId}`);
+    } catch (error) {
+      console.error(error);
+      setOpeningClientId(null);
+    }
   };
 
   const saveRegistryManagers = async () => {
@@ -3040,23 +3078,34 @@ export function B2BPreOrdersPanel({
                       </td>
                       <td className="px-3 py-2 align-top text-[var(--so-text)]">
                         <div className="px-1 py-0.5">
-                          <Link
-                            href={buildYangoClientTripsHref({
-                              corpClientId: row.clientId,
-                              clientName: row.clientName,
-                              from: yangoFromDate,
-                              to: yangoToDate,
-                            })}
-                            className="group/client block rounded-lg transition-colors"
+                          <button
+                            type="button"
+                            disabled={openingClientId === row.clientId}
+                            onClick={() => void openClientProfile(row.clientId, row.clientName)}
+                            className="group/client block w-full rounded-lg text-left transition-colors disabled:opacity-60"
                           >
                             <div className="font-semibold text-[var(--so-text)] group-hover/client:text-[var(--so-accent-strong)]">
-                              {row.clientName}
+                              {openingClientId === row.clientId ? "Opening…" : row.clientName}
                             </div>
                             {row.clientName !== row.clientId ? (
                               <div className="text-[11px] text-[var(--so-muted-2)]">{row.clientId}</div>
                             ) : null}
-                          </Link>
+                          </button>
                           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <Link
+                              href={buildYangoClientTripsHref({
+                                corpClientId: row.clientId,
+                                clientName: row.clientName,
+                                from: yangoFromDate,
+                                to: yangoToDate,
+                              })}
+                              className="inline-flex text-[11px] font-medium text-[var(--so-muted)] transition-colors hover:text-[var(--so-accent-strong)]"
+                            >
+                              Trips
+                            </Link>
+                            <span className="text-[11px] text-[var(--so-muted-2)]" aria-hidden>
+                              ·
+                            </span>
                             <a
                               href={`https://corp-admin-frontend.taxi.yandex-team.ru/corp-clients?search=${encodeURIComponent(
                                 row.clientId,

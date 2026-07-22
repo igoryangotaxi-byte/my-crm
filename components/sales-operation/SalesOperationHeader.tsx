@@ -18,6 +18,7 @@ import {
 const salesOperationPageMeta: Record<string, { titleKey: string; subtitleKey: string }> = {
   "/sales-operation/pipeline": { titleKey: "page.pipeline.title", subtitleKey: "page.pipeline.subtitle" },
   "/sales-operation/tasks": { titleKey: "page.tasks.title", subtitleKey: "page.tasks.subtitle" },
+  "/sales-operation/calendar": { titleKey: "page.calendar.title", subtitleKey: "page.calendar.subtitle" },
   "/sales-operation/portfolio": { titleKey: "page.portfolio.title", subtitleKey: "page.portfolio.subtitle" },
   "/sales-operation/b2b-clients/trips": { titleKey: "page.b2bClientTrips.title", subtitleKey: "page.b2bClientTrips.subtitle" },
   "/sales-operation/b2b-clients": { titleKey: "page.b2bClients.title", subtitleKey: "page.b2bClients.subtitle" },

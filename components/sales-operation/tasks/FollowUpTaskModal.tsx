@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Dialog";
+import { getPlatformStaffUserOptions } from "@/lib/sales-operation/crm-manager-users";
 
 export function FollowUpTaskModal({
   open,
@@ -27,6 +28,7 @@ export function FollowUpTaskModal({
 }) {
   const t = useTranslations("salesOperation.taskHub");
   const { users, currentUser } = useAuth();
+  const staffOptions = useMemo(() => getPlatformStaffUserOptions(users), [users]);
   const [title, setTitle] = useState(defaultTitle);
   const [description, setDescription] = useState("");
   const [dueAt, setDueAt] = useState("");
@@ -96,7 +98,7 @@ export function FollowUpTaskModal({
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
           >
-            {users.map((user) => (
+            {staffOptions.map((user) => (
               <option key={user.id} value={user.id}>
                 {user.name}
               </option>

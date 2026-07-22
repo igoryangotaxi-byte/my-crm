@@ -7,6 +7,7 @@ import {
   BarChart3,
   Briefcase,
   Building2,
+  CalendarClock,
   ChevronDown,
   Columns3,
   LayoutDashboard,
@@ -72,7 +73,27 @@ export function SalesOperationSidebar() {
 
   const nav: NavNode[] = useMemo(
     () => [
-      { kind: "leaf", href: "/sales-operation/tasks", labelKey: "mySpace", page: "salesPipeline", icon: LayoutGrid, badge: taskCount ?? undefined },
+      {
+        kind: "group",
+        id: "mySpace",
+        labelKey: "mySpace",
+        icon: LayoutGrid,
+        children: [
+          {
+            href: "/sales-operation/tasks",
+            labelKey: "mySpaceTasks",
+            page: "salesPipeline",
+            icon: LayoutGrid,
+            badge: taskCount ?? undefined,
+          },
+          {
+            href: "/sales-operation/calendar",
+            labelKey: "calendar",
+            page: "salesPipeline",
+            icon: CalendarClock,
+          },
+        ],
+      },
       { kind: "leaf", href: "/sales-operation/pipeline", labelKey: "pipeline", page: "salesPipeline", icon: Columns3 },
       { kind: "leaf", href: "/sales-operation/portfolio", labelKey: "portfolio", page: "salesSignedClients", icon: Briefcase },
       { kind: "leaf", href: "/sales-operation/b2b-clients", labelKey: "b2bClients", page: "salesB2BClients", icon: Building2 },
@@ -362,7 +383,8 @@ function NavGroupItem({
                       active ? "bg-[var(--so-accent)]" : "bg-[var(--so-border-strong)]",
                     )}
                   />
-                  <span className="truncate">{t(`tab.${child.labelKey}`)}</span>
+                  <span className="flex-1 truncate">{t(`tab.${child.labelKey}`)}</span>
+                  {child.badge ? <Badge count={child.badge} /> : null}
                 </Link>
               );
             })}

@@ -37,6 +37,14 @@ import type {
 
 type SpaceTab = "tasks" | "assigned" | "created" | "notes" | "scorecard";
 
+const TAB_ICONS: Record<SpaceTab, React.ReactNode> = {
+  tasks: <ListChecks className="h-4 w-4" />,
+  assigned: <Inbox className="h-4 w-4" />,
+  created: <Plus className="h-4 w-4" />,
+  notes: <StickyNote className="h-4 w-4" />,
+  scorecard: <Gauge className="h-4 w-4" />,
+};
+
 const BUCKET_ORDER: TaskDueBucket[] = ["overdue", "today", "upcoming", "no_due", "done"];
 
 const bucketTone: Record<TaskDueBucket, string> = {
@@ -45,14 +53,6 @@ const bucketTone: Record<TaskDueBucket, string> = {
   upcoming: "text-[var(--so-muted)]",
   no_due: "text-[var(--so-muted-2)]",
   done: "text-[var(--so-muted-2)]",
-};
-
-const TAB_ICONS: Record<SpaceTab, React.ReactNode> = {
-  tasks: <ListChecks className="h-4 w-4" />,
-  assigned: <Inbox className="h-4 w-4" />,
-  created: <ListChecks className="h-4 w-4" />,
-  notes: <StickyNote className="h-4 w-4" />,
-  scorecard: <Gauge className="h-4 w-4" />,
 };
 
 function StatusFilter({
@@ -126,6 +126,28 @@ function TaskListSkeleton() {
 export function MySpaceView() {
   const t = useTranslations("salesOperation");
   const [tab, setTab] = useState<SpaceTab>("tasks");
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const requested = params.get("tab");
+      if (requested === "calendar") {
+        window.location.replace("/sales-operation/calendar");
+        return;
+      }
+      if (
+        requested === "tasks" ||
+        requested === "assigned" ||
+        requested === "created" ||
+        requested === "notes" ||
+        requested === "scorecard"
+      ) {
+        setTab(requested);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const tabs: SpaceTab[] = ["tasks", "assigned", "created", "notes", "scorecard"];
   const showPrivacyHint = tab === "tasks" || tab === "notes";
