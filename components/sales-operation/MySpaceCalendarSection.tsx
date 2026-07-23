@@ -8,16 +8,17 @@ import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/ui/cn";
 import type { PersonalTask, SalesTaskWithLead } from "@/lib/sales-operation/types";
 import type { SalesMeeting } from "@/lib/sales-operation/meetings";
+import type { TrackerTicket } from "@/lib/sales-operation/tracker-types";
 import { MeetingDetailDrawer } from "@/components/sales-operation/MeetingDetailDrawer";
 import { TaskDetailDrawer } from "@/components/sales-operation/tasks/TaskDetailDrawer";
 
 type CalendarEvent = {
   id: string;
-  kind: "meeting" | "personal_task" | "lead_task";
+  kind: "meeting" | "personal_task" | "lead_task" | "tracker_ticket";
   title: string;
   startsAt: Date;
   endsAt: Date;
-  meta?: { meetingId?: string; taskId?: string };
+  meta?: { meetingId?: string; taskId?: string; href?: string };
 };
 
 type SelectedTask = { kind: "personal" | "lead"; id: string };
@@ -52,6 +53,7 @@ export function MySpaceCalendarSection() {
   const [meetings, setMeetings] = useState<SalesMeeting[]>([]);
   const [personalTasks, setPersonalTasks] = useState<PersonalTask[]>([]);
   const [leadTasks, setLeadTasks] = useState<SalesTaskWithLead[]>([]);
+  const [trackerTickets, setTrackerTickets] = useState<TrackerTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [gcalConnected, setGcalConnected] = useState(false);
   const [gcalConfigured, setGcalConfigured] = useState(false);
@@ -84,13 +86,14 @@ export function MySpaceCalendarSection() {
       const from = startOfMonth(cursor).toISOString();
       const to = addDays(startOfMonth(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)), -1);
       to.setHours(23, 59, 59, 999);
-      const [meetingsRes, personalRes, leadRes, statusRes] = await Promise.all([
+      const [meetingsRes, personalRes, leadRes, trackerRes, statusRes] = await Promise.all([
         fetch(
           `/api/sales-operation/meetings?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to.toISOString())}`,
           { cache: "no-store" },
         ),
         fetch("/api/sales-operation/personal/tasks?status=open", { cache: "no-store" }),
         fetch("/api/sales-operation/tasks?scope=mine&status=open", { cache: "no-store" }),
+        fetch("/api/sales-operation/tracker/mine?scope=mine&includeDone=1", { cache: "no-store" }),
         fetch("/api/google/calendar/status", { cache: "no-store" }),
       ]);
       const meetingsData = (await meetingsRes.json()) as {
@@ -99,6 +102,10 @@ export function MySpaceCalendarSection() {
       };
       const personalData = (await personalRes.json()) as { ok?: boolean; tasks?: PersonalTask[] };
       const leadData = (await leadRes.json()) as { ok?: boolean; tasks?: SalesTaskWithLead[] };
+      const trackerData = (await trackerRes.json()) as {
+        ok?: boolean;
+        tickets?: TrackerTicket[];
+      };
       const statusData = (await statusRes.json()) as {
         ok?: boolean;
         connected?: boolean;
@@ -107,6 +114,7 @@ export function MySpaceCalendarSection() {
       if (meetingsRes.ok && meetingsData.ok) setMeetings(meetingsData.meetings ?? []);
       if (personalRes.ok && personalData.ok) setPersonalTasks(personalData.tasks ?? []);
       if (leadRes.ok && leadData.ok) setLeadTasks(leadData.tasks ?? []);
+      if (trackerRes.ok && trackerData.ok) setTrackerTickets(trackerData.tickets ?? []);
       if (statusRes.ok && statusData.ok) {
         setGcalConnected(Boolean(statusData.connected));
         setGcalConfigured(Boolean(statusData.configured));
@@ -164,8 +172,22 @@ export function MySpaceCalendarSection() {
         meta: { taskId: task.id },
       });
     }
+    for (const ticket of trackerTickets) {
+      if (!ticket.dueAt || ticket.archivedAt) continue;
+      const due = new Date(ticket.dueAt);
+      list.push({
+        id: `tt:${ticket.id}`,
+        kind: "tracker_ticket",
+        title: ticket.projectName ? `${ticket.title} · ${ticket.projectName}` : ticket.title,
+        startsAt: due,
+        endsAt: due,
+        meta: {
+          href: `/sales-operation/tracker/${ticket.projectId}?ticket=${ticket.id}`,
+        },
+      });
+    }
     return list;
-  }, [meetings, personalTasks, leadTasks]);
+  }, [meetings, personalTasks, leadTasks, trackerTickets]);
 
   const days = useMemo(() => {
     const first = startOfMonth(cursor);
@@ -229,6 +251,12 @@ export function MySpaceCalendarSection() {
       return cn(
         "bg-violet-50 text-violet-800 hover:bg-violet-100",
         active && "ring-1 ring-violet-400",
+      );
+    }
+    if (kind === "tracker_ticket") {
+      return cn(
+        "bg-emerald-50 text-emerald-800 hover:bg-emerald-100",
+        active && "ring-1 ring-emerald-400",
       );
     }
     return cn("bg-amber-50 text-amber-800 hover:bg-amber-100", active && "ring-1 ring-amber-400");
@@ -375,6 +403,9 @@ export function MySpaceCalendarSection() {
                             if (event.kind === "personal_task" && taskId) openTask("personal", taskId);
                             else if (event.kind === "lead_task" && taskId) openTask("lead", taskId);
                             else if (event.kind === "meeting" && meetingId) openMeeting(meetingId);
+                            else if (event.kind === "tracker_ticket" && event.meta?.href) {
+                              window.location.href = event.meta.href;
+                            }
                           }}
                           className={cn(
                             "block w-full truncate rounded px-1 py-0.5 text-left text-[0.65rem] font-semibold transition-colors",

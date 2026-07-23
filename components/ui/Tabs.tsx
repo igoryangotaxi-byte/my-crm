@@ -71,7 +71,7 @@ export function Tabs<T extends string>({
             {item.icon ? <span className="relative z-[1] flex">{item.icon}</span> : null}
             <span className="relative z-[1]">{item.label}</span>
             {item.badge != null ? (
-              <span className="relative z-[1] inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-[var(--so-accent-soft)] px-1.5 text-[0.6875rem] font-bold text-[var(--so-accent-strong)]">
+              <span className="relative z-[1] inline-flex min-w-[1.15rem] items-center justify-center rounded-full bg-[var(--so-accent)] px-1.5 text-[0.6875rem] font-bold text-white">
                 {item.badge}
               </span>
             ) : null}

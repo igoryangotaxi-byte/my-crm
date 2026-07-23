@@ -14,6 +14,7 @@ import {
   Plus,
   StickyNote,
   Trash2,
+  FolderKanban,
   X,
 } from "lucide-react";
 import { formatSalesDateTime } from "@/lib/sales-operation/display";
@@ -34,13 +35,17 @@ import type {
   SalesTaskPriority,
   SalesTaskWithLead,
 } from "@/lib/sales-operation/types";
+import type { TrackerTicket } from "@/lib/sales-operation/tracker-types";
+import type { SalesNotification } from "@/lib/sales-operation/types";
+import Link from "next/link";
 
-type SpaceTab = "tasks" | "assigned" | "created" | "notes" | "scorecard";
+type SpaceTab = "tasks" | "assigned" | "created" | "tracker" | "notes" | "scorecard";
 
 const TAB_ICONS: Record<SpaceTab, React.ReactNode> = {
   tasks: <ListChecks className="h-4 w-4" />,
   assigned: <Inbox className="h-4 w-4" />,
   created: <Plus className="h-4 w-4" />,
+  tracker: <FolderKanban className="h-4 w-4" />,
   notes: <StickyNote className="h-4 w-4" />,
   scorecard: <Gauge className="h-4 w-4" />,
 };
@@ -123,9 +128,49 @@ function TaskListSkeleton() {
   );
 }
 
+function isTrackerNotification(item: SalesNotification): boolean {
+  if (item.link?.includes("/sales-operation/tracker/")) return true;
+  return (
+    item.type === "mention" ||
+    item.type === "tracker_assigned" ||
+    item.type === "tracker_comment" ||
+    item.type === "tracker_status" ||
+    item.type === "tracker_completed" ||
+    item.type === "tracker_due"
+  );
+}
+
 export function MySpaceView() {
   const t = useTranslations("salesOperation");
   const [tab, setTab] = useState<SpaceTab>("tasks");
+  const [trackerMentionCount, setTrackerMentionCount] = useState(0);
+  const [trackerMentions, setTrackerMentions] = useState<SalesNotification[]>([]);
+
+  const loadTrackerMentions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sales-operation/notifications?unread=1&limit=50", {
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        ok?: boolean;
+        notifications?: SalesNotification[];
+      };
+      if (!data.ok) return;
+      const trackerItems = (data.notifications ?? []).filter(isTrackerNotification);
+      const mentions = trackerItems.filter((item) => item.type === "mention");
+      setTrackerMentions(mentions);
+      setTrackerMentionCount(mentions.length);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTrackerMentions();
+    const timer = window.setInterval(() => void loadTrackerMentions(), 60_000);
+    return () => window.clearInterval(timer);
+  }, [loadTrackerMentions]);
 
   useEffect(() => {
     try {
@@ -139,6 +184,7 @@ export function MySpaceView() {
         requested === "tasks" ||
         requested === "assigned" ||
         requested === "created" ||
+        requested === "tracker" ||
         requested === "notes" ||
         requested === "scorecard"
       ) {
@@ -149,7 +195,7 @@ export function MySpaceView() {
     }
   }, []);
 
-  const tabs: SpaceTab[] = ["tasks", "assigned", "created", "notes", "scorecard"];
+  const tabs: SpaceTab[] = ["tasks", "assigned", "created", "tracker", "notes", "scorecard"];
   const showPrivacyHint = tab === "tasks" || tab === "notes";
 
   return (
@@ -162,6 +208,12 @@ export function MySpaceView() {
             value,
             label: t(`mySpace.tab.${value}`),
             icon: TAB_ICONS[value],
+            badge:
+              value === "tracker" && trackerMentionCount > 0
+                ? trackerMentionCount > 9
+                  ? "9+"
+                  : trackerMentionCount
+                : undefined,
           }))}
         />
         {showPrivacyHint ? (
@@ -175,6 +227,14 @@ export function MySpaceView() {
       {tab === "tasks" ? <PersonalTasksSection /> : null}
       {tab === "assigned" ? <LeadTasksSection scope="mine" /> : null}
       {tab === "created" ? <LeadTasksSection scope="created" showAssignee /> : null}
+      {tab === "tracker" ? (
+        <TrackerTicketsSection
+          mentions={trackerMentions}
+          onMentionsSeen={() => {
+            void loadTrackerMentions();
+          }}
+        />
+      ) : null}
       {tab === "notes" ? <PersonalNotesSection /> : null}
       {tab === "scorecard" ? <MyScorecardSection /> : null}
     </div>
@@ -688,6 +748,139 @@ function LeadTasksSection({
         taskId={drawerTaskId}
         onChanged={() => void load()}
       />
+    </section>
+  );
+}
+
+function TrackerTicketsSection({
+  mentions,
+  onMentionsSeen,
+}: {
+  mentions: SalesNotification[];
+  onMentionsSeen: () => void;
+}) {
+  const t = useTranslations("salesOperation");
+  const [scope, setScope] = useState<"mine" | "created">("mine");
+  const [tickets, setTickets] = useState<TrackerTicket[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/sales-operation/tracker/mine?scope=${scope}`, {
+        cache: "no-store",
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        tickets?: TrackerTicket[];
+        error?: string;
+      };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Failed to load Tracker tickets.");
+      setTickets(data.tickets ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load Tracker tickets.");
+    } finally {
+      setLoading(false);
+    }
+  }, [scope]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const markMentionRead = async (item: SalesNotification) => {
+    if (!item.isRead) {
+      await fetch("/api/sales-operation/notifications/read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [item.id] }),
+      });
+      onMentionsSeen();
+    }
+  };
+
+  return (
+    <section className="space-y-4">
+      {mentions.length > 0 ? (
+        <div className="space-y-2 rounded-[14px] border border-[var(--so-accent)]/30 bg-[var(--so-accent-soft)] p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-bold uppercase tracking-wide text-[var(--so-accent-strong)]">
+              {t("tracker.mentionsTitle")}
+            </p>
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--so-accent)] px-1.5 text-[0.65rem] font-bold text-white">
+              {mentions.length}
+            </span>
+          </div>
+          <ul className="space-y-1.5">
+            {mentions.map((item) => (
+              <li key={item.id}>
+                <Link
+                  href={item.link ?? "/sales-operation/tracker"}
+                  onClick={() => void markMentionRead(item)}
+                  className="block rounded-[10px] border border-[var(--so-border)] bg-[var(--so-surface)] px-3 py-2 transition hover:border-[var(--so-accent)]"
+                >
+                  <p className="text-sm font-semibold text-[var(--so-text)]">{item.title}</p>
+                  {item.body ? (
+                    <p className="mt-0.5 line-clamp-2 text-xs text-[var(--so-muted)]">{item.body}</p>
+                  ) : null}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="flex items-center gap-2">
+        <div className="inline-flex items-center gap-1 rounded-[10px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-0.5">
+          {(["mine", "created"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setScope(option)}
+              className={cn(
+                "rounded-[8px] px-2.5 py-1 text-xs font-semibold transition-colors",
+                scope === option
+                  ? "bg-[var(--so-surface)] text-[var(--so-text)] shadow-[var(--so-shadow-xs)]"
+                  : "text-[var(--so-muted)] hover:text-[var(--so-text)]",
+              )}
+            >
+              {option === "mine" ? t("mySpace.tab.assigned") : t("mySpace.tab.created")}
+            </button>
+          ))}
+        </div>
+      </div>
+      {loading ? <TaskListSkeleton /> : null}
+      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+      {!loading && !error && tickets.length === 0 ? (
+        <EmptyState
+          icon={<FolderKanban className="h-6 w-6" />}
+          title={scope === "mine" ? t("tracker.mineEmpty") : t("tracker.createdEmpty")}
+        />
+      ) : null}
+      <ul className="space-y-2">
+        {tickets.map((ticket) => (
+          <li key={ticket.id}>
+            <Link
+              href={`/sales-operation/tracker/${ticket.projectId}?ticket=${ticket.id}`}
+              className="flex items-start justify-between gap-3 rounded-[14px] border border-[var(--so-border)] bg-[var(--so-surface)] px-4 py-3 transition hover:border-[var(--so-accent)]"
+            >
+              <div>
+                <p className="text-sm font-semibold text-[var(--so-text)]">{ticket.title}</p>
+                <p className="mt-0.5 text-xs text-[var(--so-muted)]">
+                  {ticket.projectName ?? ticket.projectId}
+                  {ticket.statusName ? ` · ${ticket.statusName}` : ""}
+                  {ticket.dueAt ? ` · ${formatSalesDateTime(ticket.dueAt)}` : ""}
+                </p>
+              </div>
+              <span className="shrink-0 text-xs font-medium text-[var(--so-accent)]">
+                {t("tracker.openInBoard")}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

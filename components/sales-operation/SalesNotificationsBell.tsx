@@ -146,7 +146,14 @@ export function SalesNotificationsBell() {
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-xs font-semibold text-[var(--so-text)]">{item.title}</p>
+                      <div className="min-w-0">
+                        {item.type === "mention" ? (
+                          <span className="mb-0.5 inline-flex rounded-md bg-[var(--so-accent)] px-1.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-wide text-white">
+                            @mention
+                          </span>
+                        ) : null}
+                        <p className="text-xs font-semibold text-[var(--so-text)]">{item.title}</p>
+                      </div>
                       <span className="shrink-0 text-[0.65rem] text-[var(--so-muted-2)]">
                         {timeAgo(item.createdAt)}
                       </span>

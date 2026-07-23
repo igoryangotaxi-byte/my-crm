@@ -284,6 +284,11 @@ export const SALES_NOTIFICATION_TYPES = [
   "mention",
   "automation",
   "system",
+  "tracker_assigned",
+  "tracker_comment",
+  "tracker_status",
+  "tracker_due",
+  "tracker_completed",
 ] as const;
 export type SalesNotificationType = (typeof SALES_NOTIFICATION_TYPES)[number];
 

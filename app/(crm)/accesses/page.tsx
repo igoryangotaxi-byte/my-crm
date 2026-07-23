@@ -54,6 +54,7 @@ const accessSections: AccessSection[] = [
     actions: [
       { type: "page", key: "salesOperation", label: "Sales Operation (shell)" },
       { type: "page", key: "salesPipeline", label: "Pipeline" },
+      { type: "page", key: "salesTracker", label: "Tracker" },
       { type: "page", key: "salesSignedClients", label: "Signed Clients" },
       { type: "page", key: "salesB2BClients", label: "B2B Clients Overview" },
       { type: "page", key: "salesAnalytics", label: "Analytics" },

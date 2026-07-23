@@ -95,6 +95,7 @@ export function SalesOperationSidebar() {
         ],
       },
       { kind: "leaf", href: "/sales-operation/pipeline", labelKey: "pipeline", page: "salesPipeline", icon: Columns3 },
+      { kind: "leaf", href: "/sales-operation/tracker", labelKey: "tracker", page: "salesTracker", icon: LayoutDashboard },
       { kind: "leaf", href: "/sales-operation/portfolio", labelKey: "portfolio", page: "salesSignedClients", icon: Briefcase },
       { kind: "leaf", href: "/sales-operation/b2b-clients", labelKey: "b2bClients", page: "salesB2BClients", icon: Building2 },
       {

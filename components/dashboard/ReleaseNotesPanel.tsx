@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-07-23",
+    title: "Sales Operation Tracker MVP (0.2.47)",
+    notes:
+      "App version 0.2.47. New Tracker module in Sales Operation (/sales-operation/tracker): multi-project kanban with configurable columns (create/rename/recolor/WIP/reorder/delete), tickets with markdown description, multi-assignees, labels, checklist, comments with @CRM mentions + autocomplete/highlight, linked tickets, attachments, activity, archive, copy-link, and @dnd-kit drag-and-drop. Filters + search; ticket side drawer. Assignees sync to My Space Tracker tab (red mention badge) and calendar (emerald due events). Notifications bell shows @mention and tracker events. Page key salesTracker (permissions v12). SQL: supabase_sales_tracker.sql (apply in Supabase before first use). AI/automation deferred.",
+  },
+  {
     date: "2026-07-22",
     title: "B2B client profile + My Space Calendar (0.2.46)",
     notes:
