@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 import { SalesEmailTemplatesSettings } from "@/components/sales-operation/settings/SalesEmailTemplatesSettings";
+import { SalesSignedHandoverSettings } from "@/components/sales-operation/settings/SalesSignedHandoverSettings";
 import type { PipelineStage, SalesSegment } from "@/lib/sales-operation/types";
 
 type StageDraft = PipelineStage;
@@ -275,6 +276,8 @@ export function SalesSettingsView() {
           </div>
         )}
       </div>
+
+      <SalesSignedHandoverSettings />
 
       <SalesEmailTemplatesSettings />
     </section>

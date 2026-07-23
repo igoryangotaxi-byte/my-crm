@@ -1,6 +1,6 @@
 {
   "name": "my-crm",
-  "version": "0.2.47",
+  "version": "0.2.48",
   "private": true,
   "engines": {
     "node": ">=20.9.0"
@@ -32,6 +32,7 @@
     "db:apply:driver-price-comparison": "node scripts/apply-driver-price-comparison-schema.js",
     "db:apply:sales-operation": "node scripts/apply-sales-operation-schema.js",
     "telegram:set-webhook": "node scripts/telegram-set-webhook.mjs",
+    "telegram:send-release": "node scripts/telegram-send-release.mjs",
     "import:b2b:csv": "tsx scripts/import-b2b-csv-to-supabase.ts",
     "import:b2c-heatmap:csv": "node scripts/import-b2c-heatmap-csv-to-supabase.js",
     "import:corp-client-map:csv": "node scripts/import-corp-client-map-to-supabase.js",

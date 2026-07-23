@@ -87,7 +87,49 @@ export function StageGateModal({
     setFollowUpDue("");
     setFollowUpAssignee(currentUser?.id ?? lead.assignedManagerUserId ?? "");
     setLocalError(null);
-  }, [open, lead, currentUser?.id]);
+
+    if (toStatus === "signed") {
+      let cancelled = false;
+      void (async () => {
+        try {
+          const res = await fetch("/api/sales-operation/config/signed-handover", {
+            cache: "no-store",
+          });
+          const data = (await res.json()) as {
+            ok?: boolean;
+            settings?: {
+              defaultAccountManagerUserId?: string | null;
+              defaultAccountManagerName?: string | null;
+            };
+          };
+          if (cancelled) return;
+          const settingsId = data.ok ? data.settings?.defaultAccountManagerUserId : null;
+          if (settingsId && amOptions.some((u) => u.id === settingsId)) {
+            setAccountManagerUserId(settingsId);
+            return;
+          }
+          const fallback = amOptions.find((u) =>
+            (u.name || "").toLowerCase().includes("igor rebkovets") ||
+            (u.name || "").toLowerCase().includes("rebkovets"),
+          );
+          // Prefer email match via users list from auth
+          const byEmail = users.find(
+            (u) => u.email?.trim().toLowerCase() === "igorrebkovets@appli.taxi",
+          );
+          if (byEmail && amOptions.some((u) => u.id === byEmail.id)) {
+            setAccountManagerUserId(byEmail.id);
+          } else if (fallback) {
+            setAccountManagerUserId(fallback.id);
+          }
+        } catch {
+          /* optional prefill */
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+  }, [open, lead, currentUser?.id, toStatus, amOptions, users]);
 
   useEffect(() => {
     if (!open || !missingKeys.has("contractOrClientId")) return;
@@ -159,11 +201,12 @@ export function StageGateModal({
 
     const am = amOptions.find((u) => u.id === accountManagerUserId);
     const followAssignee = users.find((u) => u.id === followUpAssignee);
+    const includeAm = missingKeys.has("accountManager") || toStatus === "signed";
 
     await onConfirm({
       fields,
-      accountManagerUserId: missingKeys.has("accountManager") ? accountManagerUserId : undefined,
-      accountManagerName: missingKeys.has("accountManager") ? am?.name ?? null : undefined,
+      accountManagerUserId: includeAm ? accountManagerUserId || null : undefined,
+      accountManagerName: includeAm ? am?.name ?? null : undefined,
       followUpTask: missingKeys.has("followUpTask")
         ? {
             title: followUpTitle.trim(),

@@ -716,7 +716,16 @@
       "emailTemplateDelete": "מחק",
       "emailTemplateInactive": "לא פעילה",
       "emailTemplateCancelEdit": "ביטול",
-      "emailTemplateDeleteConfirm": "למחוק את התבנית? לא ניתן לבטל."
+      "emailTemplateDeleteConfirm": "למחוק את התבנית? לא ניתן לבטל.",
+      "handoverTitle": "העברה לאחר Signed",
+      "handoverSubtitle": "במעבר ל-Signed: Account Manager ברירת מחדל, Onboarding + First Touch, פגישה ביומן, וכרטיס Tracker להשקה.",
+      "handoverDefaultAm": "Account Manager ברירת מחדל",
+      "handoverDefaultAmFallback": "אוטומטי: {email} (אם נמצא)",
+      "handoverDefaultAmHint": "ממלא מראש את Stage Gate בחתימה. ניתן לשנות לפני אישור או אחר כך בכרטיס הלקוח.",
+      "handoverTrackerProject": "פרויקט Tracker להכנת השקה",
+      "handoverTrackerProjectNone": "— ללא (ללא כרטיס) —",
+      "handoverTrackerProjectHint": "כרטיס עם צ'קליסט קבוע נוצר עבור ה-Account Manager בפרויקט זה.",
+      "handoverMigrationHint": "אם ההגדרות לא נשמרות, הריצו supabase_sales_signed_handover_settings.sql ב-Supabase."
     },
     "automation": {
       "create": "תהליך חדש",

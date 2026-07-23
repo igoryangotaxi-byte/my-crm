@@ -578,7 +578,7 @@ export async function updateSalesLead(
   if (nextStatus === "signed" && existing.status !== "signed") {
     const notes = await listSalesLeadNotes(lead.id);
     await convertSignedLeadToClient(supabase, lead, notes, actor, {
-      onboardTitle: "Onboard Client",
+      skipDefaultOnboardingTask: true,
     });
   }
 

@@ -170,17 +170,17 @@ async function runSignedHandover(
     leadId: lead.id,
     type: "status_changed",
     title: "Signed — handover to onboarding",
-    body: `Converted to client${ownerName ? ` · owner ${ownerName}` : ""}.`,
+    body: `Converted to client${ownerName ? ` · sales owner ${ownerName}` : ""}.`,
     actor,
   });
 
-  // Notify the owning manager when they did not perform the signing themselves.
+  // Notify the owning sales manager when they did not perform the signing themselves.
   if (ownerUserId && ownerUserId !== actor.userId) {
     await createNotification({
       userId: ownerUserId,
       type: "system",
       title: `Client signed: ${clientLabel}`,
-      body: "Onboarding handover created.",
+      body: "Client converted — Account Manager onboarding follows.",
       leadId: lead.id,
       link: "/sales-operation/b2b-clients",
     });

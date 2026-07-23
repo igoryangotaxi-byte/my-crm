@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-07-23",
+    title: "Signed B2B handover automation (0.2.48)",
+    notes:
+      "App version 0.2.48. When a lead moves to Signed: Stage Gate prefills Account Manager from Settings (fallback igorrebkovets@appli.taxi); AM is upserted on gp_corp_client_map. Creates one Onboarding + First Touch sales task for the AM, a calendar meeting (+1 business day, 45 min), and a Tracker Launch prep ticket with checklist (tariff, credit limit, special conditions, credit card, contract review) in the configured project. Settings → Signed handover. Idempotent via activity meta signedHandoverVersion=v2. SQL: supabase_sales_signed_handover_settings.sql (apply in Supabase). Telegram release helper: npm run telegram:send-release.",
+  },
+  {
+    date: "2026-07-23",
     title: "Sales Operation Tracker MVP (0.2.47)",
     notes:
       "App version 0.2.47. New Tracker module in Sales Operation (/sales-operation/tracker): multi-project kanban with configurable columns (create/rename/recolor/WIP/reorder/delete), tickets with markdown description, multi-assignees, labels, checklist, comments with @CRM mentions + autocomplete/highlight, linked tickets, attachments, activity, archive, copy-link, and @dnd-kit drag-and-drop. Filters + search; ticket side drawer. Assignees sync to My Space Tracker tab (red mention badge) and calendar (emerald due events). Notifications bell shows @mention and tracker events. Page key salesTracker (permissions v12). SQL: supabase_sales_tracker.sql (apply in Supabase before first use). AI/automation deferred. (d43c4d89)",

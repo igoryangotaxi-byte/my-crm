@@ -716,7 +716,16 @@
       "emailTemplateDelete": "Delete",
       "emailTemplateInactive": "inactive",
       "emailTemplateCancelEdit": "Cancel",
-      "emailTemplateDeleteConfirm": "Delete this template? This cannot be undone."
+      "emailTemplateDeleteConfirm": "Delete this template? This cannot be undone.",
+      "handoverTitle": "Signed handover",
+      "handoverSubtitle": "When a deal moves to Signed: default Account Manager, Onboarding + First Touch, calendar meeting, and Tracker launch-prep ticket.",
+      "handoverDefaultAm": "Default Account Manager",
+      "handoverDefaultAmFallback": "Auto: {email} (if found)",
+      "handoverDefaultAmHint": "Prefills the Stage Gate when signing. Can be changed before confirm or later on the client card.",
+      "handoverTrackerProject": "Tracker project for launch prep",
+      "handoverTrackerProjectNone": "— None (skip ticket) —",
+      "handoverTrackerProjectHint": "Ticket with the fixed launch checklist is created for the Account Manager in this project.",
+      "handoverMigrationHint": "If settings do not persist, apply supabase_sales_signed_handover_settings.sql in Supabase."
     },
     "automation": {
       "create": "New workflow",

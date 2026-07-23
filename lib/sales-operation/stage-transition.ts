@@ -8,6 +8,7 @@ import {
   validateStageRequirements,
 } from "@/lib/sales-operation/status-transitions";
 import { createSalesTask } from "@/lib/sales-operation/tasks";
+import { runSignedHandoverV2, resolveDefaultAccountManager } from "@/lib/sales-operation/signed-handover";
 import type {
   CreateSalesTaskInput,
   SalesLead,
@@ -231,7 +232,7 @@ async function finalizeSignedTransition(
     corpClientId: string | null;
   },
 ): Promise<void> {
-  // Client conversion + "Onboard Client" task already ran inside updateSalesLead.
+  // Client conversion already ran inside updateSalesLead (without the legacy onboard task).
   const supabase = getSupabaseAdminClient();
   const { data: clientRow } = await supabase
     .from("sales_clients")
@@ -245,7 +246,19 @@ async function finalizeSignedTransition(
       ? normalizeCorpClientId(clientRow.corp_client_id)
       : "";
 
-  if (clientRow && (corpId || opts.accountManagerUserId)) {
+  let amUserId = opts.accountManagerUserId;
+  let amName = opts.accountManagerName;
+
+  // If gate omitted AM, resolve default from settings / email fallback.
+  if (!amUserId) {
+    const resolved = await resolveDefaultAccountManager(null);
+    if (resolved) {
+      amUserId = resolved.userId;
+      amName = resolved.name;
+    }
+  }
+
+  if (clientRow && (corpId || amUserId)) {
     const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (corpId) payload.corp_client_id = corpId;
     const { error } = await supabase
@@ -254,13 +267,13 @@ async function finalizeSignedTransition(
       .eq("id", clientRow.id);
     if (error) console.error("Failed to set corp_client_id on client:", error.message);
 
-    if (corpId && opts.accountManagerUserId) {
+    if (corpId && amUserId) {
       try {
         const { error: mapError } = await supabase.from("gp_corp_client_map").upsert(
           {
             corp_client_id: corpId,
-            account_manager_user_id: opts.accountManagerUserId,
-            account_manager_name: opts.accountManagerName || opts.accountManagerUserId,
+            account_manager_user_id: amUserId,
+            account_manager_name: amName || amUserId,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "corp_client_id" },
@@ -272,24 +285,11 @@ async function finalizeSignedTransition(
     }
   }
 
-  if (opts.accountManagerUserId) {
-    const dueAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
-    try {
-      await createSalesTask(
-        lead.id,
-        {
-          title: "First Client Call",
-          description: "Initial onboarding call with the newly signed client.",
-          taskType: "call",
-          priority: "high",
-          dueAt,
-          assignedToUserId: opts.accountManagerUserId,
-          assignedToName: opts.accountManagerName || opts.accountManagerUserId,
-        },
-        actor,
-      );
-    } catch (error) {
-      console.error("First Client Call task failed:", error);
-    }
-  }
+  await runSignedHandoverV2({
+    lead,
+    actor,
+    accountManagerUserId: amUserId,
+    accountManagerName: amName,
+    clientId: clientRow && typeof clientRow.id === "string" ? clientRow.id : null,
+  });
 }
