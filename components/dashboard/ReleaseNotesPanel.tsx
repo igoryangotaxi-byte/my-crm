@@ -9,7 +9,7 @@ const releaseItems: ReleaseItem[] = [
     date: "2026-07-23",
     title: "Signed B2B handover automation (0.2.48)",
     notes:
-      "App version 0.2.48. When a lead moves to Signed: Stage Gate prefills Account Manager from Settings (fallback igorrebkovets@appli.taxi); AM is upserted on gp_corp_client_map. Creates one Onboarding + First Touch sales task for the AM, a calendar meeting (+1 business day, 45 min), and a Tracker Launch prep ticket with checklist (tariff, credit limit, special conditions, credit card, contract review) in the configured project. Settings → Signed handover. Idempotent via activity meta signedHandoverVersion=v2. SQL: supabase_sales_signed_handover_settings.sql (apply in Supabase). Telegram release helper: npm run telegram:send-release.",
+      "App version 0.2.48. When a lead moves to Signed: Stage Gate prefills Account Manager from Settings (fallback igorrebkovets@appli.taxi); AM is upserted on gp_corp_client_map. Creates one Onboarding + First Touch sales task for the AM, a calendar meeting (+1 business day, 45 min), and a Tracker Launch prep ticket with checklist (tariff, credit limit, special conditions, credit card, contract review) in the configured project. Settings → Signed handover. Idempotent via activity meta signedHandoverVersion=v2. SQL: supabase_sales_signed_handover_settings.sql (apply in Supabase). Telegram release helper: npm run telegram:send-release. (d8ef9cc0)",
   },
   {
     date: "2026-07-23",
