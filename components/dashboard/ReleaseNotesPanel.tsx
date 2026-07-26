@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-07-26",
+    title: "Lead Discovery for Israel B2B (0.2.49)",
+    notes:
+      "App version 0.2.49. New Sales Operation module at /sales-operation/lead-discovery: describe a segment in natural language → Groq interprets business types, cities, size and qualification rules (heuristic fallback on 429) → Google Places search + scoring → candidates pending approval before pipeline. One campaign runs at a time; Stop mid-run; Activate runs Find leads; daily target editable in Advanced; cron discovery-tick every 2h. Automation gains discovery triggers (lead discovered, qualification completed, daily target, email replied), condition gate, notify/sticker/email-sequence actions. Permission salesLeadDiscovery (v13). RU locale for Lead Discovery. SQL: supabase_sales_lead_discovery.sql + supabase_sales_lead_discovery_pending_approval.sql (apply in Supabase). Env: LEAD_DISCOVERY_ENABLED, GOOGLE_PLACES_API_KEY (or Maps), GROQ_API_KEY. Deck: Yango-Sales-Operations-Lead-Discovery-0-2-49.pptx. (bac95b7c)",
+  },
+  {
     date: "2026-07-23",
     title: "Signed B2B handover automation (0.2.48)",
     notes:
