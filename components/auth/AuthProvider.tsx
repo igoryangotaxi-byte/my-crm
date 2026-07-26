@@ -35,6 +35,7 @@ import {
 } from "@/lib/role-permissions";
 import enMessages from "@/messages/en.json";
 import heMessages from "@/messages/he.json";
+import ruMessages from "@/messages/ru.json";
 
 const SESSION_STORAGE_KEY = "appli_auth_session_v1";
 const CURRENT_AREA_STORAGE_KEY = "appli_auth_current_area_v1";
@@ -149,7 +150,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => users.find((user) => user.id === sessionUserId) ?? null,
     [users, sessionUserId],
   );
-  const language = currentUser?.language === "he" ? "he" : languageState;
+  const rawLanguage = currentUser?.language ?? languageState;
+  const language: AppLanguage = rawLanguage === "he" || rawLanguage === "ru" ? rawLanguage : "en";
   const currentArea = useMemo<BusinessArea>(() => {
     if (!currentUser) {
       return currentAreaState;
@@ -500,7 +502,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ],
   );
 
-  const messages = language === "he" ? heMessages : enMessages;
+  const messages =
+    language === "he"
+      ? heMessages
+      : language === "ru"
+        ? {
+            ...enMessages,
+            salesOperation: {
+              ...enMessages.salesOperation,
+              ...ruMessages.salesOperation,
+              tab: {
+                ...enMessages.salesOperation.tab,
+                ...(ruMessages.salesOperation?.tab ?? {}),
+              },
+              page: {
+                ...enMessages.salesOperation.page,
+                ...(ruMessages.salesOperation?.page ?? {}),
+              },
+              leadDiscovery: {
+                ...enMessages.salesOperation.leadDiscovery,
+                ...(ruMessages.salesOperation?.leadDiscovery ?? {}),
+              },
+            },
+          }
+        : enMessages;
 
   return (
     <AuthContext.Provider value={value}>

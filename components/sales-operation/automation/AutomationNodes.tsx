@@ -113,9 +113,76 @@ export function ActionCreateTaskNode({ data }: NodeProps) {
   );
 }
 
+function GenericNode({
+  title,
+  tone,
+  subtitle,
+  showTarget = true,
+}: {
+  title: string;
+  tone: "trigger" | "sms" | "assign" | "task";
+  subtitle: string;
+  showTarget?: boolean;
+}) {
+  return (
+    <NodeChrome title={title} tone={tone} showTarget={showTarget}>
+      <p className="font-medium text-[var(--so-text)]">{subtitle}</p>
+    </NodeChrome>
+  );
+}
+
+export function TriggerLeadDiscoveredNode() {
+  return <GenericNode title="Trigger" tone="trigger" subtitle="Lead discovered" showTarget={false} />;
+}
+export function TriggerQualificationCompletedNode() {
+  return (
+    <GenericNode title="Trigger" tone="trigger" subtitle="Qualification completed" showTarget={false} />
+  );
+}
+export function TriggerDailyTargetNotReachedNode() {
+  return (
+    <GenericNode title="Trigger" tone="trigger" subtitle="Daily target not reached" showTarget={false} />
+  );
+}
+export function TriggerEmailRepliedNode() {
+  return <GenericNode title="Trigger" tone="trigger" subtitle="Email replied" showTarget={false} />;
+}
+export function ConditionGateNode({ data }: NodeProps) {
+  const d = data as { field?: string; op?: string; value?: unknown };
+  return (
+    <GenericNode
+      title="If"
+      tone="assign"
+      subtitle={`${d.field ?? "field"} ${d.op ?? "eq"} ${String(d.value ?? "")}`}
+    />
+  );
+}
+export function ActionAddStickerNode({ data }: NodeProps) {
+  const d = data as { stickerKey?: string };
+  return <GenericNode title="Sticker" tone="task" subtitle={d.stickerKey || "Add sticker"} />;
+}
+export function ActionNotifyNode({ data }: NodeProps) {
+  const d = data as { title?: string };
+  return <GenericNode title="Notify" tone="sms" subtitle={d.title || "Internal notification"} />;
+}
+export function ActionStartEmailSequenceNode({ data }: NodeProps) {
+  const d = data as { sequenceId?: string };
+  return (
+    <GenericNode title="Sequence" tone="sms" subtitle={d.sequenceId || "Start email sequence"} />
+  );
+}
+
 export const automationNodeTypes = {
   triggerLeadStatus: TriggerLeadStatusNode,
+  triggerLeadDiscovered: TriggerLeadDiscoveredNode,
+  triggerQualificationCompleted: TriggerQualificationCompletedNode,
+  triggerDailyTargetNotReached: TriggerDailyTargetNotReachedNode,
+  triggerEmailReplied: TriggerEmailRepliedNode,
+  conditionGate: ConditionGateNode,
   actionSms: ActionSmsNode,
   actionAssignManager: ActionAssignManagerNode,
   actionCreateTask: ActionCreateTaskNode,
+  actionAddSticker: ActionAddStickerNode,
+  actionNotify: ActionNotifyNode,
+  actionStartEmailSequence: ActionStartEmailSequenceNode,
 };

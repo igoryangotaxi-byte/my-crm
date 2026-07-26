@@ -27,6 +27,7 @@ import type {
   ActionAssignManagerData,
   ActionCreateTaskData,
   ActionSmsData,
+  AutomationNodeType,
   SalesAutomation,
   StatusMatch,
   TriggerLeadStatusData,
@@ -164,9 +165,7 @@ function EditorInner({ automationId }: EditorInnerProps) {
     setSelectedId(params.nodes[0]?.id ?? null);
   }, []);
 
-  const addNode = (
-    type: "triggerLeadStatus" | "actionSms" | "actionAssignManager" | "actionCreateTask",
-  ) => {
+  const addNode = (type: AutomationNodeType) => {
     const center = rf.screenToFlowPosition({
       x: window.innerWidth / 2,
       y: window.innerHeight / 2,
@@ -192,8 +191,18 @@ function EditorInner({ automationId }: EditorInnerProps) {
         dueInDays: 1,
         assignToLeadOwner: true,
       } satisfies ActionCreateTaskData;
-    } else {
+    } else if (type === "actionAssignManager") {
       data = { mode: "fixed", userIds: [], userNames: {} } satisfies ActionAssignManagerData;
+    } else if (type === "conditionGate") {
+      data = { field: "source", op: "eq", value: "discovery" };
+    } else if (type === "actionAddSticker") {
+      data = { stickerKey: "cold_lead" };
+    } else if (type === "actionNotify") {
+      data = { title: "Automation alert", body: "Check this lead" };
+    } else if (type === "actionStartEmailSequence") {
+      data = { sequenceId: "" };
+    } else {
+      data = { label: type };
     }
     setNodes((prev) => [
       ...prev,
@@ -389,6 +398,41 @@ function EditorInner({ automationId }: EditorInnerProps) {
             onClick={() => addNode("actionCreateTask")}
           >
             {t("automation.addTask")}
+          </button>
+          <button
+            type="button"
+            className="rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-left text-xs font-semibold text-violet-900"
+            onClick={() => addNode("triggerLeadDiscovered")}
+          >
+            Lead discovered
+          </button>
+          <button
+            type="button"
+            className="rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-left text-xs font-semibold text-violet-900"
+            onClick={() => addNode("conditionGate")}
+          >
+            Condition
+          </button>
+          <button
+            type="button"
+            className="rounded-xl border border-fuchsia-100 bg-fuchsia-50 px-3 py-2 text-left text-xs font-semibold text-fuchsia-900"
+            onClick={() => addNode("actionAddSticker")}
+          >
+            Add sticker
+          </button>
+          <button
+            type="button"
+            className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-left text-xs font-semibold text-sky-900"
+            onClick={() => addNode("actionNotify")}
+          >
+            Notify
+          </button>
+          <button
+            type="button"
+            className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-left text-xs font-semibold text-indigo-900"
+            onClick={() => addNode("actionStartEmailSequence")}
+          >
+            Start sequence
           </button>
         </aside>
 

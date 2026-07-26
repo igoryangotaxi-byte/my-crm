@@ -3,9 +3,17 @@ import type { SalesLeadStatus } from "@/lib/sales-operation/types";
 
 export const AUTOMATION_NODE_TYPES = [
   "triggerLeadStatus",
+  "triggerLeadDiscovered",
+  "triggerQualificationCompleted",
+  "triggerDailyTargetNotReached",
+  "triggerEmailReplied",
+  "conditionGate",
   "actionSms",
   "actionAssignManager",
   "actionCreateTask",
+  "actionAddSticker",
+  "actionNotify",
+  "actionStartEmailSequence",
 ] as const;
 export type AutomationNodeType = (typeof AUTOMATION_NODE_TYPES)[number];
 
@@ -15,6 +23,31 @@ export type TriggerLeadStatusData = {
   label?: string;
   fromStatus: StatusMatch;
   toStatus: StatusMatch;
+};
+
+export type TriggerLeadDiscoveredData = {
+  label?: string;
+  minScore?: number;
+};
+
+export type TriggerQualificationCompletedData = {
+  label?: string;
+  qualification?: string;
+};
+
+export type TriggerDailyTargetNotReachedData = {
+  label?: string;
+};
+
+export type TriggerEmailRepliedData = {
+  label?: string;
+};
+
+export type ConditionGateData = {
+  label?: string;
+  field: string;
+  op: "eq" | "neq" | "gte" | "lte" | "exists";
+  value?: string | number | boolean;
 };
 
 export type ActionSmsData = {
@@ -40,11 +73,36 @@ export type ActionCreateTaskData = {
   assignToLeadOwner?: boolean;
 };
 
+export type ActionAddStickerData = {
+  label?: string;
+  stickerKey: string;
+};
+
+export type ActionNotifyData = {
+  label?: string;
+  title: string;
+  body: string;
+  userId?: string;
+};
+
+export type ActionStartEmailSequenceData = {
+  label?: string;
+  sequenceId: string;
+};
+
 export type AutomationNodeData =
   | TriggerLeadStatusData
+  | TriggerLeadDiscoveredData
+  | TriggerQualificationCompletedData
+  | TriggerDailyTargetNotReachedData
+  | TriggerEmailRepliedData
+  | ConditionGateData
   | ActionSmsData
   | ActionAssignManagerData
-  | ActionCreateTaskData;
+  | ActionCreateTaskData
+  | ActionAddStickerData
+  | ActionNotifyData
+  | ActionStartEmailSequenceData;
 
 export type AutomationGraph = {
   nodes: Node[];

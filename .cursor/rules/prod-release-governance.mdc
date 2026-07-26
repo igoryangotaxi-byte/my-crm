@@ -19,13 +19,14 @@ When the user asks to ship to production (e.g. «можно в прод», «dep
 5. **Commit release notes** — separate `docs(release): …` commit if not in the same commit.
 6. **Push** — `git push origin main` (or the branch the user specified). Retry with `required_permissions: ["all"]`. If push fails on HTTPS, try `gh` or SSH; report clearly only if auth is missing on the machine.
 7. **Deploy** — `npx vercel deploy --prod --yes` from repo root (`required_permissions: ["all"]`). Wait until alias (e.g. applitaxi.space) is ready.
-8. **Report** — production URL, Vercel inspect link, version, commit hash(es), and whether `git push` succeeded.
+8. **Telegram release chat (required)** — English only. Build/copy the English PPTX to Desktop, then run `npm run telegram:send-release` (or `node scripts/telegram-send-release.mjs`) with `--version`, `--title`, short `--feature` bullets, `--pptx` (Desktop path preferred), and `--url`. Target chat is `TELEGRAM_RELEASE_CHAT_ID` (group where the bot is admin). Do not skip this step on production releases.
+9. **Report** — production URL, Vercel inspect link, version, commit hash(es), whether `git push` succeeded, and Telegram `message_id`.
 
 ## Guardrails
 
 - Deploy to production **only** when the user explicitly requests it in this chat.
 - Do not deploy proactively after implementing a feature.
-- Do not skip release notes or version bump for production releases.
+- Do not skip release notes, version bump, or the Telegram release announcement for production releases.
 - Do not use `git commit --amend` unless user rules allow it.
 - Never update git config (user name/email, credential helpers).
 - If there are no code changes to ship, confirm with the user before deploying.

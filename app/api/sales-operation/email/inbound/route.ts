@@ -47,6 +47,14 @@ export async function POST(request: Request) {
       body: body.body ?? "",
       occurredAt: body.occurredAt,
     });
+    try {
+      const { handleInboundReplyForSequences } = await import(
+        "@/lib/sales-operation/lead-discovery/sequences"
+      );
+      await handleInboundReplyForSequences(body.leadId.trim());
+    } catch {
+      // non-blocking
+    }
     return Response.json({ ok: true, message }, { status: 201 });
   } catch (error) {
     const messageText = error instanceof Error ? error.message : "Failed to record email.";

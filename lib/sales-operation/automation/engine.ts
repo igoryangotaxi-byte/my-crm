@@ -227,6 +227,140 @@ async function executeAutomation(
             message: error instanceof Error ? error.message : "Create task failed",
           });
         }
+        continue;
+      }
+
+      if (node.type === "conditionGate") {
+        const data = (node.data ?? {}) as {
+          field?: string;
+          op?: string;
+          value?: string | number | boolean;
+        };
+        const field = data.field ?? "";
+        const leadVal =
+          field === "source"
+            ? lead.source
+            : field === "status"
+              ? toStatus
+              : (lead.customFields as Record<string, unknown>)?.[field];
+        let pass = false;
+        if (data.op === "exists") pass = leadVal != null && leadVal !== "";
+        else if (data.op === "eq") pass = leadVal === data.value;
+        else if (data.op === "neq") pass = leadVal !== data.value;
+        else if (data.op === "gte") pass = Number(leadVal) >= Number(data.value);
+        else if (data.op === "lte") pass = Number(leadVal) <= Number(data.value);
+        steps.push({
+          nodeId: node.id,
+          type: "conditionGate",
+          ok: true,
+          skipped: !pass,
+          message: pass ? "Condition passed" : "Condition failed — stopping branch",
+        });
+        if (!pass) break;
+        continue;
+      }
+
+      if (node.type === "actionAddSticker") {
+        const key = String((node.data as { stickerKey?: string })?.stickerKey ?? "").trim();
+        if (!key) {
+          steps.push({
+            nodeId: node.id,
+            type: "actionAddSticker",
+            ok: true,
+            skipped: true,
+            message: "No sticker key",
+          });
+          continue;
+        }
+        try {
+          const { assignLeadStickers } = await import(
+            "@/lib/sales-operation/lead-discovery/repository"
+          );
+          await assignLeadStickers(lead.id, [key], { assignedBy: "automation" });
+          steps.push({
+            nodeId: node.id,
+            type: "actionAddSticker",
+            ok: true,
+            message: `Sticker ${key}`,
+          });
+        } catch (error) {
+          steps.push({
+            nodeId: node.id,
+            type: "actionAddSticker",
+            ok: false,
+            message: error instanceof Error ? error.message : "Sticker failed",
+          });
+        }
+        continue;
+      }
+
+      if (node.type === "actionNotify") {
+        const data = (node.data ?? {}) as { title?: string; body?: string; userId?: string };
+        const userId = data.userId || lead.assignedManagerUserId;
+        if (!userId) {
+          steps.push({
+            nodeId: node.id,
+            type: "actionNotify",
+            ok: true,
+            skipped: true,
+            message: "No recipient",
+          });
+          continue;
+        }
+        try {
+          await deps.notify({
+            userId,
+            type: "system",
+            title: data.title || "Sales automation",
+            body: data.body,
+            leadId: lead.id,
+            link: "/sales-operation/pipeline",
+          });
+          steps.push({ nodeId: node.id, type: "actionNotify", ok: true, message: "Notified" });
+        } catch (error) {
+          steps.push({
+            nodeId: node.id,
+            type: "actionNotify",
+            ok: false,
+            message: error instanceof Error ? error.message : "Notify failed",
+          });
+        }
+        continue;
+      }
+
+      if (node.type === "actionStartEmailSequence") {
+        const sequenceId = String(
+          (node.data as { sequenceId?: string })?.sequenceId ?? "",
+        ).trim();
+        if (!sequenceId) {
+          steps.push({
+            nodeId: node.id,
+            type: "actionStartEmailSequence",
+            ok: true,
+            skipped: true,
+            message: "No sequence",
+          });
+          continue;
+        }
+        try {
+          const { enrollLeadInSequence } = await import(
+            "@/lib/sales-operation/lead-discovery/sequences"
+          );
+          await enrollLeadInSequence(sequenceId, lead.id);
+          steps.push({
+            nodeId: node.id,
+            type: "actionStartEmailSequence",
+            ok: true,
+            message: "Enrolled",
+          });
+        } catch (error) {
+          steps.push({
+            nodeId: node.id,
+            type: "actionStartEmailSequence",
+            ok: false,
+            message: error instanceof Error ? error.message : "Enroll failed",
+          });
+        }
       }
     }
   }

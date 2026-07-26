@@ -238,7 +238,7 @@ function toLocalDateTimeInput(isoDate: string) {
   return new Date(date.getTime() - tzOffsetMs).toISOString().slice(0, 16);
 }
 
-function lifecycleLabel(value: string, language: "en" | "he" = "en") {
+function lifecycleLabel(value: string, language: "en" | "he" | "ru" = "en") {
   const isRtl = language === "he";
   switch (value) {
     case "searching":
@@ -268,7 +268,7 @@ function isTerminalStatus(status: RequestRideStatus | null): boolean {
   return STOP_STATUSES.has(status.lifecycleStatus) || isExpiredStatus(status);
 }
 
-function getRideStatusLabel(status: RequestRideStatus | null, language: "en" | "he" = "en"): string {
+function getRideStatusLabel(status: RequestRideStatus | null, language: "en" | "he" | "ru" = "en"): string {
   const isRtl = language === "he";
   if (!status) return isRtl ? "הסטטוס ממתין" : "Status pending";
   if (isExpiredStatus(status)) return isRtl ? "הנסיעה פגה" : "Ride expired";
@@ -306,7 +306,7 @@ function RequestedRideAccordionCard({
   index: number;
   deletingOrderId: string | null;
   onRemove: (orderId: string) => void | Promise<void>;
-  language?: "en" | "he";
+  language?: "en" | "he" | "ru";
 }) {
   const isRtl = language === "he";
   return (

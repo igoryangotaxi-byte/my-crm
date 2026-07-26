@@ -3,7 +3,7 @@ export type UserStatus = "pending" | "approved" | "rejected";
 export type BusinessArea = "b2b" | "b2c";
 export type DashboardBlockKey = "apiData" | "yangoData" | "tariffHealthCheck";
 export type AccountType = "internal" | "client";
-export type AppLanguage = "en" | "he";
+export type AppLanguage = "en" | "he" | "ru";
 
 export type AppPageKey =
   | "dashboard"
@@ -25,6 +25,7 @@ export type AppPageKey =
   | "salesAutomation"
   | "salesSettings"
   | "salesTracker"
+  | "salesLeadDiscovery"
   | "accesses"
   | "notes";
 
@@ -116,6 +117,7 @@ const salesPagesAllTrue = {
   salesManagerAnalytics: true,
   salesAutomation: true,
   salesTracker: true,
+  salesLeadDiscovery: true,
   // Admin-only by default; overridden per-role below.
   salesSettings: false,
 } as const;
@@ -129,6 +131,7 @@ const salesPagesAllFalse = {
   salesManagerAnalytics: false,
   salesAutomation: false,
   salesTracker: false,
+  salesLeadDiscovery: false,
   salesSettings: false,
 } as const;
 

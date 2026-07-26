@@ -27,11 +27,12 @@ export const SALES_OPERATION_PAGE_KEYS = [
   "salesAutomation",
   "salesSettings",
   "salesTracker",
+  "salesLeadDiscovery",
 ] as const satisfies readonly AppPageKey[];
 
 export type SalesOperationPageKey = (typeof SALES_OPERATION_PAGE_KEYS)[number];
 
-export const CURRENT_PERMISSIONS_VERSION = 12;
+export const CURRENT_PERMISSIONS_VERSION = 13;
 
 export function isAppRole(value: unknown): value is AppRole {
   return typeof value === "string" && (APP_ROLES as readonly string[]).includes(value);
@@ -132,6 +133,7 @@ export function mergeAllRoleDashboardBlockAccess(
 
 export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: SalesOperationPageKey }> = [
   { prefix: "/sales-operation/pipeline", page: "salesPipeline" },
+  { prefix: "/sales-operation/lead-discovery", page: "salesLeadDiscovery" },
   { prefix: "/sales-operation/tracker", page: "salesTracker" },
   { prefix: "/sales-operation/portfolio", page: "salesSignedClients" },
   { prefix: "/sales-operation/b2b-clients", page: "salesB2BClients" },
@@ -143,6 +145,7 @@ export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: SalesOpe
 ];
 
 export function resolveSalesOperationPageKey(pathname: string): SalesOperationPageKey {
+  if (pathname.startsWith("/sales-operation/lead-discovery")) return "salesLeadDiscovery";
   if (pathname.startsWith("/sales-operation/pipeline")) return "salesPipeline";
   if (pathname.startsWith("/sales-operation/tracker")) return "salesTracker";
   // Relocated client detail card lives under b2b-clients/[id]; it reads signed-client

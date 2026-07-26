@@ -123,7 +123,8 @@ export function Header() {
   const pageRoute =
     Object.keys(pageMeta).find((route) => pathname.startsWith(route)) ??
     "/dashboard";
-  const currentPage = pageMetaByLocale[language][pageRoute] ?? pageMeta[pageRoute];
+  const localeKey = language === "he" ? "he" : "en";
+  const currentPage = pageMetaByLocale[localeKey][pageRoute] ?? pageMeta[pageRoute];
   const avatarText =
     currentUser?.name
       ?.split(" ")

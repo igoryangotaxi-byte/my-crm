@@ -20,6 +20,7 @@ import { SalesLeadTasksSection } from "@/components/sales-operation/SalesLeadTas
 import { SalesLeadActivityFeed } from "@/components/sales-operation/SalesLeadActivityFeed";
 import { SalesLeadFilesSection } from "@/components/sales-operation/SalesLeadFilesSection";
 import { SalesLeadEmailSection } from "@/components/sales-operation/SalesLeadEmailSection";
+import { SalesLeadDiscoverySection } from "@/components/sales-operation/SalesLeadDiscoverySection";
 import {
   StageGateModal,
   type StageGateConfirmPayload,
@@ -76,10 +77,11 @@ const emptyDraft = {
   status: "new" as SalesLeadStatus,
 };
 
-type LeadDetailTab = "overview" | "contacts" | "activity" | "tasks" | "files" | "email";
+type LeadDetailTab = "overview" | "contacts" | "activity" | "tasks" | "files" | "email" | "discovery";
 
 const LEAD_DETAIL_TABS: LeadDetailTab[] = [
   "overview",
+  "discovery",
   "contacts",
   "activity",
   "tasks",
@@ -871,7 +873,16 @@ export function SalesLeadDetailSidebar({
           </div>
         ) : null}
 
+        {activeTab === "overview" &&
+        (d.source === "discovery" || d.customFields?.discovery) ? (
+          <div className="mt-4">
+            <SalesLeadDiscoverySection leadId={d.id} />
+          </div>
+        ) : null}
+
         {activeTab === "contacts" ? <SalesLeadContactsSection leadId={d.id} /> : null}
+
+        {activeTab === "discovery" ? <SalesLeadDiscoverySection leadId={d.id} /> : null}
 
         {activeTab === "tasks" ? (
           <SalesLeadTasksSection leadId={d.id} onTasksChanged={bumpActivity} />
@@ -1111,7 +1122,20 @@ const LeadCard = memo(function LeadCard({
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 truncate text-sm font-semibold text-[var(--so-text)]">{title}</p>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-[var(--so-text)]">{title}</p>
+          {lead.source === "discovery" || lead.customFields?.discovery ? (
+            <span
+              className="mt-1 inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[0.62rem] font-semibold uppercase tracking-wide text-sky-800"
+              title="Cold Lead from Lead Discovery"
+            >
+              Cold Lead
+              {typeof lead.customFields?.taxiPotentialScore === "number" ? (
+                <span>· {lead.customFields.taxiPotentialScore}</span>
+              ) : null}
+            </span>
+          ) : null}
+        </div>
         {moving ? (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--so-accent-soft)] px-1.5 py-0.5 text-[0.62rem] font-semibold text-[var(--so-accent-strong)]">
             <Loader2 className="h-3 w-3 animate-spin" />

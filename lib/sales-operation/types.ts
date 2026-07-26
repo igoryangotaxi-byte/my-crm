@@ -15,7 +15,7 @@ export type SalesLeadStatus = (typeof SALES_LEAD_STATUSES)[number];
  */
 export const SALES_LEAD_COMPAT_STATUSES = ["proposal_sent", "negotiation"] as const;
 
-export const SALES_LEAD_SOURCES = ["manual", "import", "meta", "wordpress"] as const;
+export const SALES_LEAD_SOURCES = ["manual", "import", "meta", "wordpress", "discovery"] as const;
 export type SalesLeadSource = (typeof SALES_LEAD_SOURCES)[number];
 
 export type PipelineStage = {

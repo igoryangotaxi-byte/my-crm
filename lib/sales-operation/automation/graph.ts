@@ -28,7 +28,7 @@ export function getOutgoingTargets(edges: Edge[], nodeId: string): string[] {
     .map((edge) => edge.target);
 }
 
-/** BFS walk from trigger; returns action nodes in execution order (skips triggers). */
+/** BFS walk from trigger; returns action/condition nodes in execution order (skips triggers). */
 export function walkActionNodes(
   nodes: Node[],
   edges: Edge[],
@@ -45,7 +45,9 @@ export function walkActionNodes(
     visited.add(id);
     const node = byId.get(id);
     if (!node) continue;
-    if (isAutomationNodeType(node.type) && node.type !== "triggerLeadStatus") {
+    const type = String(node.type ?? "");
+    const isTrigger = type.startsWith("trigger");
+    if (isAutomationNodeType(node.type) && !isTrigger) {
       ordered.push(node);
     }
     queue.push(...getOutgoingTargets(edges, id));
