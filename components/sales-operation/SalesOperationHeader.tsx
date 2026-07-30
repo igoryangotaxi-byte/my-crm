@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Check, LogOut, Menu } from "lucide-react";
 import { SalesNotificationsBell } from "@/components/sales-operation/SalesNotificationsBell";
 import { SalesGlobalSearch } from "@/components/sales-operation/SalesGlobalSearch";
+import { OfficeModeToggle } from "@/components/sales-operation/office/OfficeModeToggle";
 import { useSalesSidebar } from "@/components/sales-operation/SalesSidebarContext";
 import {
   DropdownMenu,
@@ -28,6 +29,9 @@ const salesOperationPageMeta: Record<string, { titleKey: string; subtitleKey: st
   "/sales-operation/manager-analytics": { titleKey: "page.managerAnalytics.title", subtitleKey: "page.managerAnalytics.subtitle" },
   "/sales-operation/performance": { titleKey: "page.performance.title", subtitleKey: "page.performance.subtitle" },
   "/sales-operation/automation": { titleKey: "page.automation.title", subtitleKey: "page.automation.subtitle" },
+  "/sales-operation/communications": { titleKey: "page.communications.title", subtitleKey: "page.communications.subtitle" },
+  "/sales-operation/price-calculator": { titleKey: "page.priceCalculator.title", subtitleKey: "page.priceCalculator.subtitle" },
+  "/sales-operation/office": { titleKey: "page.office.title", subtitleKey: "page.office.subtitle" },
   "/sales-operation/settings": { titleKey: "page.settings.title", subtitleKey: "page.settings.subtitle" },
 };
 
@@ -81,6 +85,7 @@ export function SalesOperationHeader() {
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
+        <OfficeModeToggle />
         <SalesGlobalSearch />
         <SalesNotificationsBell />
         <DropdownMenu>

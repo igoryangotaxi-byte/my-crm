@@ -131,8 +131,10 @@ export function mergeAllRoleDashboardBlockAccess(
   return result;
 }
 
-export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: SalesOperationPageKey }> = [
+/** Routes rendered inside the Appli Taxi CRM shell (may use non-sales page keys). */
+export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: AppPageKey }> = [
   { prefix: "/sales-operation/pipeline", page: "salesPipeline" },
+  { prefix: "/sales-operation/office", page: "salesPipeline" },
   { prefix: "/sales-operation/lead-discovery", page: "salesLeadDiscovery" },
   { prefix: "/sales-operation/tracker", page: "salesTracker" },
   { prefix: "/sales-operation/portfolio", page: "salesSignedClients" },
@@ -141,13 +143,18 @@ export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: SalesOpe
   { prefix: "/sales-operation/performance", page: "salesSettings" },
   { prefix: "/sales-operation/analytics", page: "salesAnalytics" },
   { prefix: "/sales-operation/automation", page: "salesAutomation" },
+  { prefix: "/sales-operation/communications", page: "communications" },
+  { prefix: "/sales-operation/price-calculator", page: "priceCalculator" },
   { prefix: "/sales-operation/settings", page: "salesSettings" },
 ];
 
-export function resolveSalesOperationPageKey(pathname: string): SalesOperationPageKey {
+export function resolveSalesOperationPageKey(pathname: string): AppPageKey {
   if (pathname.startsWith("/sales-operation/lead-discovery")) return "salesLeadDiscovery";
+  if (pathname.startsWith("/sales-operation/office")) return "salesPipeline";
   if (pathname.startsWith("/sales-operation/pipeline")) return "salesPipeline";
   if (pathname.startsWith("/sales-operation/tracker")) return "salesTracker";
+  if (pathname.startsWith("/sales-operation/communications")) return "communications";
+  if (pathname.startsWith("/sales-operation/price-calculator")) return "priceCalculator";
   // Relocated client detail card lives under b2b-clients/[id]; it reads signed-client
   // data and its API requires salesSignedClients, so gate the page the same way.
   if (
@@ -165,13 +172,27 @@ export function resolveSalesOperationPageKey(pathname: string): SalesOperationPa
   return "salesPipeline";
 }
 
+export function canAccessSalesOperationPath(
+  pathname: string,
+  canAccess: (page: AppPageKey) => boolean,
+): boolean {
+  if (!canAccess("salesOperation")) return false;
+  if (pathname.startsWith("/sales-operation/settings")) {
+    return canAccess("salesSettings") || canAccess("accesses");
+  }
+  return canAccess(resolveSalesOperationPageKey(pathname));
+}
+
 export function firstAllowedSalesOperationPath(
   canAccess: (page: AppPageKey) => boolean,
 ): string | null {
+  if (!canAccess("salesOperation")) return null;
   for (const route of SALES_OPERATION_ROUTE_PAGES) {
-    if (canAccess("salesOperation") && canAccess(route.page)) {
-      return route.prefix;
+    if (route.prefix === "/sales-operation/settings") {
+      if (canAccess("salesSettings") || canAccess("accesses")) return route.prefix;
+      continue;
     }
+    if (canAccess(route.page)) return route.prefix;
   }
   return null;
 }

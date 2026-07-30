@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { SkeletonCard } from "@/components/ui/Skeleton";
+import { AccessManagementView } from "@/components/accesses/AccessManagementView";
 import { SalesEmailTemplatesSettings } from "@/components/sales-operation/settings/SalesEmailTemplatesSettings";
 import { SalesSignedHandoverSettings } from "@/components/sales-operation/settings/SalesSignedHandoverSettings";
 import type { PipelineStage, SalesSegment } from "@/lib/sales-operation/types";
@@ -13,6 +16,12 @@ type StageDraft = PipelineStage;
 
 export function SalesSettingsView() {
   const t = useTranslations("salesOperation.settings");
+  const { canAccess } = useAuth();
+  const searchParams = useSearchParams();
+  const showPipelineSettings = canAccess("salesSettings");
+  const showAccess = canAccess("accesses");
+  const focusAccess = searchParams.get("section") === "access";
+
   const [stages, setStages] = useState<StageDraft[]>([]);
   const [segments, setSegments] = useState<SalesSegment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,6 +32,10 @@ export function SalesSettingsView() {
   const [addingSegment, setAddingSegment] = useState(false);
 
   const load = useCallback(async () => {
+    if (!showPipelineSettings) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -40,11 +53,17 @@ export function SalesSettingsView() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, showPipelineSettings]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!focusAccess || !showAccess) return;
+    const el = document.getElementById("access");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focusAccess, showAccess, loading]);
 
   const updateStageField = (key: string, patch: Partial<StageDraft>) => {
     setStages((prev) => prev.map((stage) => (stage.key === key ? { ...stage, ...patch } : stage)));
@@ -112,8 +131,20 @@ export function SalesSettingsView() {
     <section className="crm-page space-y-4">
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       {message ? <p className="text-sm text-emerald-600">{message}</p> : null}
-      {loading ? <SkeletonCard /> : null}
+      {loading && showPipelineSettings ? <SkeletonCard /> : null}
 
+      {showAccess ? (
+        <div id="access" className="scroll-mt-24 space-y-3">
+          <div>
+            <h2 className="crm-section-title mb-1">{t("accessTitle")}</h2>
+            <p className="text-sm text-[var(--so-muted)]">{t("accessSubtitle")}</p>
+          </div>
+          <AccessManagementView />
+        </div>
+      ) : null}
+
+      {showPipelineSettings ? (
+        <>
       <div className="so-card">
         <h2 className="crm-section-title mb-1">{t("stagesTitle")}</h2>
         <p className="mb-3 text-sm text-[var(--so-muted)]">{t("stagesSubtitle")}</p>
@@ -280,6 +311,8 @@ export function SalesSettingsView() {
       <SalesSignedHandoverSettings />
 
       <SalesEmailTemplatesSettings />
+        </>
+      ) : null}
     </section>
   );
 }

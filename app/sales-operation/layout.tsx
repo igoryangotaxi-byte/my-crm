@@ -6,8 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { SalesOperationAppShell } from "@/components/sales-operation/SalesOperationAppShell";
 import {
+  canAccessSalesOperationPath,
   firstAllowedSalesOperationPath,
-  resolveSalesOperationPageKey,
 } from "@/lib/role-permissions";
 
 export default function SalesOperationLayout({
@@ -33,14 +33,13 @@ export default function SalesOperationLayout({
     }
 
     if (!canAccess("salesOperation")) {
-      router.replace("/request-rides");
+      router.replace("/login");
       return;
     }
 
-    const pageKey = resolveSalesOperationPageKey(pathname);
-    if (!canAccess(pageKey)) {
+    if (!canAccessSalesOperationPath(pathname, canAccess)) {
       const fallback = firstAllowedSalesOperationPath(canAccess);
-      router.replace(fallback ?? "/request-rides");
+      router.replace(fallback ?? "/login");
     }
   }, [loading, currentUser, canAccess, pathname, router]);
 
@@ -60,8 +59,7 @@ export default function SalesOperationLayout({
     );
   }
 
-  const pageKey = resolveSalesOperationPageKey(pathname);
-  if (!canAccess(pageKey)) {
+  if (!canAccessSalesOperationPath(pathname, canAccess)) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted">
         Redirecting...

@@ -1,6 +1,6 @@
 {
   "name": "my-crm",
-  "version": "0.2.49",
+  "version": "0.2.50",
   "private": true,
   "engines": {
     "node": ">=20.9.0"
@@ -57,6 +57,8 @@
     "@radix-ui/react-popover": "^1.1.19",
     "@radix-ui/react-tabs": "^1.1.17",
     "@radix-ui/react-tooltip": "^1.2.12",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
     "@supabase/supabase-js": "^2.104.0",
     "@tanstack/react-virtual": "^3.14.6",
     "@vercel/kv": "^3.0.0",
@@ -75,6 +77,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^2.15.4",
+    "three": "^0.185.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -84,6 +87,7 @@
     "@types/pg": "^8.20.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.185.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "playwright": "^1.61.1",

@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { AppShell } from "@/components/layout/AppShell";
+import { firstAllowedSalesOperationPath } from "@/lib/role-permissions";
 import type { AppPageKey } from "@/types/auth";
 
 function resolvePageKey(pathname: string): AppPageKey {
@@ -49,9 +50,21 @@ export default function CrmLayout({
       return;
     }
 
+    // Staff landing: prefer Appli Taxi CRM over legacy Main CRM pages.
+    const soPath = firstAllowedSalesOperationPath(canAccess);
+    if (soPath && canAccess("salesOperation")) {
+      // Old CRM URLs that moved into Appli Taxi CRM redirect at page level;
+      // other legacy pages remain reachable by direct URL when permitted.
+      const pageKey = resolvePageKey(pathname);
+      if (!canAccess(pageKey)) {
+        router.replace(soPath);
+      }
+      return;
+    }
+
     const pageKey = resolvePageKey(pathname);
     if (!canAccess(pageKey)) {
-      router.replace("/dashboard");
+      router.replace(soPath ?? "/login");
     }
   }, [loading, currentUser, canAccess, pathname, router]);
 

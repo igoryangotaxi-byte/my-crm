@@ -67,7 +67,7 @@ export async function GET(request: Request) {
       return loginRedirect(origin, "rejected");
     }
 
-    const response = NextResponse.redirect(new URL("/dashboard", origin));
+    const response = NextResponse.redirect(new URL("/sales-operation/pipeline", origin));
     response.cookies.set(buildSessionSetCookie(provisioned.user.id));
     response.cookies.set({
       name: STATE_COOKIE_NAME,

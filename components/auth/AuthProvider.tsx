@@ -519,6 +519,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 ...enMessages.salesOperation.page,
                 ...(ruMessages.salesOperation?.page ?? {}),
               },
+              settings: {
+                ...enMessages.salesOperation.settings,
+                ...((ruMessages.salesOperation as { settings?: Record<string, string> } | undefined)
+                  ?.settings ?? {}),
+              },
               leadDiscovery: {
                 ...enMessages.salesOperation.leadDiscovery,
                 ...(ruMessages.salesOperation?.leadDiscovery ?? {}),

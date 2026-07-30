@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { firstAllowedSalesOperationPath } from "@/lib/role-permissions";
 
 type LoginErrorCode = "domain" | "oauth" | "config" | "rejected";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { loading, currentUser, language } = useAuth();
+  const { loading, currentUser, language, canAccess } = useAuth();
   const [errorCode, setErrorCode] = useState<LoginErrorCode | null>(null);
 
   const copy =
@@ -47,9 +48,14 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!loading && currentUser?.status === "approved") {
-      router.replace("/dashboard");
+      if (currentUser.accountType === "client") {
+        router.replace("/client/request-rides");
+        return;
+      }
+      const soPath = firstAllowedSalesOperationPath(canAccess);
+      router.replace(soPath ?? "/sales-operation/pipeline");
     }
-  }, [loading, currentUser, router]);
+  }, [loading, currentUser, canAccess, router]);
 
   const errorMessage =
     errorCode === "domain"

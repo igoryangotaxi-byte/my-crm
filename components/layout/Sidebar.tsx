@@ -222,18 +222,16 @@ export function Sidebar() {
         { href: "/client/employees", label: "Employees", page: "orders" as AppPageKey, area: "b2b" as const, icon: ShieldIcon },
       ]
     : navItems;
-  const filteredNavItems = mainNavItems.filter(
-    (item) => item.area === currentArea && canAccess(item.page),
-  );
-  const filteredFooterNavItems = isClientPortal
-    ? []
-    : footerNavItems.filter((item) => canAccess(item.page));
+  const filteredNavItems = isClientPortal
+    ? mainNavItems.filter((item) => item.area === currentArea && canAccess(item.page))
+    : [];
+  const filteredFooterNavItems: typeof footerNavItems = [];
 
   const navIconWellActive =
     "border border-white/25 bg-gradient-to-br from-red-500 to-red-700 text-white shadow-[0_10px_28px_rgba(239,68,68,0.45)]";
   const activeNavBackground =
     "group-hover:bg-gradient-to-r group-hover:from-red-500 group-hover:to-red-600 group-hover:shadow-lg group-hover:shadow-red-500/45";
-  const logoHref = firstAllowedSalesOperationPath(canAccess) ?? "/request-rides";
+  const logoHref = firstAllowedSalesOperationPath(canAccess) ?? "/sales-operation/pipeline";
   const logoGradient = "from-red-500 to-red-700 text-white";
   const logoShadow = "shadow-[0_10px_26px_rgba(239,68,68,0.5)]";
   const logoBrand = tLayout("brand");
@@ -268,7 +266,7 @@ export function Sidebar() {
         <div className="min-w-0 flex-1 overflow-hidden transition-[max-width,opacity] duration-300 ease-out max-w-0 opacity-0 group-hover:max-w-[11rem] group-hover:opacity-100 motion-reduce:transition-none">
           <p className="truncate text-lg font-semibold text-slate-900">{logoBrand}</p>
           <p className="truncate text-xs text-slate-600">
-            {currentUser?.accountType === "client" ? tNav("clientCabinet") : tNav("operations")}
+            {currentUser?.accountType === "client" ? tNav("clientCabinet") : tNav("salesOperation")}
           </p>
         </div>
       </Link>

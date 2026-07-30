@@ -43,11 +43,12 @@
     "clientCabinet": "פורטל לקוח",
     "operations": "תפעול",
     "myEmployees": "העובדים שלי",
-    "salesOperation": "תפעול מכירות"
+    "salesOperation": "Appli Taxi CRM"
   },
   "salesOperation": {
-    "sectionLabel": "תפעול מכירות",
+    "sectionLabel": "Appli Taxi CRM",
     "backToCrm": "חזרה ל-CRM",
+    "brandSubtitle": "מכירות ותפעול",
     "tab": {
       "pipeline": "צינור",
       "leadDiscovery": "גילוי לידים",
@@ -63,6 +64,9 @@
       "performance": "ביצועי צוות",
       "analytics": "אנליטיקה",
       "automation": "אוטומציה",
+      "communications": "תקשורת",
+      "priceCalculator": "מחשבון מחיר",
+      "office": "משרד תלת־ממד",
       "settings": "הגדרות"
     },
     "collapse": "צמצם",
@@ -676,14 +680,28 @@
       },
       "settings": {
         "title": "הגדרות",
-        "subtitle": "הגדרת שלבי הפייפליין וסגמנטים עסקיים"
+        "subtitle": "ניהול גישות, שלבי פייפליין וסגמנטים עסקיים"
+      },
+      "communications": {
+        "title": "תקשורת",
+        "subtitle": "הודעות צוות ומרכז התראות"
+      },
+      "priceCalculator": {
+        "title": "מחשבון מחיר",
+        "subtitle": "תעריפים, תמלילים והשוואת מחירי נהגים"
       },
       "clientDetail": {
         "title": "פרופיל לקוח",
         "subtitle": "פרטי לקוח חתום, מנהלים וביצועי B2B"
+      },
+      "office": {
+        "title": "משרד תלת־ממד",
+        "subtitle": "עברו ב־CRM — קבלה, חדר מכירות, קיר Pipeline"
       }
     },
     "settings": {
+      "accessTitle": "ניהול גישות",
+      "accessSubtitle": "משתמשים, תפקידים והרשאות עמודים ב-Appli Taxi CRM.",
       "stagesTitle": "שלבי פייפליין",
       "stagesSubtitle": "תוויות, סדר, סבירות זכייה ודגלי זכייה/הפסד/סופי. הסדר קובע את עמודות הלוח.",
       "segmentsTitle": "סגמנטים עסקיים",
@@ -824,7 +842,7 @@
     },
     "leadDiscovery": {
       "title": "גילוי לידים",
-      "eyebrow": "Sales Operation",
+      "eyebrow": "Appli Taxi CRM",
       "subtitle": "חיפוש וסינון אוטומטי של לידי B2B מוניות בישראל",
       "subtitleEasy": "צרו חיפוש, הפעילו אותו וצפו בחברות שמתאימות למוניות תאגידיות — בשלושה צעדים.",
       "loading": "טוען…",
@@ -1100,6 +1118,50 @@
       "mineEmpty": "אין כרטיסי טראקר שהוקצו לך.",
       "createdEmpty": "עדיין לא יצרת כרטיסי טראקר.",
       "openInBoard": "פתח בלוח"
+    },
+    "office": {
+      "title": "משרד תלת־ממד",
+      "classicMode": "ממשק קלאסי",
+      "classicShort": "Classic",
+      "officeShort": "3D",
+      "refresh": "רענון",
+      "graphics": "גרפיקה",
+      "shadows": "צללים",
+      "loadError": "טעינת נתוני המשרד נכשלה.",
+      "moveError": "לא ניתן להעביר ליד.",
+      "leadMoved": "הליד הועבר ל־{status}",
+      "classicOverlayHint": "החדר הזה פותח כרגע את ה־CRM הקלאסי — 3D מלא בהמשך.",
+      "roomComingSoon": "ריהוט תלת־ממד לחדר זה יגיע בשלב הבא. פתחו תצוגה קלאסית לעבודה עכשיו.",
+      "openClassicRoom": "פתח תצוגה קלאסית",
+      "backReception": "חזרה לקבלה",
+      "pipelineHint": "לחיצה על סוכן · workbench · Advance מעביר שלב · גלילה לזום",
+      "agentsHint": "לחיצה על עמית פותחת CRM workbench — לידים, משימות, אנליטיקה, discovery",
+      "agentHint": "בחרו פעולה — תיפתח החדר או עמוד קלאסי ב־CRM.",
+      "intentError": "לא ניתן להריץ פעולת סוכן.",
+      "filterActive": "סינון pipeline: {status}",
+      "clearFilter": "נקה סינון",
+      "preset": {
+        "low": "Low",
+        "high": "High",
+        "static": "Static"
+      },
+      "stat": {
+        "meetings": "פגישות היום",
+        "newLeads": "לידים חדשים",
+        "overdue": "משימות באיחור",
+        "notifications": "לא נקראו"
+      },
+      "room": {
+        "reception": "קבלה",
+        "sales": "חדר מכירות",
+        "pipeline": "קיר Pipeline",
+        "calendar": "חדר יומן",
+        "tasks": "חדר משימות",
+        "dashboard": "חדר דשבורד",
+        "automation": "שיווק / אוטומציה"
+      },
+      "taskDone": "המשימה סומנה כבוצעה",
+      "taskError": "לא ניתן להשלים משימה."
     }
   },
   "priceCalculatorPage": {

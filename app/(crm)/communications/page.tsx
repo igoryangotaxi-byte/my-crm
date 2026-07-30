@@ -1,5 +1,5 @@
-import { CommunicationsPanel } from "@/components/communications/CommunicationsPanel";
+import { redirect } from "next/navigation";
 
 export default function CommunicationsPage() {
-  return <CommunicationsPanel mode="main" />;
+  redirect("/sales-operation/communications");
 }

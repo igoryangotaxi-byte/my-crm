@@ -1,16 +1,16 @@
 import { Suspense } from "react";
-import { SalesSettingsView } from "@/components/sales-operation/settings/SalesSettingsView";
+import { OfficeShell } from "@/components/sales-operation/office/OfficeShell";
 
-export default function SalesOperationSettingsPage() {
+export default function SalesOperationOfficePage() {
   return (
     <Suspense
       fallback={
         <div className="flex min-h-[40vh] items-center justify-center text-sm text-[var(--so-muted)]">
-          Loading…
+          Loading 3D Office…
         </div>
       }
     >
-      <SalesSettingsView />
+      <OfficeShell />
     </Suspense>
   );
 }

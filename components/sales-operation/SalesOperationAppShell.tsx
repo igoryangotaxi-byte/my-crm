@@ -10,6 +10,7 @@ import {
 } from "@/components/sales-operation/SalesSidebarContext";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ConfirmProvider } from "@/components/ui/ConfirmDialog";
+import { OfficeModeProvider } from "@/components/sales-operation/office/OfficeModeContext";
 
 function ShellInner({ children }: { children: React.ReactNode }) {
   const { language } = useAuth();
@@ -50,7 +51,9 @@ export function SalesOperationAppShell({ children }: { children: React.ReactNode
       <ToastProvider>
         <ConfirmProvider>
           <SalesSidebarProvider>
-            <ShellInner>{children}</ShellInner>
+            <OfficeModeProvider>
+              <ShellInner>{children}</ShellInner>
+            </OfficeModeProvider>
           </SalesSidebarProvider>
         </ConfirmProvider>
       </ToastProvider>

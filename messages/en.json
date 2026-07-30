@@ -43,11 +43,12 @@
     "clientCabinet": "Client Cabinet",
     "operations": "Operations",
     "myEmployees": "My Employees",
-    "salesOperation": "Sales Operation"
+    "salesOperation": "Appli Taxi CRM"
   },
   "salesOperation": {
-    "sectionLabel": "Sales Operation",
+    "sectionLabel": "Appli Taxi CRM",
     "backToCrm": "Back to CRM",
+    "brandSubtitle": "Sales & operations",
     "tab": {
       "pipeline": "Pipeline",
       "leadDiscovery": "Lead Discovery",
@@ -63,6 +64,9 @@
       "performance": "Team Performance",
       "analytics": "Analytics",
       "automation": "Automation",
+      "communications": "Communications",
+      "priceCalculator": "Price Calculator",
+      "office": "3D Office",
       "settings": "Settings"
     },
     "collapse": "Collapse",
@@ -676,14 +680,72 @@
       },
       "settings": {
         "title": "Settings",
-        "subtitle": "Configure pipeline stages and business segments"
+        "subtitle": "Access management, pipeline stages, and business segments"
+      },
+      "communications": {
+        "title": "Communications",
+        "subtitle": "Team messaging and notification center"
+      },
+      "priceCalculator": {
+        "title": "Price Calculator",
+        "subtitle": "Tariffs, transcripts, and driver price comparison"
+      },
+      "office": {
+        "title": "3D Office",
+        "subtitle": "Walk the CRM — Reception, Sales Room, Pipeline Wall"
       },
       "clientDetail": {
         "title": "Client profile",
         "subtitle": "Signed client details, managers, and B2B performance"
       }
     },
+    "office": {
+      "title": "3D Office",
+      "classicMode": "Classic UI",
+      "classicShort": "Classic",
+      "officeShort": "3D",
+      "refresh": "Refresh",
+      "graphics": "Graphics",
+      "shadows": "Shadows",
+      "loadError": "Failed to load office data.",
+      "moveError": "Could not move lead.",
+      "leadMoved": "Lead moved to {status}",
+      "classicOverlayHint": "This room opens classic CRM for now — full 3D coming later.",
+      "roomComingSoon": "3D furniture for this room ships in a later phase. Open classic view to work now.",
+      "openClassicRoom": "Open classic view",
+      "backReception": "Back to Reception",
+      "pipelineHint": "Click agent · workbench opens · Advance moves stage · Scroll to zoom",
+      "agentsHint": "Click a teammate to open their CRM workbench — leads, tasks, analytics, discovery",
+      "agentHint": "Actions run live CRM data in the office panel.",
+      "intentError": "Could not run agent action.",
+      "filterActive": "Pipeline filter: {status}",
+      "clearFilter": "Clear filter",
+      "taskDone": "Task marked done",
+      "taskError": "Could not complete task.",
+      "preset": {
+        "low": "Low",
+        "high": "High",
+        "static": "Static"
+      },
+      "stat": {
+        "meetings": "Meetings today",
+        "newLeads": "New leads",
+        "overdue": "Overdue tasks",
+        "notifications": "Unread"
+      },
+      "room": {
+        "reception": "Reception",
+        "sales": "Sales Room",
+        "pipeline": "Pipeline Wall",
+        "calendar": "Calendar Room",
+        "tasks": "Task Room",
+        "dashboard": "Dashboard Room",
+        "automation": "Marketing / Automation"
+      }
+    },
     "settings": {
+      "accessTitle": "Access management",
+      "accessSubtitle": "Users, roles, and page permissions for Appli Taxi CRM.",
       "stagesTitle": "Pipeline stages",
       "stagesSubtitle": "Labels, order, win probability, and win/lost/terminal flags. Order controls the board columns.",
       "segmentsTitle": "Business segments",
@@ -824,7 +886,7 @@
     },
     "leadDiscovery": {
       "title": "Lead Discovery",
-      "eyebrow": "Sales Operation",
+      "eyebrow": "Appli Taxi CRM",
       "subtitle": "Automatic search and qualification of Israel B2B taxi leads",
       "subtitleEasy": "Create a search, run it, and review companies that fit corporate taxi — in three clicks.",
       "loading": "Loading…",

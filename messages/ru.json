@@ -7,11 +7,15 @@
       "leadDiscovery": {
         "title": "Lead Discovery",
         "subtitle": "Автопоиск и квалификация B2B-лидов такси в Израиле"
+      },
+      "office": {
+        "title": "3D Офис",
+        "subtitle": "Пройдите по CRM — Reception, Sales Room, Pipeline Wall"
       }
     },
     "leadDiscovery": {
       "title": "Lead Discovery",
-      "eyebrow": "Sales Operation",
+      "eyebrow": "Appli Taxi CRM",
       "subtitle": "Автоматический поиск и квалификация B2B-лидов корпоративного такси в Израиле",
       "subtitleEasy": "Создайте поиск, запустите его и посмотрите компании, подходящие для корпоративного такси — в три шага.",
       "loading": "Загрузка…",
@@ -200,6 +204,50 @@
         "status": "Статус",
         "actions": "Действия"
       }
+    },
+    "office": {
+      "title": "3D Офис",
+      "classicMode": "Классический UI",
+      "classicShort": "Classic",
+      "officeShort": "3D",
+      "refresh": "Обновить",
+      "graphics": "Графика",
+      "shadows": "Тени",
+      "loadError": "Не удалось загрузить данные офиса.",
+      "moveError": "Не удалось переместить лид.",
+      "leadMoved": "Лид переведён в {status}",
+      "classicOverlayHint": "Эта комната пока открывает классический CRM — полный 3D позже.",
+      "roomComingSoon": "3D-мебель для этой комнаты будет позже. Откройте classic view, чтобы работать.",
+      "openClassicRoom": "Открыть classic view",
+      "backReception": "Назад к Reception",
+      "pipelineHint": "Клик по агенту · workbench · Advance двигает этап · Скролл — зум",
+      "agentsHint": "Клик по сотруднику открывает CRM workbench — лиды, задачи, аналитика, discovery",
+      "agentHint": "Выберите действие — откроется комната или classic-страница CRM.",
+      "intentError": "Не удалось выполнить действие агента.",
+      "filterActive": "Фильтр pipeline: {status}",
+      "clearFilter": "Сбросить фильтр",
+      "preset": {
+        "low": "Low",
+        "high": "High",
+        "static": "Static"
+      },
+      "stat": {
+        "meetings": "Встречи сегодня",
+        "newLeads": "Новые лиды",
+        "overdue": "Просроченные задачи",
+        "notifications": "Непрочитанные"
+      },
+      "room": {
+        "reception": "Reception",
+        "sales": "Sales Room",
+        "pipeline": "Pipeline Wall",
+        "calendar": "Calendar Room",
+        "tasks": "Task Room",
+        "dashboard": "Dashboard Room",
+        "automation": "Marketing / Automation"
+      },
+      "taskDone": "Задача отмечена выполненной",
+      "taskError": "Не удалось завершить задачу."
     }
   }
 }

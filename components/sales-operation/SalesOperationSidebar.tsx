@@ -20,6 +20,9 @@ import {
   Users,
   Workflow,
   Search,
+  MessageSquare,
+  Calculator,
+  Box,
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useRouteLoading } from "@/components/layout/RouteLoadingContext";
@@ -96,6 +99,7 @@ export function SalesOperationSidebar() {
         ],
       },
       { kind: "leaf", href: "/sales-operation/pipeline", labelKey: "pipeline", page: "salesPipeline", icon: Columns3 },
+      { kind: "leaf", href: "/sales-operation/office", labelKey: "office", page: "salesPipeline", icon: Box },
       { kind: "leaf", href: "/sales-operation/lead-discovery", labelKey: "leadDiscovery", page: "salesLeadDiscovery", icon: Search },
       { kind: "leaf", href: "/sales-operation/tracker", labelKey: "tracker", page: "salesTracker", icon: LayoutDashboard },
       { kind: "leaf", href: "/sales-operation/portfolio", labelKey: "portfolio", page: "salesSignedClients", icon: Briefcase },
@@ -112,6 +116,8 @@ export function SalesOperationSidebar() {
         ],
       },
       { kind: "leaf", href: "/sales-operation/automation", labelKey: "automation", page: "salesAutomation", icon: Workflow },
+      { kind: "leaf", href: "/sales-operation/communications", labelKey: "communications", page: "communications", icon: MessageSquare },
+      { kind: "leaf", href: "/sales-operation/price-calculator", labelKey: "priceCalculator", page: "priceCalculator", icon: Calculator },
       { kind: "leaf", href: "/sales-operation/settings", labelKey: "settings", page: "salesSettings", icon: Settings },
     ],
     [taskCount],
@@ -121,7 +127,12 @@ export function SalesOperationSidebar() {
     () =>
       nav
         .map((node) => {
-          if (node.kind === "leaf") return canAccess(node.page) ? node : null;
+          if (node.kind === "leaf") {
+            if (node.href === "/sales-operation/settings") {
+              return canAccess("salesSettings") || canAccess("accesses") ? node : null;
+            }
+            return canAccess(node.page) ? node : null;
+          }
           const children = node.children.filter((c) => canAccess(c.page));
           return children.length ? { ...node, children } : null;
         })
@@ -130,7 +141,6 @@ export function SalesOperationSidebar() {
   );
 
   const showExpanded = !collapsed; // desktop expanded/pinned
-  const mainCrmHref = "/request-rides";
 
   const onNavigate = (href: string) => {
     if (!pathname.startsWith(href)) startRouteLoading();
@@ -150,7 +160,7 @@ export function SalesOperationSidebar() {
       ) : null}
 
       <aside
-        aria-label="Sales Operation navigation"
+        aria-label="Appli Taxi CRM navigation"
         className={cn(
           "fixed inset-y-0 z-[80] flex h-screen flex-col border-[var(--so-border)] bg-[var(--so-surface)] transition-[width,transform] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
           rtl ? "right-0 border-l" : "left-0 border-r",
@@ -164,13 +174,9 @@ export function SalesOperationSidebar() {
               : "-translate-x-full lg:translate-x-0",
         )}
       >
-        {/* Brand / back to CRM */}
+        {/* Brand */}
         <div className="flex items-center gap-2.5 px-3.5 py-4">
-          <Link
-            href={mainCrmHref}
-            onClick={() => onNavigate(mainCrmHref)}
-            className="so-focus-ring flex min-w-0 items-center gap-2.5 rounded-xl"
-          >
+          <div className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[var(--so-accent)] text-white">
               <LayoutDashboard className="h-[18px] w-[18px]" />
             </span>
@@ -180,11 +186,11 @@ export function SalesOperationSidebar() {
                   {tSales("sectionLabel")}
                 </span>
                 <span className="block truncate text-xs text-[var(--so-muted)]">
-                  {tSales("backToCrm")}
+                  {tSales("brandSubtitle")}
                 </span>
               </span>
             ) : null}
-          </Link>
+          </div>
         </div>
 
         <div className="mx-3.5 mb-1 h-px bg-[var(--so-border)]" />
