@@ -23,3 +23,14 @@ Optional env for capture:
 - `SO_CAPTURE_USER_ID` (default `user-admin-1`)
 
 Capture is GET-only (no pipeline mutations). Requires `.env.local` so the session cookie matches the running Next.js process.
+
+## Release 0.2.50 — Appli Taxi CRM + 3D Office
+
+- **File:** [Yango-Sales-Operations-CRM-3D-Office-0-2-50.pptx](./Yango-Sales-Operations-CRM-3D-Office-0-2-50.pptx)
+- **Contents:** Unified CRM shell (Communications, Price Calculator, Access) + interactive 3D Office with team agents and live workbench
+- **Assets:** `assets/release-0-2-50/`
+
+```bash
+node scripts/presentations/capture-release-0-2-50.mjs
+node scripts/presentations/generate-release-0-2-50-pptx.mjs
+```
