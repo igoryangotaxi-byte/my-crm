@@ -1,8 +1,14 @@
 /**
- * Office AI intent heuristics — maps natural language to CRM actions.
+ * Ops Floor Ask-Ops heuristics — maps short commands to dock / classic actions.
+ * No OpenClaw; CRM APIs remain the system of record.
  */
 
-import type { OfficeIntentAction, OfficeRoomId } from "@/lib/sales-operation/office/types";
+import type {
+  OfficeDockTab,
+  OfficeIntentAction,
+  OfficePipelineFilter,
+  OfficeRoomId,
+} from "@/lib/sales-operation/office/types";
 
 export type OfficeIntentResponse = {
   ok: true;
@@ -15,96 +21,64 @@ export function parseOfficeIntentHeuristic(text: string): OfficeIntentResponse {
   if (!t) {
     return {
       ok: true,
-      action: { type: "noop", message: "Try: show new leads, open calendar, briefing…" },
-      reply: "I'm listening — ask me to open a room or find leads.",
+      action: { type: "noop", message: "Try: overdue, stuck, my leads, briefing…" },
+      reply: "Ask Ops: overdue tasks, stuck deals, my leads, new leads, meetings…",
     };
   }
 
-  if (t.includes("in progress") || t.includes("working")) {
+  if (t.includes("briefing") || t.includes("attention") || t.includes("morning")) {
     return {
       ok: true,
-      action: { type: "open_pipeline", status: "in_progress" },
-      reply: "Showing In Progress deals on the Pipeline Wall.",
+      action: { type: "open_dock", tab: "attention" },
+      reply: "Opening Attention queue — what needs you now.",
     };
   }
 
-  if (t.includes("proposal")) {
+  if (t.includes("my desk") || t.includes("my lead") || t.includes("mine")) {
     return {
       ok: true,
-      action: { type: "open_pipeline", status: "proposal_sent" },
-      reply: "Showing Proposal Sent on the Pipeline Wall.",
+      action: { type: "open_dock", tab: "my_desk", filter: { kind: "mine" } },
+      reply: "Opening My Desk — your open leads and tasks.",
     };
   }
 
-  if (t.includes("portfolio") || t.includes("clients")) {
+  if (t.includes("team") || t.includes("managers")) {
     return {
       ok: true,
-      action: { type: "open_classic", path: "/sales-operation/portfolio" },
-      reply: "Opening Portfolio.",
+      action: { type: "open_dock", tab: "team" },
+      reply: "Opening Team Floor — managers and load.",
     };
   }
 
-  if (t.includes("igor k") || t.includes("team lead") || t.includes("briefing")) {
+  if (t.includes("overdue") || (t.includes("task") && !t.includes("tracker"))) {
     return {
       ok: true,
-      action: { type: "open_room", roomId: "reception" },
-      reply: "Igor K — Team Lead. Here's your reception briefing.",
-    };
-  }
-
-  if (t.includes("lior") || t.includes("igor r") || t.includes("itay")) {
-    return {
-      ok: true,
-      action: { type: "open_room", roomId: "sales" },
-      reply: "Sales floor — Lior, Igor R and Itay cover active deals.",
-    };
-  }
-
-  if (t.includes("egor")) {
-    return {
-      ok: true,
-      action: { type: "open_room", roomId: "dashboard" },
-      reply: "Egor — Analytics. Opening Dashboard room.",
-    };
-  }
-
-  if (t.includes("ido")) {
-    return {
-      ok: true,
-      action: { type: "open_room", roomId: "tasks" },
-      reply: "Ido — Operations. Opening Task room.",
-    };
-  }
-
-  if (t.includes("adam")) {
-    return {
-      ok: true,
-      action: { type: "open_classic", path: "/sales-operation/lead-discovery" },
-      reply: "Adam — Growth. Opening Lead Discovery.",
-    };
-  }
-
-  if (t.includes("gal")) {
-    return {
-      ok: true,
-      action: { type: "open_classic", path: "/sales-operation/tracker" },
-      reply: "Gal — Account Manager. Opening Tracker.",
-    };
-  }
-
-  if (t.includes("new lead")) {
-    return {
-      ok: true,
-      action: { type: "open_pipeline", status: "new" },
-      reply: "Opening new leads on the Pipeline Wall. Click a sticker to open the card.",
+      action: { type: "open_dock", tab: "attention" },
+      reply: "Attention queue highlights overdue tasks first.",
     };
   }
 
   if (t.includes("stuck") || t.includes("negotiation") || t.includes("at risk")) {
     return {
       ok: true,
-      action: { type: "open_pipeline", status: "negotiation" },
-      reply: "Focusing Pipeline Wall on Negotiation — deals most at risk.",
+      action: {
+        type: "open_dock",
+        tab: "attention",
+        filter: { kind: "stuck" },
+      },
+      reply: "Focusing stuck deals on the Pipeline Wall.",
+    };
+  }
+
+  if (t.includes("new lead") || t.includes("unassigned")) {
+    return {
+      ok: true,
+      action: {
+        type: "open_dock",
+        tab: "attention",
+        filter: { kind: "status", status: "new" },
+      },
+      reply: "Showing new / unassigned leads.",
     };
   }
 
@@ -112,47 +86,23 @@ export function parseOfficeIntentHeuristic(text: string): OfficeIntentResponse {
     return {
       ok: true,
       action: { type: "open_room", roomId: "pipeline" },
-      reply: "Moving to Pipeline Wall. Click a sticker to open · use Advance to move stage.",
-    };
-  }
-
-  if (t.includes("sales coach") || t.includes("sales room") || t.includes("manager")) {
-    return {
-      ok: true,
-      action: { type: "open_room", roomId: "sales" },
-      reply: "Sales Room — managers at desks. Click a manager for their analytics.",
+      reply: "Pipeline Wall — click a sticker or use the dock to Advance.",
     };
   }
 
   if (t.includes("calendar") || t.includes("meeting")) {
     return {
       ok: true,
-      action: { type: "open_room", roomId: "calendar" },
-      reply: "Calendar room ready — open classic calendar to edit meetings.",
-    };
-  }
-
-  if (t.includes("overdue") || t.includes("task")) {
-    return {
-      ok: true,
-      action: { type: "open_room", roomId: "tasks" },
-      reply: "Task room. Open classic My Space to complete overdue work.",
+      action: { type: "open_classic", path: "/sales-operation/calendar" },
+      reply: "Opening classic Calendar.",
     };
   }
 
   if (t.includes("analytics") || t.includes("dashboard") || t.includes("revenue")) {
     return {
       ok: true,
-      action: { type: "open_room", roomId: "dashboard" },
-      reply: "Dashboard room — open classic Analytics for full charts.",
-    };
-  }
-
-  if (t.includes("automation") || t.includes("campaign") || t.includes("marketing")) {
-    return {
-      ok: true,
-      action: { type: "open_classic", path: "/sales-operation/automation" },
-      reply: "Opening Automations in classic UI.",
+      action: { type: "open_classic", path: "/sales-operation/analytics" },
+      reply: "Opening classic Analytics.",
     };
   }
 
@@ -172,14 +122,33 @@ export function parseOfficeIntentHeuristic(text: string): OfficeIntentResponse {
     };
   }
 
-  const roomWords: Array<{ keys: string[]; room: OfficeRoomId }> = [
-    { keys: ["reception"], room: "reception" },
+  if (t.includes("portfolio")) {
+    return {
+      ok: true,
+      action: { type: "open_classic", path: "/sales-operation/portfolio" },
+      reply: "Opening Portfolio.",
+    };
+  }
+
+  if (t.includes("automation")) {
+    return {
+      ok: true,
+      action: { type: "open_classic", path: "/sales-operation/automation" },
+      reply: "Opening Automations.",
+    };
+  }
+
+  const roomWords: Array<{ keys: string[]; room: OfficeRoomId; tab?: OfficeDockTab }> = [
+    { keys: ["reception"], room: "reception", tab: "attention" },
+    { keys: ["sales"], room: "sales", tab: "team" },
   ];
   for (const row of roomWords) {
     if (row.keys.some((k) => t.includes(k))) {
       return {
         ok: true,
-        action: { type: "open_room", roomId: row.room },
+        action: row.tab
+          ? { type: "open_dock", tab: row.tab }
+          : { type: "open_room", roomId: row.room },
         reply: `Going to ${row.room}.`,
       };
     }
@@ -187,8 +156,15 @@ export function parseOfficeIntentHeuristic(text: string): OfficeIntentResponse {
 
   return {
     ok: true,
-    action: { type: "noop", message: "Try: new leads, stuck deals, open calendar, briefing." },
-    reply:
-      "I can open Pipeline / Sales / Calendar / Tasks / Dashboard, show new or stuck deals, or jump to Automations.",
+    action: { type: "noop", message: "Try: overdue, stuck, my leads, team, pipeline." },
+    reply: "I can open Attention, My Desk, Team, stuck deals, or jump to classic CRM pages.",
   };
+}
+
+export function defaultFilterForDock(
+  tab: OfficeDockTab,
+): OfficePipelineFilter {
+  if (tab === "my_desk") return { kind: "mine" };
+  if (tab === "attention") return { kind: "all" };
+  return { kind: "all" };
 }

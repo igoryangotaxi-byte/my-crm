@@ -1,4 +1,6 @@
-import type { SalesLead, SalesLeadStatus } from "@/lib/sales-operation/types";
+import type { SalesLead, SalesLeadStatus, UpdateSalesLeadInput } from "@/lib/sales-operation/types";
+import type { StageMissingField } from "@/lib/sales-operation/status-transitions";
+import { buildAttentionItems } from "@/lib/sales-operation/office/attention";
 import type {
   OfficeAnalyticsSnapshot,
   OfficeCrmSnapshot,
@@ -10,13 +12,39 @@ import type {
   OfficeReceptionSnapshot,
   OfficeTaskItem,
 } from "@/lib/sales-operation/office/types";
+import {
+  MANAGER_COLORS,
+  daysSince,
+  isStuckLead,
+} from "@/lib/sales-operation/office/types";
+
+export type OfficeTransitionPayload = {
+  fields?: UpdateSalesLeadInput;
+  accountManagerUserId?: string | null;
+  accountManagerName?: string | null;
+  followUpTask?: {
+    title: string;
+    description: string | null;
+    dueAt: string | null;
+    assignedToUserId: string | null;
+    assignedToName: string | null;
+  } | null;
+  contact?: {
+    fullName: string;
+    email: string | null;
+    mobilePhone: string | null;
+  } | null;
+};
 
 type NotificationRow = {
   id: string;
   title?: string;
-  body?: string;
+  body?: string | null;
   message?: string;
+  isRead?: boolean;
   readAt?: string | null;
+  leadId?: string | null;
+  link?: string | null;
   createdAt?: string | null;
 };
 type MeetingRow = {
@@ -35,6 +63,7 @@ type TaskRow = {
   dueDate?: string | null;
   leadId?: string | null;
   leadName?: string | null;
+  assignedToUserId?: string | null;
 };
 
 function startOfTodayMs() {
@@ -73,16 +102,12 @@ function buildBriefing(
   const who = name?.split(" ")[0] || "there";
   const hour = new Date().getHours();
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  return [
+  const lines = [
     `${greet} ${who}.`,
-    "Today you have:",
-    `${reception.meetingsToday} meetings`,
-    `${reception.newLeads} new leads`,
-    `${reception.overdueTasks} overdue tasks`,
-    reception.unreadNotifications
-      ? `${reception.unreadNotifications} unread notifications`
-      : "No unread notifications",
-  ].join("\n");
+    `${reception.overdueTasks} overdue · ${reception.unassignedNew} unassigned new · ${reception.stuckDeals} stuck`,
+    `${reception.meetingsToday} meetings today · ${reception.unreadNotifications} unread`,
+  ];
+  return lines.join("\n");
 }
 
 async function safeJson<T>(res: Response | null): Promise<T | null> {
@@ -99,7 +124,7 @@ export async function fetchOfficeCrmSnapshot(opts?: {
     meetingsRes,
     tasksRes,
     stagesRes,
-    managersRes,
+    rosterRes,
     analyticsRes,
     discoveryRes,
   ] = await Promise.all([
@@ -108,7 +133,7 @@ export async function fetchOfficeCrmSnapshot(opts?: {
     fetch("/api/sales-operation/meetings", { cache: "no-store" }),
     fetch("/api/sales-operation/tasks?scope=mine&status=open", { cache: "no-store" }),
     fetch("/api/sales-operation/config/stages", { cache: "no-store" }),
-    fetch("/api/sales-operation/analytics/managers", { cache: "no-store" }).catch(() => null),
+    fetch("/api/sales-operation/office/roster", { cache: "no-store" }).catch(() => null),
     fetch("/api/sales-operation/analytics/summary", { cache: "no-store" }).catch(() => null),
     fetch("/api/sales-operation/lead-discovery/campaigns", { cache: "no-store" }).catch(() => null),
   ]);
@@ -121,10 +146,10 @@ export async function fetchOfficeCrmSnapshot(opts?: {
     ok?: boolean;
     stages?: Array<{ key: string; label: string; isActive?: boolean; orderIndex?: number }>;
   }>(stagesRes);
-  const managersData = await safeJson<{
+  const rosterData = await safeJson<{
     ok?: boolean;
-    managers?: Array<{ userId?: string; id?: string; name?: string; openLeads?: number }>;
-  }>(managersRes);
+    managers?: Array<{ userId?: string; id?: string; name?: string; role?: string }>;
+  }>(rosterRes);
   const analyticsData = await safeJson<{
     ok?: boolean;
     summary?: {
@@ -157,6 +182,7 @@ export async function fetchOfficeCrmSnapshot(opts?: {
     leadId: task.leadId ?? null,
     leadName: task.leadName ?? null,
     overdue: isOverdueTask(task),
+    assignedToUserId: task.assignedToUserId ?? null,
   }));
 
   const officeMeetings: OfficeMeetingItem[] = meetingsRaw
@@ -174,16 +200,23 @@ export async function fetchOfficeCrmSnapshot(opts?: {
     .filter((m): m is OfficeMeetingItem => Boolean(m))
     .slice(0, 20);
 
-  const officeNotifications: OfficeNotificationItem[] = notificationsRaw.slice(0, 25).map((n) => ({
+  const officeNotifications: OfficeNotificationItem[] = notificationsRaw.slice(0, 30).map((n) => ({
     id: n.id,
     title: n.title ?? n.body ?? n.message ?? "Notification",
-    readAt: n.readAt ?? null,
+    body: n.body ?? null,
+    isRead: typeof n.isRead === "boolean" ? n.isRead : !n.readAt,
+    leadId: n.leadId ?? null,
+    link: n.link ?? null,
     createdAt: n.createdAt ?? null,
   }));
 
+  const openLeads = leads.filter((l) => l.status !== "signed" && l.status !== "rejected");
+  const unassignedNew = openLeads.filter((l) => l.status === "new" && !l.assignedManagerUserId)
+    .length;
+  const stuckDeals = openLeads.filter((l) => isStuckLead(l)).length;
   const meetingsToday = officeMeetings.length;
-  const unreadNotifications = officeNotifications.filter((n) => !n.readAt).length;
-  const newLeads = leads.filter((l) => l.status === "new").length;
+  const unreadNotifications = officeNotifications.filter((n) => !n.isRead).length;
+  const newLeads = openLeads.filter((l) => l.status === "new").length;
   const overdueTasks = officeTasks.filter((t) => t.overdue).length;
 
   const receptionBase = {
@@ -191,60 +224,94 @@ export async function fetchOfficeCrmSnapshot(opts?: {
     unreadNotifications,
     newLeads,
     overdueTasks,
+    unassignedNew,
+    stuckDeals,
   };
   const reception: OfficeReceptionSnapshot = {
     ...receptionBase,
     briefing: buildBriefing(opts?.userName, receptionBase),
   };
 
-  const stickers: OfficePipelineSticker[] = leads
-    .filter((l) => l.status !== "signed" && l.status !== "rejected")
-    .slice(0, 80)
-    .map((l) => ({
-      id: l.id,
-      title: l.fullName || l.companyName || "Lead",
-      company: l.companyName,
-      status: l.status,
-      ownerUserId: l.assignedManagerUserId ?? null,
-      ownerName: l.assignedManagerName ?? null,
-    }));
+  const stickers: OfficePipelineSticker[] = openLeads.slice(0, 100).map((l) => ({
+    id: l.id,
+    title: l.fullName || l.companyName || "Lead",
+    company: l.companyName,
+    status: l.status,
+    ownerUserId: l.assignedManagerUserId ?? null,
+    ownerName: l.assignedManagerName ?? null,
+    daysInStage: daysSince(l.statusEnteredAt),
+  }));
 
-  const byOwner = new Map<string, { count: number; name: string }>();
-  for (const lead of leads) {
+  const byOwner = new Map<
+    string,
+    { count: number; stuck: number; name: string }
+  >();
+  for (const lead of openLeads) {
     if (!lead.assignedManagerUserId) continue;
-    if (lead.status === "signed" || lead.status === "rejected") continue;
     const cur = byOwner.get(lead.assignedManagerUserId) ?? {
       count: 0,
+      stuck: 0,
       name: lead.assignedManagerName ?? lead.assignedManagerUserId,
     };
     cur.count += 1;
+    if (isStuckLead(lead)) cur.stuck += 1;
     cur.name = lead.assignedManagerName ?? cur.name;
     byOwner.set(lead.assignedManagerUserId, cur);
   }
 
-  let managers: OfficeManagerAvatar[] = [];
-  if (managersData?.ok && Array.isArray(managersData.managers) && managersData.managers.length) {
-    managers = managersData.managers.slice(0, 12).map((m) => {
-      const id = String(m.userId ?? m.id ?? "unknown");
-      const open = byOwner.get(id)?.count ?? m.openLeads ?? 0;
-      const name = m.name ?? id;
-      return {
-        id,
-        name,
-        openLeads: open,
-        label: open > 0 ? `Working ${open} leads` : "Available",
-      };
-    });
-  } else {
-    managers = Array.from(byOwner.entries())
-      .slice(0, 12)
-      .map(([id, v]) => ({
-        id,
-        name: v.name,
-        openLeads: v.count,
-        label: v.count > 0 ? `Working ${v.count} leads` : "Available",
-      }));
+  function severityFor(open: number, stuck: number): OfficeManagerAvatar["severity"] {
+    if (stuck > 0) return "critical";
+    if (open >= 8) return "warn";
+    return "ok";
   }
+
+  function toAvatar(
+    id: string,
+    name: string,
+    index: number,
+  ): OfficeManagerAvatar {
+    const stats = byOwner.get(id);
+    const open = stats?.count ?? 0;
+    const stuck = stats?.stuck ?? 0;
+    return {
+      id,
+      name: name || stats?.name || id,
+      openLeads: open,
+      stuckLeads: stuck,
+      label: stuck > 0 ? `${stuck} stuck · ${open} open` : open > 0 ? `${open} open` : "Clear",
+      severity: severityFor(open, stuck),
+      color: MANAGER_COLORS[index % MANAGER_COLORS.length],
+    };
+  }
+
+  const seen = new Set<string>();
+  let managers: OfficeManagerAvatar[] = [];
+
+  if (rosterData?.ok && Array.isArray(rosterData.managers) && rosterData.managers.length) {
+    for (const m of rosterData.managers) {
+      const id = String(m.userId ?? m.id ?? "").trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      managers.push(toAvatar(id, m.name ?? id, managers.length));
+    }
+  }
+
+  // Always merge owners from open leads (covers users missing from roster / permission gaps).
+  for (const [id, v] of byOwner.entries()) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    managers.push(toAvatar(id, v.name, managers.length));
+  }
+
+  managers = managers
+    .sort((a, b) => {
+      const sev = { critical: 0, warn: 1, ok: 2 } as const;
+      const d = sev[a.severity] - sev[b.severity];
+      if (d !== 0) return d;
+      return b.openLeads - a.openLeads || a.name.localeCompare(b.name);
+    })
+    .slice(0, 12)
+    .map((m, i) => ({ ...m, color: MANAGER_COLORS[i % MANAGER_COLORS.length] }));
 
   const stages = (stagesData?.ok ? stagesData.stages ?? [] : [])
     .filter((s) => s.isActive !== false)
@@ -266,18 +333,19 @@ export async function fetchOfficeCrmSnapshot(opts?: {
     byStatusFromLeads[lead.status] = (byStatusFromLeads[lead.status] ?? 0) + 1;
   }
 
-  const analytics: OfficeAnalyticsSnapshot = analyticsData?.ok && analyticsData.summary
-    ? {
-        leadsTotal: analyticsData.summary.leadsTotal ?? leads.length,
-        byStatus: analyticsData.summary.byStatus ?? byStatusFromLeads,
-        signedConversionPct: analyticsData.summary.signedConversionPct ?? 0,
-      }
-    : {
-        leadsTotal: leads.length,
-        byStatus: byStatusFromLeads,
-        signedConversionPct:
-          leads.length > 0 ? ((byStatusFromLeads.signed ?? 0) / leads.length) * 100 : 0,
-      };
+  const analytics: OfficeAnalyticsSnapshot =
+    analyticsData?.ok && analyticsData.summary
+      ? {
+          leadsTotal: analyticsData.summary.leadsTotal ?? leads.length,
+          byStatus: analyticsData.summary.byStatus ?? byStatusFromLeads,
+          signedConversionPct: analyticsData.summary.signedConversionPct ?? 0,
+        }
+      : {
+          leadsTotal: leads.length,
+          byStatus: byStatusFromLeads,
+          signedConversionPct:
+            leads.length > 0 ? ((byStatusFromLeads.signed ?? 0) / leads.length) * 100 : 0,
+        };
 
   let discovery: OfficeDiscoverySnapshot;
   if (discoveryData?.ok && Array.isArray(discoveryData.campaigns)) {
@@ -296,6 +364,13 @@ export async function fetchOfficeCrmSnapshot(opts?: {
     };
   }
 
+  const attention = buildAttentionItems({
+    tasks: officeTasks,
+    leads: openLeads,
+    meetings: officeMeetings,
+    notifications: officeNotifications,
+  });
+
   return {
     loadedAt: new Date().toISOString(),
     reception,
@@ -308,24 +383,112 @@ export async function fetchOfficeCrmSnapshot(opts?: {
     notifications: officeNotifications,
     analytics,
     discovery,
+    attention,
   };
 }
 
-export async function transitionOfficeLead(leadId: string, toStatus: SalesLeadStatus) {
+export type OfficeTransitionResult =
+  | { ok: true; lead: SalesLead }
+  | {
+      ok: false;
+      needsGate: true;
+      missing: StageMissingField[];
+      lead: SalesLead | null;
+      error?: string;
+    }
+  | { ok: false; needsGate: false; error: string };
+
+export async function transitionOfficeLead(
+  leadId: string,
+  toStatus: SalesLeadStatus,
+  payload?: OfficeTransitionPayload,
+): Promise<OfficeTransitionResult> {
+  if (payload?.contact) {
+    const contactRes = await fetch(`/api/sales-operation/leads/${leadId}/contacts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fullName: payload.contact.fullName,
+        email: payload.contact.email,
+        mobilePhone: payload.contact.mobilePhone,
+        isPrimary: true,
+      }),
+    });
+    if (!contactRes.ok && contactRes.status !== 409) {
+      const contactData = (await contactRes.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      return {
+        ok: false,
+        needsGate: false,
+        error: contactData?.error ?? "Failed to create contact.",
+      };
+    }
+  }
+
+  const preflightRes = await fetch(`/api/sales-operation/leads/${leadId}/transition`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ toStatus, preflightOnly: true }),
+  });
+  const preflight = (await preflightRes.json().catch(() => null)) as {
+    ok?: boolean;
+    missing?: StageMissingField[];
+    lead?: SalesLead;
+    error?: string;
+  } | null;
+
+  if (!preflightRes.ok) {
+    return {
+      ok: false,
+      needsGate: false,
+      error: preflight?.error ?? "Failed to validate stage move.",
+    };
+  }
+  if (!payload && preflight && !preflight.ok && (preflight.missing?.length ?? 0) > 0) {
+    return {
+      ok: false,
+      needsGate: true,
+      missing: preflight.missing ?? [],
+      lead: preflight.lead ?? null,
+    };
+  }
+
   const res = await fetch(`/api/sales-operation/leads/${leadId}/transition`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ toStatus }),
+    body: JSON.stringify({
+      toStatus,
+      fields: payload?.fields,
+      accountManagerUserId: payload?.accountManagerUserId,
+      accountManagerName: payload?.accountManagerName,
+      followUpTask: payload?.followUpTask,
+    }),
   });
   const data = (await res.json().catch(() => null)) as {
     ok?: boolean;
     error?: string;
     lead?: SalesLead;
+    code?: string;
+    missing?: StageMissingField[];
   } | null;
-  if (!res.ok || !data?.ok) {
-    throw new Error(data?.error ?? "Failed to move lead");
+
+  if (res.status === 422 && data?.code === "STAGE_REQUIREMENTS") {
+    return {
+      ok: false,
+      needsGate: true,
+      missing: data.missing ?? [],
+      lead: data.lead ?? null,
+    };
   }
-  return data.lead;
+  if (!res.ok || !data?.ok || !data.lead) {
+    return {
+      ok: false,
+      needsGate: false,
+      error: data?.error ?? "Failed to move lead",
+    };
+  }
+  return { ok: true, lead: data.lead };
 }
 
 export async function completeOfficeTask(taskId: string) {
@@ -338,4 +501,36 @@ export async function completeOfficeTask(taskId: string) {
   if (!res.ok || !data?.ok) {
     throw new Error(data?.error ?? "Failed to complete task");
   }
+}
+
+export async function assignOfficeLeadToMe(
+  leadId: string,
+  user: { id: string; name: string },
+): Promise<SalesLead> {
+  const body: UpdateSalesLeadInput = {
+    assignedManagerUserId: user.id,
+    assignedManagerName: user.name,
+  };
+  const res = await fetch(`/api/sales-operation/leads/${leadId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json().catch(() => null)) as {
+    ok?: boolean;
+    error?: string;
+    lead?: SalesLead;
+  } | null;
+  if (!res.ok || !data?.ok || !data.lead) {
+    throw new Error(data?.error ?? "Failed to assign lead");
+  }
+  return data.lead;
+}
+
+export async function markOfficeNotificationsRead(ids?: string[], all?: boolean) {
+  await fetch("/api/sales-operation/notifications/read", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(all ? { all: true } : { ids }),
+  });
 }

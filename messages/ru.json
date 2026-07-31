@@ -10,7 +10,7 @@
       },
       "office": {
         "title": "3D Офис",
-        "subtitle": "Пройдите по CRM — Reception, Sales Room, Pipeline Wall"
+        "subtitle": "Очередь Attention, My Desk и Team — живые CRM-сигналы в 3D"
       }
     },
     "leadDiscovery": {
@@ -213,17 +213,18 @@
       "refresh": "Обновить",
       "graphics": "Графика",
       "shadows": "Тени",
-      "loadError": "Не удалось загрузить данные офиса.",
+      "loadError": "Не удалось загрузить данные 3D Office.",
       "moveError": "Не удалось переместить лид.",
       "leadMoved": "Лид переведён в {status}",
-      "classicOverlayHint": "Эта комната пока открывает классический CRM — полный 3D позже.",
-      "roomComingSoon": "3D-мебель для этой комнаты будет позже. Откройте classic view, чтобы работать.",
+      "classicOverlayHint": "Эта комната открывает классический CRM для глубокой работы.",
+      "roomComingSoon": "Откройте classic view для полного редактирования.",
       "openClassicRoom": "Открыть classic view",
       "backReception": "Назад к Reception",
-      "pipelineHint": "Клик по агенту · workbench · Advance двигает этап · Скролл — зум",
-      "agentsHint": "Клик по сотруднику открывает CRM workbench — лиды, задачи, аналитика, discovery",
-      "agentHint": "Выберите действие — откроется комната или classic-страница CRM.",
-      "intentError": "Не удалось выполнить действие агента.",
+      "pipelineHint": "Dock работает на живом CRM · Advance со stage gate · Скролл — зум",
+      "agentsHint": "Клик по менеджеру открывает его сделки в Team dock",
+      "agentHint": "Действия идут по живым данным CRM в dock офиса.",
+      "intentError": "Не удалось выполнить Ask Ops.",
+      "openDock": "Открыть dock офиса",
       "filterActive": "Фильтр pipeline: {status}",
       "clearFilter": "Сбросить фильтр",
       "preset": {
@@ -234,20 +235,25 @@
       "stat": {
         "meetings": "Встречи сегодня",
         "newLeads": "Новые лиды",
-        "overdue": "Просроченные задачи",
+        "overdue": "Просрочено",
+        "unassigned": "Без владельца",
+        "stuck": "Застряли",
         "notifications": "Непрочитанные"
       },
       "room": {
         "reception": "Reception",
         "sales": "Sales Room",
         "pipeline": "Pipeline Wall",
-        "calendar": "Calendar Room",
-        "tasks": "Task Room",
-        "dashboard": "Dashboard Room",
-        "automation": "Marketing / Automation"
+        "calendar": "Calendar",
+        "tasks": "Tasks",
+        "dashboard": "Dashboard",
+        "automation": "Discovery"
       },
       "taskDone": "Задача отмечена выполненной",
-      "taskError": "Не удалось завершить задачу."
+      "taskError": "Не удалось завершить задачу.",
+      "assigned": "Лид назначен вам",
+      "assignError": "Не удалось назначить лид.",
+      "notifError": "Не удалось отметить уведомление прочитанным."
     }
   }
 }

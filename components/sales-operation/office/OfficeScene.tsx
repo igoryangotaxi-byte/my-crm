@@ -12,14 +12,14 @@ import {
 } from "react";
 import * as THREE from "three";
 import type {
-  OfficeAgentId,
   OfficeCrmSnapshot,
+  OfficePipelineFilter,
   OfficePipelineSticker,
   OfficeRoomId,
 } from "@/lib/sales-operation/office/types";
+import { NEXT_PIPELINE_STATUS, filterStickers } from "@/lib/sales-operation/office/types";
 import type { OfficePerformanceSettings } from "@/lib/sales-operation/office/performance";
 import type { SalesLeadStatus } from "@/lib/sales-operation/types";
-import { OFFICE_AGENTS, agentLiveBadge } from "@/lib/sales-operation/office/agents";
 import { OfficeWalkingAgents } from "@/components/sales-operation/office/OfficeWalkingAgents";
 
 const STAGE_COLORS: Record<string, string> = {
@@ -244,7 +244,7 @@ function PipelineStickerMesh({
           >
             <div className="truncate text-[10px] font-bold text-slate-900">{sticker.title}</div>
             <div className="truncate text-[9px] text-slate-500">
-              {sticker.company ?? sticker.status.replace("_", " ")}
+              {sticker.company ?? sticker.status.replace(/_/g, " ")} · {sticker.daysInStage}d
             </div>
           </button>
           <button
@@ -257,36 +257,6 @@ function PipelineStickerMesh({
           >
             Advance →
           </button>
-        </div>
-      </Html>
-    </group>
-  );
-}
-
-function ScreenOnWall({
-  position,
-  rotation = 0,
-  color,
-  title,
-}: {
-  position: [number, number, number];
-  rotation?: number;
-  color: string;
-  title: string;
-}) {
-  return (
-    <group position={position} rotation={[0, rotation, 0]}>
-      <mesh castShadow>
-        <boxGeometry args={[2.4, 1.4, 0.08]} />
-        <meshStandardMaterial color="#0f172a" />
-      </mesh>
-      <mesh position={[0, 0, 0.05]}>
-        <planeGeometry args={[2.2, 1.2]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.25} />
-      </mesh>
-      <Html position={[0, 0.85, 0.1]} center>
-        <div className="rounded bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
-          {title}
         </div>
       </Html>
     </group>
@@ -358,25 +328,20 @@ function HotspotPad({
   );
 }
 
-const NEXT_STATUS: Partial<Record<SalesLeadStatus, SalesLeadStatus>> = {
-  new: "in_progress",
-  in_progress: "proposal_sent",
-  proposal_sent: "negotiation",
-  negotiation: "signed",
-};
-
 type OfficeSceneProps = {
   snapshot: OfficeCrmSnapshot | null;
   activeRoom: OfficeRoomId;
   selectedLeadId?: string | null;
-  selectedAgentId?: OfficeAgentId | null;
-  pipelineStatusFilter?: SalesLeadStatus | null;
+  selectedManagerId?: string | null;
+  pipelineFilter?: OfficePipelineFilter;
+  currentUserId?: string | null;
   perf: OfficePerformanceSettings;
   onSelectRoom: (room: OfficeRoomId) => void;
   onOpenLead: (leadId: string) => void;
   onMoveLead: (leadId: string, toStatus: SalesLeadStatus) => void;
-  onSelectAgent: (agentId: OfficeAgentId) => void;
-  onTalkReception: () => void;
+  onSelectManager: (managerId: string) => void;
+  onOpenAttention: () => void;
+  onOpenClassic: (path: string) => void;
   briefingOpen: boolean;
 };
 
@@ -384,14 +349,16 @@ export function OfficeScene({
   snapshot,
   activeRoom,
   selectedLeadId,
-  selectedAgentId,
-  pipelineStatusFilter = null,
+  selectedManagerId,
+  pipelineFilter = { kind: "all" },
+  currentUserId,
   perf,
   onSelectRoom,
   onOpenLead,
   onMoveLead,
-  onSelectAgent,
-  onTalkReception,
+  onSelectManager,
+  onOpenAttention,
+  onOpenClassic,
   briefingOpen,
 }: OfficeSceneProps) {
   const controlsRef = useRef<{
@@ -400,40 +367,29 @@ export function OfficeScene({
     update: () => void;
   } | null>(null);
 
+  const filteredStickers = useMemo(
+    () => filterStickers(snapshot?.stickers ?? [], pipelineFilter, currentUserId),
+    [snapshot?.stickers, pipelineFilter, currentUserId],
+  );
+
   const stickersByStage = useMemo(() => {
     const map = new Map<string, OfficePipelineSticker[]>();
-    for (const s of snapshot?.stickers ?? []) {
-      if (pipelineStatusFilter && s.status !== pipelineStatusFilter) continue;
+    for (const s of filteredStickers) {
       const list = map.get(s.status) ?? [];
       list.push(s);
       map.set(s.status, list);
     }
     return map;
-  }, [snapshot, pipelineStatusFilter]);
+  }, [filteredStickers]);
 
   const stages = (snapshot?.stages ?? []).filter((s) =>
     ["new", "in_progress", "proposal_sent", "negotiation"].includes(s.key),
   );
 
-  const agentBadges = useMemo(() => {
-    const reception = snapshot?.reception;
-    const stickers = snapshot?.stickers ?? [];
-    const badges: Partial<Record<OfficeAgentId, string | null>> = {};
-    for (const agent of OFFICE_AGENTS) {
-      const ownerLeadCount = stickers.filter((s) => {
-        const name = (s.ownerName ?? "").toLowerCase();
-        return agent.ownerMatch.some((m) => name.includes(m));
-      }).length;
-      badges[agent.id] = agentLiveBadge(agent, {
-        newLeads: reception?.newLeads ?? 0,
-        overdueTasks: reception?.overdueTasks ?? 0,
-        meetingsToday: reception?.meetingsToday ?? 0,
-        unread: reception?.unreadNotifications ?? 0,
-        ownerLeadCount,
-      });
-    }
-    return badges;
-  }, [snapshot]);
+  const meetingsToday = snapshot?.meetings.length ?? 0;
+  const overdueTasks = snapshot?.reception.overdueTasks ?? 0;
+  const leadsTotal = snapshot?.analytics.leadsTotal ?? 0;
+  const discovery = snapshot?.discovery;
 
   return (
     <Canvas
@@ -490,11 +446,11 @@ export function OfficeScene({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onTalkReception();
+                    onOpenAttention();
                   }}
                   className="w-full rounded-lg bg-[#ff2d2d] px-3 py-1.5 text-[11px] font-semibold text-white"
                 >
-                  Open workbench
+                  Open Attention
                 </button>
               </div>
             </Html>
@@ -562,7 +518,7 @@ export function OfficeScene({
                     position={[6.2 + col * 1.35, 2.15 - row * 0.85, -2.72]}
                     onOpen={() => onOpenLead(sticker.id)}
                     onAdvance={() => {
-                      const next = NEXT_STATUS[sticker.status];
+                      const next = NEXT_PIPELINE_STATUS[sticker.status];
                       if (next) onMoveLead(sticker.id, next);
                     }}
                   />
@@ -574,22 +530,8 @@ export function OfficeScene({
           <Plant position={[6.2, 0, 1.8]} />
         </HotspotPad>
 
-        {/* Calendar room */}
+        {/* Calendar — honest deep-link, no fake grid */}
         <HotspotPad position={[-8.5, 0, -7]} size={[6.5, 5]} onClick={() => onSelectRoom("calendar")}>
-          <mesh position={[-8.5, 1.6, -10.4]} castShadow>
-            <boxGeometry args={[3.2, 2.2, 0.1]} />
-            <meshStandardMaterial color="#e2e8f0" />
-          </mesh>
-          {Array.from({ length: 20 }).map((_, i) => {
-            const x = -9.7 + (i % 5) * 0.55;
-            const y = 2.3 - Math.floor(i / 5) * 0.45;
-            return (
-              <mesh key={i} position={[x, y, -10.34]}>
-                <planeGeometry args={[0.45, 0.35]} />
-                <meshStandardMaterial color={i % 7 === 0 ? "#fecaca" : "#ffffff"} />
-              </mesh>
-            );
-          })}
           <Desk position={[-8.5, 0, -7.2]} />
           <RoomSign
             position={[-8.5, 2.85, -7]}
@@ -597,25 +539,28 @@ export function OfficeScene({
             active={activeRoom === "calendar"}
             onClick={() => onSelectRoom("calendar")}
           />
+          <Html position={[-8.5, 1.6, -9.2]} center distanceFactor={12}>
+            <div className="w-[180px] rounded-xl border border-slate-200 bg-white/95 p-2.5 shadow">
+              <p className="text-[11px] font-bold text-slate-900">
+                {meetingsToday} meeting{meetingsToday === 1 ? "" : "s"} today
+              </p>
+              <p className="mt-0.5 text-[10px] text-slate-500">Open classic calendar to schedule.</p>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenClassic("/sales-operation/calendar");
+                }}
+                className="mt-2 w-full rounded-lg bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white"
+              >
+                Open Calendar
+              </button>
+            </div>
+          </Html>
         </HotspotPad>
 
-        {/* Tasks room */}
+        {/* Tasks — overdue count only */}
         <HotspotPad position={[0, 0, -7]} size={[6.5, 5]} onClick={() => onSelectRoom("tasks")}>
-          <mesh position={[0, 1.55, -10.4]} castShadow>
-            <boxGeometry args={[3.6, 2.1, 0.1]} />
-            <meshStandardMaterial color="#fef3c7" />
-          </mesh>
-          {[0, 1, 2, 3].map((i) => (
-            <RoundedBox
-              key={i}
-              args={[1.4, 0.35, 0.04]}
-              radius={0.03}
-              position={[-1.1 + (i % 2) * 1.6, 2.1 - Math.floor(i / 2) * 0.55, -10.32]}
-              castShadow
-            >
-              <meshStandardMaterial color={i < 2 ? "#fee2e2" : "#dcfce7"} />
-            </RoundedBox>
-          ))}
           <Desk position={[0, 0, -7]} />
           <RoomSign
             position={[0, 2.85, -7]}
@@ -623,12 +568,28 @@ export function OfficeScene({
             active={activeRoom === "tasks"}
             onClick={() => onSelectRoom("tasks")}
           />
+          <Html position={[0, 1.6, -9.2]} center distanceFactor={12}>
+            <div className="w-[180px] rounded-xl border border-slate-200 bg-white/95 p-2.5 shadow">
+              <p className="text-[11px] font-bold text-slate-900">
+                {overdueTasks} overdue task{overdueTasks === 1 ? "" : "s"}
+              </p>
+              <p className="mt-0.5 text-[10px] text-slate-500">Act in Attention dock or My Space.</p>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenAttention();
+                }}
+                className="mt-2 w-full rounded-lg bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white"
+              >
+                Open Attention
+              </button>
+            </div>
+          </Html>
         </HotspotPad>
 
-        {/* Dashboard room */}
+        {/* Dashboard — summary + classic analytics */}
         <HotspotPad position={[8.5, 0, -7]} size={[6.5, 5]} onClick={() => onSelectRoom("dashboard")}>
-          <ScreenOnWall position={[7.2, 1.7, -10.4]} color="#38bdf8" title="Revenue" />
-          <ScreenOnWall position={[10, 1.7, -10.4]} color="#a78bfa" title="Funnel" />
           <Desk position={[8.5, 0, -7]} />
           <RoomSign
             position={[8.5, 2.85, -7]}
@@ -636,17 +597,72 @@ export function OfficeScene({
             active={activeRoom === "dashboard"}
             onClick={() => onSelectRoom("dashboard")}
           />
+          <Html position={[8.5, 1.6, -9.2]} center distanceFactor={12}>
+            <div className="w-[180px] rounded-xl border border-slate-200 bg-white/95 p-2.5 shadow">
+              <p className="text-[11px] font-bold text-slate-900">{leadsTotal} leads total</p>
+              <p className="mt-0.5 text-[10px] text-slate-500">
+                Conversion{" "}
+                {(snapshot?.analytics.signedConversionPct ?? 0).toFixed(0)}% · open Analytics for
+                charts.
+              </p>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenClassic("/sales-operation/analytics");
+                }}
+                className="mt-2 w-full rounded-lg bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white"
+              >
+                Open Analytics
+              </button>
+            </div>
+          </Html>
         </HotspotPad>
 
-        {/* Named team agents — walk the office with hover + talk */}
+        {/* Automation / Discovery — summary + deep-link */}
+        <HotspotPad
+          position={[0, 0, 9.5]}
+          size={[4, 2]}
+          onClick={() => onSelectRoom("automation")}
+        >
+          <RoomSign
+            position={[0, 2.4, 9.2]}
+            label="Discovery"
+            active={activeRoom === "automation"}
+            onClick={() => onSelectRoom("automation")}
+          />
+          <Html position={[0, 1.2, 9]} center distanceFactor={14}>
+            <div className="w-[200px] rounded-xl border border-slate-200 bg-white/95 p-2.5 shadow">
+              <p className="text-[11px] font-bold text-slate-900">
+                {discovery?.enabled
+                  ? `${discovery.activeCount}/${discovery.campaignCount} campaigns active`
+                  : "Lead Discovery"}
+              </p>
+              <p className="mt-0.5 text-[10px] text-slate-500">
+                Configure campaigns in classic Lead Discovery.
+              </p>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenClassic("/sales-operation/lead-discovery");
+                }}
+                className="mt-2 w-full rounded-lg bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white"
+              >
+                Open Discovery
+              </button>
+            </div>
+          </Html>
+        </HotspotPad>
+
+        {/* CRM managers — severity cues, click → Team dock */}
         <OfficeWalkingAgents
-          selectedAgentId={selectedAgentId}
+          managers={snapshot?.managers ?? []}
+          selectedManagerId={selectedManagerId}
           animate={perf.animateAgents}
-          badges={agentBadges}
-          onSelectAgent={(id) => {
-            const agent = OFFICE_AGENTS.find((a) => a.id === id);
-            onSelectRoom(agent?.roomId ?? "reception");
-            onSelectAgent(id);
+          onSelectManager={(id) => {
+            onSelectRoom("sales");
+            onSelectManager(id);
           }}
         />
       </Suspense>

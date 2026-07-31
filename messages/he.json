@@ -696,7 +696,7 @@
       },
       "office": {
         "title": "משרד תלת־ממד",
-        "subtitle": "עברו ב־CRM — קבלה, חדר מכירות, קיר Pipeline"
+        "subtitle": "תור Attention, My Desk ו־Team — אותות CRM חיים בתלת־ממד"
       }
     },
     "settings": {
@@ -1127,17 +1127,18 @@
       "refresh": "רענון",
       "graphics": "גרפיקה",
       "shadows": "צללים",
-      "loadError": "טעינת נתוני המשרד נכשלה.",
+      "loadError": "טעינת נתוני המשרד התלת־ממדי נכשלה.",
       "moveError": "לא ניתן להעביר ליד.",
       "leadMoved": "הליד הועבר ל־{status}",
-      "classicOverlayHint": "החדר הזה פותח כרגע את ה־CRM הקלאסי — 3D מלא בהמשך.",
-      "roomComingSoon": "ריהוט תלת־ממד לחדר זה יגיע בשלב הבא. פתחו תצוגה קלאסית לעבודה עכשיו.",
+      "classicOverlayHint": "החדר הזה פותח את ה־CRM הקלאסי לעבודה מעמיקה.",
+      "roomComingSoon": "פתחו תצוגה קלאסית לכל כלי העריכה.",
       "openClassicRoom": "פתח תצוגה קלאסית",
       "backReception": "חזרה לקבלה",
-      "pipelineHint": "לחיצה על סוכן · workbench · Advance מעביר שלב · גלילה לזום",
-      "agentsHint": "לחיצה על עמית פותחת CRM workbench — לידים, משימות, אנליטיקה, discovery",
-      "agentHint": "בחרו פעולה — תיפתח החדר או עמוד קלאסי ב־CRM.",
-      "intentError": "לא ניתן להריץ פעולת סוכן.",
+      "pipelineHint": "ה־dock פועל על CRM חי · Advance עם stage gate · גלילה לזום",
+      "agentsHint": "לחיצה על מנהל פותחת את העסקאות שלו ב־Team dock",
+      "agentHint": "הפעולות רצות על נתוני CRM חיים ב־dock המשרד.",
+      "intentError": "לא ניתן להריץ Ask Ops.",
+      "openDock": "פתח את dock המשרד",
       "filterActive": "סינון pipeline: {status}",
       "clearFilter": "נקה סינון",
       "preset": {
@@ -1148,20 +1149,25 @@
       "stat": {
         "meetings": "פגישות היום",
         "newLeads": "לידים חדשים",
-        "overdue": "משימות באיחור",
+        "overdue": "באיחור",
+        "unassigned": "ללא שיוך",
+        "stuck": "תקועים",
         "notifications": "לא נקראו"
       },
       "room": {
         "reception": "קבלה",
         "sales": "חדר מכירות",
         "pipeline": "קיר Pipeline",
-        "calendar": "חדר יומן",
-        "tasks": "חדר משימות",
-        "dashboard": "חדר דשבורד",
-        "automation": "שיווק / אוטומציה"
+        "calendar": "יומן",
+        "tasks": "משימות",
+        "dashboard": "דשבורד",
+        "automation": "Discovery"
       },
       "taskDone": "המשימה סומנה כבוצעה",
-      "taskError": "לא ניתן להשלים משימה."
+      "taskError": "לא ניתן להשלים משימה.",
+      "assigned": "הליד שויך אליך",
+      "assignError": "לא ניתן לשייך ליד.",
+      "notifError": "לא ניתן לסמן התראה כנקראה."
     }
   },
   "priceCalculatorPage": {

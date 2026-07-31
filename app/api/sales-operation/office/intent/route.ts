@@ -5,8 +5,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Stub Office AI intent endpoint (Phase 4 roadmap).
- * Returns heuristic actions only — no separate agent DB; executors use existing CRM APIs.
+ * Ops Floor Ask Ops intent — heuristic actions only.
+ * No separate agent DB; executors use existing CRM APIs via the shell.
  */
 export async function POST(request: Request) {
   const auth = await requireSalesOperationPage(request, "salesPipeline");

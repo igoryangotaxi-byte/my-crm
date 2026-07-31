@@ -6,22 +6,31 @@ import { Box, Layers, RefreshCw, Settings2 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTranslations } from "next-intl";
 import { SalesLeadDetailSidebar } from "@/components/sales-operation/SalesPipelineBoard";
+import {
+  StageGateModal,
+  type StageGateConfirmPayload,
+} from "@/components/sales-operation/StageGateModal";
 import { OfficeScene } from "@/components/sales-operation/office/OfficeSceneDynamic";
-import { OfficeWorkbench } from "@/components/sales-operation/office/OfficeWorkbench";
+import { OfficeOpsDock } from "@/components/sales-operation/office/OfficeOpsDock";
 import { useOfficeMode } from "@/components/sales-operation/office/OfficeModeContext";
 import {
+  assignOfficeLeadToMe,
   completeOfficeTask,
   fetchOfficeCrmSnapshot,
+  markOfficeNotificationsRead,
   transitionOfficeLead,
+  type OfficeTransitionPayload,
 } from "@/lib/sales-operation/office/adapter";
-import {
-  OFFICE_AGENTS,
-  type OfficeAgent,
-  type OfficeAgentAction,
-  type OfficeAgentId,
-  type OfficeWorkbenchMode,
-} from "@/lib/sales-operation/office/agents";
-import type { OfficeCrmSnapshot, OfficeRoomId } from "@/lib/sales-operation/office/types";
+import { buildAttentionItems } from "@/lib/sales-operation/office/attention";
+import type {
+  OfficeCrmSnapshot,
+  OfficeDockTab,
+  OfficeIntentAction,
+  OfficePipelineFilter,
+  OfficeRoomId,
+} from "@/lib/sales-operation/office/types";
+import { isStuckLead } from "@/lib/sales-operation/office/types";
+import type { StageMissingField } from "@/lib/sales-operation/status-transitions";
 import type { SalesLead, SalesLeadStatus } from "@/lib/sales-operation/types";
 import { OFFICE_PERF_PRESETS } from "@/lib/sales-operation/office/performance";
 
@@ -32,17 +41,7 @@ const CLASSIC_ROOM_PATH: Record<OfficeRoomId, string> = {
   calendar: "/sales-operation/calendar",
   tasks: "/sales-operation/tasks",
   dashboard: "/sales-operation/analytics",
-  automation: "/sales-operation/automation",
-};
-
-const ROOM_WORKBENCH: Partial<Record<OfficeRoomId, OfficeWorkbenchMode>> = {
-  reception: { kind: "briefing" },
-  sales: { kind: "leads", title: "Sales floor · open deals" },
-  pipeline: { kind: "leads", title: "Pipeline wall" },
-  calendar: { kind: "meetings" },
-  tasks: { kind: "tasks", overdueOnly: true },
-  dashboard: { kind: "analytics" },
-  automation: { kind: "discovery" },
+  automation: "/sales-operation/lead-discovery",
 };
 
 export function OfficeShell() {
@@ -69,16 +68,46 @@ export function OfficeShell() {
   const [message, setMessage] = useState<string | null>(null);
   const [perfOpen, setPerfOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<SalesLead | null>(null);
-  const [selectedAgentId, setSelectedAgentId] = useState<OfficeAgentId | null>(null);
-  const [workbench, setWorkbench] = useState<OfficeWorkbenchMode | null>({ kind: "briefing" });
-  const [pipelineStatusFilter, setPipelineStatusFilter] = useState<SalesLeadStatus | null>(null);
+  const [selectedManagerId, setSelectedManagerId] = useState<string | null>(null);
+  const [dockTab, setDockTab] = useState<OfficeDockTab>("attention");
+  const [dockOpen, setDockOpen] = useState(true);
+  const [pipelineFilter, setPipelineFilter] = useState<OfficePipelineFilter>({ kind: "all" });
   const [actionBusy, setActionBusy] = useState(false);
   const [stages, setStages] = useState<Array<{ key: string; label: string }>>([]);
+  const [askValue, setAskValue] = useState("");
+  const [askBusy, setAskBusy] = useState(false);
+  const [askReply, setAskReply] = useState<string | null>(null);
 
-  const selectedAgent = useMemo(
-    () => OFFICE_AGENTS.find((a) => a.id === selectedAgentId) ?? null,
-    [selectedAgentId],
-  );
+  const [gateOpen, setGateOpen] = useState(false);
+  const [gateLead, setGateLead] = useState<SalesLead | null>(null);
+  const [gateToStatus, setGateToStatus] = useState<SalesLeadStatus | null>(null);
+  const [gateMissing, setGateMissing] = useState<StageMissingField[]>([]);
+  const [gateLoading, setGateLoading] = useState(false);
+
+  const currentUserId = currentUser?.id ?? null;
+
+  const refreshAttention = useCallback((prev: OfficeCrmSnapshot): OfficeCrmSnapshot => {
+    const openLeads = Object.values(prev.leadsById).filter(
+      (l) => l.status !== "signed" && l.status !== "rejected",
+    );
+    return {
+      ...prev,
+      attention: buildAttentionItems({
+        tasks: prev.tasks,
+        leads: openLeads,
+        meetings: prev.meetings,
+        notifications: prev.notifications,
+      }),
+      reception: {
+        ...prev.reception,
+        overdueTasks: prev.tasks.filter((task) => task.overdue).length,
+        unreadNotifications: prev.notifications.filter((n) => !n.isRead).length,
+        unassignedNew: openLeads.filter((l) => l.status === "new" && !l.assignedManagerUserId)
+          .length,
+        stuckDeals: openLeads.filter((l) => isStuckLead(l)).length,
+      },
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -92,19 +121,22 @@ export function OfficeShell() {
         setSelectedLead(data.leadsById[leadId]);
         setFocusEntity({ kind: "lead", id: leadId });
         setActiveRoom("pipeline");
-        setWorkbench({ kind: "leads", title: "Focused lead" });
+        setDockTab("my_desk");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : t("loadError"));
     } finally {
       setLoading(false);
     }
-  }, [currentUser?.name, searchParams, setActiveRoom, setFocusEntity, t]);
+  }, [currentUser, searchParams, setActiveRoom, setFocusEntity, t]);
 
   useEffect(() => {
-    void load();
+    const boot = window.setTimeout(() => void load(), 0);
     const id = window.setInterval(() => void load(), 60_000);
-    return () => window.clearInterval(id);
+    return () => {
+      window.clearTimeout(boot);
+      window.clearInterval(id);
+    };
   }, [load]);
 
   const openLead = useCallback(
@@ -114,7 +146,6 @@ export function OfficeShell() {
       setSelectedLead(lead);
       setFocusEntity({ kind: "lead", id: leadId });
       setActiveRoom("pipeline");
-      setPipelineStatusFilter(null);
       const url = new URL(window.location.href);
       url.searchParams.set("leadId", leadId);
       window.history.replaceState({}, "", url.toString());
@@ -122,34 +153,78 @@ export function OfficeShell() {
     [snapshot, setFocusEntity, setActiveRoom],
   );
 
+  const applyLeadUpdate = useCallback(
+    (lead: SalesLead) => {
+      setSelectedLead(lead);
+      setSnapshot((prev) => {
+        if (!prev) return prev;
+        const stickers = prev.stickers.map((s) =>
+          s.id === lead.id
+            ? {
+                ...s,
+                status: lead.status,
+                ownerUserId: lead.assignedManagerUserId ?? null,
+                ownerName: lead.assignedManagerName ?? null,
+              }
+            : s,
+        );
+        const next = refreshAttention({
+          ...prev,
+          leadsById: { ...prev.leadsById, [lead.id]: lead },
+          stickers,
+        });
+        return next;
+      });
+    },
+    [refreshAttention],
+  );
+
   const moveLead = useCallback(
-    async (leadId: string, toStatus: SalesLeadStatus) => {
+    async (
+      leadId: string,
+      toStatus: SalesLeadStatus,
+      payload?: OfficeTransitionPayload,
+    ): Promise<boolean> => {
       setActionBusy(true);
+      setError(null);
       try {
-        const lead = await transitionOfficeLead(leadId, toStatus);
-        setMessage(t("leadMoved", { status: toStatus }));
-        if (lead) {
-          setSelectedLead(lead);
-          setSnapshot((prev) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              leadsById: { ...prev.leadsById, [lead.id]: lead },
-              stickers: prev.stickers.map((s) =>
-                s.id === lead.id ? { ...s, status: lead.status } : s,
-              ),
-            };
-          });
-        } else {
-          void load();
+        const result = await transitionOfficeLead(leadId, toStatus, payload);
+        if (!result.ok && result.needsGate) {
+          setGateLead(result.lead ?? snapshot?.leadsById[leadId] ?? null);
+          setGateToStatus(toStatus);
+          setGateMissing(result.missing);
+          setGateOpen(true);
+          return false;
         }
+        if (!result.ok) {
+          setError(result.error);
+          return false;
+        }
+        setMessage(t("leadMoved", { status: toStatus }));
+        applyLeadUpdate(result.lead);
+        return true;
       } catch (err) {
         setError(err instanceof Error ? err.message : t("moveError"));
+        return false;
       } finally {
         setActionBusy(false);
       }
     },
-    [load, t],
+    [applyLeadUpdate, snapshot, t],
+  );
+
+  const confirmGate = useCallback(
+    async (payload: StageGateConfirmPayload) => {
+      if (!gateLead || !gateToStatus) return;
+      setGateLoading(true);
+      try {
+        const ok = await moveLead(gateLead.id, gateToStatus, payload);
+        if (ok) setGateOpen(false);
+      } finally {
+        setGateLoading(false);
+      }
+    },
+    [gateLead, gateToStatus, moveLead],
   );
 
   const completeTask = useCallback(
@@ -161,19 +236,7 @@ export function OfficeShell() {
         setSnapshot((prev) => {
           if (!prev) return prev;
           const tasks = prev.tasks.filter((task) => task.id !== taskId);
-          const overdueTasks = tasks.filter((task) => task.overdue).length;
-          return {
-            ...prev,
-            tasks,
-            reception: {
-              ...prev.reception,
-              overdueTasks,
-              briefing: prev.reception.briefing.replace(
-                /\d+ overdue tasks/,
-                `${overdueTasks} overdue tasks`,
-              ),
-            },
-          };
+          return refreshAttention({ ...prev, tasks });
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : t("taskError"));
@@ -181,7 +244,53 @@ export function OfficeShell() {
         setActionBusy(false);
       }
     },
-    [t],
+    [refreshAttention, t],
+  );
+
+  const assignMe = useCallback(
+    async (leadId: string) => {
+      if (!currentUser?.id) {
+        setError(t("assignError"));
+        return;
+      }
+      setActionBusy(true);
+      try {
+        const lead = await assignOfficeLeadToMe(leadId, {
+          id: currentUser.id,
+          name: currentUser.name || currentUser.email || "Me",
+        });
+        setMessage(t("assigned"));
+        applyLeadUpdate(lead);
+        setDockTab("my_desk");
+        setPipelineFilter({ kind: "mine" });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : t("assignError"));
+      } finally {
+        setActionBusy(false);
+      }
+    },
+    [applyLeadUpdate, currentUser, t],
+  );
+
+  const markNotificationRead = useCallback(
+    async (id: string) => {
+      setActionBusy(true);
+      try {
+        await markOfficeNotificationsRead([id]);
+        setSnapshot((prev) => {
+          if (!prev) return prev;
+          const notifications = prev.notifications.map((n) =>
+            n.id === id ? { ...n, isRead: true } : n,
+          );
+          return refreshAttention({ ...prev, notifications });
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : t("notifError"));
+      } finally {
+        setActionBusy(false);
+      }
+    },
+    [refreshAttention, t],
   );
 
   const goClassic = useCallback(
@@ -194,69 +303,111 @@ export function OfficeShell() {
     [activeRoom, returnToClassicPath, router, setMode, setReturnToClassicPath],
   );
 
-  const openWorkbench = useCallback(
-    (mode: OfficeWorkbenchMode, agent?: OfficeAgent | null) => {
-      setWorkbench(mode);
-      if (agent) setSelectedAgentId(agent.id);
-      if (mode.kind === "leads") {
-        setActiveRoom("pipeline");
-        setPipelineStatusFilter(mode.status ?? null);
-      } else if (mode.kind === "briefing") {
-        setActiveRoom("reception");
-      } else if (mode.kind === "tasks") {
-        setActiveRoom("tasks");
-      } else if (mode.kind === "meetings") {
-        setActiveRoom("calendar");
-      } else if (mode.kind === "analytics") {
-        setActiveRoom("dashboard");
-      } else if (mode.kind === "discovery") {
-        setActiveRoom("automation");
+  const onSelectManager = useCallback(
+    (managerId: string | null) => {
+      setSelectedManagerId(managerId);
+      setDockOpen(true);
+      setDockTab("team");
+      if (managerId) {
+        setPipelineFilter({ kind: "owner", ownerUserId: managerId });
+        setActiveRoom("sales");
+        setFocusEntity({ kind: "manager", id: managerId });
+      } else {
+        setPipelineFilter({ kind: "all" });
       }
     },
-    [setActiveRoom],
-  );
-
-  const runAgentAction = useCallback(
-    (action: OfficeAgentAction) => {
-      if ("classic" in action) {
-        goClassic(action.classic);
-        return;
-      }
-      openWorkbench(action.workbench, selectedAgent);
-    },
-    [goClassic, openWorkbench, selectedAgent],
-  );
-
-  const onSelectAgent = useCallback(
-    (id: OfficeAgentId) => {
-      const agent = OFFICE_AGENTS.find((a) => a.id === id);
-      if (!agent) return;
-      setSelectedAgentId(id);
-      setMessage(null);
-      openWorkbench(agent.primary, agent);
-    },
-    [openWorkbench],
+    [setActiveRoom, setFocusEntity],
   );
 
   const onSelectRoom = useCallback(
     (room: OfficeRoomId) => {
       setActiveRoom(room);
-      if (room !== "pipeline") setPipelineStatusFilter(null);
-      const mode = ROOM_WORKBENCH[room];
-      if (mode) {
-        setWorkbench(mode);
-        if (room === "pipeline") setSelectedAgentId(null);
+      setDockOpen(true);
+      if (room === "reception") {
+        setDockTab("attention");
+        setPipelineFilter({ kind: "all" });
+      } else if (room === "sales") {
+        setDockTab("team");
+      } else if (room === "pipeline") {
+        setDockTab(dockTab === "team" ? "team" : "my_desk");
+      } else if (room === "calendar" || room === "tasks" || room === "dashboard" || room === "automation") {
+        // Honest rooms: keep camera, deep-link via dock / classic CTA in scene
       }
     },
-    [setActiveRoom],
+    [dockTab, setActiveRoom],
   );
 
-  const talkReception = useCallback(() => {
-    const igor = OFFICE_AGENTS.find((a) => a.id === "igor_k") ?? null;
-    openWorkbench({ kind: "briefing" }, igor);
-  }, [openWorkbench]);
+  const executeIntent = useCallback(
+    (action: OfficeIntentAction) => {
+      switch (action.type) {
+        case "open_dock":
+          setDockOpen(true);
+          setDockTab(action.tab);
+          if (action.filter) setPipelineFilter(action.filter);
+          if (action.ownerUserId) {
+            setSelectedManagerId(action.ownerUserId);
+            setPipelineFilter({ kind: "owner", ownerUserId: action.ownerUserId });
+          }
+          if (action.tab === "attention") setActiveRoom("reception");
+          if (action.tab === "my_desk") setActiveRoom("pipeline");
+          if (action.tab === "team") setActiveRoom("sales");
+          break;
+        case "open_room":
+          onSelectRoom(action.roomId);
+          break;
+        case "open_classic":
+          goClassic(action.path);
+          break;
+        case "open_lead":
+          openLead(action.leadId);
+          break;
+        case "open_pipeline":
+          setActiveRoom("pipeline");
+          setDockTab("my_desk");
+          setPipelineFilter(
+            action.status ? { kind: "status", status: action.status } : { kind: "all" },
+          );
+          break;
+        case "noop":
+          break;
+      }
+    },
+    [goClassic, onSelectRoom, openLead, setActiveRoom],
+  );
+
+  const onAskSubmit = useCallback(async () => {
+    if (!askValue.trim()) return;
+    setAskBusy(true);
+    setAskReply(null);
+    try {
+      const res = await fetch("/api/sales-operation/office/intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: askValue, roomId: activeRoom }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        action?: OfficeIntentAction;
+        reply?: string;
+        error?: string;
+      } | null;
+      if (!res.ok || !data?.action) {
+        setAskReply(data?.error ?? t("intentError"));
+        return;
+      }
+      setAskReply(data.reply ?? null);
+      executeIntent(data.action);
+      setAskValue("");
+    } catch {
+      setAskReply(t("intentError"));
+    } finally {
+      setAskBusy(false);
+    }
+  }, [activeRoom, askValue, executeIntent, t]);
 
   const receptionStats = useMemo(() => snapshot?.reception, [snapshot]);
+
+  const managersStrip = snapshot?.managers ?? [];
 
   return (
     <div className="relative flex h-[calc(100vh-5.5rem)] min-h-[520px] flex-col overflow-hidden rounded-2xl border border-[var(--so-border)] bg-[var(--so-surface-2)]">
@@ -349,39 +500,37 @@ export function OfficeShell() {
             {t(`room.${room}`)}
           </button>
         ))}
-        {pipelineStatusFilter ? (
+        {pipelineFilter.kind !== "all" ? (
           <button
             type="button"
-            onClick={() => setPipelineStatusFilter(null)}
+            onClick={() => setPipelineFilter({ kind: "all" })}
             className="rounded-full border border-[var(--so-border-strong)] bg-[var(--so-accent-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--so-accent-strong)]"
           >
-            {t("clearFilter")} · {pipelineStatusFilter}
+            {t("clearFilter")}
           </button>
         ) : null}
       </div>
 
-      {/* Quick team strip */}
-      <div className="flex flex-wrap gap-1 border-b border-[var(--so-border)] bg-[var(--so-surface)] px-3 py-1.5">
-        {OFFICE_AGENTS.map((agent) => (
-          <button
-            key={agent.id}
-            type="button"
-            onClick={() => onSelectAgent(agent.id)}
-            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-              selectedAgentId === agent.id
-                ? "text-white"
-                : "bg-[var(--so-surface-2)] text-[var(--so-muted)] hover:text-[var(--so-text)]"
-            }`}
-            style={
-              selectedAgentId === agent.id
-                ? { backgroundColor: agent.color }
-                : undefined
-            }
-          >
-            {agent.name}
-          </button>
-        ))}
-      </div>
+      {managersStrip.length ? (
+        <div className="flex flex-wrap gap-1 border-b border-[var(--so-border)] bg-[var(--so-surface)] px-3 py-1.5">
+          {managersStrip.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => onSelectManager(m.id)}
+              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                selectedManagerId === m.id
+                  ? "text-white"
+                  : "bg-[var(--so-surface-2)] text-[var(--so-muted)] hover:text-[var(--so-text)]"
+              }`}
+              style={selectedManagerId === m.id ? { backgroundColor: m.color } : undefined}
+            >
+              {m.name}
+              {m.stuckLeads > 0 ? ` · ${m.stuckLeads}` : ""}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {(error || message) && (
         <div className="space-y-1 border-b border-[var(--so-border)] px-3 py-2 text-xs">
@@ -397,23 +546,29 @@ export function OfficeShell() {
           selectedLeadId={
             selectedLead?.id ?? (focusEntity?.kind === "lead" ? focusEntity.id : null)
           }
-          selectedAgentId={selectedAgentId}
-          pipelineStatusFilter={pipelineStatusFilter}
+          selectedManagerId={selectedManagerId}
+          pipelineFilter={pipelineFilter}
+          currentUserId={currentUserId}
           perf={perf}
-          briefingOpen={activeRoom === "reception" && workbench?.kind === "briefing"}
+          briefingOpen={activeRoom === "reception" && dockTab === "attention"}
           onSelectRoom={onSelectRoom}
           onOpenLead={openLead}
           onMoveLead={(id, status) => void moveLead(id, status)}
-          onSelectAgent={onSelectAgent}
-          onTalkReception={talkReception}
+          onSelectManager={onSelectManager}
+          onOpenAttention={() => {
+            setDockOpen(true);
+            setDockTab("attention");
+            setActiveRoom("reception");
+          }}
+          onOpenClassic={goClassic}
         />
 
         {receptionStats ? (
           <div className="pointer-events-none absolute left-3 top-3 grid max-w-xs gap-1.5 sm:grid-cols-2">
             {[
-              [t("stat.meetings"), receptionStats.meetingsToday],
-              [t("stat.newLeads"), receptionStats.newLeads],
               [t("stat.overdue"), receptionStats.overdueTasks],
+              [t("stat.unassigned"), receptionStats.unassignedNew],
+              [t("stat.stuck"), receptionStats.stuckDeals],
               [t("stat.notifications"), receptionStats.unreadNotifications],
             ].map(([label, value]) => (
               <div
@@ -429,26 +584,48 @@ export function OfficeShell() {
           </div>
         ) : null}
 
-        {workbench ? (
-          <OfficeWorkbench
+        {dockOpen ? (
+          <OfficeOpsDock
             snapshot={snapshot}
-            mode={workbench}
-            agent={selectedAgent}
+            tab={dockTab}
+            currentUserId={currentUserId}
+            selectedManagerId={selectedManagerId}
+            pipelineFilter={pipelineFilter}
             busy={actionBusy}
-            onClose={() => {
-              setWorkbench(null);
-              setSelectedAgentId(null);
+            askValue={askValue}
+            askBusy={askBusy}
+            askReply={askReply}
+            onTabChange={(tab) => {
+              setDockTab(tab);
+              if (tab === "my_desk") setPipelineFilter({ kind: "mine" });
+              if (tab === "attention") setPipelineFilter({ kind: "all" });
             }}
+            onAskChange={setAskValue}
+            onAskSubmit={() => void onAskSubmit()}
+            onSelectManager={onSelectManager}
+            onSetFilter={setPipelineFilter}
             onOpenLead={openLead}
             onAdvanceLead={(id, status) => void moveLead(id, status)}
             onCompleteTask={(id) => void completeTask(id)}
-            onRunAction={runAgentAction}
+            onAssignMe={(id) => void assignMe(id)}
+            onMarkNotificationRead={(id) => void markNotificationRead(id)}
             onOpenClassic={goClassic}
+            onClose={() => setDockOpen(false)}
           />
         ) : (
-          <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-[240px] rounded-xl border border-white/70 bg-white/90 px-2.5 py-2 text-[11px] text-slate-600 shadow">
-            {t("agentsHint")}
-          </div>
+          <button
+            type="button"
+            onClick={() => setDockOpen(true)}
+            className="absolute bottom-3 left-3 z-30 inline-flex items-center gap-2 rounded-2xl border border-[var(--so-border)] bg-[var(--so-surface)]/97 px-3 py-2 text-xs font-bold text-[var(--so-text)] shadow-2xl backdrop-blur hover:bg-[var(--so-surface-hover)]"
+          >
+            <Box className="h-3.5 w-3.5 text-[var(--so-accent)]" />
+            {t("openDock")}
+            {receptionStats && receptionStats.overdueTasks + receptionStats.stuckDeals > 0 ? (
+              <span className="rounded-full bg-[var(--so-accent)] px-1.5 py-0.5 text-[10px] text-white">
+                {receptionStats.overdueTasks + receptionStats.stuckDeals}
+              </span>
+            ) : null}
+          </button>
         )}
 
         <p className="pointer-events-none absolute bottom-3 right-3 rounded-lg bg-black/50 px-2 py-1 text-[10px] text-white/90">
@@ -489,6 +666,16 @@ export function OfficeShell() {
         onRequestStageTransition={(lead, toStatus) => {
           void moveLead(lead.id, toStatus);
         }}
+      />
+
+      <StageGateModal
+        open={gateOpen}
+        onOpenChange={setGateOpen}
+        lead={gateLead}
+        toStatus={gateToStatus}
+        missing={gateMissing}
+        loading={gateLoading}
+        onConfirm={confirmGate}
       />
     </div>
   );

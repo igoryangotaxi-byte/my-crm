@@ -692,7 +692,7 @@
       },
       "office": {
         "title": "3D Office",
-        "subtitle": "Walk the CRM — Reception, Sales Room, Pipeline Wall"
+        "subtitle": "Attention queue, My Desk, and Team — live CRM cues in 3D"
       },
       "clientDetail": {
         "title": "Client profile",
@@ -707,21 +707,25 @@
       "refresh": "Refresh",
       "graphics": "Graphics",
       "shadows": "Shadows",
-      "loadError": "Failed to load office data.",
+      "loadError": "Failed to load 3D Office data.",
       "moveError": "Could not move lead.",
       "leadMoved": "Lead moved to {status}",
-      "classicOverlayHint": "This room opens classic CRM for now — full 3D coming later.",
-      "roomComingSoon": "3D furniture for this room ships in a later phase. Open classic view to work now.",
+      "classicOverlayHint": "This room opens classic CRM for deep work.",
+      "roomComingSoon": "Open classic view for full editing tools.",
       "openClassicRoom": "Open classic view",
       "backReception": "Back to Reception",
-      "pipelineHint": "Click agent · workbench opens · Advance moves stage · Scroll to zoom",
-      "agentsHint": "Click a teammate to open their CRM workbench — leads, tasks, analytics, discovery",
-      "agentHint": "Actions run live CRM data in the office panel.",
-      "intentError": "Could not run agent action.",
+      "pipelineHint": "Dock acts live · Advance uses stage gates · Scroll to zoom",
+      "agentsHint": "Click a manager to open their deals in Team dock",
+      "agentHint": "Actions run live CRM data in the office dock.",
+      "intentError": "Could not run Ask Ops.",
+      "openDock": "Open office dock",
       "filterActive": "Pipeline filter: {status}",
       "clearFilter": "Clear filter",
       "taskDone": "Task marked done",
       "taskError": "Could not complete task.",
+      "assigned": "Lead assigned to you",
+      "assignError": "Could not assign lead.",
+      "notifError": "Could not mark notification read.",
       "preset": {
         "low": "Low",
         "high": "High",
@@ -730,17 +734,19 @@
       "stat": {
         "meetings": "Meetings today",
         "newLeads": "New leads",
-        "overdue": "Overdue tasks",
+        "overdue": "Overdue",
+        "unassigned": "Unassigned",
+        "stuck": "Stuck",
         "notifications": "Unread"
       },
       "room": {
         "reception": "Reception",
         "sales": "Sales Room",
         "pipeline": "Pipeline Wall",
-        "calendar": "Calendar Room",
-        "tasks": "Task Room",
-        "dashboard": "Dashboard Room",
-        "automation": "Marketing / Automation"
+        "calendar": "Calendar",
+        "tasks": "Tasks",
+        "dashboard": "Dashboard",
+        "automation": "Discovery"
       }
     },
     "settings": {
