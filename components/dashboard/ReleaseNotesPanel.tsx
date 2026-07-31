@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-07-31",
+    title: "Useful 3D Office — Attention, My Desk, Team (0.2.51)",
+    notes:
+      "App version 0.2.51. 3D Office becomes a useful command center: Attention dock (overdue tasks, unassigned new leads, stuck deals, unread notifications, meetings next 2h) with Complete / Assign me / Advance / Open; My Desk filtered by assignedManagerUserId; Team floor uses real CRM managers from /api/sales-operation/office/roster with severity cues; Pipeline Wall stickers show days-in-stage and sync with dock filters; Advance uses the same stage-gate modal as classic pipeline; Ask Ops heuristics wired to open dock/classic; fake calendar/task/dashboard props removed; dock can close/reopen. Deck: Yango-Sales-Operations-3D-Office-Useful-0-2-51.pptx. (91b1ce62)",
+  },
+  {
     date: "2026-07-30",
     title: "Appli Taxi CRM unify + 3D Office (0.2.50)",
     notes:
