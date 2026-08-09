@@ -9,7 +9,7 @@ const releaseItems: ReleaseItem[] = [
     date: "2026-08-09",
     title: "Route Bundles + Operations HUB (0.2.52)",
     notes:
-      "App version 0.2.52. New Route Bundles workspace at /sales-operation/route-bundles: generate exclusive pre-order chains (same token, safety buffers, empty-drive limits) via Google Routes/Matrix; list + timeline + MapLibre map with road polylines, per-order colors, client name in marker popups; edit/reorder/recalculate; driver after call; opportunity inserts. Operations HUB under Sales Operation: Pre-Orders, Orders, Route Bundles, Price Calculator, API Health Check (tokens moved out of Notes); legacy /pre-orders and /orders redirect into SO. Settings drawer (buffers/km/pool). RBAC: preOrders / notes / salesSettings. SQL: supabase_preorder_route_bundles.sql (apply via apply-sales-operation-schema). Env: GOOGLE_MAPS_API_KEY. Deck: Yango-Sales-Operations-Route-Bundles-0-2-52.pptx.",
+      "App version 0.2.52. New Route Bundles workspace at /sales-operation/route-bundles: generate exclusive pre-order chains (same token, safety buffers, empty-drive limits) via Google Routes/Matrix; list + timeline + MapLibre map with road polylines, per-order colors, client name in marker popups; edit/reorder/recalculate; driver after call; opportunity inserts. Operations HUB under Sales Operation: Pre-Orders, Orders, Route Bundles, Price Calculator, API Health Check (tokens moved out of Notes); legacy /pre-orders and /orders redirect into SO. Settings drawer (buffers/km/pool). RBAC: preOrders / notes / salesSettings. SQL: supabase_preorder_route_bundles.sql (apply via apply-sales-operation-schema). Env: GOOGLE_MAPS_API_KEY. Deck: Yango-Sales-Operations-Route-Bundles-0-2-52.pptx. (6b8c06c7)",
   },
   {
     date: "2026-07-31",

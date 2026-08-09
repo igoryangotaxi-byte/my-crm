@@ -103,17 +103,14 @@ async function main() {
   await save(page, "02-route-bundles-list");
 
   console.log("03 Select first bundle (map)…");
-  const card = page.locator("button, [role='button'], a").filter({ hasText: /score|orders|buffer|suggested/i }).first();
-  // Prefer list cards in the left column
-  const listButtons = page.locator("aside button, .overflow-y-auto button, [data-bundle-id]");
-  const count = await listButtons.count();
-  if (count > 0) {
-    await listButtons.first().click().catch(() => null);
+  const bundleCard = page.locator("aside button").filter({ hasText: /pre-orders|Unassigned|km empty/i }).first();
+  if (await bundleCard.count()) {
+    await bundleCard.click();
   } else {
-    const anyCard = page.getByText(/#\d{4,}|\d+\s*orders|Suggested/i).first();
-    if (await anyCard.count()) await anyCard.click().catch(() => null);
+    const fallback = page.getByRole("button", { name: /pre-orders|Unassigned/i }).first();
+    if (await fallback.count()) await fallback.click().catch(() => null);
   }
-  await page.waitForTimeout(5000);
+  await page.waitForTimeout(6000);
   await save(page, "03-route-bundles-map");
 
   console.log("04 Open settings drawer…");
