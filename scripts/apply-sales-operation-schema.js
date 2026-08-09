@@ -55,6 +55,7 @@ async function main() {
     "supabase_sales_signed_handover_settings.sql",
     "supabase_sales_lead_discovery.sql",
     "supabase_sales_lead_discovery_pending_approval.sql",
+    "supabase_preorder_route_bundles.sql",
   ];
   const client = new Client({
     connectionString: resolveDatabaseUrl(),

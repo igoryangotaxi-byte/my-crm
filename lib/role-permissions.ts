@@ -144,7 +144,11 @@ export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: AppPageK
   { prefix: "/sales-operation/analytics", page: "salesAnalytics" },
   { prefix: "/sales-operation/automation", page: "salesAutomation" },
   { prefix: "/sales-operation/communications", page: "communications" },
+  { prefix: "/sales-operation/pre-orders", page: "preOrders" },
+  { prefix: "/sales-operation/route-bundles", page: "preOrders" },
+  { prefix: "/sales-operation/orders", page: "orders" },
   { prefix: "/sales-operation/price-calculator", page: "priceCalculator" },
+  { prefix: "/sales-operation/api-health-check", page: "notes" },
   { prefix: "/sales-operation/settings", page: "salesSettings" },
 ];
 
@@ -154,7 +158,11 @@ export function resolveSalesOperationPageKey(pathname: string): AppPageKey {
   if (pathname.startsWith("/sales-operation/pipeline")) return "salesPipeline";
   if (pathname.startsWith("/sales-operation/tracker")) return "salesTracker";
   if (pathname.startsWith("/sales-operation/communications")) return "communications";
+  if (pathname.startsWith("/sales-operation/pre-orders")) return "preOrders";
+  if (pathname.startsWith("/sales-operation/route-bundles")) return "preOrders";
+  if (pathname.startsWith("/sales-operation/orders")) return "orders";
   if (pathname.startsWith("/sales-operation/price-calculator")) return "priceCalculator";
+  if (pathname.startsWith("/sales-operation/api-health-check")) return "notes";
   // Relocated client detail card lives under b2b-clients/[id]; it reads signed-client
   // data and its API requires salesSignedClients, so gate the page the same way.
   if (

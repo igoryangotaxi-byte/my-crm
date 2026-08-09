@@ -4,10 +4,20 @@ const { XMLParser } = require("fast-xml-parser");
 
 function getDefaultHistoryPath() {
   const homeDir = process.env.HOME || "";
-  return path.join(
-    homeDir,
-    "Library/Application Support/JetBrains/DataGrip2026.1/dataSourcesHistory/c76e2af9/data_sources_history.xml",
-  );
+  const candidates = [
+    path.join(
+      homeDir,
+      "DataGripProjects/Yango Taxi GP/.idea/dataSources/data_sources_history.xml",
+    ),
+    path.join(
+      homeDir,
+      "Library/Application Support/JetBrains/DataGrip2026.1/dataSourcesHistory/c76e2af9/data_sources_history.xml",
+    ),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return candidates[candidates.length - 1];
 }
 
 function normalizeDataSourceEntry(entry) {

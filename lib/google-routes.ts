@@ -104,6 +104,52 @@ function buildMatrixBody(points: LatLon[]) {
   };
 }
 
+function buildDirectedMatrixBody(origins: LatLon[], destinations: LatLon[]) {
+  const waypoint = (point: LatLon) => ({
+    waypoint: { location: { latLng: { latitude: point.lat, longitude: point.lon } } },
+  });
+  return {
+    origins: origins.map(waypoint),
+    destinations: destinations.map(waypoint),
+    travelMode: "DRIVE" as const,
+    routingPreference: "TRAFFIC_AWARE_OPTIMAL" as const,
+  };
+}
+
+async function parseMatrixResponse(
+  data: unknown,
+  originCount: number,
+  destinationCount: number,
+): Promise<GoogleRouteMatrix> {
+  if (!Array.isArray(data)) {
+    throw new Error("We couldn’t load route data. Try again.");
+  }
+  const cells: MatrixCell[][] = Array.from({ length: originCount }, () =>
+    Array.from({ length: destinationCount }, () => ({ duration: null, distance: null })),
+  );
+  for (const row of data as unknown[]) {
+    if (!row || typeof row !== "object") continue;
+    const r = row as {
+      originIndex?: unknown;
+      destinationIndex?: unknown;
+      duration?: unknown;
+      distanceMeters?: unknown;
+      condition?: unknown;
+    };
+    const oi = typeof r.originIndex === "number" ? r.originIndex : -1;
+    const di = typeof r.destinationIndex === "number" ? r.destinationIndex : -1;
+    if (oi < 0 || di < 0 || oi >= originCount || di >= destinationCount) continue;
+    if (r.condition && r.condition !== "ROUTE_EXISTS") continue;
+    const duration = readDurationSeconds(r.duration);
+    const distance = typeof r.distanceMeters === "number" ? r.distanceMeters : null;
+    cells[oi][di] = { duration, distance };
+  }
+  return {
+    durations: cells.map((row) => row.map((cell) => cell.duration)),
+    distances: cells.map((row) => row.map((cell) => cell.distance)),
+  };
+}
+
 export async function googleComputeRouteMatrix(
   points: LatLon[],
   apiKey: string,
@@ -130,34 +176,38 @@ export async function googleComputeRouteMatrix(
   if (status < 200 || status >= 300) {
     throw new Error(formatRoutesHttpError("Appli Taxi route matrix", status, raw, "matrix"));
   }
-  if (!Array.isArray(data)) {
-    throw new Error("We couldn’t load route data. Try again.");
+  return parseMatrixResponse(data, points.length, points.length);
+}
+
+/** Origins × destinations matrix (used for empty-drive dropoff→pickup batching). */
+export async function googleComputeRouteMatrixDirected(
+  origins: LatLon[],
+  destinations: LatLon[],
+  apiKey: string,
+  timeoutMs: number,
+): Promise<GoogleRouteMatrix> {
+  if (!origins.length || !destinations.length) {
+    throw new Error("Origins and destinations are required.");
   }
-  const size = points.length;
-  const cells: MatrixCell[][] = Array.from({ length: size }, () =>
-    Array.from({ length: size }, () => ({ duration: null, distance: null })),
+  const url = `${ROUTES_BASE}/distanceMatrix/v2:computeRouteMatrix`;
+  const { status, data, raw } = await fetchJsonWithTimeout(
+    url,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask":
+          "originIndex,destinationIndex,duration,distanceMeters,condition,status",
+      },
+      body: JSON.stringify(buildDirectedMatrixBody(origins, destinations)),
+    },
+    timeoutMs,
   );
-  for (const row of data as unknown[]) {
-    if (!row || typeof row !== "object") continue;
-    const r = row as {
-      originIndex?: unknown;
-      destinationIndex?: unknown;
-      duration?: unknown;
-      distanceMeters?: unknown;
-      condition?: unknown;
-    };
-    const oi = typeof r.originIndex === "number" ? r.originIndex : -1;
-    const di = typeof r.destinationIndex === "number" ? r.destinationIndex : -1;
-    if (oi < 0 || di < 0 || oi >= size || di >= size) continue;
-    if (r.condition && r.condition !== "ROUTE_EXISTS") continue;
-    const duration = readDurationSeconds(r.duration);
-    const distance = typeof r.distanceMeters === "number" ? r.distanceMeters : null;
-    cells[oi][di] = { duration, distance };
+  if (status < 200 || status >= 300) {
+    throw new Error(formatRoutesHttpError("Appli Taxi directed route matrix", status, raw, "matrix-directed"));
   }
-  return {
-    durations: cells.map((row) => row.map((cell) => cell.duration)),
-    distances: cells.map((row) => row.map((cell) => cell.distance)),
-  };
+  return parseMatrixResponse(data, origins.length, destinations.length);
 }
 
 /** Decode encoded polyline (precision 5) into [lon, lat] pairs for MapLibre. */

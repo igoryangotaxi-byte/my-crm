@@ -65,7 +65,12 @@
       "analytics": "Analytics",
       "automation": "Automation",
       "communications": "Communications",
+      "hubGroup": "HUB",
+      "preOrders": "Pre-Orders",
+      "routeBundles": "Route Bundles",
+      "orders": "Orders",
       "priceCalculator": "Price Calculator",
+      "apiHealthCheck": "API Healthy Check",
       "office": "3D Office",
       "settings": "Settings"
     },
@@ -686,9 +691,25 @@
         "title": "Communications",
         "subtitle": "Team messaging and notification center"
       },
+      "preOrders": {
+        "title": "Pre-Orders",
+        "subtitle": "Upcoming scheduled rides from Yango API"
+      },
+      "routeBundles": {
+        "title": "Route Bundles",
+        "subtitle": "Traffic-aware chains of compatible pre-orders for one driver"
+      },
+      "orders": {
+        "title": "Orders",
+        "subtitle": "B2B orders with filters and details"
+      },
       "priceCalculator": {
         "title": "Price Calculator",
         "subtitle": "Tariffs, transcripts, and driver price comparison"
+      },
+      "apiHealthCheck": {
+        "title": "API Healthy Check",
+        "subtitle": "Validate, register, and diagnose Yango API tokens"
       },
       "office": {
         "title": "3D Office",

@@ -30,7 +30,11 @@ const salesOperationPageMeta: Record<string, { titleKey: string; subtitleKey: st
   "/sales-operation/performance": { titleKey: "page.performance.title", subtitleKey: "page.performance.subtitle" },
   "/sales-operation/automation": { titleKey: "page.automation.title", subtitleKey: "page.automation.subtitle" },
   "/sales-operation/communications": { titleKey: "page.communications.title", subtitleKey: "page.communications.subtitle" },
+  "/sales-operation/pre-orders": { titleKey: "page.preOrders.title", subtitleKey: "page.preOrders.subtitle" },
+  "/sales-operation/route-bundles": { titleKey: "page.routeBundles.title", subtitleKey: "page.routeBundles.subtitle" },
+  "/sales-operation/orders": { titleKey: "page.orders.title", subtitleKey: "page.orders.subtitle" },
   "/sales-operation/price-calculator": { titleKey: "page.priceCalculator.title", subtitleKey: "page.priceCalculator.subtitle" },
+  "/sales-operation/api-health-check": { titleKey: "page.apiHealthCheck.title", subtitleKey: "page.apiHealthCheck.subtitle" },
   "/sales-operation/office": { titleKey: "page.office.title", subtitleKey: "page.office.subtitle" },
   "/sales-operation/settings": { titleKey: "page.settings.title", subtitleKey: "page.settings.subtitle" },
 };

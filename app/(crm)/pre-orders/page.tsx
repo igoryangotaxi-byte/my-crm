@@ -1,15 +1,5 @@
-import { PreOrdersBoard } from "@/components/pre-orders/PreOrdersBoard";
-import { getAllYangoPreOrders } from "@/lib/yango-api";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function PreOrdersPage() {
-  const { preOrders, errors } = await getAllYangoPreOrders();
-
-  return (
-    <PreOrdersBoard
-      preOrders={preOrders}
-      errors={errors}
-    />
-  );
+export default function PreOrdersPage() {
+  redirect("/sales-operation/pre-orders");
 }

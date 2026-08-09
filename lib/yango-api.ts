@@ -3598,6 +3598,35 @@ function extractOrderRouteSeed(preOrder: PreOrder, details: B2BOrderDetailsRespo
   };
 }
 
+/** Public helper for Route Bundles and other geo enrichment. */
+export async function resolvePreOrderEndpointCoords(preOrder: PreOrder): Promise<{
+  pickupAddress: string;
+  dropoffAddress: string;
+  pickupLat: number | null;
+  pickupLon: number | null;
+  dropoffLat: number | null;
+  dropoffLon: number | null;
+} | null> {
+  try {
+    const details = await getB2BOrderDetails({
+      tokenLabel: preOrder.tokenLabel,
+      clientId: preOrder.clientId,
+      orderId: preOrder.orderId,
+    });
+    const seed = extractOrderRouteSeed(preOrder, details);
+    return {
+      pickupAddress: seed.sourceAddress,
+      dropoffAddress: seed.destinationAddress,
+      pickupLat: seed.sourceLat ?? (typeof preOrder.pointALat === "number" ? preOrder.pointALat : null),
+      pickupLon: seed.sourceLon ?? (typeof preOrder.pointALon === "number" ? preOrder.pointALon : null),
+      dropoffLat: seed.destinationLat,
+      dropoffLon: seed.destinationLon,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function findTenantB2CSettingsByScope(input: {
   tokenLabel: string;
   clientId: string;

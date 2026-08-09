@@ -45,7 +45,7 @@ const accessSections: AccessSection[] = [
       { type: "page", key: "communications", label: "Communications" },
       { type: "page", key: "financialCenter", label: "Business Center" },
       { type: "page", key: "priceCalculator", label: "Price Calculator" },
-      { type: "page", key: "notes", label: "Notes" },
+      { type: "page", key: "notes", label: "API Healthy Check" },
     ],
   },
   {

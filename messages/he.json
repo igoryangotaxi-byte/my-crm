@@ -65,7 +65,12 @@
       "analytics": "אנליטיקה",
       "automation": "אוטומציה",
       "communications": "תקשורת",
+      "hubGroup": "HUB",
+      "preOrders": "הזמנות מוקדמות",
+      "routeBundles": "חבילות מסלול",
+      "orders": "הזמנות",
       "priceCalculator": "מחשבון מחיר",
+      "apiHealthCheck": "בדיקת תקינות API",
       "office": "משרד תלת־ממד",
       "settings": "הגדרות"
     },
@@ -686,9 +691,25 @@
         "title": "תקשורת",
         "subtitle": "הודעות צוות ומרכז התראות"
       },
+      "preOrders": {
+        "title": "הזמנות מוקדמות",
+        "subtitle": "נסיעות מתוכננות מ-Yango API"
+      },
+      "routeBundles": {
+        "title": "חבילות מסלול",
+        "subtitle": "שרשראות פרי־אורד תלויות תנועה לנהג אחד"
+      },
+      "orders": {
+        "title": "הזמנות",
+        "subtitle": "הזמנות B2B עם סינון ופרטים"
+      },
       "priceCalculator": {
         "title": "מחשבון מחיר",
         "subtitle": "תעריפים, תמלילים והשוואת מחירי נהגים"
+      },
+      "apiHealthCheck": {
+        "title": "בדיקת תקינות API",
+        "subtitle": "אימות, רישום ואבחון טוקני Yango API"
       },
       "clientDetail": {
         "title": "פרופיל לקוח",

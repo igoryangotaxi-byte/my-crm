@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Plus } from "lucide-react";
+import { Plus, Route } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { SkeletonCard } from "@/components/ui/Skeleton";
@@ -145,6 +146,24 @@ export function SalesSettingsView() {
 
       {showPipelineSettings ? (
         <>
+      <div className="so-card">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="crm-section-title mb-1">Route Bundles</h2>
+            <p className="text-sm text-[var(--so-muted)]">
+              Configure max orders, safety buffer, traffic-aware routing, and auto-generate for Pre-Order
+              route chains.
+            </p>
+          </div>
+          <Link
+            href="/sales-operation/route-bundles?settings=1"
+            className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--so-border)] bg-[var(--so-surface)] px-3 py-2 text-sm font-semibold text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)]"
+          >
+            <Route className="h-4 w-4" />
+            Open settings
+          </Link>
+        </div>
+      </div>
       <div className="so-card">
         <h2 className="crm-section-title mb-1">{t("stagesTitle")}</h2>
         <p className="mb-3 text-sm text-[var(--so-muted)]">{t("stagesSubtitle")}</p>

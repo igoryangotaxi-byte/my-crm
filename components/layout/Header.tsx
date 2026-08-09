@@ -81,7 +81,7 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
   },
   "/notes": {
     title: "Notes",
-    subtitle: "Token diagnostics and release notes",
+    subtitle: "Mind maps, unmapped corp clients, and release notes",
   },
 };
 
@@ -117,7 +117,7 @@ export function Header() {
         title: "מפת מוח",
         subtitle: "לוחות סיעור מוחין עם בלוקים, מדבקות, קישורים וקבצים",
       },
-      "/notes": { title: "הערות", subtitle: "דיאגנוסטיקת טוקנים ורשימות שחרור" },
+      "/notes": { title: "הערות", subtitle: "מפות מוח, לקוחות ללא מיפוי ורשימות שחרור" },
     },
   };
   const pageRoute =
