@@ -260,7 +260,7 @@ export function StageGateModal({
             {missing.map((item) => (
               <span
                 key={item.key}
-                className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800"
+                className="rounded-[6px] bg-[var(--warning-soft)] px-2.5 py-0.5 text-[11px] font-medium text-[var(--warning)]"
               >
                 {item.label}
               </span>
@@ -268,7 +268,7 @@ export function StageGateModal({
           </div>
         ) : null}
 
-        {localError ? <p className="text-xs text-rose-600">{localError}</p> : null}
+        {localError ? <p className="text-xs text-[var(--destructive)]">{localError}</p> : null}
 
         {missingKeys.has("contact") ? (
           <div className="space-y-2 rounded-[12px] border border-[var(--so-border)] p-3">

@@ -229,14 +229,14 @@ export function PreOrdersMapView({ preOrders, onOpenFull }: PreOrdersMapViewProp
 
   if (mappable.length === 0) {
     return (
-      <div className="glass-surface mt-0.5 rounded-3xl px-4 py-10 text-center text-sm text-muted">
+      <div className="so-card mt-0.5 rounded-[12px] px-4 py-10 text-center text-sm text-muted">
         {t("mapNoCoordinates")}
       </div>
     );
   }
 
   return (
-    <section className="glass-surface mt-0 overflow-hidden rounded-3xl border border-white/60">
+    <section className="so-card mt-0 overflow-hidden rounded-[12px]">
       <div className="border-b border-white/60 bg-white/75 px-4 py-2 text-xs text-slate-600">
         {t("mapLegend")}
       </div>
@@ -248,7 +248,7 @@ export function PreOrdersMapView({ preOrders, onOpenFull }: PreOrdersMapViewProp
           onClick={() => setSelectedCompact(null)}
         >
           <div
-            className="crm-modal-surface w-full max-w-md rounded-3xl p-4"
+            className="crm-modal-surface w-full max-w-md rounded-[16px] p-4"
             onClick={(event) => event.stopPropagation()}
           >
             <h3 className="text-lg font-semibold text-slate-900">{t("compactTitle")}</h3>

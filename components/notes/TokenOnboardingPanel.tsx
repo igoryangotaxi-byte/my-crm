@@ -177,22 +177,22 @@ export function TokenOnboardingPanel() {
   }
 
   return (
-    <section className="glass-surface mb-4 rounded-3xl p-4">
+    <section className="so-card mb-4 rounded-[12px] p-4">
       <div className="mb-3">
-        <h3 className="crm-section-title">Add client by API token</h3>
-        <p className="crm-subtitle">
+        <h3 className="ycds-h2 text-[var(--so-text)]">Add client by API token</h3>
+        <p className="mt-1 text-sm text-[var(--so-muted)]">
           Validate token ownership, then save it to live token registry for all CRM flows.
         </p>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
-        <label className="flex flex-col gap-1 text-xs text-slate-600">
+        <label className="flex flex-col gap-1 text-xs font-medium text-[var(--so-muted)]">
           API token
           <input
             value={apiToken}
             onChange={(event) => setApiToken(event.target.value)}
             placeholder="y0__..."
-            className="rounded-xl border border-border bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+            className="crm-input"
           />
         </label>
         <div className="flex items-end">
@@ -200,7 +200,7 @@ export function TokenOnboardingPanel() {
             type="button"
             onClick={validateToken}
             disabled={!canValidate || isValidating}
-            className="inline-flex h-10 items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-10 items-center justify-center rounded-[8px] bg-[var(--so-text)] px-4 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isValidating ? "Validating..." : "Validate token"}
           </button>
@@ -214,7 +214,7 @@ export function TokenOnboardingPanel() {
             value={corpClientId}
             onChange={(event) => setCorpClientId(event.target.value)}
             placeholder="corp_client_id"
-            className="rounded-xl border border-border bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+            className="crm-input"
           />
         </label>
         <div className="flex items-end">
@@ -222,7 +222,7 @@ export function TokenOnboardingPanel() {
             type="button"
             onClick={findByCorpClientId}
             disabled={!corpClientId.trim()}
-            className="inline-flex h-10 items-center justify-center rounded-xl border border-border bg-white px-4 text-sm font-semibold text-slate-900 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-10 items-center justify-center rounded-[8px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-4 text-sm font-medium text-[var(--so-text)] transition hover:bg-[var(--so-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             Find existing token
           </button>
@@ -251,7 +251,7 @@ export function TokenOnboardingPanel() {
               <input
                 value={tokenLabel}
                 onChange={(event) => setTokenLabel(event.target.value)}
-                className="rounded-xl border border-border bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                className="crm-input"
               />
             </label>
             <label className="flex flex-col gap-1 text-xs text-slate-600">
@@ -259,7 +259,7 @@ export function TokenOnboardingPanel() {
               <input
                 value={clientName}
                 onChange={(event) => setClientName(event.target.value)}
-                className="rounded-xl border border-border bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                className="crm-input"
               />
             </label>
             <div className="text-xs text-slate-600">
@@ -291,7 +291,7 @@ export function TokenOnboardingPanel() {
                 <input
                   value={adminName}
                   onChange={(event) => setAdminName(event.target.value)}
-                  className="rounded-xl border border-border bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                  className="crm-input"
                 />
               </label>
               <label className="flex flex-col gap-1 text-xs text-slate-600">
@@ -299,7 +299,7 @@ export function TokenOnboardingPanel() {
                 <input
                   value={adminEmail}
                   onChange={(event) => setAdminEmail(event.target.value)}
-                  className="rounded-xl border border-border bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                  className="crm-input"
                 />
               </label>
               <label className="flex flex-col gap-1 text-xs text-slate-600">
@@ -308,7 +308,7 @@ export function TokenOnboardingPanel() {
                   type="password"
                   value={adminPassword}
                   onChange={(event) => setAdminPassword(event.target.value)}
-                  className="rounded-xl border border-border bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                  className="crm-input"
                 />
               </label>
             </div>
@@ -318,7 +318,7 @@ export function TokenOnboardingPanel() {
             type="button"
             onClick={registerToken}
             disabled={!canSave || isSaving}
-            className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-10 items-center justify-center rounded-[8px] bg-[var(--success)] px-4 text-sm font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSaving
               ? "Saving..."
@@ -329,7 +329,7 @@ export function TokenOnboardingPanel() {
         </div>
       ) : null}
 
-      {error ? <p className="mt-3 text-xs font-semibold text-rose-700">{error}</p> : null}
+      {error ? <p className="mt-3 text-xs font-medium text-[var(--destructive)]">{error}</p> : null}
       {onboardingWarnings.length > 0 ? (
         <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
           <p className="mb-1 font-semibold">Onboarding notice</p>
@@ -340,7 +340,7 @@ export function TokenOnboardingPanel() {
           </ul>
         </div>
       ) : null}
-      {success ? <p className="mt-3 text-xs font-semibold text-emerald-700">{success}</p> : null}
+      {success ? <p className="mt-3 text-xs font-medium text-[var(--success)]">{success}</p> : null}
     </section>
   );
 }

@@ -3,16 +3,17 @@
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Search } from "lucide-react";
+import { Building2, Search, UserRound } from "lucide-react";
+import { Kbd } from "@/components/ui/Kbd";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type { SearchResult } from "@/lib/sales-operation/search";
 
 const DEBOUNCE_MS = 250;
 
-const ENTITY_ICON: Record<SearchResult["entityType"], string> = {
-  lead: "L",
-  client: "C",
-  contact: "@",
+const ENTITY_ICON: Record<SearchResult["entityType"], typeof UserRound> = {
+  lead: UserRound,
+  client: Building2,
+  contact: UserRound,
 };
 
 export function SalesGlobalSearch() {
@@ -82,13 +83,16 @@ export function SalesGlobalSearch() {
           }}
           onFocus={() => setOpen(true)}
           placeholder={t("search.placeholder")}
-          className="so-focus-ring h-9 w-44 rounded-[10px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] py-1.5 pl-8 pr-3 text-sm text-[var(--so-text)] outline-none transition-[width,border-color,box-shadow] focus:w-64 focus:border-[rgba(255,45,45,0.5)] focus:shadow-[var(--so-focus-ring)]"
+          className="so-focus-ring h-9 w-52 rounded-[8px] border border-[var(--so-border)] bg-[var(--so-surface-2)] py-1.5 pl-8 pr-12 text-sm text-[var(--so-text)] outline-none transition-[width,border-color,box-shadow] focus:w-72 focus:border-[rgba(255,45,45,0.5)] focus:bg-[var(--so-surface)] focus:shadow-[var(--so-focus-ring)]"
           aria-label={t("search.placeholder")}
         />
+        <span className="pointer-events-none absolute right-1.5 top-1/2 hidden -translate-y-1/2 sm:inline-flex">
+          <Kbd>⌘K</Kbd>
+        </span>
       </div>
       {open && query.trim().length >= 2 ? (
         <div
-          className={`absolute z-30 mt-2 max-h-[26rem] w-80 overflow-y-auto rounded-[14px] border border-[var(--so-border)] bg-[var(--so-surface)] p-2 shadow-[var(--so-shadow-lg)] ${
+          className={`absolute z-30 mt-2 max-h-[26rem] w-80 overflow-y-auto rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-2 shadow-[var(--so-shadow-lg)] ${
             language === "he" ? "left-0" : "right-0"
           }`}
         >
@@ -105,12 +109,15 @@ export function SalesGlobalSearch() {
                     onClick={() => onSelect(result)}
                     className="so-focus-ring flex w-full items-start gap-2 rounded-[10px] px-2.5 py-2 text-left transition-colors hover:bg-[var(--so-surface-hover)]"
                   >
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[var(--so-surface-2)] text-[0.65rem] font-bold text-[var(--so-muted)]">
-                      {ENTITY_ICON[result.entityType]}
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[var(--so-surface-2)] text-[var(--so-muted)]">
+                      {(() => {
+                        const Icon = ENTITY_ICON[result.entityType];
+                        return <Icon className="h-3.5 w-3.5" />;
+                      })()}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center justify-between gap-2">
-                        <span className="truncate text-xs font-semibold text-[var(--so-text)]">
+                        <span className="truncate text-xs font-medium text-[var(--so-text)]">
                           {result.title}
                         </span>
                         <span className="shrink-0 text-[0.6rem] uppercase tracking-wide text-[var(--so-muted-2)]">

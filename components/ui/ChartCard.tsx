@@ -26,12 +26,12 @@ export function ChartCard({
   return (
     <article
       className={cn(
-        "rounded-[16px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-sm)]",
+        "rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-sm)]",
         className,
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-[0.95rem] font-bold tracking-tight text-[var(--so-text)]">{title}</h3>
+        <h3 className="ycds-h3 text-[var(--so-text)]">{title}</h3>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
       <div className={cn("mt-4", contentClassName)}>

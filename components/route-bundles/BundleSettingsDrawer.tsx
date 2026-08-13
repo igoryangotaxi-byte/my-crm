@@ -2,6 +2,12 @@
 
 import { useEffect, useState } from "react";
 import type { RouteBundleSettings } from "@/lib/route-bundles/types";
+import { Button } from "@/components/ui/Button";
+import { Drawer } from "@/components/ui/Dialog";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Label } from "@/components/ui/Label";
+import { Switch } from "@/components/ui/Switch";
 
 export function BundleSettingsDrawer({
   open,
@@ -24,8 +30,6 @@ export function BundleSettingsDrawer({
     setForm(settings);
   }, [settings, open]);
 
-  if (!open) return null;
-
   async function save() {
     if (!form || !canEdit) return;
     setSaving(true);
@@ -47,68 +51,74 @@ export function BundleSettingsDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-[90] flex justify-end bg-black/30">
-      <button type="button" aria-label="Close settings" className="flex-1" onClick={onClose} />
-      <div className="h-full w-full max-w-md overflow-y-auto border-l border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-bold text-[var(--so-text)]">Route Bundle settings</h2>
-          <button type="button" onClick={onClose} className="text-sm text-[var(--so-muted)]">
-            Close
-          </button>
-        </div>
+    <Drawer
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      title="Route Bundle settings"
+      footer={
+        canEdit ? (
+          <Button loading={saving} disabled={saving || !form} onClick={() => void save()}>
+            {saving ? "Saving…" : "Save settings"}
+          </Button>
+        ) : null
+      }
+    >
+      <div className="space-y-3 px-5 py-4">
         {!form ? (
           <div className="text-sm text-[var(--so-muted)]">Loading…</div>
         ) : (
-          <div className="space-y-3">
-            <Field
+          <>
+            <NumberField
               label="Max orders per bundle"
               value={form.maxOrdersPerBundle}
               disabled={!canEdit}
               onChange={(v) => setForm({ ...form, maxOrdersPerBundle: v })}
             />
-            <Field
+            <NumberField
               label="Minimum safety buffer (min)"
               value={form.minSafetyBufferMin}
               disabled={!canEdit}
               onChange={(v) => setForm({ ...form, minSafetyBufferMin: v })}
             />
-            <Field
+            <NumberField
               label="Max empty drive (km)"
               value={form.maxEmptyDriveKm}
               disabled={!canEdit}
               onChange={(v) => setForm({ ...form, maxEmptyDriveKm: v })}
             />
-            <Field
+            <NumberField
               label="Service duration fallback (min)"
               value={form.serviceDurationFallbackMin}
               disabled={!canEdit}
               onChange={(v) => setForm({ ...form, serviceDurationFallbackMin: v })}
             />
-            <Field
+            <NumberField
               label="Max Google matrix cells / generate"
               value={form.maxMatrixCellsPerGenerate}
               disabled={!canEdit}
               onChange={(v) => setForm({ ...form, maxMatrixCellsPerGenerate: v })}
             />
-            <Field
+            <NumberField
               label="Max candidate orders"
               value={form.maxCandidateOrders}
               disabled={!canEdit}
               onChange={(v) => setForm({ ...form, maxCandidateOrders: v })}
             />
-            <Toggle
+            <ToggleRow
               label="Traffic-aware routing"
               checked={form.trafficAware}
               disabled={!canEdit}
               onChange={(v) => setForm({ ...form, trafficAware: v })}
             />
-            <Toggle
+            <ToggleRow
               label="Auto-generate suggestions"
               checked={form.autoGenerateSuggestions}
               disabled={!canEdit}
               onChange={(v) => setForm({ ...form, autoGenerateSuggestions: v })}
             />
-            <Toggle
+            <ToggleRow
               label="Allow insertion into accepted routes"
               checked={form.allowInsertIntoAccepted}
               disabled={!canEdit}
@@ -117,25 +127,15 @@ export function BundleSettingsDrawer({
             {!canEdit ? (
               <p className="text-xs text-[var(--so-muted)]">Only Admins / Settings roles can edit.</p>
             ) : null}
-            {error ? <p className="text-xs text-rose-600">{error}</p> : null}
-            {canEdit ? (
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void save()}
-                className="w-full rounded-xl bg-[var(--so-accent)] py-2 text-sm font-bold text-white disabled:opacity-50"
-              >
-                {saving ? "Saving…" : "Save settings"}
-              </button>
-            ) : null}
-          </div>
+            {error ? <p className="text-xs text-[var(--destructive)]">{error}</p> : null}
+          </>
         )}
       </div>
-    </div>
+    </Drawer>
   );
 }
 
-function Field({
+function NumberField({
   label,
   value,
   disabled,
@@ -147,20 +147,18 @@ function Field({
   onChange: (v: number) => void;
 }) {
   return (
-    <label className="block text-xs font-semibold text-[var(--so-muted)]">
-      {label}
-      <input
+    <Field label={label}>
+      <Input
         type="number"
         disabled={disabled}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="mt-1 w-full rounded-lg border border-[var(--so-border)] px-2 py-1.5 text-sm text-[var(--so-text)] disabled:opacity-60"
       />
-    </label>
+    </Field>
   );
 }
 
-function Toggle({
+function ToggleRow({
   label,
   checked,
   disabled,
@@ -172,14 +170,9 @@ function Toggle({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex items-center justify-between gap-3 text-sm text-[var(--so-text)]">
-      <span>{label}</span>
-      <input
-        type="checkbox"
-        disabled={disabled}
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-    </label>
+    <div className="flex items-center justify-between gap-3">
+      <Label className="text-sm text-[var(--so-text)]">{label}</Label>
+      <Switch checked={checked} disabled={disabled} onCheckedChange={onChange} aria-label={label} />
+    </div>
   );
 }

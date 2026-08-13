@@ -179,10 +179,10 @@ export function SalesOperationSidebar() {
       <aside
         aria-label="Appli Taxi CRM navigation"
         className={cn(
-          "fixed inset-y-0 z-[80] flex h-screen flex-col border-[var(--so-border)] bg-[var(--so-surface)] transition-[width,transform] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
-          rtl ? "right-0 border-l" : "left-0 border-r",
-          collapsed ? "lg:w-[76px]" : "lg:w-[248px]",
-          "w-[248px]",
+          "fixed inset-y-0 z-[80] flex h-screen flex-col border-transparent bg-[var(--so-bg)] transition-[width,transform] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+          rtl ? "right-0" : "left-0",
+          collapsed ? "lg:w-[72px]" : "lg:w-[240px]",
+          "w-[240px]",
           // Mobile: off-canvas unless open
           mobileOpen
             ? "translate-x-0"
@@ -194,12 +194,16 @@ export function SalesOperationSidebar() {
         {/* Brand */}
         <div className="flex items-center gap-2.5 px-3.5 py-4">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[var(--so-accent)] text-white">
-              <LayoutDashboard className="h-[18px] w-[18px]" />
-            </span>
+            <img
+              src="/brand/appli-logo.png"
+              alt="Appli"
+              width={36}
+              height={36}
+              className="h-9 w-9 shrink-0 rounded-[8px] object-cover"
+            />
             {showExpanded ? (
               <span className="min-w-0">
-                <span className="block truncate text-sm font-bold text-[var(--so-text)]">
+                <span className="ycds-h2 block truncate text-[var(--so-text)]">
                   {tSales("sectionLabel")}
                 </span>
                 <span className="block truncate text-xs text-[var(--so-muted)]">
@@ -210,7 +214,7 @@ export function SalesOperationSidebar() {
           </div>
         </div>
 
-        <div className="mx-3.5 mb-1 h-px bg-[var(--so-border)]" />
+        <div className="mx-3 mb-1 h-px bg-[var(--so-border)]" />
 
         {/* Nav */}
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-2.5 py-2">
@@ -238,7 +242,7 @@ export function SalesOperationSidebar() {
         </nav>
 
         {/* Collapse toggle (desktop only) */}
-        <div className="hidden border-t border-[var(--so-border)] p-2.5 lg:block">
+        <div className="hidden p-2.5 lg:block">
           <button
             type="button"
             onClick={toggle}
@@ -287,7 +291,7 @@ function NavLink({
       aria-current={active ? "page" : undefined}
       onClick={() => onNavigate(node.href)}
       className={cn(
-        "so-focus-ring group relative flex items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-sm font-medium transition-colors",
+        "so-focus-ring group relative flex items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-sm font-medium transition-colors",
         collapsed ? "lg:justify-center" : "",
         active
           ? "bg-[var(--so-accent-soft)] text-[var(--so-accent-strong)]"

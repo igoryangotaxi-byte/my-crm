@@ -30,9 +30,9 @@ function getStatusLabel(statusRaw: string, successOrderFlag: boolean | null): st
 }
 
 function statusTone(statusRaw: string, successOrderFlag: boolean | null): string {
-  if (successOrderFlag === true) return "bg-emerald-50 text-emerald-700";
-  if (statusRaw.toLowerCase().includes("cancel")) return "bg-rose-50 text-rose-700";
-  return "bg-amber-50 text-amber-700";
+  if (successOrderFlag === true) return "bg-[var(--success-soft)] text-[var(--success)]";
+  if (statusRaw.toLowerCase().includes("cancel")) return "bg-[rgba(199,15,31,0.1)] text-[var(--destructive)]";
+  return "bg-[var(--warning-soft)] text-[var(--warning)]";
 }
 
 export function TripsTable({ rows }: { rows: YangoSupabaseOrderMetric[] }) {
@@ -41,6 +41,8 @@ export function TripsTable({ rows }: { rows: YangoSupabaseOrderMetric[] }) {
       rows={rows}
       getRowKey={(row) => row.orderId}
       searchable
+      showColumnToggle
+      stickyFirstColumn
       getSearchText={(row) => `${row.orderId} ${row.statusRaw}`}
       pageSize={25}
       labels={{ empty: "No trips found for this client in the selected period." }}

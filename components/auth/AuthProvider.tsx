@@ -528,6 +528,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 ...enMessages.salesOperation.leadDiscovery,
                 ...(ruMessages.salesOperation?.leadDiscovery ?? {}),
               },
+              density: {
+                ...enMessages.salesOperation.density,
+                ...(ruMessages.salesOperation.density ?? {}),
+              },
+              command: {
+                ...enMessages.salesOperation.command,
+                ...(ruMessages.salesOperation.command ?? {}),
+              },
             },
           }
         : enMessages;

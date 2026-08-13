@@ -26,10 +26,10 @@ export default function ClientPortalLayout({ children }: { children: React.React
   }, [loading, currentUser, pathname, router]);
 
   if (loading || !currentUser || currentUser.status !== "approved") {
-    return <div className="flex min-h-screen items-center justify-center text-sm text-muted">Checking access...</div>;
+    return <div className="flex min-h-screen items-center justify-center text-sm text-[var(--so-muted)]">Checking access...</div>;
   }
   if (currentUser.accountType !== "client") {
-    return <div className="flex min-h-screen items-center justify-center text-sm text-muted">Redirecting...</div>;
+    return <div className="flex min-h-screen items-center justify-center text-sm text-[var(--so-muted)]">Redirecting...</div>;
   }
   return <AppShell>{children}</AppShell>;
 }

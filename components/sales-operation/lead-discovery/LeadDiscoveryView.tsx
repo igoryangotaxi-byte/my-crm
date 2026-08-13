@@ -130,7 +130,7 @@ function Chip({
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-150",
+        "rounded-[8px] border px-3 py-1.5 text-xs font-medium transition-colors duration-150",
         selected
           ? "border-[var(--so-accent)] bg-[var(--so-accent-soft)] text-[var(--so-accent)] shadow-[var(--so-shadow-xs)]"
           : "border-[var(--so-border)] bg-[var(--so-surface)] text-[var(--so-muted)] hover:border-[var(--so-border-strong)] hover:text-[var(--so-text)]",
@@ -552,7 +552,7 @@ export function LeadDiscoveryView() {
               <h3 className="truncate text-base font-semibold text-[var(--so-text)]">{name}</h3>
               <span
                 className={cn(
-                  "rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+                  "rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
                   approved
                     ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
                     : "bg-amber-50 text-amber-800 ring-amber-200",
@@ -560,7 +560,7 @@ export function LeadDiscoveryView() {
               >
                 {approved ? t("leadState.inPipeline") : t("leadState.pending")}
               </span>
-              <span className="rounded-full bg-[var(--so-accent-soft)] px-2 py-0.5 text-[11px] font-bold text-[var(--so-accent)]">
+              <span className="rounded-md bg-[var(--so-accent-soft)] px-2 py-0.5 text-[11px] font-bold text-[var(--so-accent)]">
                 {t("col.score")} {String(l.taxiPotentialScore)}
               </span>
             </div>
@@ -605,7 +605,7 @@ export function LeadDiscoveryView() {
                 {signals.map((s) => (
                   <span
                     key={s.signal}
-                    className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700"
+                    className="rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700"
                   >
                     {s.signal}
                   </span>
@@ -654,13 +654,8 @@ export function LeadDiscoveryView() {
   };
 
   return (
-    <div className="relative min-h-[70vh] overflow-hidden">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-[radial-gradient(ellipse_at_top,_rgba(255,45,45,0.07),_transparent_55%)]"
-      />
-
-      <div className="relative mx-auto max-w-5xl space-y-6 p-4 md:p-6">
+    <div className="relative min-h-[70vh]">
+      <div className="relative space-y-4">
         {loading && !overview ? (
           <div className="space-y-3">
             <Skeleton className="h-28 w-full rounded-[var(--so-radius-lg)]" />
@@ -706,7 +701,7 @@ export function LeadDiscoveryView() {
                           {item.icon}
                           {item.label}
                         </div>
-                        <p className="mt-2 text-2xl font-semibold tracking-tight text-[var(--so-text)]">
+                        <p className="ycds-kpi mt-2 text-[1.5rem] text-[var(--so-text)]">
                           {item.value}
                         </p>
                         <p className="mt-1 text-[11px] text-[var(--so-muted-2)]">{item.hint}</p>
@@ -735,7 +730,7 @@ export function LeadDiscoveryView() {
 
                 {overview.activeCampaignList?.length ? (
                   <div className="rounded-[var(--so-radius)] border border-[var(--so-border)] bg-[var(--so-surface)] p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--so-muted)]">
+                    <p className="text-xs font-medium tracking-[0.01em] text-[var(--so-muted)]">
                       {t("dashboard.activeNow")}
                     </p>
                     <ul className="mt-2 space-y-2">
@@ -812,7 +807,7 @@ export function LeadDiscoveryView() {
                         </h2>
                         <span
                           className={cn(
-                            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+                            "inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
                             statusTone(
                               campaignDisplayStatus(
                                 String(selectedCampaign.status),
@@ -986,7 +981,7 @@ export function LeadDiscoveryView() {
                                 </h2>
                                 <span
                                   className={cn(
-                                    "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+                                    "inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
                                     statusTone(status),
                                   )}
                                 >
@@ -1079,7 +1074,7 @@ export function LeadDiscoveryView() {
                   <p className="mt-1 text-xs text-[var(--so-muted)]">{t("advanced.progressHint")}</p>
                   <div className="mt-3 flex flex-wrap items-end gap-3">
                     <label className="block min-w-[10rem] flex-1">
-                      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[var(--so-muted)]">
+                      <span className="mb-1 block text-[11px] font-medium tracking-[0.01em] text-[var(--so-muted)]">
                         {t("advanced.dailyTargetLabel")}
                       </span>
                       <input
@@ -1263,7 +1258,7 @@ export function LeadDiscoveryView() {
                   <button
                     key={example}
                     type="button"
-                    className="rounded-full border border-[var(--so-border)] bg-[var(--so-surface-2)] px-3 py-1.5 text-left text-[11px] font-medium text-[var(--so-muted)] transition-colors hover:border-[var(--so-border-strong)] hover:text-[var(--so-text)]"
+                    className="rounded-[8px] border border-[var(--so-border)] bg-[var(--so-surface-2)] px-3 py-1.5 text-left text-[11px] font-medium text-[var(--so-muted)] transition-colors hover:border-[var(--so-border-strong)] hover:text-[var(--so-text)]"
                     onClick={() => setSegmentPrompt(example)}
                   >
                     {example}
@@ -1277,7 +1272,7 @@ export function LeadDiscoveryView() {
             <div className="space-y-4">
               {segmentDraft?.summary ? (
                 <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--so-muted)]">
+                  <p className="text-[11px] font-medium tracking-[0.01em] text-[var(--so-muted)]">
                     {t("wizard.groqSummary")}
                   </p>
                   <p className="mt-1 text-sm text-[var(--so-text)]">{segmentDraft.summary}</p>

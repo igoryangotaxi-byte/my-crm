@@ -14,7 +14,7 @@ export function OfficeModeToggle() {
   const inOffice = pathname.startsWith("/sales-operation/office");
 
   return (
-    <div className="inline-flex items-center rounded-[10px] border border-[var(--so-border-strong)] p-0.5">
+    <div className="inline-flex items-center rounded-[8px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-0.5">
       <button
         type="button"
         onClick={() => {

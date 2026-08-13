@@ -1,3 +1,4 @@
+/** @deprecated Use `PageHeader` from `@/components/ui/PageHeader`. */
 type PageHeadingProps = {
   title: string;
   subtitle: string;

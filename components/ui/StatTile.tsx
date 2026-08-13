@@ -27,8 +27,8 @@ type StatTileProps = {
 
 const valueTone: Record<NonNullable<StatTileProps["tone"]>, string> = {
   default: "text-[var(--so-text)]",
-  success: "text-emerald-600",
-  danger: "text-rose-600",
+  success: "text-[var(--success)]",
+  danger: "text-[var(--destructive)]",
   accent: "text-[var(--so-accent-strong)]",
 };
 
@@ -45,8 +45,8 @@ function DeltaChip({ delta }: { delta: StatTileDelta }) {
       <span
         className={cn(
           "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[0.6875rem] font-bold tabular-nums",
-          good && "bg-emerald-50 text-emerald-700",
-          bad && "bg-rose-50 text-rose-700",
+          good && "bg-[var(--success-soft)] text-[var(--success)]",
+          bad && "bg-[rgba(199,15,31,0.1)] text-[var(--destructive)]",
           neutral && "bg-[var(--so-surface-2)] text-[var(--so-muted)]",
         )}
       >
@@ -76,14 +76,12 @@ export function StatTile({
   return (
     <article
       className={cn(
-        "group relative overflow-hidden rounded-[16px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-xs)] transition-shadow hover:shadow-[var(--so-shadow-sm)]",
+        "group relative overflow-hidden rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-xs)] transition-shadow hover:shadow-[var(--so-shadow-sm)]",
         className,
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[0.7rem] font-bold uppercase tracking-wide text-[var(--so-muted)]">
-          {label}
-        </p>
+        <p className="ycds-label text-[var(--so-muted)]">{label}</p>
         {icon ? (
           <span className="inline-flex h-7 w-7 items-center justify-center rounded-[8px] bg-[var(--so-surface-2)] text-[var(--so-muted)]">
             {icon}
@@ -96,9 +94,7 @@ export function StatTile({
           {loading ? (
             <div className="h-8 w-24 animate-pulse rounded bg-[var(--so-border)]" />
           ) : (
-            <p className={cn("text-[1.6rem] font-bold leading-tight tracking-tight tabular-nums", valueTone[tone])}>
-              {value}
-            </p>
+            <p className={cn("ycds-kpi text-[1.6rem]", valueTone[tone])}>{value}</p>
           )}
           {delta && !loading ? (
             <div className="mt-1.5">

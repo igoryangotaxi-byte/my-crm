@@ -8,6 +8,7 @@ import { Plus, Route } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { SkeletonCard } from "@/components/ui/Skeleton";
+import { SectionHeader } from "@/components/patterns/SectionHeader";
 import { AccessManagementView } from "@/components/accesses/AccessManagementView";
 import { SalesEmailTemplatesSettings } from "@/components/sales-operation/settings/SalesEmailTemplatesSettings";
 import { SalesSignedHandoverSettings } from "@/components/sales-operation/settings/SalesSignedHandoverSettings";
@@ -136,10 +137,7 @@ export function SalesSettingsView() {
 
       {showAccess ? (
         <div id="access" className="scroll-mt-24 space-y-3">
-          <div>
-            <h2 className="crm-section-title mb-1">{t("accessTitle")}</h2>
-            <p className="text-sm text-[var(--so-muted)]">{t("accessSubtitle")}</p>
-          </div>
+          <SectionHeader title={t("accessTitle")} subtitle={t("accessSubtitle")} />
           <AccessManagementView />
         </div>
       ) : null}
@@ -165,34 +163,33 @@ export function SalesSettingsView() {
         </div>
       </div>
       <div className="so-card">
-        <h2 className="crm-section-title mb-1">{t("stagesTitle")}</h2>
-        <p className="mb-3 text-sm text-[var(--so-muted)]">{t("stagesSubtitle")}</p>
+        <SectionHeader title={t("stagesTitle")} subtitle={t("stagesSubtitle")} />
         <div className="overflow-x-auto rounded-[12px] border border-[var(--so-border)]">
           <table className="min-w-full text-sm">
             <thead className="bg-[var(--so-surface-2)]">
               <tr>
-                <th className="px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="px-2 py-1.5 text-left text-xs font-medium tracking-[0.01em] text-muted">
                   {t("stageOrder")}
                 </th>
-                <th className="px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="px-2 py-1.5 text-left text-xs font-medium tracking-[0.01em] text-muted">
                   {t("stageKey")}
                 </th>
-                <th className="px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="px-2 py-1.5 text-left text-xs font-medium tracking-[0.01em] text-muted">
                   {t("stageLabel")}
                 </th>
-                <th className="px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="px-2 py-1.5 text-left text-xs font-medium tracking-[0.01em] text-muted">
                   {t("stageProbability")}
                 </th>
-                <th className="px-2 py-1.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="px-2 py-1.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
                   {t("stageWon")}
                 </th>
-                <th className="px-2 py-1.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="px-2 py-1.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
                   {t("stageLost")}
                 </th>
-                <th className="px-2 py-1.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="px-2 py-1.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
                   {t("stageTerminal")}
                 </th>
-                <th className="px-2 py-1.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="px-2 py-1.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
                   {t("stageActive")}
                 </th>
                 <th className="px-2 py-1.5" />

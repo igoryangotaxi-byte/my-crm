@@ -15,6 +15,7 @@ import { StatTile } from "@/components/ui/StatTile";
 import { ChartCard } from "@/components/ui/ChartCard";
 import { Skeleton, SkeletonCard } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 function ChartSkeleton() {
   return <Skeleton className="h-72 w-full rounded-[12px]" />;
@@ -174,12 +175,13 @@ export function SalesAnalyticsView() {
 
   return (
     <section className="crm-page space-y-4">
+      <PageHeader title={t("page.analytics.title")} subtitle={t("page.analytics.subtitle")} />
       {report ? (
-        <article className="rounded-[16px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-sm)]">
-          <h3 className="text-[0.95rem] font-bold tracking-tight text-[var(--so-text)]">
+        <article className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-sm)] md:col-span-2">
+          <h3 className="ycds-h3 text-[var(--so-text)]">
             {t("report.dailyTitle")} · {report.daily.date}
           </h3>
-          <div className="mt-3 grid gap-3 md:grid-cols-4">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <StatTile label={t("report.newLeads")} value={report.daily.newLeads} />
             <StatTile label={t("report.movedForward")} value={report.daily.movedForward} />
             <StatTile label={t("report.signedToday")} value={report.daily.signed} tone="success" />

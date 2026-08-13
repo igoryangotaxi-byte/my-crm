@@ -33,12 +33,13 @@ import type {
 } from "@/lib/driver-price-comparison/types";
 import { COMPARISON_TABLE_COLUMNS } from "@/lib/driver-price-comparison/table-sort";
 import { ComparisonChartShell } from "@/components/price-calculator/charts/ComparisonChartShell";
+import { CHART_HEX } from "@/lib/ui/tokens";
 
 const FLAG_COLORS: Record<DifferenceFlag, string> = {
-  "No difference": "#16a34a",
-  "Driver price higher": "#dc2626",
-  "Mone price higher": "#ea580c",
-  "No price": "#94a3b8",
+  "No difference": CHART_HEX.chart4,
+  "Driver price higher": CHART_HEX.chart2,
+  "Mone price higher": CHART_HEX.chart5,
+  "No price": CHART_HEX.muted,
 };
 
 type DataStatus = {
@@ -89,7 +90,7 @@ function ProblematicInsightsCard({
   const driverThreshold = money(DRIVER_PRICE_HIGHER_PROBLEMATIC_MIN_NIS);
 
   return (
-    <div className="space-y-4 rounded-2xl border border-white/70 bg-white/80 p-4">
+    <div className="space-y-4 rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4">
       <div>
         <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
         <p className="mt-1 text-xs leading-relaxed text-slate-500">
@@ -348,17 +349,17 @@ export function DriverPriceComparisonDashboard() {
 
       {status ? (
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-white/70 bg-white/85 p-3 text-sm">
+          <div className="rounded-[10px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-3 text-sm">
             <p className="text-slate-500">Taxi orders in DB</p>
             <p className="mt-1 text-xl font-semibold text-slate-900">{status.totalTaxiOrders}</p>
           </div>
-          <div className="rounded-xl border border-white/70 bg-white/85 p-3 text-sm">
+          <div className="rounded-[10px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-3 text-sm">
             <p className="text-slate-500">Rides with mone price</p>
             <p className="mt-1 text-xl font-semibold text-slate-900">
               {status.ridesWithMone} ({status.moneCoveragePct.toFixed(1)}%)
             </p>
           </div>
-          <div className="rounded-xl border border-white/70 bg-white/85 p-3 text-sm">
+          <div className="rounded-[10px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-3 text-sm">
             <p className="text-slate-500">Last GP sync</p>
             <p className="mt-1 text-sm font-semibold text-slate-900">
               {status.lastSyncAt ? new Date(status.lastSyncAt).toLocaleString() : "Not synced yet"}
@@ -375,7 +376,7 @@ export function DriverPriceComparisonDashboard() {
         </div>
       ) : null}
 
-      <div className="rounded-2xl border border-white/70 bg-white/75 p-4">
+      <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4">
         <h3 className="text-sm font-semibold text-slate-900">Filters</h3>
         <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <label className="block text-sm">
@@ -500,7 +501,7 @@ export function DriverPriceComparisonDashboard() {
           },
           { label: "Max difference (NIS)", value: summary?.kpis.maxDifferenceNis ?? 0, format: "money" },
         ].map((card) => (
-          <div key={card.label} className="rounded-xl border border-white/70 bg-white/85 p-4">
+          <div key={card.label} className="rounded-[10px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4">
             <p className="text-xs uppercase tracking-wide text-slate-500">{card.label}</p>
             <p className="mt-2 text-2xl font-semibold text-slate-900">
               {card.format === "money"
@@ -522,7 +523,7 @@ export function DriverPriceComparisonDashboard() {
         >
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={frequencyChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_HEX.grid} />
               <XAxis dataKey="dayOfWeek" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip />
@@ -556,7 +557,7 @@ export function DriverPriceComparisonDashboard() {
         >
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={summary?.severityByDay ?? []}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_HEX.grid} />
               <XAxis dataKey="dayOfWeek" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip formatter={(value: number) => money(value)} />
@@ -636,7 +637,7 @@ export function DriverPriceComparisonDashboard() {
         >
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={summary?.byDistance ?? []}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_HEX.grid} />
               <XAxis dataKey="distanceBucket" tick={{ fontSize: 11 }} />
               <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
               <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} />
@@ -667,7 +668,7 @@ export function DriverPriceComparisonDashboard() {
         >
           <ResponsiveContainer width="100%" height={260}>
             <ScatterChart>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_HEX.grid} />
               <XAxis type="number" dataKey="monePrice" name="Mone price" tick={{ fontSize: 11 }} />
               <YAxis type="number" dataKey="driverPriceWithVat" name="Driver price" tick={{ fontSize: 11 }} />
               <Tooltip cursor={{ strokeDasharray: "3 3" }} />
@@ -699,7 +700,7 @@ export function DriverPriceComparisonDashboard() {
         </div>
       ) : null}
 
-      <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
+      <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h3 className="text-sm font-semibold text-slate-900">Detailed rides</h3>
           <p className="text-xs text-slate-500">

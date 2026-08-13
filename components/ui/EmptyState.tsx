@@ -27,14 +27,12 @@ export function EmptyState({
       )}
     >
       {icon ? (
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-[var(--so-border)] bg-[var(--so-surface-2)] text-[var(--so-muted)]">
+        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-[10px] border border-[var(--so-border)] bg-[var(--so-surface-2)] text-[var(--so-muted)]">
           {icon}
         </div>
       ) : null}
-      <p className="text-sm font-semibold text-[var(--so-text)]">{title}</p>
-      {description ? (
-        <p className="mt-1 max-w-sm text-sm text-[var(--so-muted)]">{description}</p>
-      ) : null}
+      <p className="ycds-h3 text-[var(--so-text)]">{title}</p>
+      {description ? <p className="mt-1 max-w-sm text-sm text-[var(--so-muted)]">{description}</p> : null}
       {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );

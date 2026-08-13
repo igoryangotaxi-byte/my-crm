@@ -442,6 +442,21 @@
         "contact": "איש קשר"
       }
     },
+    "density": {
+      "label": "צפיפות",
+      "comfortable": "נוח",
+      "compact": "קומפקטי"
+    },
+    "command": {
+      "placeholder": "חיפוש או מעבר…",
+      "empty": "אין תוצאות.",
+      "close": "סגור פלטת פקודות",
+      "navigation": "ניווט",
+      "search": "חיפוש",
+      "actions": "פעולות",
+      "createLead": "יצירת ליד",
+      "createTask": "פתח משימות"
+    },
     "dedup": {
       "warning": "{count, plural, one {נמצאה כפילות אפשרית אחת} other {נמצאו # כפילויות אפשריות}}",
       "requiredHint": "ליד מחייב שם ולפחות אימייל או טלפון.",

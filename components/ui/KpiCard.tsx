@@ -1,3 +1,4 @@
+/** @deprecated Use `StatTile` from `@/components/ui/StatTile`. */
 type KpiCardProps = {
   label: string;
   value: string;

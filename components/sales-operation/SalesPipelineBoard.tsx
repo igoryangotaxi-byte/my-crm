@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { Drawer, Modal } from "@/components/ui/Dialog";
 import { Tabs } from "@/components/ui/Tabs";
+import { FilterBar } from "@/components/patterns/FilterBar";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/ui/cn";
 import {
@@ -1181,8 +1182,7 @@ const LeadCard = memo(function LeadCard({
         }
       }}
       className={cn(
-        "group w-full cursor-pointer rounded-[12px] border bg-[var(--so-surface)] p-3 text-left transition-[box-shadow,border-color,transform,opacity] duration-150",
-        "hover:-translate-y-px hover:shadow-[var(--so-shadow-md)] active:translate-y-0",
+        "so-kanban-card group w-full cursor-pointer rounded-[8px] border bg-[var(--so-surface)] text-left transition-[box-shadow,border-color] duration-150",
         selected
           ? "border-[var(--so-accent)] shadow-[0_0_0_1px_var(--so-accent)]"
           : "border-[var(--so-border)] shadow-[var(--so-shadow-xs)] hover:border-[var(--so-border-strong)]",
@@ -1192,10 +1192,10 @@ const LeadCard = memo(function LeadCard({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-[var(--so-text)]">{title}</p>
+          <p className="truncate text-sm font-medium text-[var(--so-text)]">{title}</p>
           {lead.source === "discovery" || lead.customFields?.discovery ? (
             <span
-              className="mt-1 inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[0.62rem] font-semibold uppercase tracking-wide text-sky-800"
+              className="mt-1 inline-flex items-center gap-1 rounded-[6px] border border-[color-mix(in_srgb,var(--info)_28%,transparent)] bg-[var(--info-soft)] px-1.5 py-0.5 text-[0.62rem] font-medium text-[var(--info)]"
               title="Cold Lead from Lead Discovery"
             >
               Cold Lead
@@ -1206,7 +1206,7 @@ const LeadCard = memo(function LeadCard({
           ) : null}
         </div>
         {moving ? (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--so-accent-soft)] px-1.5 py-0.5 text-[0.62rem] font-semibold text-[var(--so-accent-strong)]">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-[var(--so-accent-soft)] px-1.5 py-0.5 text-[0.62rem] font-semibold text-[var(--so-accent-strong)]">
             <Loader2 className="h-3 w-3 animate-spin" />
             {t("owner.moving")}
           </span>
@@ -1266,7 +1266,7 @@ const LeadCard = memo(function LeadCard({
               openPotentialEditor();
             }}
             className={cn(
-              "so-focus-ring inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.68rem] font-semibold transition-colors",
+              "so-focus-ring inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[0.68rem] font-semibold transition-colors",
               potentialLabel
                 ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
                 : "border border-dashed border-[var(--so-border-strong)] text-[var(--so-muted)] hover:border-[var(--so-accent)] hover:bg-[var(--so-accent-soft)] hover:text-[var(--so-accent-strong)]",
@@ -1277,12 +1277,12 @@ const LeadCard = memo(function LeadCard({
           </button>
         )}
         {segmentName ? (
-          <span className="inline-flex max-w-full truncate rounded-full bg-sky-50 px-2 py-0.5 text-[0.68rem] font-semibold text-sky-700">
+          <span className="inline-flex max-w-full truncate rounded-md bg-sky-50 px-2 py-0.5 text-[0.68rem] font-semibold text-sky-700">
             {segmentName}
           </span>
         ) : null}
         {lead.campaignName ? (
-          <span className="inline-flex max-w-full truncate rounded-full bg-[var(--so-accent-soft)] px-2 py-0.5 text-[0.68rem] font-semibold uppercase tracking-wide text-[var(--so-accent-strong)]">
+          <span className="inline-flex max-w-full truncate rounded-md bg-[var(--so-accent-soft)] px-2 py-0.5 text-[0.68rem] font-semibold text-[var(--so-accent-strong)]">
             {lead.campaignName}
           </span>
         ) : null}
@@ -1340,7 +1340,7 @@ const LeadCard = memo(function LeadCard({
               openOwnerEditor();
             }}
             className={cn(
-              "so-focus-ring inline-flex max-w-full items-center gap-1 truncate rounded-full px-2 py-0.5 text-[0.68rem] font-semibold transition-colors",
+              "so-focus-ring inline-flex max-w-full items-center gap-1 truncate rounded-md px-2 py-0.5 text-[0.68rem] font-semibold transition-colors",
               lead.assignedManagerName
                 ? "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
                 : "border border-dashed border-emerald-300 text-emerald-700 hover:bg-emerald-50",
@@ -1584,11 +1584,6 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
   const ownerOptions = useMemo(
     () => getPlatformStaffUserOptions(users).map((user) => ({ id: user.id, name: user.name })),
     [users],
-  );
-
-  const filtersActive = useMemo(
-    () => Object.values(filters).some((value) => value.trim() !== ""),
-    [filters],
   );
 
   const filteredLeads = useMemo(() => {
@@ -1934,6 +1929,12 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
     <section className="crm-page flex h-[calc(100dvh-10.5rem)] min-h-[24rem] flex-col">
       {/* Filters + saved views */}
       <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2">
+        <FilterBar
+          className="min-w-0 flex-1"
+          activeCount={Object.values(filters).filter((value) => value.trim() !== "").length}
+          onReset={() => setFilters(EMPTY_FILTERS)}
+          resetLabel={t("filter.clear")}
+        >
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--so-muted-2)]" />
           <input
@@ -2005,15 +2006,7 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
           value={filters.maxPotential}
           onChange={(event) => setFilters((prev) => ({ ...prev, maxPotential: event.target.value }))}
         />
-        {filtersActive ? (
-          <button
-            type="button"
-            onClick={() => setFilters(EMPTY_FILTERS)}
-            className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600"
-          >
-            {t("filter.clear")}
-          </button>
-        ) : null}
+        </FilterBar>
         <div className="ml-auto flex items-center gap-2">
           {savedViews.length > 0 ? (
             <select
@@ -2082,7 +2075,7 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
             <div
               key={stage.key}
               className={cn(
-                "flex min-h-0 w-[17rem] shrink-0 flex-col rounded-[16px] border bg-[var(--so-surface-2)] p-2.5 transition-colors",
+                "flex min-h-0 w-[17rem] shrink-0 flex-col rounded-[12px] border bg-[var(--so-surface-2)] p-3 transition-colors",
                 isDropTarget
                   ? "border-dashed border-[var(--so-accent)]/40"
                   : "border-[var(--so-border)]",
@@ -2099,7 +2092,7 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
                 <div className="flex min-w-0 items-center justify-between gap-1">
                   <div className="flex min-w-0 items-center gap-1.5">
                     <StatusBadge label={stage.label} tone={toneForStage(stage.key)} compact title={stage.label} />
-                    <span className="shrink-0 rounded-full bg-[var(--so-surface)] px-1.5 text-xs font-bold text-[var(--so-muted)]">
+                    <span className="shrink-0 rounded-md bg-[var(--so-surface)] px-1.5 text-xs font-bold text-[var(--so-muted)]">
                       {columnLeads.length}
                     </span>
                   </div>

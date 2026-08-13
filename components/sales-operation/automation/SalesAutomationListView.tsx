@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SkeletonCard } from "@/components/ui/Skeleton";
+import { Switch } from "@/components/ui/Switch";
 import type { SalesAutomationListItem } from "@/lib/sales-operation/automation/types";
 
 export function SalesAutomationListView() {
@@ -155,7 +156,7 @@ export function SalesAutomationListView() {
               <div className="min-w-0">
                 <Link
                   href={`/sales-operation/automation/${item.id}`}
-                  className="truncate text-base font-semibold text-[var(--so-text)] transition-colors hover:text-[var(--so-accent-strong)]"
+                  className="truncate text-base font-medium text-[var(--so-text)] transition-colors hover:text-[var(--so-accent-strong)]"
                 >
                   {item.name}
                 </Link>
@@ -164,17 +165,11 @@ export function SalesAutomationListView() {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void toggleEnabled(item)}
-                  className={`so-focus-ring rounded-[10px] border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                    item.enabled
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                      : "border-[var(--so-border-strong)] bg-[var(--so-surface)] text-[var(--so-muted)]"
-                  }`}
-                >
-                  {item.enabled ? t("automation.enabled") : t("automation.disabled")}
-                </button>
+                <Switch
+                  checked={item.enabled}
+                  onCheckedChange={() => void toggleEnabled(item)}
+                  aria-label={item.enabled ? t("automation.enabled") : t("automation.disabled")}
+                />
                 <Link
                   href={`/sales-operation/automation/${item.id}`}
                   className="so-focus-ring rounded-[10px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)]"

@@ -22,6 +22,7 @@ import { sortTasks, taskDueBucket, type TaskDueBucket } from "@/lib/sales-operat
 import { MyScorecardSection } from "@/components/sales-operation/MyScorecardSection";
 import { TaskDetailDrawer } from "@/components/sales-operation/tasks/TaskDetailDrawer";
 import { Button } from "@/components/ui/Button";
+import { FilterBar, FilterChip } from "@/components/patterns/FilterBar";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Tabs } from "@/components/ui/Tabs";
@@ -70,23 +71,13 @@ function StatusFilter({
   t: (key: string) => string;
 }) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-[10px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-0.5">
+    <FilterBar>
       {(["open", "done", "all"] as const).map((option) => (
-        <button
-          key={option}
-          type="button"
-          onClick={() => onChange(option)}
-          className={cn(
-            "rounded-[8px] px-2.5 py-1 text-xs font-semibold transition-colors",
-            value === option
-              ? "bg-[var(--so-surface)] text-[var(--so-text)] shadow-[var(--so-shadow-xs)]"
-              : "text-[var(--so-muted)] hover:text-[var(--so-text)]",
-          )}
-        >
+        <FilterChip key={option} active={value === option} onClick={() => onChange(option)}>
           {t(`tasks.status.${option}`)}
-        </button>
+        </FilterChip>
       ))}
-    </div>
+    </FilterBar>
   );
 }
 

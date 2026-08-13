@@ -25,7 +25,7 @@ export function YangoCorpRegisterView() {
     <div className={embed ? "p-3" : "mx-auto max-w-3xl space-y-4 p-4"}>
       {!embed ? (
         <div>
-          <h1 className="text-lg font-semibold text-[var(--so-text)]">{t("yangoRegisterTitle")}</h1>
+          <h1 className="ycds-h1 text-[var(--so-text)]">{t("yangoRegisterTitle")}</h1>
           <p className="mt-1 text-sm text-[var(--so-muted)]">{t("yangoRegisterHint")}</p>
         </div>
       ) : null}

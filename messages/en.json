@@ -442,6 +442,21 @@
         "contact": "Contact"
       }
     },
+    "density": {
+      "label": "Density",
+      "comfortable": "Comfortable",
+      "compact": "Compact"
+    },
+    "command": {
+      "placeholder": "Search or jump to…",
+      "empty": "No results.",
+      "close": "Close command palette",
+      "navigation": "Navigation",
+      "search": "Search",
+      "actions": "Actions",
+      "createLead": "Create lead",
+      "createTask": "Open tasks"
+    },
     "dedup": {
       "warning": "{count, plural, one {# possible duplicate found} other {# possible duplicates found}}",
       "requiredHint": "A lead requires a name and at least an email or a phone.",

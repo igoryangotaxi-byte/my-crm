@@ -19,7 +19,7 @@ type DecouplingSuggestionApi = {
 };
 
 const secondaryButtonClass =
-  "inline-flex h-10 items-center justify-center rounded-xl border border-slate-300/90 bg-white/90 px-4 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-white";
+  "inline-flex h-10 items-center justify-center rounded-[8px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-4 text-sm font-medium text-[var(--so-text)] shadow-[var(--so-shadow-xs)] transition-colors hover:bg-[var(--so-surface-hover)]";
 
 const CHUNK_SIZE = 20;
 
@@ -349,8 +349,8 @@ export function TranscriptsTab() {
     ? "grid gap-3 rounded-2xl border border-rose-400/75 bg-rose-50/95 p-3 md:grid-cols-2 xl:grid-cols-4"
     : "grid gap-3 md:grid-cols-2 xl:grid-cols-4";
   const summaryCardClass = totalsNegativeDecoupling
-    ? "rounded-2xl border border-rose-200/90 bg-white/95 p-4 shadow-sm"
-    : "rounded-2xl border border-white/70 bg-white/85 p-4";
+    ? "rounded-[12px] border border-rose-200 bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-xs)]"
+    : "rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4";
 
   return (
     <div className="space-y-4">
@@ -477,7 +477,7 @@ export function TranscriptsTab() {
       ) : null}
 
       {results.length > 0 ? (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/90 shadow-sm">
+        <div className="overflow-x-auto rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] shadow-[var(--so-shadow-xs)]">
           <table className="min-w-[1040px] w-full border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/90">
@@ -539,13 +539,13 @@ export function TranscriptsTab() {
               <button
                 type="button"
                 onClick={() => closeDecouplingModal()}
-                className="shrink-0 rounded-xl border border-white/70 bg-white/70 px-3 py-1.5 text-sm font-semibold text-slate-700 backdrop-blur-sm transition hover:bg-white"
+                className="shrink-0 rounded-[8px] border border-[var(--so-border)] bg-[var(--so-surface)] px-3 py-1.5 text-sm font-medium text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)]"
               >
                 {t("transcripts.decouplingModal.close")}
               </button>
             </div>
 
-            <div className="mt-4 rounded-xl border border-slate-200/90 bg-white/90 p-3">
+            <div className="mt-4 rounded-[10px] border border-[var(--so-border)] bg-[var(--so-surface)] p-3">
               <p className="crm-label text-xs">{t("transcripts.decouplingModal.currentTariff")}</p>
               <p className="mt-1 font-mono text-sm font-medium text-slate-800">{tariffCode}</p>
               <p className="mt-1 text-xs text-slate-600">
@@ -569,7 +569,7 @@ export function TranscriptsTab() {
                   {formatPct(transcriptTotals.totalDecouplingPct)}
                 </p>
               </div>
-              <div className="rounded-xl border border-slate-200/90 bg-white/90 p-3">
+              <div className="rounded-[10px] border border-[var(--so-border)] bg-[var(--so-surface)] p-3">
                 <label className="block">
                   <span className="crm-label mb-1 block text-xs">{t("transcripts.decouplingModal.targetPctLabel")}</span>
                   <input
@@ -624,7 +624,7 @@ export function TranscriptsTab() {
                 {suggestions.map((s, idx) => (
                   <div
                     key={`${s.label}-${idx}`}
-                    className="rounded-2xl border border-slate-200/90 bg-white/95 p-4 shadow-sm"
+                    className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-xs)]"
                   >
                     <p className="text-sm font-semibold text-slate-900">
                       {idx + 1}. {s.label}

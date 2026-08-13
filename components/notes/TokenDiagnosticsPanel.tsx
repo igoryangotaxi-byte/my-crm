@@ -16,13 +16,13 @@ export function TokenDiagnosticsPanel({ diagnostics }: TokenDiagnosticsPanelProp
       }`;
 
   return (
-    <section className="glass-surface mb-4 rounded-3xl p-4">
+    <section className="so-card mb-4 rounded-[12px] p-4">
       <div className="mb-3">
-        <h3 className="crm-section-title">Token diagnostics ({titleDetail})</h3>
-        <p className="crm-subtitle">Live auth/orders status from API tokens</p>
+        <h3 className="ycds-h2 text-[var(--so-text)]">Token diagnostics ({titleDetail})</h3>
+        <p className="mt-1 text-sm text-[var(--so-muted)]">Live auth/orders status from API tokens</p>
         <a
           href="/api/client-mapping-export"
-          className="mt-2 inline-flex rounded-xl border border-border bg-white/85 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-white"
+          className="so-focus-ring mt-2 inline-flex rounded-[8px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-3 py-1.5 text-xs font-medium text-[var(--so-text)] transition hover:bg-[var(--so-surface-hover)]"
         >
           Export client mapping CSV
         </a>
@@ -32,27 +32,27 @@ export function TokenDiagnosticsPanel({ diagnostics }: TokenDiagnosticsPanelProp
         {diagnostics.map((item) => (
           <div
             key={item.label}
-            className="crm-hover-lift rounded-xl border border-white/70 bg-white/75 px-3 py-2"
+            className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] px-3 py-2 shadow-[var(--so-shadow-xs)]"
           >
-            <p className="text-sm font-semibold text-slate-900">{item.tokenLabel}</p>
-            <p className="text-xs text-muted">{item.clientName ?? "No client name"}</p>
-            <p className="text-xs text-slate-500">Client ID: {item.clientId ?? "n/a"}</p>
-            <p className="mt-1 text-xs text-slate-600">
+            <p className="text-sm font-medium text-[var(--so-text)]">{item.tokenLabel}</p>
+            <p className="text-xs text-[var(--so-muted)]">{item.clientName ?? "No client name"}</p>
+            <p className="ycds-mono text-xs text-[var(--so-muted-2)]">Client ID: {item.clientId ?? "n/a"}</p>
+            <p className="mt-1 text-xs text-[var(--so-muted)]">
               Orders:{" "}
               <span
                 className={
                   item.ordersStatus === "ok"
-                    ? "font-semibold text-emerald-700"
+                    ? "font-medium text-[var(--success)]"
                     : item.ordersStatus === "feature_disabled"
-                      ? "font-semibold text-amber-700"
-                      : "font-semibold text-rose-700"
+                      ? "font-medium text-[var(--warning)]"
+                      : "font-medium text-[var(--destructive)]"
                 }
               >
                 {item.ordersStatus}
               </span>
             </p>
             {item.message ? (
-              <p className="mt-1 break-words rounded-md bg-slate-100 px-2 py-1 text-[11px] leading-relaxed text-slate-700">
+              <p className="mt-1 break-words rounded-md bg-[var(--so-surface-2)] px-2 py-1 text-[11px] leading-relaxed text-[var(--so-muted)]">
                 {item.message}
               </p>
             ) : null}

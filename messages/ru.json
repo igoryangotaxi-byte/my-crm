@@ -1,5 +1,20 @@
 {
   "salesOperation": {
+    "density": {
+      "label": "Плотность",
+      "comfortable": "Комфортная",
+      "compact": "Компактная"
+    },
+    "command": {
+      "placeholder": "Поиск или переход…",
+      "empty": "Нет результатов.",
+      "close": "Закрыть палитру команд",
+      "navigation": "Навигация",
+      "search": "Поиск",
+      "actions": "Действия",
+      "createLead": "Создать лид",
+      "createTask": "Открыть задачи"
+    },
     "tab": {
       "leadDiscovery": "Поиск лидов"
     },

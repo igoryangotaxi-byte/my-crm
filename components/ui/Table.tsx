@@ -1,3 +1,4 @@
+/** @deprecated Use `DataTable` from `@/components/ui/DataTable`. */
 import type { ReactNode } from "react";
 
 export type TableColumn<T> = {

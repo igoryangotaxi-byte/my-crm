@@ -10,7 +10,7 @@ import type {
 } from "@/lib/sales-operation/automation/types";
 
 const shell =
-  "min-w-[180px] max-w-[220px] rounded-[14px] border border-[var(--so-border)] bg-[var(--so-surface)] px-3 py-2.5 shadow-[var(--so-shadow-sm)]";
+  "min-w-[180px] max-w-[220px] rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] px-3 py-2.5 shadow-[var(--so-shadow-sm)]";
 
 function NodeChrome({
   title,
@@ -20,19 +20,21 @@ function NodeChrome({
   showSource = true,
 }: {
   title: string;
-  tone: "trigger" | "sms" | "assign" | "task";
+  tone: "trigger" | "sms" | "assign" | "task" | "condition";
   children: ReactNode;
   showTarget?: boolean;
   showSource?: boolean;
 }) {
   const badge =
     tone === "trigger"
-      ? "bg-red-50 text-red-700"
+      ? "bg-[var(--so-accent-soft)] text-[var(--so-accent-strong)]"
       : tone === "sms"
-        ? "bg-sky-50 text-sky-800"
+        ? "bg-[var(--info-soft)] text-[var(--info)]"
         : tone === "task"
-          ? "bg-amber-50 text-amber-800"
-          : "bg-emerald-50 text-emerald-800";
+          ? "bg-[var(--warning-soft)] text-[var(--warning)]"
+          : tone === "condition"
+            ? "bg-[var(--so-surface-2)] text-[var(--so-text)]"
+            : "bg-[var(--success-soft)] text-[var(--success)]";
 
   return (
     <div className={shell}>
@@ -40,10 +42,10 @@ function NodeChrome({
         <Handle
           type="target"
           position={Position.Left}
-          className="!h-2.5 !w-2.5 !border-2 !border-white !bg-red-500"
+          className="!h-2.5 !w-2.5 !border-2 !border-white !bg-[var(--primary)]"
         />
       ) : null}
-      <p className={`mb-1 inline-flex rounded-lg px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide ${badge}`}>
+      <p className={`mb-1 inline-flex rounded-[6px] px-1.5 py-0.5 text-[0.65rem] font-medium ${badge}`}>
         {title}
       </p>
       <div className="text-xs text-[var(--so-muted)]">{children}</div>
@@ -51,7 +53,7 @@ function NodeChrome({
         <Handle
           type="source"
           position={Position.Right}
-          className="!h-2.5 !w-2.5 !border-2 !border-white !bg-red-500"
+          className="!h-2.5 !w-2.5 !border-2 !border-white !bg-[var(--primary)]"
         />
       ) : null}
     </div>
@@ -120,7 +122,7 @@ function GenericNode({
   showTarget = true,
 }: {
   title: string;
-  tone: "trigger" | "sms" | "assign" | "task";
+  tone: "trigger" | "sms" | "assign" | "task" | "condition";
   subtitle: string;
   showTarget?: boolean;
 }) {
@@ -152,7 +154,7 @@ export function ConditionGateNode({ data }: NodeProps) {
   return (
     <GenericNode
       title="If"
-      tone="assign"
+      tone="condition"
       subtitle={`${d.field ?? "field"} ${d.op ?? "eq"} ${String(d.value ?? "")}`}
     />
   );

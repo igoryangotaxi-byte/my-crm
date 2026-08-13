@@ -11,6 +11,7 @@ import {
   segmentedTabTrackClass,
 } from "@/components/crm/segmented-tab-classes";
 import { PreOrdersMapView } from "@/components/pre-orders/PreOrdersMapView";
+import { FilterBar, FilterChip } from "@/components/patterns/FilterBar";
 import type { PreOrder } from "@/types/crm";
 
 type PreOrdersBoardProps = {
@@ -191,7 +192,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
   };
 
   const fallbackPillClass =
-    "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_4px_10px_rgba(15,23,42,0.08)]";
+    "inline-flex rounded-md border px-2 py-0.5 text-[10px] font-medium";
 
   const fallbackStatusBadge = (preOrder: PreOrder) => {
     const status = preOrder.fallback?.status;
@@ -199,7 +200,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
     if (status === "completed") {
       return (
         <span
-          className={`${fallbackPillClass} border-sky-200/90 bg-[linear-gradient(180deg,#e0f2fe_0%,#7dd3fc_100%)] text-sky-900`}
+          className={`${fallbackPillClass} border-sky-200 bg-sky-50 text-sky-800`}
         >
           Fallback to B2C
         </span>
@@ -208,7 +209,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
     if (status === "failed") {
       return (
         <span
-          className={`${fallbackPillClass} border-amber-200/90 bg-[linear-gradient(180deg,#fffbeb_0%,#fcd34d_100%)] text-amber-900`}
+          className={`${fallbackPillClass} border-amber-200 bg-amber-50 text-amber-800`}
         >
           Fallback failed
         </span>
@@ -217,7 +218,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
     if (status === "in_progress") {
       return (
         <span
-          className={`${fallbackPillClass} border-slate-200/90 bg-[linear-gradient(180deg,#f8fafc_0%,#cbd5e1_100%)] text-slate-800`}
+          className={`${fallbackPillClass} border-slate-200 bg-slate-50 text-slate-700`}
         >
           Fallback running
         </span>
@@ -225,7 +226,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
     }
     return (
       <span
-        className={`${fallbackPillClass} border-slate-200/90 bg-[linear-gradient(180deg,#f8fafc_0%,#e2e8f0_100%)] text-slate-800`}
+        className={`${fallbackPillClass} border-slate-200 bg-slate-50 text-slate-700`}
       >
         Fallback skipped
       </span>
@@ -357,29 +358,24 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
       </div>
 
       {viewMode === "list" ? (
-        <div className="mb-0.5 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+        <div className="mb-0.5 rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-2 shadow-[var(--so-shadow-xs)]">
           <div className="flex w-full min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between lg:gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <FilterBar>
               {([
                 { mode: "all", label: "All" },
                 { mode: "today", label: "Today" },
                 { mode: "tomorrow", label: "Tomorrow" },
                 { mode: "range", label: "Date range" },
               ] as const).map((item) => (
-                <button
+                <FilterChip
                   key={item.mode}
-                  type="button"
+                  active={filterMode === item.mode}
                   onClick={() => setFilterMode(item.mode)}
-                  className={`inline-flex h-9 shrink-0 items-center justify-center rounded-lg border px-3 text-sm font-medium transition ${
-                    filterMode === item.mode
-                      ? "crm-button-primary border-transparent text-white shadow-sm"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
                 >
                   {item.label}
-                </button>
+                </FilterChip>
               ))}
-            </div>
+            </FilterBar>
 
             <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 lg:w-auto lg:flex-1 lg:justify-center">
               <div className="relative min-w-0 flex-1 sm:max-w-[11rem]">
@@ -439,36 +435,36 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
           onOpenFull={(preOrder) => setSelectedPreOrder(preOrder)}
         />
       ) : filteredPreOrders.length === 0 ? (
-        <div className="glass-surface rounded-3xl px-4 py-10 text-center text-sm text-muted">
+        <div className="so-card rounded-[12px] px-4 py-10 text-center text-sm text-muted">
           No pre-orders found for selected filter.
         </div>
       ) : (
-        <section className="glass-surface mt-0.5 overflow-hidden rounded-3xl">
+        <section className="so-card mt-0.5 overflow-hidden rounded-[12px]">
           <div className="overflow-x-auto">
             <table className="min-w-full border-separate border-spacing-y-2">
               <thead className="bg-[#f6f6f8]">
                 <tr>
-                  <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                  <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
                     Pre-order
                   </th>
                   {!isClientScopedUser ? (
-                    <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                    <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
                       Client
                     </th>
                   ) : null}
-                  <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                  <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
                     Status
                   </th>
-                  <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                  <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
                     Scheduled for
                   </th>
-                  <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                  <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
                     Route
                   </th>
-                  <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                  <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
                     Adminka
                   </th>
-                  <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                  <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
                     Action
                   </th>
                 </tr>
@@ -480,7 +476,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                   return (
                     <tr
                       key={preOrder.id}
-                      className={`group cursor-pointer transition-all duration-200 ease-out hover:-translate-y-0.5 hover:drop-shadow-[0_14px_36px_rgba(15,23,42,0.14)] ${rowTint} hover:[&>td]:bg-white/95`}
+                      className={`group cursor-pointer transition-colors duration-150 ease-out ${rowTint} hover:[&>td]:bg-[var(--so-surface-hover)]`}
                       onClick={() => setSelectedPreOrder(preOrder)}
                     >
                       <td className="rounded-l-xl border border-transparent px-3 py-2.5 text-center text-sm font-medium text-slate-900 transition-colors duration-200">
@@ -494,10 +490,10 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                       <td className="border border-transparent px-3 py-2.5 text-center text-sm transition-colors duration-200">
                         <div className="flex flex-wrap items-center justify-center gap-1.5">
                           <span
-                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.88),0_5px_14px_rgba(15,23,42,0.1)] ${
+                            className={`inline-flex rounded-md border px-2.5 py-1 text-xs font-medium ${
                               assigned
-                                ? "border-emerald-200/90 bg-[linear-gradient(180deg,#ecfdf5_0%,#a7f3d0_55%,#6ee7b7_100%)] text-emerald-900"
-                                : "border-rose-200/90 bg-[linear-gradient(180deg,#fff1f2_0%,#fecdd3_55%,#fda4af_100%)] text-rose-900"
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                : "border-rose-200 bg-rose-50 text-rose-800"
                             }`}
                           >
                             {assigned ? "Assigned" : "Unassigned"}
@@ -576,7 +572,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
           onClick={() => setSelectedPreOrder(null)}
         >
           <div
-            className="crm-modal-surface w-full max-w-3xl rounded-3xl p-3 lg:p-4"
+            className="crm-modal-surface w-full max-w-3xl rounded-[16px] p-3 lg:p-4"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-3 px-1">
@@ -595,11 +591,11 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
 
             <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr]">
               <section className="space-y-4">
-                <div className="overflow-hidden rounded-3xl border border-slate-200 bg-[#f7f8fa]">
+                <div className="overflow-hidden rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)]">
                   <div className="h-44 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.9),rgba(226,232,240,0.6)),linear-gradient(135deg,#e2e8f0,#f8fafc)] p-3">
                     <div className="grid h-full grid-rows-2 gap-4">
                       <div className="rounded-2xl border border-slate-200 bg-white/80 p-3">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                        <p className="text-xs font-medium tracking-[0.01em] text-muted">
                           Pickup
                         </p>
                         <p className="mt-2 text-sm font-medium text-slate-900">
@@ -607,7 +603,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                         </p>
                       </div>
                       <div className="rounded-2xl border border-slate-200 bg-white/80 p-3">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                        <p className="text-xs font-medium tracking-[0.01em] text-muted">
                           Destination
                         </p>
                         <p className="mt-2 text-sm font-medium text-slate-900">
@@ -618,7 +614,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                   </div>
                 </div>
 
-                <div className="rounded-3xl border border-slate-200 bg-[#f8f9fb] p-4">
+                <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-4">
                   <h4 className="mb-3 text-xl font-semibold text-slate-900">Route</h4>
                   <dl className="space-y-3 text-sm">
                     <div className="rounded-xl bg-white px-3 py-2.5">
@@ -640,7 +636,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                   </dl>
 
                   <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3.5">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                    <p className="text-xs font-medium tracking-[0.01em] text-muted">
                       Driver details
                     </p>
                     <dl className="mt-2 space-y-2.5 text-sm">
@@ -719,7 +715,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                 </div>
               </section>
 
-              <aside className="rounded-3xl border border-slate-200 bg-[#f8f9fb] p-4">
+              <aside className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-4">
                 <h4 className="mb-4 text-2xl font-semibold text-slate-900">Details</h4>
                 <dl className="space-y-4 text-sm">
                   <div>
@@ -804,7 +800,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
           }}
         >
           <div
-            className="crm-modal-surface grid h-[86vh] w-full max-w-7xl gap-3 rounded-3xl p-3 lg:grid-cols-[1.7fr_0.9fr]"
+            className="crm-modal-surface grid h-[86vh] w-full max-w-7xl gap-3 rounded-[16px] p-3 lg:grid-cols-[1.7fr_0.9fr]"
             onClick={(event) => event.stopPropagation()}
           >
             <section className="flex min-h-[420px] flex-col justify-center rounded-2xl border border-slate-200 bg-white p-5">
@@ -866,7 +862,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
               </div>
               <div className="mt-3 space-y-2">
                 <div className="rounded-xl border border-slate-200 bg-white p-2.5">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pickup</p>
+                  <p className="text-xs font-medium tracking-[0.01em] text-slate-500">Pickup</p>
                   <p className="mt-1 text-sm font-medium text-slate-900">{handoffPreOrder.pointA}</p>
                   <button
                     type="button"
@@ -877,7 +873,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
                   </button>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-2.5">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Destination</p>
+                  <p className="text-xs font-medium tracking-[0.01em] text-slate-500">Destination</p>
                   <p className="mt-1 text-sm font-medium text-slate-900">{handoffPreOrder.pointB}</p>
                   <button
                     type="button"

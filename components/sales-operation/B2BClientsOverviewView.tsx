@@ -77,6 +77,7 @@ export function B2BClientsOverviewView({
             rows={awaitingLinkRows}
             getRowKey={(row) => row.key}
             searchable={awaitingLinkRows.length > 8}
+            showColumnToggle
             getSearchText={(row) => `${row.name} ${row.companyName ?? ""} ${row.salesManagerName ?? ""}`}
             labels={dataTableLabels(t)}
             columns={[

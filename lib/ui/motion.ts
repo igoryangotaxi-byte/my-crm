@@ -1,12 +1,12 @@
 import type { Transition, Variants } from "framer-motion";
 
-// Linear-style easing, mirrors the CSS --ease-ui token.
-export const EASE_UI = [0.2, 0.8, 0.2, 1] as const;
+// Emil ease-out: instant feedback, no ease-in. Overlay/modal/drawer only.
+export const EASE_UI = [0.16, 1, 0.3, 1] as const;
 
 export const durations = {
   fast: 0.15,
-  base: 0.2,
-  slow: 0.25,
+  base: 0.16,
+  slow: 0.2,
 } as const;
 
 export const transitionBase: Transition = {

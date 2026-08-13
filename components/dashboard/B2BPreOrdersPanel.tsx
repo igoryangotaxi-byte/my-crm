@@ -148,9 +148,9 @@ type YangoClientSortKey =
   | "salesManager";
 
 const YANGO_NUMERIC_CARD_CLASS =
-  "rounded-[24px] border border-white/70 bg-white/75 p-4 shadow-[0_14px_30px_rgba(15,23,42,0.08)] backdrop-blur-md transition-all duration-300 crm-hover-lift min-h-[160px]";
+  "rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-xs)] min-h-[160px]";
 const BI_PANEL_CLASS =
-  "rounded-[24px] border border-white/70 bg-white/75 p-4 shadow-[0_14px_30px_rgba(15,23,42,0.08)] backdrop-blur-md transition-all duration-300 crm-hover-lift";
+  "rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-xs)]";
 
 const CLIENT_SPEND_COLORS = [
   "#16a34a",
@@ -554,7 +554,7 @@ function ClientSpendCard({
   const hitRadius = pointsCount > 60 ? 2 : pointsCount > 31 ? 2.8 : 4;
 
   return (
-    <article className="relative overflow-hidden rounded-[28px] border border-border bg-white/90 p-5 shadow-sm crm-hover-lift">
+    <article className="relative overflow-hidden rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-5 shadow-[var(--so-shadow-xs)]">
       <div className="mb-2 flex items-center justify-between">
         <p className="crm-section-title text-2xl">Client spend</p>
         <p className="crm-subtitle font-semibold">Report</p>
@@ -705,7 +705,7 @@ function YangoTopClientsCard({
   const maxTrips = Math.max(1, ...clients.map((item) => item.trips));
 
   return (
-    <article className="relative overflow-hidden rounded-[28px] border border-border bg-white/90 p-5 shadow-sm crm-hover-lift">
+    <article className="relative overflow-hidden rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-5 shadow-[var(--so-shadow-xs)]">
       <p className="crm-section-title text-xl">Top clients</p>
       <p className="crm-subtitle">By trips in selected date range</p>
       <div className="mt-4 space-y-2">
@@ -749,7 +749,7 @@ function YangoMonthlyMetricsTable({ rows }: { rows: ClientMonthlyMetricRow[] }) 
               <th className="px-2 py-2 text-right">Gross profit</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-border/70 bg-white/70">
+          <tbody className="divide-y divide-[var(--so-border)] bg-[var(--so-surface)]">
             {rows.map((row, index) => (
               <tr
                 key={`${row.monthKey}:${row.corpClientId}`}
@@ -2510,7 +2510,7 @@ export function B2BPreOrdersPanel({
     <>
     <section
       className={
-        view === "orders" || isB2bClientsOverview ? "" : "glass-surface mt-6 rounded-3xl p-4"
+        view === "orders" || isB2bClientsOverview ? "" : "so-card mt-6 rounded-[12px] p-4"
       }
     >
 
@@ -2529,12 +2529,12 @@ export function B2BPreOrdersPanel({
       <div
         className={
           view === "orders"
-            ? "mb-0.5 glass-surface overflow-hidden rounded-3xl p-4"
+            ? "mb-0.5 so-card overflow-hidden rounded-[12px] p-4"
             : "mb-0.5 rounded-2xl border border-border bg-panel p-3"
         }
       >
         <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
-          <label className="flex min-w-0 flex-col items-center text-center text-xs font-semibold uppercase tracking-wide text-muted">
+          <label className="flex min-w-0 flex-col items-center text-center text-xs font-medium tracking-[0.01em] text-muted">
             From
             <input
               type="date"
@@ -2543,7 +2543,7 @@ export function B2BPreOrdersPanel({
               className="crm-input mt-1.5 block h-10 min-h-10 w-full min-w-0 px-2.5 text-center text-sm text-slate-800"
             />
           </label>
-          <label className="flex min-w-0 flex-col items-center text-center text-xs font-semibold uppercase tracking-wide text-muted">
+          <label className="flex min-w-0 flex-col items-center text-center text-xs font-medium tracking-[0.01em] text-muted">
             To
             <input
               type="date"
@@ -2553,14 +2553,14 @@ export function B2BPreOrdersPanel({
             />
           </label>
           {isClientScopedUser ? (
-            <label className="flex min-w-0 flex-col items-center text-center text-xs font-semibold uppercase tracking-wide text-muted">
+            <label className="flex min-w-0 flex-col items-center text-center text-xs font-medium tracking-[0.01em] text-muted">
               Client
               <div className="crm-input mt-1.5 flex h-10 min-h-10 w-full min-w-0 items-center justify-center px-2.5 text-center text-sm font-semibold text-slate-800">
                 {fixedClientName ?? "Client from your cabinet"}
               </div>
             </label>
           ) : (
-            <label className="flex min-w-0 flex-col items-center text-center text-xs font-semibold uppercase tracking-wide text-muted">
+            <label className="flex min-w-0 flex-col items-center text-center text-xs font-medium tracking-[0.01em] text-muted">
               Client
               <select
                 value={clientFilter}
@@ -2575,7 +2575,7 @@ export function B2BPreOrdersPanel({
               </select>
             </label>
           )}
-          <label className="flex min-w-0 flex-col items-center text-center text-xs font-semibold uppercase tracking-wide text-muted">
+          <label className="flex min-w-0 flex-col items-center text-center text-xs font-medium tracking-[0.01em] text-muted">
             Status
             <select
               value={statusFilter}
@@ -2589,7 +2589,7 @@ export function B2BPreOrdersPanel({
               {view === "dashboard" ? <option value="pending">Pending</option> : null}
             </select>
           </label>
-          <label className="flex min-w-0 flex-col items-center text-center text-xs font-semibold uppercase tracking-wide text-muted">
+          <label className="flex min-w-0 flex-col items-center text-center text-xs font-medium tracking-[0.01em] text-muted">
             Sort
             <select
               value={sortMode}
@@ -2650,7 +2650,7 @@ export function B2BPreOrdersPanel({
       {view === "dashboard" ? (
         <>
           {showApiDashboardSection ? (
-          <section className="mb-4 rounded-3xl border border-white/70 bg-white/70 p-4">
+          <section className="mb-4 rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4">
             <div className="mb-3">
               <h3 className="crm-section-title">API Data</h3>
               <p className="crm-subtitle">Dashboards based on live API-loaded orders</p>
@@ -2713,7 +2713,7 @@ export function B2BPreOrdersPanel({
           ) : null}
 
           {!canSeeApiData ? (
-            <section className="mb-2 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            <section className="mb-2 rounded-[12px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
               Your role has no access to Dashboard blocks. Ask Admin to enable API Data.
             </section>
           ) : null}
@@ -2931,7 +2931,7 @@ export function B2BPreOrdersPanel({
               className="max-h-[70vh] overflow-auto rounded-[14px] border border-[var(--so-border)] bg-[var(--so-surface)]"
             >
               <table className="min-w-full text-xs">
-                <thead className="sticky top-0 z-[1] bg-[var(--so-surface-2)] text-[0.6875rem] font-bold uppercase tracking-wide text-[var(--so-muted)]">
+                <thead className="sticky top-0 z-[1] bg-[var(--so-surface-2)] text-[0.6875rem] font-medium tracking-[0.01em] text-[var(--so-muted)]">
                   <tr>
                     <th className="w-9 px-3 py-2 text-left">
                       <button
@@ -3228,11 +3228,11 @@ export function B2BPreOrdersPanel({
     </section>
 
     {view === "orders" ? (
-    <section className="glass-surface mt-0.5 overflow-hidden rounded-3xl">
+    <section className="so-card mt-0.5 overflow-hidden rounded-[12px]">
         {remoteError ? (
           <div className="border-b border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{remoteError}</div>
         ) : null}
-        <div className="flex items-center justify-end gap-2 border-b border-border/70 bg-white/60 px-3 py-2">
+        <div className="flex items-center justify-end gap-2 border-b border-[var(--so-border)] bg-[var(--so-surface-2)] px-3 py-2">
           {ordersRemote && remoteLoading ? (
             <span className="text-xs text-muted">Loading orders…</span>
           ) : null}
@@ -3249,27 +3249,27 @@ export function B2BPreOrdersPanel({
           <table className="min-w-full border-separate border-spacing-y-2">
             <thead className="bg-[#f6f6f8]">
               <tr>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
                   Order
                 </th>
                 {!isClientScopedUser ? (
-                  <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                  <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
                     Client
                   </th>
                 ) : null}
-                <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
                   Status
                 </th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
                   Scheduled for{" "}
                   <span className="normal-case text-[11px] font-normal text-slate-500">
                     (ride time)
                   </span>
                 </th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
                   Client paid
                 </th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
                   Adminka
                 </th>
               </tr>
@@ -3288,7 +3288,7 @@ export function B2BPreOrdersPanel({
                 return (
                   <tr
                     key={`${row.tokenLabel}:${row.orderId}`}
-                    className={`group cursor-pointer transition-all duration-200 ease-out hover:-translate-y-0.5 hover:drop-shadow-[0_14px_36px_rgba(15,23,42,0.14)] ${rowTint} hover:[&>td]:bg-white/95`}
+                    className={`group cursor-pointer transition-colors duration-150 ease-out ${rowTint} hover:[&>td]:bg-[var(--so-surface-hover)]`}
                     onClick={() => openOrderModal(row)}
                   >
                     <td className="rounded-l-xl border border-transparent px-3 py-2.5 text-center text-sm font-medium text-slate-900 transition-colors duration-200">
@@ -3355,7 +3355,7 @@ export function B2BPreOrdersPanel({
               type="button"
               onClick={() => void handleLoadMoreOrders()}
               disabled={remoteLoading}
-              className="crm-hover-lift rounded-lg border border-border/80 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-[8px] border border-[var(--so-border)] bg-[var(--so-surface)] px-3 py-1.5 text-xs font-medium text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Load more orders
             </button>
@@ -3370,7 +3370,7 @@ export function B2BPreOrdersPanel({
         onClick={closeGpUploadModal}
       >
         <div
-          className="crm-modal-surface w-full max-w-md rounded-3xl p-4 lg:p-5"
+          className="crm-modal-surface w-full max-w-md rounded-[16px] p-4 lg:p-5"
           onClick={(event) => event.stopPropagation()}
         >
           <div className="mb-4 flex items-start justify-between gap-3 px-1">
@@ -3380,7 +3380,7 @@ export function B2BPreOrdersPanel({
             <button
               type="button"
               onClick={closeGpUploadModal}
-              className="crm-hover-lift inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-lg font-semibold leading-none text-slate-700"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[var(--so-surface-2)] text-lg font-semibold leading-none text-[var(--so-text)]"
               aria-label="Close modal"
             >
               ×
@@ -3429,7 +3429,7 @@ export function B2BPreOrdersPanel({
           onClick={closeOrderModal}
         >
           <div
-            className="crm-modal-surface w-full max-w-4xl rounded-3xl p-4 lg:p-5"
+            className="crm-modal-surface w-full max-w-4xl rounded-[16px] p-4 lg:p-5"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-3 px-1">
@@ -3437,7 +3437,7 @@ export function B2BPreOrdersPanel({
               <button
                 type="button"
                 onClick={closeOrderModal}
-                className="crm-hover-lift inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-lg font-semibold leading-none text-slate-700"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[var(--so-surface-2)] text-lg font-semibold leading-none text-[var(--so-text)]"
                 aria-label="Close modal"
               >
                 ×
@@ -3455,7 +3455,7 @@ export function B2BPreOrdersPanel({
             ) : (
               <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
                 <section className="space-y-4">
-                  <div className="rounded-3xl border border-slate-200 bg-[#f8f9fb] p-4">
+                  <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-4">
                     <h4 className="mb-3 text-xl font-semibold text-slate-900">Route</h4>
                     <dl className="space-y-3 text-sm">
                       <div className="rounded-xl bg-white px-3 py-2.5">
@@ -3477,7 +3477,7 @@ export function B2BPreOrdersPanel({
                     </dl>
                   </div>
 
-                  <div className="rounded-3xl border border-slate-200 bg-[#f8f9fb] p-4">
+                  <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-4">
                     <h4 className="mb-3 text-lg font-semibold text-slate-900">Driver & Vehicle</h4>
                     <dl className="grid gap-2 text-sm md:grid-cols-2">
                       <div className="rounded-xl bg-white px-3 py-2.5">
@@ -3500,7 +3500,7 @@ export function B2BPreOrdersPanel({
                   </div>
                 </section>
 
-                <aside className="rounded-3xl border border-slate-200 bg-[#f8f9fb] p-4">
+                <aside className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-4">
                   <h4 className="mb-4 text-2xl font-semibold text-slate-900">Details</h4>
                   {view === "orders" && canCancelSelectedOrderInYango ? (
                     <div className="mb-4">
@@ -3508,7 +3508,7 @@ export function B2BPreOrdersPanel({
                         type="button"
                         onClick={() => void handleCancelInYango()}
                         disabled={cancelInYangoLoading}
-                        className="crm-hover-lift inline-flex w-full items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex w-full items-center justify-center rounded-[8px] border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {cancelInYangoLoading ? "Cancelling..." : "Cancel in Yango"}
                       </button>
@@ -3592,7 +3592,7 @@ export function B2BPreOrdersPanel({
                   </dl>
 
                   <details className="mt-4 rounded-xl border border-border bg-white p-2.5">
-                    <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-muted">
+                    <summary className="cursor-pointer text-xs font-medium tracking-[0.01em] text-muted">
                       Raw API payload
                     </summary>
                     <pre className="mt-2 max-h-56 overflow-auto rounded-lg bg-slate-900 p-2 text-[11px] text-slate-100">

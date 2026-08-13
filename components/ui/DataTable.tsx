@@ -14,6 +14,8 @@ import {
 import { cn } from "@/lib/ui/cn";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -72,6 +74,11 @@ type DataTableProps<T> = {
   labels?: Partial<DataTableLabels>;
   emptyIcon?: ReactNode;
   className?: string;
+  stickyFirstColumn?: boolean;
+  selectable?: boolean;
+  selectedKeys?: Array<string | number>;
+  onSelectionChange?: (keys: Array<string | number>) => void;
+  bulkBar?: ReactNode;
 };
 
 type SortState = { key: string; dir: "asc" | "desc" } | null;
@@ -92,6 +99,11 @@ export function DataTable<T>({
   labels: labelsProp,
   emptyIcon,
   className,
+  stickyFirstColumn = false,
+  selectable = false,
+  selectedKeys,
+  onSelectionChange,
+  bulkBar,
 }: DataTableProps<T>) {
   const labels = { ...defaultLabels, ...labelsProp };
   const [query, setQuery] = useState("");
@@ -155,6 +167,29 @@ export function DataTable<T>({
     align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
 
   const hasToolbar = searchable || showColumnToggle || toolbar;
+  const selectedSet = new Set(selectedKeys ?? []);
+  const pageKeys = paged.map((row, index) => getRowKey(row, index));
+  const allPageSelected = selectable && pageKeys.length > 0 && pageKeys.every((key) => selectedSet.has(key));
+  const somePageSelected = selectable && pageKeys.some((key) => selectedSet.has(key)) && !allPageSelected;
+
+  const toggleAllPage = () => {
+    if (!onSelectionChange) return;
+    if (allPageSelected) {
+      onSelectionChange((selectedKeys ?? []).filter((key) => !pageKeys.includes(key)));
+      return;
+    }
+    const next = new Set(selectedKeys ?? []);
+    pageKeys.forEach((key) => next.add(key));
+    onSelectionChange([...next]);
+  };
+
+  const toggleRow = (key: string | number) => {
+    if (!onSelectionChange) return;
+    const next = new Set(selectedKeys ?? []);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    onSelectionChange([...next]);
+  };
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
@@ -163,14 +198,14 @@ export function DataTable<T>({
           {searchable ? (
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--so-muted-2)]" />
-              <input
+              <Input
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
                   setPage(0);
                 }}
                 placeholder={labels.search}
-                className="crm-input h-9 w-56 max-w-full pl-8 pr-3 text-sm"
+                className="h-9 w-56 max-w-full pl-8"
               />
             </div>
           ) : null}
@@ -181,7 +216,7 @@ export function DataTable<T>({
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="so-focus-ring inline-flex h-9 items-center gap-1.5 rounded-[10px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-3 text-sm font-semibold text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)]"
+                    className="so-focus-ring inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-3 text-sm font-medium text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)]"
                   >
                     <SlidersHorizontal className="h-4 w-4" />
                     {labels.columns}
@@ -218,12 +253,31 @@ export function DataTable<T>({
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-[16px] border border-[var(--so-border)] bg-[var(--so-surface)] shadow-[var(--so-shadow-sm)]">
+      {selectable && selectedSet.size > 0 && bulkBar ? (
+        <div className="flex items-center gap-3 rounded-[8px] border border-[var(--so-border)] bg-[var(--so-surface)] px-3 py-2 text-sm shadow-[var(--so-shadow-xs)]">
+          <span className="tabular-nums text-[var(--so-muted)]">{selectedSet.size}</span>
+          {bulkBar}
+        </div>
+      ) : null}
+
+      <div className="overflow-hidden rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] shadow-[var(--so-shadow-sm)]">
         <div className="max-h-[70vh] overflow-auto">
-          <table className="min-w-full border-collapse text-left">
+          <table className="min-w-full border-collapse text-left text-[0.8125rem]">
             <thead className="sticky top-0 z-[1] bg-[var(--so-surface-2)]">
               <tr className="border-b border-[var(--so-border)]">
-                {visibleColumns.map((column) => {
+                {selectable ? (
+                  <th className="w-10 px-3 py-2">
+                    <Checkbox
+                      checked={allPageSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = somePageSelected;
+                      }}
+                      onChange={toggleAllPage}
+                      aria-label="Select all"
+                    />
+                  </th>
+                ) : null}
+                {visibleColumns.map((column, colIndex) => {
                   const isSorted = sort?.key === column.key;
                   return (
                     <th
@@ -233,8 +287,9 @@ export function DataTable<T>({
                         isSorted ? (sort!.dir === "asc" ? "ascending" : "descending") : undefined
                       }
                       className={cn(
-                        "whitespace-nowrap px-4 py-2.5 text-[0.6875rem] font-bold uppercase tracking-wide text-[var(--so-muted)]",
+                        "ycds-label whitespace-nowrap px-4 py-2 text-[var(--so-muted)]",
                         alignClass(column.align),
+                        stickyFirstColumn && colIndex === 0 && "sticky left-0 z-[2] bg-[var(--so-surface-2)]",
                       )}
                     >
                       {column.sortable && column.sortValue ? (
@@ -269,8 +324,9 @@ export function DataTable<T>({
               {loading ? (
                 Array.from({ length: loadingRows }).map((_, r) => (
                   <tr key={r} className="border-b border-[var(--so-border)] last:border-0">
+                    {selectable ? <td className="px-3" /> : null}
                     {visibleColumns.map((c) => (
-                      <td key={c.key} className="px-4 py-3.5">
+                      <td key={c.key} className="px-4" style={{ height: "var(--density-row, 44px)" }}>
                         <Skeleton className="h-4" style={{ width: `${50 + ((r + c.key.length) % 40)}%` }} />
                       </td>
                     ))}
@@ -278,7 +334,7 @@ export function DataTable<T>({
                 ))
               ) : paged.length === 0 ? (
                 <tr>
-                  <td colSpan={visibleColumns.length}>
+                  <td colSpan={visibleColumns.length + (selectable ? 1 : 0)}>
                     <EmptyState
                       icon={emptyIcon}
                       title={labels.empty}
@@ -287,9 +343,11 @@ export function DataTable<T>({
                   </td>
                 </tr>
               ) : (
-                paged.map((row, index) => (
+                paged.map((row, index) => {
+                  const rowKey = getRowKey(row, index);
+                  return (
                   <tr
-                    key={getRowKey(row, index)}
+                    key={rowKey}
                     data-row
                     tabIndex={onRowClick ? 0 : -1}
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
@@ -298,23 +356,36 @@ export function DataTable<T>({
                       "border-b border-[var(--so-border)] transition-colors last:border-0 focus:outline-none focus-visible:bg-[var(--so-accent-soft)]",
                       onRowClick && "cursor-pointer",
                       "hover:bg-[var(--so-surface-hover)]",
+                      selectedSet.has(rowKey) && "bg-[var(--so-accent-soft)]",
                       getRowClassName?.(row, index),
                     )}
+                    style={{ height: "var(--density-row, 44px)" }}
                   >
-                    {visibleColumns.map((column) => (
+                    {selectable ? (
+                      <td className="px-3" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedSet.has(rowKey)}
+                          onChange={() => toggleRow(rowKey)}
+                          aria-label="Select row"
+                        />
+                      </td>
+                    ) : null}
+                    {visibleColumns.map((column, colIndex) => (
                       <td
                         key={column.key}
                         className={cn(
-                          "px-4 py-3 text-sm text-[var(--so-text)]",
+                          "px-4 text-[0.8125rem] text-[var(--so-text)]",
                           alignClass(column.align),
                           column.className,
+                          stickyFirstColumn && colIndex === 0 && "sticky left-0 z-[1] bg-[var(--so-surface)]",
                         )}
                       >
                         {column.render(row)}
                       </td>
                     ))}
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

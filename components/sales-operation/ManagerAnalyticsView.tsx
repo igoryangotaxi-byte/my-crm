@@ -108,7 +108,7 @@ export function ManagerAnalyticsView() {
   return (
     <>
       <section className="crm-page">
-      <div className="mb-4 grid gap-3 rounded-[16px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-sm)] md:grid-cols-2 lg:grid-cols-5">
+      <div className="mb-4 grid gap-3 rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-sm)] md:grid-cols-2 lg:grid-cols-5">
         <label className="text-xs text-[var(--so-muted)]">
           {t("manager.role")}
           <select
@@ -202,6 +202,7 @@ export function ManagerAnalyticsView() {
             rows={summary.clients}
             getRowKey={(row) => `${row.corpClientId}-${row.clientName}`}
             searchable
+            showColumnToggle
             getSearchText={(row) => `${row.clientName} ${row.corpClientId}`}
             pageSize={20}
             labels={dataTableLabels(t, { empty: t("manager.noClients") })}

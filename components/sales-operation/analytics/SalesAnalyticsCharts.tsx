@@ -10,20 +10,21 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { CHART_HEX } from "@/lib/ui/tokens";
 
-const axisTick = { fontSize: 12, fill: "#6b7280" } as const;
-const gridStroke = "#eef0f3";
+const axisTick = { fontSize: 12, fill: CHART_HEX.muted } as const;
+const gridStroke = CHART_HEX.grid;
 
 const tooltipProps = {
   cursor: { fill: "rgba(15,18,24,0.04)" },
   contentStyle: {
     borderRadius: 12,
-    border: "1px solid #e9ebf0",
+    border: `1px solid ${CHART_HEX.border}`,
     boxShadow: "0 12px 32px rgba(16,24,40,0.12)",
     fontSize: 12,
     padding: "8px 10px",
   },
-  labelStyle: { color: "#14161a", fontWeight: 600 },
+  labelStyle: { color: CHART_HEX.text, fontWeight: 500 },
 } as const;
 
 export function StatusBarChart({
@@ -39,7 +40,7 @@ export function StatusBarChart({
           <XAxis dataKey="status" tick={axisTick} tickLine={false} axisLine={{ stroke: gridStroke }} />
           <YAxis allowDecimals={false} tick={axisTick} tickLine={false} axisLine={false} />
           <Tooltip {...tooltipProps} />
-          <Bar dataKey="count" fill="#ff2d2d" radius={[8, 8, 0, 0]} maxBarSize={56} animationDuration={500} />
+          <Bar dataKey="count" fill={CHART_HEX.chart1} radius={[6, 6, 0, 0]} maxBarSize={56} animationDuration={500} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -68,7 +69,7 @@ export function CampaignsBarChart({
           <Tooltip {...tooltipProps} />
           <Bar dataKey="count" radius={[0, 8, 8, 0]} maxBarSize={26} animationDuration={500}>
             {data.map((entry, index) => (
-              <Cell key={entry.campaignName} fill={index % 2 === 0 ? "#ff2d2d" : "#ff6b6b"} />
+              <Cell key={entry.campaignName} fill={index % 2 === 0 ? CHART_HEX.chart1 : CHART_HEX.chart2} />
             ))}
           </Bar>
         </BarChart>

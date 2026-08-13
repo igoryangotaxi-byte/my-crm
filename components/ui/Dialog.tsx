@@ -210,3 +210,6 @@ export function Drawer({
     </RadixDialog.Root>
   );
 }
+
+/** YCDS alias for the side drawer (shadcn Sheet analogue). Public API unchanged. */
+export const Sheet = Drawer;

@@ -307,8 +307,8 @@ export function AccessManagementView() {
   }, [selectedTenantId]);
 
   return (
-    <section className="crm-page">
-      <details className="group make-glass-card-static mb-4 overflow-hidden rounded-3xl">
+    <section className="crm-page space-y-4">
+      <details className="group so-card mb-4 overflow-hidden rounded-[12px]">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
           <span className="crm-section-title mb-0">Global B2C fallback (main CRM)</span>
           <AccessBlockChevron />
@@ -386,7 +386,7 @@ export function AccessManagementView() {
         </div>
       </details>
 
-      <details className="group make-glass-card-static mb-4 overflow-hidden rounded-3xl">
+      <details className="group so-card mb-4 overflow-hidden rounded-[12px]">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
           <span className="crm-section-title mb-0">Permissions (role · section · actions)</span>
           <AccessBlockChevron />
@@ -403,7 +403,7 @@ export function AccessManagementView() {
                     key={role}
                     type="button"
                     onClick={() => setSelectedRole(role)}
-                    className={`crm-hover-lift flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium transition ${
+                    className={`flex w-full items-center justify-between rounded-[8px] px-3 py-2 text-left text-sm font-medium transition-colors ${
                       isSelected
                         ? "crm-button-primary text-white"
                         : "bg-white/55 text-slate-700 hover:bg-white"
@@ -427,7 +427,7 @@ export function AccessManagementView() {
                     key={section.key}
                     type="button"
                     onClick={() => setSelectedSectionKey(section.key)}
-                    className={`crm-hover-lift flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium transition ${
+                    className={`flex w-full items-center justify-between rounded-[8px] px-3 py-2 text-left text-sm font-medium transition-colors ${
                       isSelected
                         ? "crm-button-primary text-white"
                         : "bg-white/55 text-slate-700 hover:bg-white"
@@ -455,7 +455,7 @@ export function AccessManagementView() {
                 return (
                   <label
                     key={`${action.type}-${action.key}`}
-                    className="crm-hover-lift flex items-center gap-3 rounded-xl border border-white/70 bg-white/70 px-3 py-2.5 text-sm text-slate-800"
+                    className="flex items-center gap-3 rounded-[8px] border border-[var(--so-border)] bg-[var(--so-surface)] px-3 py-2.5 text-sm text-[var(--so-text)]"
                   >
                     <input
                       type="checkbox"
@@ -489,7 +489,7 @@ export function AccessManagementView() {
         </div>
       </details>
 
-      <details className="group make-glass-card-static mb-4 overflow-hidden rounded-3xl">
+      <details className="group so-card mb-4 overflow-hidden rounded-[12px]">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
           <span className="crm-section-title mb-0">Summary by role</span>
           <AccessBlockChevron />
@@ -497,7 +497,7 @@ export function AccessManagementView() {
         <div className="border-t border-border px-5 pb-5 pt-4">
       <div className="grid gap-3 md:grid-cols-3">
         {roleStats.map((item) => (
-          <article key={item.role} className="make-glass-card crm-hover-lift rounded-3xl !p-3">
+          <article key={item.role} className="so-card rounded-[12px] !p-3">
             <p className="crm-subtitle">{item.role}</p>
             <p className="mt-1 text-2xl font-semibold text-slate-900">
               {item.allowedCount}/{accessSections.flatMap((section) => section.actions).length}
@@ -509,7 +509,7 @@ export function AccessManagementView() {
         </div>
       </details>
 
-      <details className="group make-glass-card-static mb-4 overflow-hidden rounded-3xl">
+      <details className="group so-card mb-4 overflow-hidden rounded-[12px]">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
           <span className="crm-section-title mb-0">Pending registrations</span>
           <AccessBlockChevron />
@@ -585,7 +585,7 @@ export function AccessManagementView() {
         </div>
       </details>
 
-      <details className="group make-glass-card-static mb-4 overflow-hidden rounded-3xl">
+      <details className="group so-card mb-4 overflow-hidden rounded-[12px]">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
           <span className="crm-section-title mb-0">Clients Cabinet ({tenantAccounts.length})</span>
           <AccessBlockChevron />
@@ -646,7 +646,7 @@ export function AccessManagementView() {
           onClick={() => setSelectedTenantId(null)}
         >
           <div
-            className="crm-modal-surface w-full max-w-5xl rounded-3xl p-4"
+            className="crm-modal-surface w-full max-w-5xl rounded-[16px] p-4"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
@@ -1113,7 +1113,7 @@ export function AccessManagementView() {
         </div>
       ) : null}
 
-      <details className="group make-glass-card-static mb-4 overflow-hidden rounded-3xl">
+      <details className="group so-card mb-4 overflow-hidden rounded-[12px]">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
           <span className="crm-section-title mb-0">Main CRM Users ({mainCrmUsers.length})</span>
           <AccessBlockChevron />

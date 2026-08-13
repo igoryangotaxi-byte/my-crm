@@ -25,17 +25,29 @@ export default function LoginPage() {
           errorConfig: "כניסת Google אינה מוגדרת. פנו למנהל המערכת.",
           errorRejected: "הגישה לחשבון נדחתה על ידי מנהל.",
         }
-      : {
-          loading: "Loading...",
-          brand: "Appli Taxi Oz",
-          title: "Sign in to the CRM",
-          subtitle: "Access is restricted to @appli.taxi Google accounts.",
-          signInWithGoogle: "Sign in with Google",
-          errorDomain: "Only @appli.taxi accounts are allowed.",
-          errorOAuth: "Sign-in failed. Please try again.",
-          errorConfig: "Google sign-in is not configured. Contact your administrator.",
-          errorRejected: "Your account access was rejected by an admin.",
-        };
+      : language === "ru"
+        ? {
+            loading: "Загрузка...",
+            brand: "Appli Taxi Oz",
+            title: "Вход в CRM",
+            subtitle: "Доступ только для Google-аккаунтов @appli.taxi.",
+            signInWithGoogle: "Войти через Google",
+            errorDomain: "Разрешены только аккаунты @appli.taxi.",
+            errorOAuth: "Не удалось войти. Попробуйте ещё раз.",
+            errorConfig: "Вход Google не настроен. Обратитесь к администратору.",
+            errorRejected: "Администратор отклонил доступ.",
+          }
+        : {
+            loading: "Loading...",
+            brand: "Appli Taxi Oz",
+            title: "Sign in to the CRM",
+            subtitle: "Access is restricted to @appli.taxi Google accounts.",
+            signInWithGoogle: "Sign in with Google",
+            errorDomain: "Only @appli.taxi accounts are allowed.",
+            errorOAuth: "Sign-in failed. Please try again.",
+            errorConfig: "Google sign-in is not configured. Contact your administrator.",
+            errorRejected: "Your account access was rejected by an admin.",
+          };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -70,28 +82,30 @@ export default function LoginPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background text-sm text-muted">
+      <main className="flex min-h-screen items-center justify-center bg-[var(--so-bg)] text-sm text-[var(--so-muted)]">
         {copy.loading}
       </main>
     );
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
-      <div className="glass-surface w-full max-w-md rounded-2xl p-8">
+    <main className="flex min-h-screen items-center justify-center bg-[var(--so-bg)] px-4 py-10">
+      <div className="w-full max-w-md rounded-[16px] border border-[var(--so-border)] bg-[var(--so-surface)] p-8 shadow-[var(--so-shadow-md)]">
         <div className="mb-6">
-          <p className="text-sm font-medium text-accent">{copy.brand}</p>
-          <h1 className="mt-2 text-2xl font-semibold text-foreground">{copy.title}</h1>
-          <p className="mt-1 text-sm text-muted">{copy.subtitle}</p>
+          <p className="ycds-label text-[var(--primary)]">{copy.brand}</p>
+          <h1 className="ycds-display mt-2 text-[var(--so-text)]">{copy.title}</h1>
+          <p className="mt-1 text-sm text-[var(--so-muted)]">{copy.subtitle}</p>
         </div>
 
         {errorMessage ? (
-          <p className="mb-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{errorMessage}</p>
+          <p className="mb-4 rounded-[8px] bg-[rgba(199,15,31,0.08)] px-3 py-2 text-sm text-[var(--destructive)]">
+            {errorMessage}
+          </p>
         ) : null}
 
         <a
           href="/api/auth/google/start"
-          className="flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.08)] transition hover:bg-slate-50"
+          className="so-focus-ring flex h-11 w-full items-center justify-center gap-3 rounded-[8px] border border-[var(--so-border-strong)] bg-white text-sm font-medium text-[var(--so-text)] shadow-[var(--so-shadow-xs)] transition hover:bg-[var(--so-surface-hover)]"
         >
           <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18">
             <path

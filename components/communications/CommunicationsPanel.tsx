@@ -323,14 +323,9 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
 
   return (
     <section className="crm-page">
-      <div className="glass-surface rounded-3xl p-4 lg:p-5">
-        <h1 className="crm-title-xl">{copy.communications}</h1>
-        <p className="crm-subtitle mt-2 max-w-2xl">
-          {mode === "main"
-            ? copy.mainSubtitle
-            : copy.clientSubtitle}
-        </p>
-      </div>
+      <p className="mb-3 max-w-2xl text-sm text-[var(--so-muted)]">
+        {mode === "main" ? copy.mainSubtitle : copy.clientSubtitle}
+      </p>
 
       {mode === "main" ? (
         <div className={segmentedTabTrackClass}>
@@ -359,8 +354,8 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
         </div>
       ) : null}
 
-      <div className="glass-surface space-y-5 rounded-3xl p-4 lg:p-5">
-        <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+      <div className="space-y-5 rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-xs)] lg:p-5">
+        <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-2 shadow-[var(--so-shadow-xs)]">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-2">
             {mode === "main" ? (
               <label className="relative min-w-0 flex-1 lg:max-w-sm">
@@ -464,7 +459,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
 
         {(mode === "client" || (mode === "main" && communicationsTab === "bulk")) && (
           <>
-            <div className="make-glass-card-static rounded-2xl p-4">
+            <div className="so-card rounded-[12px] p-4">
               <div>
                 <p className="crm-label mb-1">{copy.selectedRecipients}</p>
                 {selectedRecipients.length === 0 ? (
@@ -491,7 +486,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
               </div>
             </div>
 
-            <div className="space-y-3 make-glass-card-static rounded-2xl p-4">
+            <div className="space-y-3 so-card rounded-[12px] p-4">
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -543,7 +538,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
             onClick={(event) => event.stopPropagation()}
           >
             <h3 className="text-lg font-semibold text-slate-900">Confirm SMS sending</h3>
-            <div className="mt-3 space-y-1 make-glass-card-static rounded-xl p-3 text-sm text-slate-700">
+            <div className="mt-3 space-y-1 so-card rounded-[10px] p-3 text-sm text-[var(--so-text)]">
               <p>
                 <span className="font-semibold text-slate-900">Channel:</span> SMS
               </p>
@@ -559,7 +554,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
               <p className="pt-1">
                 <span className="font-semibold text-slate-900">Message:</span>
               </p>
-              <p className="rounded-lg border border-white/50 bg-white/45 p-2 text-sm whitespace-pre-wrap backdrop-blur-sm">
+              <p className="rounded-[8px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-2 text-sm whitespace-pre-wrap">
                 {messageText.trim()}
               </p>
             </div>
@@ -567,7 +562,7 @@ export function CommunicationsPanel({ mode }: CommunicationsPanelProps) {
               <button
                 type="button"
                 onClick={() => setIsConfirmOpen(false)}
-                className="rounded-xl border border-white/70 bg-white/70 px-3 py-2 text-sm font-semibold text-slate-700 backdrop-blur-sm transition hover:bg-white"
+                className="rounded-[8px] border border-[var(--so-border)] bg-[var(--so-surface)] px-3 py-2 text-sm font-medium text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)]"
               >
                 Cancel
               </button>

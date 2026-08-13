@@ -109,7 +109,7 @@ function CompareDriverPriceTab() {
 
   return (
     <div className="w-full space-y-5">
-      <section className="glass-surface mx-auto w-full max-w-3xl rounded-3xl p-4 lg:p-5">
+      <section className="so-card mx-auto w-full max-w-3xl rounded-[12px] p-4 lg:p-5">
         <div className="mb-5">
           <h2 className="text-base font-semibold text-slate-900">Manual price calculator</h2>
           <p className="mt-1 text-sm text-slate-600">
@@ -186,13 +186,13 @@ function CompareDriverPriceTab() {
       {yangoDriversBreakdown && moneBreakdown ? (
         <div className="mt-5 space-y-3">
           <div className="grid gap-3 md:grid-cols-2">
-            <article className="crm-hover-lift rounded-2xl border border-white/70 bg-white/75 p-4">
+            <article className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4">
               <p className="text-xs uppercase tracking-wide text-muted">Yango Drivers Tariff</p>
               <p className="mt-1 text-2xl font-semibold text-slate-900">
                 {formatMoney(yangoDriversBreakdown.total)}
               </p>
             </article>
-            <article className="crm-hover-lift rounded-2xl border border-white/70 bg-white/75 p-4">
+            <article className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4">
               <p className="text-xs uppercase tracking-wide text-muted">
                 taxitariff.co.il mone price
               </p>
@@ -205,7 +205,7 @@ function CompareDriverPriceTab() {
             </article>
           </div>
 
-          <div className="rounded-2xl border border-white/70 bg-white/75 px-4 py-3">
+          <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] px-4 py-3">
             <p className="text-sm font-semibold text-slate-900">Difference (mone vs Yango Drivers)</p>
             <p className="mt-1 text-xl font-semibold text-slate-900">
               {deltaAmount !== null ? formatMoney(deltaAmount) : "n/a"}
@@ -221,7 +221,7 @@ function CompareDriverPriceTab() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/70 bg-white/75">
+          <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)]">
             <div className="border-b border-white/70 px-4 py-3 text-sm font-semibold text-slate-800">
               Yango Drivers Tariff Breakdown
             </div>
@@ -258,7 +258,7 @@ function CompareDriverPriceTab() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/70 bg-white/75">
+          <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)]">
             <div className="border-b border-white/70 px-4 py-3 text-sm font-semibold text-slate-800">
               taxitariff.co.il mone price Breakdown
             </div>
@@ -287,13 +287,13 @@ function CompareDriverPriceTab() {
       ) : null}
       </section>
 
-      <section className="glass-surface w-full rounded-3xl p-4 lg:p-5">
+      <section className="so-card w-full rounded-[12px] p-4 lg:p-5">
         <MonePriceImportPanel
           onImportComplete={() => setDashboardRefreshKey((value) => value + 1)}
         />
       </section>
 
-      <section className="glass-surface w-full rounded-3xl p-4 lg:p-5">
+      <section className="so-card w-full rounded-[12px] p-4 lg:p-5">
         <DriverPriceComparisonDashboard key={dashboardRefreshKey} />
       </section>
     </div>
@@ -445,7 +445,7 @@ function TariffHealthCheckTab() {
       {result ? (
         <div className="space-y-3">
           <div className="grid gap-3 md:grid-cols-2">
-            <article className="rounded-2xl border border-white/70 bg-white/75 p-4">
+            <article className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4">
               <p className="text-xs uppercase tracking-wide text-muted">Decoupling Rate</p>
               <p className="mt-1 text-2xl font-semibold text-slate-900">
                 {result.summary.decouplingRatePct === null
@@ -454,7 +454,7 @@ function TariffHealthCheckTab() {
               </p>
               <p className="mt-1 text-xs text-muted">{result.parsedIntent.period.label}</p>
             </article>
-            <article className="rounded-2xl border border-white/70 bg-white/75 p-4">
+            <article className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4">
               <p className="text-xs uppercase tracking-wide text-muted">Trips</p>
               <p className="mt-1 text-2xl font-semibold text-slate-900">
                 {result.summary.trips.toLocaleString("en-US")}
@@ -474,19 +474,19 @@ function TariffHealthCheckTab() {
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
-            <article className="rounded-2xl border border-white/70 bg-white/75 p-4">
+            <article className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4">
               <p className="text-xs uppercase tracking-wide text-muted">Client Spend</p>
               <p className="mt-1 text-lg font-semibold text-slate-900">
                 {formatMoney(result.summary.clientSpend)}
               </p>
             </article>
-            <article className="rounded-2xl border border-white/70 bg-white/75 p-4">
+            <article className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4">
               <p className="text-xs uppercase tracking-wide text-muted">Driver Cost</p>
               <p className="mt-1 text-lg font-semibold text-slate-900">
                 {formatMoney(result.summary.driverCost)}
               </p>
             </article>
-            <article className="rounded-2xl border border-white/70 bg-white/75 p-4">
+            <article className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4">
               <p className="text-xs uppercase tracking-wide text-muted">ABS Decoupling</p>
               <p className="mt-1 text-lg font-semibold text-slate-900">
                 {formatMoney(result.summary.decouplingAbs)}
@@ -495,7 +495,7 @@ function TariffHealthCheckTab() {
           </div>
 
           {result.referenceFlatTariff ? (
-            <div className="rounded-2xl border border-white/70 bg-white/75">
+            <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)]">
               <div className="border-b border-white/70 px-4 py-3 text-sm font-semibold text-slate-800">
                 Reference flat tariff (comparison only)
               </div>
@@ -518,7 +518,7 @@ function TariffHealthCheckTab() {
           ) : null}
 
           {result.selectedBaseTariff ? (
-            <div className="rounded-2xl border border-white/70 bg-white/75">
+            <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)]">
               <div className="border-b border-white/70 px-4 py-3 text-sm font-semibold text-slate-800">
                 Selected base tariff (optimization baseline)
               </div>
@@ -542,7 +542,7 @@ function TariffHealthCheckTab() {
             </div>
           ) : null}
 
-          <div className="rounded-2xl border border-white/70 bg-white/75">
+          <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)]">
             <div className="border-b border-white/70 px-4 py-3 text-sm font-semibold text-slate-800">
               Tiered tariff suggestions
             </div>
@@ -553,7 +553,7 @@ function TariffHealthCheckTab() {
               {result.suggestions.map((suggestion) => (
                 <article
                   key={suggestion.name}
-                  className="rounded-xl border border-white/70 bg-white/70 p-3 text-sm text-slate-800"
+                  className="rounded-[10px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-3 text-sm text-[var(--so-text)]"
                 >
                   <p className="font-semibold">{suggestion.name}</p>
                   <p className="mt-1 text-xs text-muted">{suggestion.assumption}</p>
@@ -587,7 +587,7 @@ function TariffHealthCheckTab() {
           </div>
 
           {result.analystMarkdown ? (
-            <div className="rounded-2xl border border-white/70 bg-white/75">
+            <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)]">
               <div className="border-b border-white/70 px-4 py-3 text-sm font-semibold text-slate-800">
                 Analyst narrative
               </div>
@@ -597,7 +597,7 @@ function TariffHealthCheckTab() {
             </div>
           ) : null}
 
-          <div className="rounded-2xl border border-white/70 bg-white/75 px-4 py-3 text-xs text-muted">
+          <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] px-4 py-3 text-xs text-muted">
             <p>Parsed metric: {result.parsedIntent.metric}</p>
             <p>
               Period: {result.parsedIntent.period.fromIso} - {result.parsedIntent.period.toIsoExclusive}
@@ -620,7 +620,6 @@ function TariffHealthCheckTab() {
 export function PriceCalculatorView() {
   const [activeTab, setActiveTab] = useState<PriceCalculatorTab>("compare");
   const { canAccessDashboardBlock } = useAuth();
-  const tNav = useTranslations("nav");
   const tPage = useTranslations("priceCalculatorPage");
   const canAccessTariffHealthCheck = canAccessDashboardBlock("tariffHealthCheck");
   const effectiveActiveTab: PriceCalculatorTab =
@@ -632,10 +631,7 @@ export function PriceCalculatorView() {
 
   return (
     <section className="crm-page">
-      <div className="glass-surface rounded-3xl p-4 lg:p-5">
-        <h1 className="crm-title-xl">{tNav("priceCalculator")}</h1>
-        <p className="crm-subtitle mt-2 max-w-2xl">{tPage("subtitle")}</p>
-      </div>
+      <p className="mb-3 max-w-2xl text-sm text-[var(--so-muted)]">{tPage("subtitle")}</p>
 
       <div className={segmentedTabTrackClass}>
         <button
@@ -679,7 +675,7 @@ export function PriceCalculatorView() {
       {effectiveActiveTab === "compare" ? (
         <CompareDriverPriceTab />
       ) : (
-        <div className="glass-surface space-y-5 rounded-3xl p-4 lg:p-5">
+        <div className="space-y-5 rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-xs)] lg:p-5">
           <div className={`mx-auto ${effectiveActiveTab === "transcripts" ? "max-w-7xl" : "max-w-3xl"}`}>
             {effectiveActiveTab === "health" ? <TariffHealthCheckTab /> : <TranscriptsTab />}
 

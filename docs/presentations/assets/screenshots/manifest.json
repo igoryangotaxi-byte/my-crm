@@ -24,6 +24,36 @@
     "ok": true
   },
   {
+    "name": "orders",
+    "path": "/sales-operation/orders",
+    "file": "screenshots/orders.png",
+    "ok": true
+  },
+  {
+    "name": "communications",
+    "path": "/sales-operation/communications",
+    "file": "screenshots/communications.png",
+    "ok": true
+  },
+  {
+    "name": "pre-orders",
+    "path": "/sales-operation/pre-orders",
+    "file": "screenshots/pre-orders.png",
+    "ok": true
+  },
+  {
+    "name": "price-calculator",
+    "path": "/sales-operation/price-calculator",
+    "file": "screenshots/price-calculator.png",
+    "ok": true
+  },
+  {
+    "name": "lead-discovery",
+    "path": "/sales-operation/lead-discovery",
+    "file": "screenshots/lead-discovery.png",
+    "ok": true
+  },
+  {
     "name": "analytics",
     "path": "/sales-operation/analytics",
     "file": "screenshots/analytics.png",

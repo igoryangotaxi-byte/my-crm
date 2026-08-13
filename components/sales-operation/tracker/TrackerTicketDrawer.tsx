@@ -248,7 +248,7 @@ export function TrackerTicketDrawer({
             <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--so-muted)]">
               {boardStatuses.find((s) => s.id === ticket?.statusId)?.name ?? t("status")}
             </p>
-            <h2 className="truncate text-base font-semibold text-[var(--so-text)]">
+            <h2 className="ycds-h2 truncate text-[var(--so-text)]">
               {loading ? "…" : ticket?.title}
             </h2>
           </div>

@@ -93,7 +93,7 @@ export function OfficeOpsDock({
     : [];
 
   return (
-    <div className="absolute bottom-3 left-3 z-30 flex w-[min(440px,94%)] max-h-[min(62vh,560px)] flex-col overflow-hidden rounded-2xl border border-[var(--so-border)] bg-[var(--so-surface)]/97 shadow-2xl backdrop-blur">
+    <div className="absolute bottom-3 left-3 z-30 flex w-[min(440px,94%)] max-h-[min(62vh,560px)] flex-col overflow-hidden rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] shadow-[var(--so-shadow-lg)]">
       <div className="border-b border-[var(--so-border)] px-3 pt-2.5 pb-2">
         <div className="mb-2 flex items-center justify-between gap-2">
           <div>

@@ -7,6 +7,7 @@ import { ClientHealthBadge } from "@/components/sales-operation/ClientHealthBadg
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SkeletonCard } from "@/components/ui/Skeleton";
+import { StatTile } from "@/components/ui/StatTile";
 import { Briefcase } from "lucide-react";
 import type { AmPortfolioGroup } from "@/lib/sales-operation/am-portfolio";
 import type { ClientHealthStatus } from "@/lib/sales-operation/client-health";
@@ -67,13 +68,26 @@ export function SalesAmPortfolioView() {
     void load();
   }, [load]);
 
+  const totalClients = groups.reduce((sum, group) => sum + group.clientCount, 0);
+  const totalGmv = groups.reduce((sum, group) => sum + group.totalGmv, 0);
+  const totalTrips = groups.reduce((sum, group) => sum + group.totalTrips, 0);
+  const atRiskCount = groups.reduce((sum, group) => sum + group.atRiskCount, 0);
+
   return (
     <section className="crm-page space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3 rounded-[14px] border border-[var(--so-border)] bg-[var(--so-surface)] px-3.5 py-3 shadow-[var(--so-shadow-xs)]">
+      {groups.length > 0 ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatTile label={t("portfolio.colClient")} value={totalClients} />
+          <StatTile label={t("manager.trips")} value={totalTrips.toLocaleString()} />
+          <StatTile label={t("manager.gmv")} value={formatMoney(totalGmv)} />
+          <StatTile label={t("health.status.at_risk")} value={atRiskCount} tone={atRiskCount > 0 ? "danger" : "success"} />
+        </div>
+      ) : null}
+      <div className="flex flex-wrap items-end justify-between gap-3 rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] px-3.5 py-3 shadow-[var(--so-shadow-xs)]">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-          <span className="font-semibold text-[var(--so-text)]">
+          <span className="font-medium text-[var(--so-text)]">
             {t("portfolio.clientCount", {
-              count: groups.reduce((sum, group) => sum + group.clientCount, 0),
+              count: totalClients,
             })}
           </span>
           <span className="text-[var(--so-muted-2)]">·</span>
@@ -106,7 +120,7 @@ export function SalesAmPortfolioView() {
         </div>
       </div>
 
-      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+      {error ? <p className="text-sm text-[var(--destructive)]">{error}</p> : null}
 
       {loading && groups.length === 0 ? (
         <div className="space-y-3">
@@ -123,7 +137,7 @@ export function SalesAmPortfolioView() {
           {groups.map((group) => (
             <article
               key={group.accountManagerUserId ?? "unassigned"}
-              className="rounded-[16px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-sm)]"
+              className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-sm)]"
             >
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>

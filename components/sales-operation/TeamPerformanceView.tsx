@@ -150,7 +150,7 @@ export function TeamPerformanceView() {
 
   return (
     <section className="crm-page">
-      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-[16px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-sm)]">
+      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-sm)]">
         <label className="text-xs text-[var(--so-muted)]">
           {t("performance.periodType")}
           <select
@@ -172,7 +172,7 @@ export function TeamPerformanceView() {
           />
         </label>
         <div className="ml-auto flex items-end gap-2">
-          {notice ? <span className="pb-2 text-xs font-medium text-emerald-600">{notice}</span> : null}
+          {notice ? <span className="pb-2 text-xs font-medium text-[var(--success)]">{notice}</span> : null}
           <Button loading={loading} disabled={loading} onClick={() => void load()}>
             {t("manager.refresh")}
           </Button>

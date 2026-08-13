@@ -7,10 +7,10 @@ import { cn } from "@/lib/ui/cn";
 import type { TrackerTicket } from "@/lib/sales-operation/tracker-types";
 
 const priorityTone: Record<string, string> = {
-  low: "bg-slate-100 text-slate-600",
-  normal: "bg-sky-50 text-sky-700",
-  high: "bg-amber-50 text-amber-700",
-  urgent: "bg-rose-50 text-rose-700",
+  low: "bg-[var(--so-surface-2)] text-[var(--so-muted)]",
+  normal: "bg-[var(--info-soft)] text-[var(--info)]",
+  high: "bg-[var(--warning-soft)] text-[var(--warning)]",
+  urgent: "bg-[rgba(199,15,31,0.1)] text-[var(--destructive)]",
 };
 
 export function TrackerTicketCard({
@@ -50,7 +50,7 @@ export function TrackerTicketCard({
         }
       }}
       className={cn(
-        "group relative cursor-grab rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-3 text-left shadow-[var(--so-shadow-xs)] transition-[border-color,box-shadow] active:cursor-grabbing",
+        "so-kanban-card group relative cursor-grab rounded-[8px] border border-[var(--so-border)] bg-[var(--so-surface)] text-left shadow-[var(--so-shadow-xs)] transition-[border-color,box-shadow] active:cursor-grabbing",
         isDragging && "shadow-[var(--so-shadow-md)] ring-2 ring-[var(--so-accent)]/25",
         "hover:border-[var(--so-border-strong)] hover:shadow-[var(--so-shadow-sm)]",
       )}

@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 
 const yangoHeadline = localFont({
   src: "../../public/fonts/yango-headline.ttf",
+  weight: "900",
   display: "swap",
   variable: "--font-yango-headline",
 });

@@ -17,19 +17,19 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const base =
-  "inline-flex items-center justify-center gap-2 font-semibold whitespace-nowrap rounded-[10px] transition-[background-color,box-shadow,color,border-color,transform] duration-150 ease-[cubic-bezier(0.2,0.8,0.2,1)] focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_rgba(255,45,45,0.18)] disabled:pointer-events-none disabled:opacity-50 active:translate-y-[0.5px] select-none";
+  "inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap rounded-[8px] transition-[background-color,box-shadow,color,border-color,transform] duration-150 ease-out focus-visible:outline-none focus-visible:shadow-[var(--so-focus-ring)] disabled:pointer-events-none disabled:opacity-50 active:scale-[0.97] select-none";
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    "bg-[var(--so-accent)] text-white border border-transparent shadow-[var(--so-shadow-xs)] hover:bg-[var(--so-accent-strong)]",
+    "bg-[var(--primary)] text-[var(--primary-foreground)] border border-transparent shadow-[var(--so-shadow-xs)] hover:bg-[var(--primary-hover)]",
   secondary:
-    "bg-[var(--so-surface)] text-[var(--so-text)] border border-[var(--so-border-strong)] shadow-[var(--so-shadow-xs)] hover:bg-[var(--so-surface-hover)] hover:border-[#cfd3db]",
+    "bg-[var(--so-surface)] text-[var(--so-text)] border border-[var(--so-border-strong)] shadow-[var(--so-shadow-xs)] hover:bg-[var(--so-surface-hover)] hover:border-[var(--so-border-strong)]",
   outline:
     "bg-transparent text-[var(--so-text)] border border-[var(--so-border-strong)] hover:bg-[var(--so-surface-hover)]",
   ghost:
     "bg-transparent text-[var(--so-text)] border border-transparent hover:bg-[var(--so-surface-hover)]",
   destructive:
-    "bg-rose-600 text-white border border-transparent shadow-[var(--so-shadow-xs)] hover:bg-rose-700",
+    "bg-[var(--destructive)] text-[var(--destructive-foreground)] border border-transparent shadow-[var(--so-shadow-xs)] hover:brightness-95",
 };
 
 const sizes: Record<ButtonSize, string> = {
@@ -63,11 +63,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       className={cn(base, variants[variant], sizes[size], className)}
       {...props}
     >
-      {loading ? (
-        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-      ) : (
-        leftIcon
-      )}
+      {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : leftIcon}
       {size !== "icon" ? children : loading ? null : children}
       {!loading ? rightIcon : null}
     </button>

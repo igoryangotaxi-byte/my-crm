@@ -289,7 +289,7 @@ function EditorInner({ automationId }: EditorInnerProps) {
         >
           {t("automation.backToList")}
         </Link>
-        <div className="crm-surface rounded-3xl p-8 text-sm text-muted">{t("loading")}</div>
+        <div className="crm-surface rounded-[12px] p-8 text-sm text-muted">{t("loading")}</div>
         {error ? (
           <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
             {error}
@@ -369,8 +369,8 @@ function EditorInner({ automationId }: EditorInnerProps) {
       ) : null}
 
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[13rem_minmax(0,1fr)_16rem]">
-        <aside className="crm-surface flex flex-col gap-2 rounded-3xl p-3">
-          <p className="crm-label text-[0.62rem] tracking-[0.14em]">{t("automation.palette")}</p>
+        <aside className="crm-surface flex flex-col gap-2 rounded-[12px] p-3">
+          <p className="crm-label text-[0.72rem]">{t("automation.palette")}</p>
           <button
             type="button"
             className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-left text-xs font-semibold text-red-800"
@@ -436,7 +436,7 @@ function EditorInner({ automationId }: EditorInnerProps) {
           </button>
         </aside>
 
-        <div className="crm-surface relative min-h-[22rem] overflow-hidden rounded-3xl">
+        <div className="crm-surface relative min-h-[22rem] overflow-hidden rounded-[12px]">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -453,20 +453,20 @@ function EditorInner({ automationId }: EditorInnerProps) {
             nodeTypes={automationNodeTypes}
             fitView={!pendingViewport}
             proOptions={{ hideAttribution: true }}
-            className="bg-gradient-to-br from-slate-50/80 via-white/40 to-red-50/40"
+            className="bg-[var(--so-surface-2)]"
           >
             <Background gap={18} color="rgba(148,163,184,0.35)" />
-            <Controls className="!rounded-xl !border-white/70 !bg-white/90 !shadow-md" />
+            <Controls className="!rounded-[8px] !border-[var(--so-border)] !bg-[var(--so-surface)] !shadow-[var(--so-shadow-xs)]" />
             <MiniMap
-              className="!rounded-xl !border-white/70 !bg-white/90"
+              className="!rounded-[8px] !border-[var(--so-border)] !bg-[var(--so-surface)]"
               nodeColor={() => "#ef4444"}
               maskColor="rgba(15,23,42,0.08)"
             />
           </ReactFlow>
         </div>
 
-        <aside className="crm-surface overflow-y-auto rounded-3xl p-3">
-          <p className="crm-label mb-2 text-[0.62rem] tracking-[0.14em]">{t("automation.config")}</p>
+        <aside className="crm-surface overflow-y-auto rounded-[12px] p-3">
+          <p className="crm-label mb-2 text-[0.72rem]">{t("automation.config")}</p>
           {!selectedNode ? (
             <p className="text-xs text-muted">{t("automation.selectNode")}</p>
           ) : selectedNode.type === "triggerLeadStatus" ? (

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { ClientHealthBadge } from "@/components/sales-operation/ClientHealthBadge";
+import { EntityHeader } from "@/components/patterns/EntityHeader";
 import { computeClientHealth } from "@/lib/sales-operation/client-health";
 import { Button } from "@/components/ui/Button";
 import { StatTile } from "@/components/ui/StatTile";
@@ -423,19 +424,19 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
             >
               ← {t("tab.b2bClients")}
             </button>
-            <h1 className="mt-2 text-lg font-semibold text-[var(--so-text)]">
-              {client.companyName || client.fullName}
-            </h1>
-            <p className="mt-0.5 text-xs text-[var(--so-muted)]">
-              #{client.id.slice(0, 8)}
-              {client.corpClientId ? ` · ${client.corpClientId}` : ""}
-            </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {health ? <ClientHealthBadge status={health.status} score={health.score} /> : null}
-              <span className="inline-flex rounded-full bg-[var(--so-surface-2)] px-2 py-0.5 text-[0.68rem] font-semibold text-[var(--so-muted)]">
-                {t("signedAt")}: {formatSalesDateTime(client.signedAt)}
-              </span>
-            </div>
+            <EntityHeader
+              className="mt-2"
+              title={client.companyName || client.fullName}
+              subtitle={`#${client.id.slice(0, 8)}${client.corpClientId ? ` · ${client.corpClientId}` : ""}`}
+              meta={
+                <>
+                  {health ? <ClientHealthBadge status={health.status} score={health.score} /> : null}
+                  <span className="inline-flex rounded-[6px] bg-[var(--so-surface-2)] px-2 py-0.5 text-[0.68rem] font-medium text-[var(--so-muted)]">
+                    {t("signedAt")}: {formatSalesDateTime(client.signedAt)}
+                  </span>
+                </>
+              }
+            />
             {client.corpClientId ? (
               <Link
                 href={buildSalesOperationB2BClientTripsHref({

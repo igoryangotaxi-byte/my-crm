@@ -1,3 +1,4 @@
+/** @deprecated Use `FilterBar` / `FilterChip` from `@/components/patterns/FilterBar`. Legacy glass demo only. */
 type FiltersBarProps = {
   filters: string[];
 };

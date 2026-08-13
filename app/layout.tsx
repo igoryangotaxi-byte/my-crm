@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import "./globals.css";
@@ -17,14 +16,9 @@ const yangoText = localFont({
 });
 
 const yangoHeadline = localFont({
-  src: [{ path: "../public/fonts/yango-headline.ttf", weight: "700", style: "normal" }],
+  src: [{ path: "../public/fonts/yango-headline.ttf", weight: "900", style: "normal" }],
   variable: "--font-yango-headline",
   display: "swap",
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
@@ -42,7 +36,7 @@ export default function RootLayout({
       lang="en"
       dir="ltr"
       suppressHydrationWarning
-      className={`${yangoText.variable} ${yangoHeadline.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${yangoText.variable} ${yangoHeadline.variable} h-full antialiased`}
     >
       <body className="min-h-full">
         <AuthProvider>

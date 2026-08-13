@@ -4,19 +4,19 @@ import { useTranslations } from "next-intl";
 import type { ClientHealthStatus } from "@/lib/sales-operation/client-health";
 
 const TONES: Record<ClientHealthStatus, string> = {
-  healthy: "bg-emerald-50 text-emerald-800 border-emerald-200",
-  new: "bg-sky-50 text-sky-800 border-sky-200",
-  watch: "bg-amber-50 text-amber-900 border-amber-200",
-  at_risk: "bg-orange-50 text-orange-900 border-orange-200",
-  dormant: "bg-rose-50 text-rose-800 border-rose-200",
+  healthy: "bg-[var(--success-soft)] text-[var(--success)] border-[color-mix(in_srgb,var(--success)_28%,transparent)]",
+  new: "bg-[var(--info-soft)] text-[var(--info)] border-[color-mix(in_srgb,var(--info)_28%,transparent)]",
+  watch: "bg-[var(--warning-soft)] text-[var(--warning)] border-[color-mix(in_srgb,var(--warning)_28%,transparent)]",
+  at_risk: "bg-[rgba(249,115,22,0.12)] text-[#c2410c] border-[rgba(249,115,22,0.28)]",
+  dormant: "bg-[rgba(199,15,31,0.1)] text-[var(--destructive)] border-[color-mix(in_srgb,var(--destructive)_28%,transparent)]",
 };
 
 const DOTS: Record<ClientHealthStatus, string> = {
-  healthy: "bg-emerald-500",
-  new: "bg-sky-500",
-  watch: "bg-amber-500",
-  at_risk: "bg-orange-500",
-  dormant: "bg-rose-500",
+  healthy: "bg-[var(--success)]",
+  new: "bg-[var(--info)]",
+  watch: "bg-[var(--warning)]",
+  at_risk: "bg-[#f97316]",
+  dormant: "bg-[var(--destructive)]",
 };
 
 export function ClientHealthBadge({
@@ -31,7 +31,7 @@ export function ClientHealthBadge({
   const t = useTranslations("salesOperation");
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[0.7rem] font-semibold ${TONES[status]} ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-[6px] border px-2 py-0.5 text-[0.7rem] font-medium ${TONES[status]} ${className}`}
     >
       <span className={`h-1.5 w-1.5 rounded-full ${DOTS[status]}`} />
       {t(`health.status.${status}`)}

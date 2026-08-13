@@ -27,14 +27,8 @@ export function PageHeader({
         {breadcrumbs && breadcrumbs.length > 0 ? (
           <Breadcrumbs items={breadcrumbs} className="mb-2" />
         ) : null}
-        {typeof title === "string" ? (
-          <h1 className="truncate text-2xl font-bold tracking-tight text-[var(--so-text)]">{title}</h1>
-        ) : (
-          title
-        )}
-        {subtitle ? (
-          <p className="mt-0.5 text-sm text-[var(--so-muted)]">{subtitle}</p>
-        ) : null}
+        {typeof title === "string" ? <h1 className="ycds-h1 truncate text-[var(--so-text)]">{title}</h1> : title}
+        {subtitle ? <p className="mt-0.5 text-sm text-[var(--so-muted)]">{subtitle}</p> : null}
         {meta ? <div className="mt-2 flex flex-wrap items-center gap-1.5">{meta}</div> : null}
       </div>
       {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}

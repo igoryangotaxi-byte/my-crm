@@ -96,7 +96,7 @@ export function TrackerProjectsView() {
       {loading ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-28 rounded-[14px]" />
+            <Skeleton key={i} className="h-28 rounded-[12px]" />
           ))}
         </div>
       ) : projects.length === 0 ? (
@@ -107,7 +107,7 @@ export function TrackerProjectsView() {
             <Link
               key={project.id}
               href={`/sales-operation/tracker/${project.id}`}
-              className="group rounded-[14px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-xs)] transition hover:border-[var(--so-accent)] hover:shadow-[var(--so-shadow-sm)]"
+              className="group rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-4 shadow-[var(--so-shadow-xs)] transition hover:border-[var(--so-accent)] hover:shadow-[var(--so-shadow-sm)]"
             >
               <div className="mb-2 flex items-start justify-between gap-2">
                 <h3 className="text-base font-semibold text-[var(--so-text)] group-hover:text-[var(--so-accent)]">
