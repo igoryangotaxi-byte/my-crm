@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-08-13",
+    title: "Linear-primary Sales Operation redesign (0.2.54)",
+    notes:
+      "App version 0.2.54. Presentation-only visual system for Sales Operation — no API, RBAC or validation changes. Inset canvas on #eceef2 with a white 16px product surface, Appli mark in the sidebar, Yango Text 400/500/700 + Headline 900, accent #FF2D2D. Flat so-cards replace glass/hover-lift on Orders, Price Calculator, Communications, Pre-orders, Access, Pipeline, Discovery and Automation. ⌘K command palette wraps existing search; comfortable/compact density toggle. Emil motion: 160ms ease-out drawers, button active scale 0.97, no palette animation. Legacy Main CRM UI unchanged. Deck: Yango-Sales-Operations-Linear-Redesign-0-2-54.pptx. (274f07b2)",
+  },
+  {
+    date: "2026-08-13",
     title: "Yango corp register + Signed Corp Client ID (0.2.53)",
     notes:
       "App version 0.2.53. Yango client registration accordion on every pipeline lead card (any status) with iframe + open-in-new-window; standalone /sales-operation/corp-register without feedback FAB. Signed stage gate requires Corp Client ID (contract number alone is not enough) + Account Manager; widget removed from the Hired/Signed modal. Pending sales manager writes to gp_corp_client_map when Corp Client ID is linked (case-insensitive, canonical casing kept). Client details: search B2B by name or corp_client_id and assign SM/AM from the pipeline (SM can save on the lead without Corp ID; AM needs a linked B2B client). New leads hydrate name + SM from B2B Client Overview. Deck: Yango-Sales-Operations-Corp-Register-0-2-53.pptx. (5a051a44)",
