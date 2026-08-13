@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-08-13",
+    title: "Yango corp register + Signed Corp Client ID (0.2.53)",
+    notes:
+      "App version 0.2.53. Yango client registration accordion on every pipeline lead card (any status) with iframe + open-in-new-window; standalone /sales-operation/corp-register without feedback FAB. Signed stage gate requires Corp Client ID (contract number alone is not enough) + Account Manager; widget removed from the Hired/Signed modal. Pending sales manager writes to gp_corp_client_map when Corp Client ID is linked (case-insensitive, canonical casing kept). Client details: search B2B by name or corp_client_id and assign SM/AM from the pipeline (SM can save on the lead without Corp ID; AM needs a linked B2B client). New leads hydrate name + SM from B2B Client Overview. Deck: Yango-Sales-Operations-Corp-Register-0-2-53.pptx. (5a051a44)",
+  },
+  {
     date: "2026-08-09",
     title: "Route Bundles + Operations HUB (0.2.52)",
     notes:
