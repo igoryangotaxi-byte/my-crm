@@ -482,8 +482,6 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
                 registry={registry}
                 draft={managerDraft}
                 onChange={setManagerDraft}
-                pendingSalesManagerName={client.pendingSalesManagerName}
-                assignedSalesManagerName={client.salesManagerName}
               />
             </div>
 

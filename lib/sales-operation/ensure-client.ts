@@ -1,4 +1,5 @@
 import {
+  getB2BClientRegistryEntry,
   getManagersByCorpClientIds,
   normalizeCorpClientId,
 } from "@/lib/sales-operation/b2b-client-registry";
@@ -27,12 +28,24 @@ export async function ensureSalesClientForCorpClient(
   }
 
   const supabase = getSupabaseAdminClient();
-  const { data: existing, error: existingError } = await supabase
+  const overview = await getB2BClientRegistryEntry(corpClientId);
+  const canonicalCorpId = overview?.corpClientId || corpClientId;
+  const { data: existingExact, error: existingError } = await supabase
     .from("sales_clients")
     .select("id, lead_id, company_name, full_name")
-    .eq("corp_client_id", corpClientId)
+    .eq("corp_client_id", canonicalCorpId)
     .maybeSingle();
   if (existingError) throw new Error(existingError.message);
+  let existing = existingExact;
+  if (!existing && canonicalCorpId !== corpClientId) {
+    const { data: existingNormalized, error: normalizedError } = await supabase
+      .from("sales_clients")
+      .select("id, lead_id, company_name, full_name")
+      .eq("corp_client_id", canonicalCorpId)
+      .maybeSingle();
+    if (normalizedError) throw new Error(normalizedError.message);
+    existing = existingNormalized;
+  }
 
   if (existing) {
     return {
@@ -47,8 +60,8 @@ export async function ensureSalesClientForCorpClient(
     };
   }
 
-  const registry = await getManagersByCorpClientIds([corpClientId]);
-  const entry = registry.get(corpClientId);
+  const registry = await getManagersByCorpClientIds([canonicalCorpId, corpClientId]);
+  const entry = registry.get(normalizeCorpClientId(canonicalCorpId)) ?? overview;
   const label =
     options?.clientName?.trim() ||
     entry?.clientName?.trim() ||
@@ -60,7 +73,7 @@ export async function ensureSalesClientForCorpClient(
     source: "manual",
     full_name: label,
     company_name: label,
-    corp_client_id: corpClientId,
+    corp_client_id: canonicalCorpId,
     custom_fields: { ensured_from_b2b: true },
     status_entered_at: now,
     created_by_user_id: actor.userId,
@@ -81,7 +94,7 @@ export async function ensureSalesClientForCorpClient(
     const { data: raced } = await supabase
       .from("sales_clients")
       .select("id, lead_id, company_name, full_name")
-      .eq("corp_client_id", corpClientId)
+      .eq("corp_client_id", canonicalCorpId)
       .maybeSingle();
     if (raced) {
       return {
@@ -103,7 +116,7 @@ export async function ensureSalesClientForCorpClient(
     lead_id: leadId,
     full_name: label,
     company_name: label,
-    corp_client_id: corpClientId,
+    corp_client_id: canonicalCorpId,
     custom_fields: { ensured_from_b2b: true },
     signed_at: now,
     pending_sales_manager_user_id: entry?.salesManager.userId ?? actor.userId,
@@ -123,7 +136,7 @@ export async function ensureSalesClientForCorpClient(
     const { data: raced } = await supabase
       .from("sales_clients")
       .select("id, lead_id, company_name, full_name")
-      .eq("corp_client_id", corpClientId)
+      .eq("corp_client_id", canonicalCorpId)
       .maybeSingle();
     if (raced) {
       await supabase.from("sales_leads").delete().eq("id", leadId).neq("id", raced.lead_id);

@@ -15,7 +15,10 @@ import type {
   SalesLeadStatus,
   UpdateSalesLeadInput,
 } from "@/lib/sales-operation/types";
-import { normalizeCorpClientId } from "@/lib/sales-operation/b2b-client-registry";
+import {
+  applyPendingSalesManagerToCorpClient,
+  normalizeCorpClientId,
+} from "@/lib/sales-operation/b2b-client-registry";
 import { getSupabaseAdminClient } from "@/lib/supabase";
 
 export type TransitionFollowUpInput = {
@@ -122,8 +125,8 @@ export async function preflightStageTransition(
               ? "Pricing / proposal sent to client"
               : key === "followUpTask"
                 ? "Follow-up with client task"
-                : key === "contractOrClientId"
-                  ? "Contract number or Client ID"
+                : key === "corpClientId"
+                  ? "Corp Client ID"
                   : key === "accountManager"
                     ? "Account Manager"
                     : key,
@@ -236,7 +239,7 @@ async function finalizeSignedTransition(
   const supabase = getSupabaseAdminClient();
   const { data: clientRow } = await supabase
     .from("sales_clients")
-    .select("id, corp_client_id")
+    .select("id, corp_client_id, company_name, pending_sales_manager_user_id, pending_sales_manager_name")
     .eq("lead_id", lead.id)
     .maybeSingle();
 
@@ -272,6 +275,7 @@ async function finalizeSignedTransition(
         const { error: mapError } = await supabase.from("gp_corp_client_map").upsert(
           {
             corp_client_id: corpId,
+            client_name: lead.companyName || lead.fullName || corpId,
             account_manager_user_id: amUserId,
             account_manager_name: amName || amUserId,
             updated_at: new Date().toISOString(),
@@ -281,6 +285,40 @@ async function finalizeSignedTransition(
         if (mapError) console.error("Failed to upsert AM on corp map:", mapError.message);
       } catch (err) {
         console.error("AM registry update failed:", err);
+      }
+    }
+
+    if (corpId) {
+      const pendingUserId =
+        (typeof clientRow.pending_sales_manager_user_id === "string"
+          ? clientRow.pending_sales_manager_user_id
+          : null) ||
+        lead.assignedManagerUserId ||
+        actor.userId;
+      const pendingName =
+        (typeof clientRow.pending_sales_manager_name === "string"
+          ? clientRow.pending_sales_manager_name
+          : null) ||
+        lead.assignedManagerName ||
+        actor.name;
+      if (pendingUserId) {
+        try {
+          await applyPendingSalesManagerToCorpClient(
+            corpId,
+            { userId: pendingUserId, name: pendingName },
+            { clientName: lead.companyName || lead.fullName },
+          );
+          await supabase
+            .from("sales_clients")
+            .update({
+              pending_sales_manager_user_id: null,
+              pending_sales_manager_name: null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", clientRow.id);
+        } catch (err) {
+          console.error("Pending sales manager apply failed:", err);
+        }
       }
     }
   }

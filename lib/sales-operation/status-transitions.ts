@@ -67,7 +67,7 @@ const FIELD_LABELS: Record<string, string> = {
   estimatedMonthlyPotential: "Monthly potential (₪)",
   pricingProposal: "Pricing / proposal sent to client",
   followUpTask: "Follow-up with client task",
-  contractOrClientId: "Contract number or Client ID",
+  corpClientId: "Corp Client ID",
   accountManager: "Account Manager",
 };
 
@@ -108,9 +108,8 @@ export function validateStageRequirements(
     if (!ctx.followUpTaskProvided) missing.push("followUpTask");
   }
   if (to === "signed") {
-    const hasContract = Boolean(ctx.contractNumber?.trim());
-    const hasClientId = Boolean(ctx.corpClientId?.trim());
-    if (!hasContract && !hasClientId) missing.push("contractOrClientId");
+    // Corp Client ID is required: trip counts, B2B Overview, and client name sync all key off it.
+    if (!ctx.corpClientId?.trim()) missing.push("corpClientId");
     if (!ctx.accountManagerUserId?.trim()) missing.push("accountManager");
   }
 

@@ -67,5 +67,9 @@ export default function SalesOperationLayout({
     );
   }
 
+  if (pathname.startsWith("/sales-operation/corp-register")) {
+    return <div className="bg-white">{children}</div>;
+  }
+
   return <SalesOperationAppShell>{children}</SalesOperationAppShell>;
 }

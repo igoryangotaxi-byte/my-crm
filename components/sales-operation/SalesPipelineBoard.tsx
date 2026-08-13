@@ -21,6 +21,7 @@ import { SalesLeadActivityFeed } from "@/components/sales-operation/SalesLeadAct
 import { SalesLeadFilesSection } from "@/components/sales-operation/SalesLeadFilesSection";
 import { SalesLeadEmailSection } from "@/components/sales-operation/SalesLeadEmailSection";
 import { SalesLeadDiscoverySection } from "@/components/sales-operation/SalesLeadDiscoverySection";
+import { YangoCorpRegisterAccordion } from "@/components/sales-operation/YangoCorpRegisterAccordion";
 import {
   StageGateModal,
   type StageGateConfirmPayload,
@@ -39,6 +40,7 @@ import {
   type StageMissingField,
 } from "@/lib/sales-operation/status-transitions";
 import type { DuplicateMatch } from "@/lib/sales-operation/dedup";
+import { corpClientIdsMatch } from "@/lib/sales-operation/corp-client-id";
 import type { B2BClientRegistryEntry } from "@/lib/sales-operation/manager-types";
 import {
   SALES_LEAD_SOURCES,
@@ -212,19 +214,42 @@ export function SalesLeadDetailSidebar({
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load notes."))
       .finally(() => setLoadingNotes(false));
 
+    void fetch("/api/sales-operation/b2b-clients/registry", { cache: "no-store" })
+      .then(async (res) => {
+        const data = (await res.json()) as { ok?: boolean; registry?: B2BClientRegistryEntry[] };
+        if (res.ok && data.ok) setRegistry(data.registry ?? []);
+      })
+      .catch(() => setRegistry([]));
+
     if (lead.status === "signed") {
       void loadLinkedClient(lead.id);
-      void fetch("/api/sales-operation/b2b-clients/registry", { cache: "no-store" })
-        .then(async (res) => {
-          const data = (await res.json()) as { ok?: boolean; registry?: B2BClientRegistryEntry[] };
-          if (res.ok && data.ok) setRegistry(data.registry ?? []);
-        })
-        .catch(() => setRegistry([]));
     } else {
       setLinkedClient(null);
-      setRegistry([]);
     }
   }, [lead, loadLinkedClient]);
+
+  useEffect(() => {
+    if (!lead) {
+      setManagerDraft({ corpClientId: "", accountManagerUserId: "", salesManagerUserId: "" });
+      return;
+    }
+    const corpId = linkedClient?.corpClientId || lead.corpClientId || "";
+    const entry = registry.find((item) => corpClientIdsMatch(item.corpClientId, corpId)) ?? null;
+    const pendingUserId =
+      linkedClient?.pendingSalesManagerUserId ||
+      users.find((user) => user.name === linkedClient?.pendingSalesManagerName)?.id ||
+      "";
+    setManagerDraft({
+      corpClientId: entry?.corpClientId || corpId,
+      accountManagerUserId: linkedClient?.accountManagerUserId || entry?.accountManager.userId || "",
+      salesManagerUserId:
+        linkedClient?.salesManagerUserId ||
+        entry?.salesManager.userId ||
+        pendingUserId ||
+        lead.assignedManagerUserId ||
+        "",
+    });
+  }, [lead?.id, lead?.corpClientId, lead?.assignedManagerUserId, linkedClient, registry, users]);
 
   const saveLead = async () => {
     if (!lead) return;
@@ -369,29 +394,67 @@ export function SalesLeadDetailSidebar({
   };
 
   const saveManagers = async () => {
-    if (!linkedClient) return;
+    if (!lead) return;
+    const corpId = managerDraft.corpClientId.trim();
+    if (managerDraft.accountManagerUserId && !corpId) {
+      setError(t("manager.accountManagerNeedsB2b"));
+      return;
+    }
+    const salesName =
+      users.find((user) => user.id === managerDraft.salesManagerUserId)?.name ?? null;
     setSavingManagers(true);
     setError(null);
     try {
-      const res = await fetch(`/api/sales-operation/clients/${linkedClient.id}`, {
+      if (corpId && linkedClient) {
+        const res = await fetch(`/api/sales-operation/clients/${linkedClient.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            corpClientId: corpId,
+            accountManagerUserId: managerDraft.accountManagerUserId || null,
+            salesManagerUserId: managerDraft.salesManagerUserId || null,
+          }),
+        });
+        const data = (await res.json()) as { ok?: boolean; client?: SalesClient; error?: string };
+        if (!res.ok || !data.ok || !data.client) {
+          throw new Error(data.error ?? "Failed to save client managers.");
+        }
+        setLinkedClient(data.client);
+        setManagerDraft({
+          corpClientId: data.client.corpClientId ?? corpId,
+          accountManagerUserId: data.client.accountManagerUserId ?? "",
+          salesManagerUserId: data.client.salesManagerUserId ?? "",
+        });
+      } else if (corpId) {
+        const res = await fetch(`/api/sales-operation/b2b-clients/${encodeURIComponent(corpId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            accountManagerUserId: managerDraft.accountManagerUserId || null,
+            salesManagerUserId: managerDraft.salesManagerUserId || null,
+          }),
+        });
+        const data = (await res.json()) as { ok?: boolean; error?: string };
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error ?? "Failed to save client managers.");
+        }
+      }
+
+      const leadRes = await fetch(`/api/sales-operation/leads/${lead.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          corpClientId: managerDraft.corpClientId.trim() || null,
-          accountManagerUserId: managerDraft.accountManagerUserId || null,
-          salesManagerUserId: managerDraft.salesManagerUserId || null,
+          corpClientId: corpId || lead.corpClientId || null,
+          assignedManagerUserId: managerDraft.salesManagerUserId || null,
+          assignedManagerName: managerDraft.salesManagerUserId ? salesName : null,
         }),
       });
-      const data = (await res.json()) as { ok?: boolean; client?: SalesClient; error?: string };
-      if (!res.ok || !data.ok || !data.client) {
-        throw new Error(data.error ?? "Failed to save client managers.");
+      const leadData = (await leadRes.json()) as { ok?: boolean; lead?: SalesLead; error?: string };
+      if (!leadRes.ok || !leadData.ok || !leadData.lead) {
+        throw new Error(leadData.error ?? "Failed to save managers.");
       }
-      setLinkedClient(data.client);
-      setManagerDraft({
-        corpClientId: data.client.corpClientId ?? "",
-        accountManagerUserId: data.client.accountManagerUserId ?? "",
-        salesManagerUserId: data.client.salesManagerUserId ?? "",
-      });
+      onUpdated(leadData.lead);
+      if (leadData.lead.status === "signed") void loadLinkedClient(leadData.lead.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save client managers.");
     } finally {
@@ -492,6 +555,7 @@ export function SalesLeadDetailSidebar({
       title={d.fullName}
       description={d.companyName || t("leadDetails")}
       width="30rem"
+      preventOutsideDismiss
       footer={
         <div className="flex w-full items-center gap-2">
           <button
@@ -841,20 +905,20 @@ export function SalesLeadDetailSidebar({
               />
             </label>
 
-            {d.status === "signed" ? (
+            <YangoCorpRegisterAccordion leadId={d.id} />
+
+            {d.status === "signed" || d.corpClientId || draft.corpClientId || managerDraft.corpClientId ? (
               <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-3">
                 <p className="mb-2 text-sm font-semibold text-[var(--so-text)]">{t("clientDetails")}</p>
-                {loadingClient ? (
+                {loadingClient && d.status === "signed" && !linkedClient ? (
                   <p className="text-xs text-[var(--so-muted)]">{t("loading")}</p>
-                ) : linkedClient ? (
+                ) : (
                   <>
                     <SalesClientManagerFields
                       users={users}
                       registry={registry}
                       draft={managerDraft}
                       onChange={setManagerDraft}
-                      pendingSalesManagerName={linkedClient.pendingSalesManagerName}
-                      assignedSalesManagerName={linkedClient.salesManagerName}
                     />
                     <Button
                       className="mt-3 w-full"
@@ -865,8 +929,6 @@ export function SalesLeadDetailSidebar({
                       {t("manager.saveClientManagers")}
                     </Button>
                   </>
-                ) : (
-                  <p className="text-xs text-[var(--so-muted)]">{t("client.notConvertedYet")}</p>
                 )}
               </div>
             ) : null}
@@ -1006,6 +1068,13 @@ const emptyCreateDraft = {
   segmentId: "",
   estimatedMonthlyPotential: "",
   assignedManagerUserId: "",
+  corpClientId: "",
+};
+
+const emptyCreateManagerDraft: SalesClientManagerDraft = {
+  corpClientId: "",
+  accountManagerUserId: "",
+  salesManagerUserId: "",
 };
 
 type LeadCardProps = {
@@ -1311,6 +1380,8 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
   const arrivedTimersRef = useRef<Record<string, number>>({});
   const [showCreate, setShowCreate] = useState(false);
   const [createDraft, setCreateDraft] = useState(emptyCreateDraft);
+  const [createManagerDraft, setCreateManagerDraft] = useState<SalesClientManagerDraft>(emptyCreateManagerDraft);
+  const [createRegistry, setCreateRegistry] = useState<B2BClientRegistryEntry[]>([]);
   const [creating, setCreating] = useState(false);
   const [filters, setFilters] = useState<PipelineFilters>(EMPTY_FILTERS);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -1363,6 +1434,22 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
       // keep defaults
     }
   }, []);
+
+  useEffect(() => {
+    if (!showCreate) return;
+    let cancelled = false;
+    void fetch("/api/sales-operation/b2b-clients/registry", { cache: "no-store" })
+      .then(async (res) => {
+        const data = (await res.json()) as { ok?: boolean; registry?: B2BClientRegistryEntry[] };
+        if (!cancelled && res.ok && data.ok) setCreateRegistry(data.registry ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setCreateRegistry([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showCreate]);
 
   useEffect(() => {
     void loadLeads();
@@ -1810,6 +1897,7 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
           estimatedMonthlyPotential: Number.isFinite(potential) ? potential : null,
           assignedManagerUserId: createDraft.assignedManagerUserId || null,
           assignedManagerName: ownerName ?? null,
+          corpClientId: createDraft.corpClientId.trim() || createManagerDraft.corpClientId.trim() || null,
         }),
       });
       const data = (await res.json()) as { ok?: boolean; lead?: SalesLead; error?: string };
@@ -1817,6 +1905,7 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
       setLeads((prev) => [data.lead!, ...prev]);
       setShowCreate(false);
       setCreateDraft(emptyCreateDraft);
+      setCreateManagerDraft(emptyCreateManagerDraft);
       setSelectedLeadId(data.lead.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create lead.");
@@ -2221,6 +2310,27 @@ export function SalesPipelineBoard({ initialLeads = [] }: PipelineBoardProps) {
                   />
                 </label>
               </div>
+              <SalesClientManagerFields
+                users={users}
+                registry={createRegistry}
+                draft={createManagerDraft}
+                onChange={(next) => {
+                  setCreateManagerDraft(next);
+                  const entry =
+                    createRegistry.find((item) => corpClientIdsMatch(item.corpClientId, next.corpClientId)) ??
+                    null;
+                  setCreateDraft((prev) => ({
+                    ...prev,
+                    corpClientId: next.corpClientId,
+                    companyName: prev.companyName.trim()
+                      ? prev.companyName
+                      : entry?.clientName || prev.companyName,
+                    fullName: prev.fullName.trim() ? prev.fullName : entry?.clientName || prev.fullName,
+                    assignedManagerUserId:
+                      prev.assignedManagerUserId || next.salesManagerUserId || prev.assignedManagerUserId,
+                  }));
+                }}
+              />
               <label className="block text-sm">
                 <span className="crm-label">{t("field.owner")}</span>
                 <select

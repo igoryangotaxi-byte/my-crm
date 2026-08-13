@@ -289,17 +289,27 @@
       "pricingPlaceholder": "תארו את ההצעה שנשלחה ללקוח…",
       "pricingAmount": "סכום הצעה (רשות)",
       "followUpSection": "משימת מעקב",
-      "signedSection": "חוזה או מזהה לקוח",
-      "contractNumber": "מספר חוזה",
+      "signedSection": "נדרש מזהה לקוח תאגידי",
+      "contractNumber": "מספר חוזה (רשות)",
       "corpClientId": "מזהה לקוח תאגידי",
       "corpClientPlaceholder": "חפש או הזן מזהה לקוח",
       "or": "או",
+      "yangoRegisterTitle": "רישום לקוח Yango",
+      "yangoRegisterHint": "מלאו את טופס ההצעה של Yango כדי לרשום את לקוח ה-B2B. אפשר לפתוח כאן או בחלון חדש.",
+      "yangoRegisterPending": "לא מולא",
+      "yangoRegisterDone": "הרישום הושלם",
+      "yangoRegisterMarkDone": "סמן כהושלם",
+      "yangoRegisterOpenWindow": "פתח בחלון חדש",
+      "yangoRegisterSkipTitle": "להמשיך בלי רישום לקוח?",
+      "yangoRegisterSkipBody": "טופס הרישום של Yango לא מולא. להעביר את הליד ל-Signed בלי לרשום את הלקוח?",
+      "yangoRegisterSkipYes": "כן",
       "fields": {
         "contact": "איש קשר",
         "estimatedMonthlyPotential": "פוטנציאל חודשי (₪)",
         "pricingProposal": "תמחור / הצעה",
         "followUpTask": "משימת מעקב",
-        "contractOrClientId": "חוזה או מזהה לקוח",
+        "corpClientId": "מזהה לקוח תאגידי",
+        "contractOrClientId": "מזהה לקוח תאגידי",
         "accountManager": "מנהל חשבון"
       }
     },
@@ -555,7 +565,8 @@
       "filterAccountManager": "סינון Account Manager",
       "filterSalesManager": "סינון Sales Manager",
       "editManagers": "עריכת מנהלים",
-      "saveClientManagers": "שמירת מנהלי לקוח"
+      "saveClientManagers": "שמירת מנהלי לקוח",
+      "accountManagerNeedsB2b": "יש לקשר לקוח B2B לפני שיוך Account Manager."
     },
     "kpi": {
       "totalLeads": "סה״כ לידים",

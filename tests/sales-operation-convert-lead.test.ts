@@ -126,6 +126,10 @@ describe("convert signed lead to client", () => {
     probabilityOverride: null,
     clientAddress: null,
     generalNotes: null,
+    pricingProposal: null,
+    pricingAmount: null,
+    contractNumber: null,
+    corpClientId: null,
     isArchived: false,
     archivedAt: null,
     statusEnteredAt: "2026-05-01T10:00:00.000Z",
@@ -164,6 +168,21 @@ describe("convert signed lead to client", () => {
     assert.equal(mock.getClientNotes().length, 1);
     assert.equal(mock.getClientNotes()[0]?.body, "Qualified lead");
     assert.equal(mock.getClientNotes()[0]?.source_lead_note_id, "note-1");
+  });
+
+  it("stores pending sales manager from the lead owner, not the actor", async () => {
+    const mock = createMockSupabase();
+    const owned: SalesLead = {
+      ...lead,
+      assignedManagerUserId: "sm-igor",
+      assignedManagerName: "Igor Rebkovets",
+    };
+    const client = await convertSignedLeadToClient(mock as never, owned, [], {
+      userId: "user-2",
+      name: "Sales Rep",
+    });
+    assert.equal(client.pendingSalesManagerUserId, "sm-igor");
+    assert.equal(client.pendingSalesManagerName, "Igor Rebkovets");
   });
 
   it("is idempotent by lead_id", async () => {

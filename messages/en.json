@@ -289,17 +289,27 @@
       "pricingPlaceholder": "Describe the proposal sent to the client…",
       "pricingAmount": "Proposal amount (optional)",
       "followUpSection": "Follow-up task",
-      "signedSection": "Contract or Client ID",
-      "contractNumber": "Contract number",
+      "signedSection": "Corp Client ID required",
+      "contractNumber": "Contract number (optional)",
       "corpClientId": "Corp Client ID",
       "corpClientPlaceholder": "Search or enter Client ID",
       "or": "or",
+      "yangoRegisterTitle": "Yango client registration",
+      "yangoRegisterHint": "Fill the Yango offer form to register the B2B client. You can expand it here or open it in a new window.",
+      "yangoRegisterPending": "Not filled",
+      "yangoRegisterDone": "Registration completed",
+      "yangoRegisterMarkDone": "Mark as completed",
+      "yangoRegisterOpenWindow": "Open in new window",
+      "yangoRegisterSkipTitle": "Continue without client registration?",
+      "yangoRegisterSkipBody": "The Yango registration form is not completed. Are you sure you want to move this lead to Signed without registering the client?",
+      "yangoRegisterSkipYes": "Yes",
       "fields": {
         "contact": "Client contact",
         "estimatedMonthlyPotential": "Monthly potential (₪)",
         "pricingProposal": "Pricing / proposal",
         "followUpTask": "Follow-up task",
-        "contractOrClientId": "Contract or Client ID",
+        "corpClientId": "Corp Client ID",
+        "contractOrClientId": "Corp Client ID",
         "accountManager": "Account Manager"
       }
     },
@@ -555,7 +565,8 @@
       "filterAccountManager": "Account Manager filter",
       "filterSalesManager": "Sales Manager filter",
       "editManagers": "Edit managers",
-      "saveClientManagers": "Save client managers"
+      "saveClientManagers": "Save client managers",
+      "accountManagerNeedsB2b": "Link a B2B client before assigning an Account Manager."
     },
     "kpi": {
       "totalLeads": "Total leads",

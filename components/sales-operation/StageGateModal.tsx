@@ -87,52 +87,53 @@ export function StageGateModal({
     setFollowUpDue("");
     setFollowUpAssignee(currentUser?.id ?? lead.assignedManagerUserId ?? "");
     setLocalError(null);
-
-    if (toStatus === "signed") {
-      let cancelled = false;
-      void (async () => {
-        try {
-          const res = await fetch("/api/sales-operation/config/signed-handover", {
-            cache: "no-store",
-          });
-          const data = (await res.json()) as {
-            ok?: boolean;
-            settings?: {
-              defaultAccountManagerUserId?: string | null;
-              defaultAccountManagerName?: string | null;
-            };
-          };
-          if (cancelled) return;
-          const settingsId = data.ok ? data.settings?.defaultAccountManagerUserId : null;
-          if (settingsId && amOptions.some((u) => u.id === settingsId)) {
-            setAccountManagerUserId(settingsId);
-            return;
-          }
-          const fallback = amOptions.find((u) =>
-            (u.name || "").toLowerCase().includes("igor rebkovets") ||
-            (u.name || "").toLowerCase().includes("rebkovets"),
-          );
-          // Prefer email match via users list from auth
-          const byEmail = users.find(
-            (u) => u.email?.trim().toLowerCase() === "igorrebkovets@appli.taxi",
-          );
-          if (byEmail && amOptions.some((u) => u.id === byEmail.id)) {
-            setAccountManagerUserId(byEmail.id);
-          } else if (fallback) {
-            setAccountManagerUserId(fallback.id);
-          }
-        } catch {
-          /* optional prefill */
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }
-  }, [open, lead, currentUser?.id, toStatus, amOptions, users]);
+  }, [open, lead?.id, toStatus, currentUser?.id]);
 
   useEffect(() => {
-    if (!open || !missingKeys.has("contractOrClientId")) return;
+    if (!open || toStatus !== "signed") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/sales-operation/config/signed-handover", {
+          cache: "no-store",
+        });
+        const data = (await res.json()) as {
+          ok?: boolean;
+          settings?: {
+            defaultAccountManagerUserId?: string | null;
+            defaultAccountManagerName?: string | null;
+          };
+        };
+        if (cancelled) return;
+        const settingsId = data.ok ? data.settings?.defaultAccountManagerUserId : null;
+        if (settingsId && amOptions.some((u) => u.id === settingsId)) {
+          setAccountManagerUserId(settingsId);
+          return;
+        }
+        const fallback = amOptions.find(
+          (u) =>
+            (u.name || "").toLowerCase().includes("igor rebkovets") ||
+            (u.name || "").toLowerCase().includes("rebkovets"),
+        );
+        const byEmail = users.find(
+          (u) => u.email?.trim().toLowerCase() === "igorrebkovets@appli.taxi",
+        );
+        if (byEmail && amOptions.some((u) => u.id === byEmail.id)) {
+          setAccountManagerUserId(byEmail.id);
+        } else if (fallback) {
+          setAccountManagerUserId(fallback.id);
+        }
+      } catch {
+        /* optional prefill */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, toStatus, amOptions, users]);
+
+  useEffect(() => {
+    if (!open || !missingKeys.has("corpClientId")) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -163,7 +164,7 @@ export function StageGateModal({
     }
     if (missingKeys.has("pricingProposal") && !pricingProposal.trim()) return false;
     if (missingKeys.has("followUpTask") && !followUpTitle.trim()) return false;
-    if (missingKeys.has("contractOrClientId") && !contractNumber.trim() && !corpClientId.trim()) {
+    if (missingKeys.has("corpClientId") && !corpClientId.trim()) {
       return false;
     }
     if (missingKeys.has("accountManager") && !accountManagerUserId) return false;
@@ -188,9 +189,9 @@ export function StageGateModal({
         if (Number.isFinite(amount)) fields.pricingAmount = amount;
       }
     }
-    if (missingKeys.has("contractOrClientId")) {
+    if (missingKeys.has("corpClientId")) {
+      fields.corpClientId = corpClientId.trim();
       if (contractNumber.trim()) fields.contractNumber = contractNumber.trim();
-      if (corpClientId.trim()) fields.corpClientId = corpClientId.trim();
     }
     // Also patch lead contact fields as legacy fallback when creating contact.
     if (missingKeys.has("contact")) {
@@ -241,6 +242,7 @@ export function StageGateModal({
       title={tg("title", { status: formatSalesStatus(toStatus) })}
       description={tg("description")}
       className="max-w-lg"
+      preventOutsideDismiss
       footer={
         <>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={loading}>
@@ -265,6 +267,8 @@ export function StageGateModal({
             ))}
           </div>
         ) : null}
+
+        {localError ? <p className="text-xs text-rose-600">{localError}</p> : null}
 
         {missingKeys.has("contact") ? (
           <div className="space-y-2 rounded-[12px] border border-[var(--so-border)] p-3">
@@ -365,20 +369,9 @@ export function StageGateModal({
           </div>
         ) : null}
 
-        {missingKeys.has("contractOrClientId") ? (
+        {missingKeys.has("corpClientId") ? (
           <div className="space-y-2 rounded-[12px] border border-[var(--so-border)] p-3">
             <p className="text-xs font-bold text-[var(--so-text)]">{tg("signedSection")}</p>
-            <label className="block text-sm">
-              <span className="crm-label">{tg("contractNumber")}</span>
-              <input
-                className="crm-input mt-1 h-9 w-full px-3 text-sm"
-                value={contractNumber}
-                onChange={(e) => setContractNumber(e.target.value)}
-              />
-            </label>
-            <p className="text-center text-[11px] font-semibold text-[var(--so-muted-2)]">
-              {tg("or")}
-            </p>
             <label className="block text-sm">
               <span className="crm-label">{tg("corpClientId")}</span>
               <input
@@ -387,6 +380,7 @@ export function StageGateModal({
                 value={corpClientId}
                 onChange={(e) => setCorpClientId(e.target.value)}
                 placeholder={tg("corpClientPlaceholder")}
+                required
               />
               <datalist id="stage-gate-corp-ids">
                 {registry.slice(0, 80).map((entry) => (
@@ -395,6 +389,14 @@ export function StageGateModal({
                   </option>
                 ))}
               </datalist>
+            </label>
+            <label className="block text-sm">
+              <span className="crm-label">{tg("contractNumber")}</span>
+              <input
+                className="crm-input mt-1 h-9 w-full px-3 text-sm"
+                value={contractNumber}
+                onChange={(e) => setContractNumber(e.target.value)}
+              />
             </label>
           </div>
         ) : null}
@@ -416,8 +418,6 @@ export function StageGateModal({
             </select>
           </label>
         ) : null}
-
-        {localError ? <p className="text-xs text-rose-600">{localError}</p> : null}
       </div>
     </Modal>
   );

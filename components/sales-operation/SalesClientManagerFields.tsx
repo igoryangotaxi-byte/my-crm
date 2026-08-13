@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
-import {
-  getAccountManagerUserOptions,
-  getSalesManagerUserOptions,
-} from "@/lib/sales-operation/crm-manager-users";
+import { getPlatformStaffUserOptions } from "@/lib/sales-operation/crm-manager-users";
+import { corpClientIdsMatch, normalizeCorpClientId } from "@/lib/sales-operation/corp-client-id";
 import type { B2BClientRegistryEntry } from "@/lib/sales-operation/manager-types";
 import type { AuthUser } from "@/types/auth";
 
@@ -20,8 +19,6 @@ type SalesClientManagerFieldsProps = {
   registry: B2BClientRegistryEntry[];
   draft: SalesClientManagerDraft;
   onChange: (draft: SalesClientManagerDraft) => void;
-  pendingSalesManagerName?: string | null;
-  assignedSalesManagerName?: string | null;
   disabled?: boolean;
 };
 
@@ -33,47 +30,77 @@ function formatClientLabel(entry: B2BClientRegistryEntry): string {
   return entry.corpClientId;
 }
 
+function findRegistryEntry(
+  registry: B2BClientRegistryEntry[],
+  corpClientId: string | null | undefined,
+): B2BClientRegistryEntry | null {
+  return registry.find((entry) => corpClientIdsMatch(entry.corpClientId, corpClientId)) ?? null;
+}
+
 export function SalesClientManagerFields({
   users,
   registry,
   draft,
   onChange,
-  pendingSalesManagerName,
-  assignedSalesManagerName,
   disabled = false,
 }: SalesClientManagerFieldsProps) {
   const t = useTranslations("salesOperation");
-  const accountManagerOptions = getAccountManagerUserOptions(users);
-  const salesManagerOptions = getSalesManagerUserOptions(users);
+  const staffOptions = useMemo(() => getPlatformStaffUserOptions(users), [users]);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [menuRect, setMenuRect] = useState<DOMRect | null>(null);
   const blurTimerRef = useRef<number | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   const selectedEntry = useMemo(
-    () => registry.find((entry) => entry.corpClientId === draft.corpClientId) ?? null,
+    () => findRegistryEntry(registry, draft.corpClientId),
     [draft.corpClientId, registry],
   );
 
   useEffect(() => {
     if (!open) {
-      setQuery(selectedEntry ? formatClientLabel(selectedEntry) : "");
+      setQuery(selectedEntry ? formatClientLabel(selectedEntry) : draft.corpClientId || "");
     }
-  }, [open, selectedEntry]);
+  }, [open, selectedEntry, draft.corpClientId]);
+
+  useEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const el = wrapRef.current;
+      if (!el) return;
+      setMenuRect(el.getBoundingClientRect());
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open, query]);
 
   const filteredRegistry = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return registry.slice(0, 50);
+    if (!needle) return registry.slice(0, 80);
     return registry
       .filter((entry) => {
         const name = entry.clientName?.toLowerCase() ?? "";
         const id = entry.corpClientId.toLowerCase();
-        return name.includes(needle) || id.includes(needle);
+        const label = formatClientLabel(entry).toLowerCase();
+        return name.includes(needle) || id.includes(needle) || label.includes(needle);
       })
-      .slice(0, 50);
+      .slice(0, 80);
   }, [query, registry]);
 
   const selectClient = (corpClientId: string) => {
-    onChange({ ...draft, corpClientId });
+    const entry = findRegistryEntry(registry, corpClientId);
+    onChange({
+      ...draft,
+      corpClientId: entry?.corpClientId || corpClientId,
+      accountManagerUserId: entry?.accountManager.userId || draft.accountManagerUserId,
+      salesManagerUserId: entry?.salesManager.userId || draft.salesManagerUserId,
+    });
+    setQuery(entry ? formatClientLabel(entry) : corpClientId);
     setOpen(false);
   };
 
@@ -81,20 +108,21 @@ export function SalesClientManagerFields({
     onChange({
       ...draft,
       corpClientId: "",
-      accountManagerUserId: "",
-      salesManagerUserId: "",
     });
     setQuery("");
     setOpen(false);
   };
 
+  const openUpward = Boolean(menuRect && menuRect.bottom + 240 > window.innerHeight);
+  const hasCorpClient = Boolean(normalizeCorpClientId(draft.corpClientId));
+
   return (
     <div className="space-y-3">
       <label className="block text-sm">
         <span className="crm-label">{t("field.corpClient")}</span>
-        <div className="relative mt-1">
+        <div className="relative mt-1" ref={wrapRef}>
           <input
-            type="search"
+            type="text"
             value={query}
             disabled={disabled}
             placeholder={t("field.corpClientSearch")}
@@ -104,13 +132,13 @@ export function SalesClientManagerFields({
                 blurTimerRef.current = null;
               }
               setOpen(true);
-              if (selectedEntry) setQuery("");
+              setQuery("");
             }}
             onBlur={() => {
               blurTimerRef.current = window.setTimeout(() => {
                 setOpen(false);
-                setQuery(selectedEntry ? formatClientLabel(selectedEntry) : "");
-              }, 150);
+                setQuery(selectedEntry ? formatClientLabel(selectedEntry) : draft.corpClientId || "");
+              }, 200);
             }}
             onChange={(event) => {
               setQuery(event.target.value);
@@ -119,7 +147,7 @@ export function SalesClientManagerFields({
             className="crm-input block h-9 w-full px-2.5 text-sm text-slate-700 disabled:opacity-60"
             autoComplete="off"
           />
-          {draft.corpClientId && !disabled ? (
+          {hasCorpClient && !disabled ? (
             <button
               type="button"
               onMouseDown={(event) => event.preventDefault()}
@@ -129,52 +157,70 @@ export function SalesClientManagerFields({
               {t("manager.clear")}
             </button>
           ) : null}
-          {open && !disabled ? (
-            <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-border bg-white shadow-lg">
-              <button
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={clearClient}
-                className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm text-slate-500 hover:bg-slate-50"
-              >
-                {t("manager.unassigned")}
-              </button>
-              {filteredRegistry.length === 0 ? (
-                <p className="px-3 py-2 text-xs text-slate-500">{t("field.corpClientNoMatch")}</p>
-              ) : (
-                filteredRegistry.map((entry) => (
+          {open && !disabled && menuRect && typeof document !== "undefined"
+            ? createPortal(
+                <div
+                  className="fixed z-[240] max-h-56 overflow-y-auto rounded-xl border border-border bg-white shadow-lg"
+                  style={{
+                    pointerEvents: "auto",
+                    left: menuRect.left,
+                    width: Math.max(menuRect.width, 240),
+                    ...(openUpward
+                      ? { bottom: window.innerHeight - menuRect.top + 4 }
+                      : { top: menuRect.bottom + 4 }),
+                  }}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
                   <button
-                    key={entry.corpClientId}
                     type="button"
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => selectClient(entry.corpClientId)}
-                    className={`block w-full border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-slate-50 ${
-                      entry.corpClientId === draft.corpClientId ? "bg-slate-50" : ""
-                    }`}
+                    onClick={clearClient}
+                    className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm text-slate-500 hover:bg-slate-50"
                   >
-                    <p className="text-sm font-semibold text-slate-900">
-                      {entry.clientName?.trim() || entry.corpClientId}
-                    </p>
-                    <p className="break-all text-xs text-slate-500">{entry.corpClientId}</p>
+                    {t("manager.unassigned")}
                   </button>
-                ))
-              )}
-            </div>
-          ) : null}
+                  {filteredRegistry.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-slate-500">{t("field.corpClientNoMatch")}</p>
+                  ) : (
+                    filteredRegistry.map((entry) => (
+                      <button
+                        key={entry.corpClientId}
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => selectClient(entry.corpClientId)}
+                        className={`block w-full border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-slate-50 ${
+                          corpClientIdsMatch(entry.corpClientId, draft.corpClientId) ? "bg-slate-50" : ""
+                        }`}
+                      >
+                        <p className="text-sm font-semibold text-slate-900">
+                          {entry.clientName?.trim() || entry.corpClientId}
+                        </p>
+                        <p className="break-all text-xs text-slate-500">{entry.corpClientId}</p>
+                      </button>
+                    ))
+                  )}
+                </div>,
+                document.body,
+              )
+            : null}
         </div>
       </label>
       <label className="block text-sm">
         <span className="crm-label">{t("manager.accountManager")}</span>
         <select
           value={draft.accountManagerUserId}
-          disabled={disabled || !draft.corpClientId}
+          disabled={disabled}
           onChange={(event) =>
             onChange({ ...draft, accountManagerUserId: event.target.value })
           }
           className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700 disabled:opacity-60"
         >
           <option value="">{t("manager.unassigned")}</option>
-          {accountManagerOptions.map((user) => (
+          {staffOptions.map((user) => (
             <option key={user.id} value={user.id}>
               {user.name} ({user.role})
             </option>
@@ -185,23 +231,18 @@ export function SalesClientManagerFields({
         <span className="crm-label">{t("manager.salesManager")}</span>
         <select
           value={draft.salesManagerUserId}
-          disabled={disabled || !draft.corpClientId}
+          disabled={disabled}
           onChange={(event) => onChange({ ...draft, salesManagerUserId: event.target.value })}
           className="crm-input mt-1 block h-9 w-full px-2.5 text-sm text-slate-700 disabled:opacity-60"
         >
           <option value="">{t("manager.unassigned")}</option>
-          {salesManagerOptions.map((user) => (
+          {staffOptions.map((user) => (
             <option key={user.id} value={user.id}>
               {user.name} ({user.role})
             </option>
           ))}
         </select>
       </label>
-      {pendingSalesManagerName && !assignedSalesManagerName ? (
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          {t("manager.pendingSalesManager", { name: pendingSalesManagerName })}
-        </p>
-      ) : null}
     </div>
   );
 }

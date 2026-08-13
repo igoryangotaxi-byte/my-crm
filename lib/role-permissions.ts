@@ -135,6 +135,7 @@ export function mergeAllRoleDashboardBlockAccess(
 export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: AppPageKey }> = [
   { prefix: "/sales-operation/pipeline", page: "salesPipeline" },
   { prefix: "/sales-operation/office", page: "salesPipeline" },
+  { prefix: "/sales-operation/corp-register", page: "salesPipeline" },
   { prefix: "/sales-operation/lead-discovery", page: "salesLeadDiscovery" },
   { prefix: "/sales-operation/tracker", page: "salesTracker" },
   { prefix: "/sales-operation/portfolio", page: "salesSignedClients" },
@@ -155,6 +156,7 @@ export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: AppPageK
 export function resolveSalesOperationPageKey(pathname: string): AppPageKey {
   if (pathname.startsWith("/sales-operation/lead-discovery")) return "salesLeadDiscovery";
   if (pathname.startsWith("/sales-operation/office")) return "salesPipeline";
+  if (pathname.startsWith("/sales-operation/corp-register")) return "salesPipeline";
   if (pathname.startsWith("/sales-operation/pipeline")) return "salesPipeline";
   if (pathname.startsWith("/sales-operation/tracker")) return "salesTracker";
   if (pathname.startsWith("/sales-operation/communications")) return "communications";

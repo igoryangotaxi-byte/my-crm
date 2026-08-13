@@ -5,7 +5,7 @@ import {
   type SalesClientMetricsSummary,
 } from "@/lib/sales-operation/client-overview-metrics";
 import { isSupabaseConfigured } from "@/lib/supabase";
-import { requireSalesOperationPage } from "@/lib/sales-operation/require-sales-access";
+import { requireAnySalesOperationPage, requireSalesOperationPage } from "@/lib/sales-operation/require-sales-access";
 import {
   getSalesClientById,
   listSalesClientNotes,
@@ -84,7 +84,7 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const auth = await requireSalesOperationPage(request, "salesSignedClients");
+  const auth = await requireAnySalesOperationPage(request, ["salesPipeline", "salesSignedClients"]);
   if (!auth.ok) return auth.response;
   if (!isSupabaseConfigured()) {
     return Response.json({ ok: false, error: "Supabase is not configured." }, { status: 500 });

@@ -65,8 +65,8 @@ export async function convertSignedLeadToClient(
     custom_fields: lead.customFields,
     corp_client_id: corpFromLead || null,
     signed_at: lead.statusEnteredAt || now,
-    pending_sales_manager_user_id: actor.userId,
-    pending_sales_manager_name: actor.name,
+    pending_sales_manager_user_id: lead.assignedManagerUserId ?? actor.userId,
+    pending_sales_manager_name: lead.assignedManagerName ?? actor.name,
     updated_at: now,
   };
 

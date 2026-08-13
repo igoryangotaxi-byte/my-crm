@@ -1,7 +1,7 @@
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { updateB2BClientManagers } from "@/lib/sales-operation/b2b-client-registry";
 import type { UpdateB2BClientManagersInput } from "@/lib/sales-operation/manager-types";
-import { requireSalesOperationPage } from "@/lib/sales-operation/require-sales-access";
+import { requireAnySalesOperationPage } from "@/lib/sales-operation/require-sales-access";
 import { loadAuthStore } from "@/lib/auth-store";
 
 export const runtime = "nodejs";
@@ -22,10 +22,11 @@ function resolveManagerName(
 
 export async function PATCH(request: Request, context: RouteContext) {
   // Used from B2B Overview and Clients list — either page is enough.
-  const authB2b = await requireSalesOperationPage(request, "salesB2BClients");
-  const authClients = authB2b.ok
-    ? authB2b
-    : await requireSalesOperationPage(request, "salesSignedClients");
+  const authClients = await requireAnySalesOperationPage(request, [
+    "salesPipeline",
+    "salesB2BClients",
+    "salesSignedClients",
+  ]);
   if (!authClients.ok) return authClients.response;
   if (!isSupabaseConfigured()) {
     return Response.json({ ok: false, error: "Supabase is not configured." }, { status: 500 });

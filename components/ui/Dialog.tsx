@@ -16,6 +16,9 @@ type BaseProps = {
   footer?: ReactNode;
   className?: string;
   showClose?: boolean;
+  bodyClassName?: string;
+  /** Keep the dialog open when focus/pointer moves into an iframe, native select, or widget portal. */
+  preventOutsideDismiss?: boolean;
 };
 
 function CloseButton() {
@@ -38,6 +41,8 @@ export function Modal({
   footer,
   className,
   showClose = true,
+  bodyClassName,
+  preventOutsideDismiss = false,
 }: BaseProps) {
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
@@ -55,7 +60,14 @@ export function Modal({
               />
             </RadixDialog.Overlay>
             <div className="fixed inset-0 z-[95] flex items-center justify-center p-4">
-              <RadixDialog.Content asChild forceMount onOpenAutoFocus={(e) => e.preventDefault()}>
+              <RadixDialog.Content
+                asChild
+                forceMount
+                onOpenAutoFocus={(e) => e.preventDefault()}
+                onFocusOutside={preventOutsideDismiss ? (e) => e.preventDefault() : undefined}
+                onInteractOutside={preventOutsideDismiss ? (e) => e.preventDefault() : undefined}
+                onPointerDownOutside={preventOutsideDismiss ? (e) => e.preventDefault() : undefined}
+              >
                 <motion.div
                   data-module="sales-operation"
                   variants={modalVariants}
@@ -84,7 +96,7 @@ export function Modal({
                   ) : null}
                   {showClose ? <CloseButton /> : null}
                   {children ? (
-                    <div data-so-modal-body className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+                    <div data-so-modal-body className={cn("min-h-0 flex-1 overflow-y-auto px-5 py-4", bodyClassName)}>
                       {children}
                     </div>
                   ) : null}
@@ -117,11 +129,12 @@ export function Drawer({
   footer,
   className,
   showClose = true,
+  preventOutsideDismiss = false,
   side = "right",
   width = "28rem",
 }: DrawerProps) {
   return (
-    <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
+    <RadixDialog.Root open={open} onOpenChange={onOpenChange} modal={!preventOutsideDismiss}>
       <AnimatePresence>
         {open ? (
           <RadixDialog.Portal forceMount>
@@ -135,7 +148,14 @@ export function Drawer({
                 exit="exit"
               />
             </RadixDialog.Overlay>
-            <RadixDialog.Content asChild forceMount onOpenAutoFocus={(e) => e.preventDefault()}>
+            <RadixDialog.Content
+              asChild
+              forceMount
+              onOpenAutoFocus={(e) => e.preventDefault()}
+              onFocusOutside={preventOutsideDismiss ? (e) => e.preventDefault() : undefined}
+              onInteractOutside={preventOutsideDismiss ? (e) => e.preventDefault() : undefined}
+              onPointerDownOutside={preventOutsideDismiss ? (e) => e.preventDefault() : undefined}
+            >
               <motion.aside
                 data-module="sales-operation"
                 variants={drawerVariants(side)}

@@ -34,3 +34,20 @@ export async function requireSalesOperationPage(
 
   return { ok: true as const, user: auth.user };
 }
+
+export async function requireAnySalesOperationPage(
+  request: Request,
+  pageKeys: Array<SalesOperationPageKey | "salesOperation">,
+) {
+  if (pageKeys.length === 0) {
+    return requireSalesOperationPage(request, "salesOperation");
+  }
+  const first = await requireSalesOperationPage(request, pageKeys[0]);
+  if (first.ok) return first;
+  if (first.response.status === 401) return first;
+  for (const pageKey of pageKeys.slice(1)) {
+    const next = await requireSalesOperationPage(request, pageKey);
+    if (next.ok) return next;
+  }
+  return first;
+}

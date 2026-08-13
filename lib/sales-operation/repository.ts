@@ -4,8 +4,11 @@ import {
 } from "@/lib/sales-operation/proposal-sent-compat";
 import {
   applyPendingSalesManagerToCorpClient,
+  getB2BClientRegistryEntry,
   getManagersByCorpClientIds,
+  hydrateLeadFromB2BOverview,
   normalizeCorpClientId,
+  resolveB2BOverviewClient,
   updateB2BClientManagers,
 } from "@/lib/sales-operation/b2b-client-registry";
 import {
@@ -177,6 +180,21 @@ function applyDealFieldsToPayload(
   if (input.corpClientId !== undefined) payload.corp_client_id = input.corpClientId?.trim() || null;
 }
 
+async function hydrateDealFieldsFromB2BOverview<
+  T extends {
+    corpClientId?: string | null;
+    companyName?: string | null;
+    assignedManagerUserId?: string | null;
+    assignedManagerName?: string | null;
+  },
+>(input: T): Promise<T> {
+  const entry = await resolveB2BOverviewClient({
+    corpClientId: input.corpClientId,
+    companyName: input.companyName,
+  });
+  return hydrateLeadFromB2BOverview(input, entry);
+}
+
 function mapLeadNoteRow(row: Record<string, unknown>): SalesLeadNote {
   return {
     id: String(row.id),
@@ -305,6 +323,8 @@ export async function createSalesLead(
 ): Promise<SalesLead> {
   const supabase = getSupabaseAdminClient();
   const now = new Date().toISOString();
+  const hydrated = await hydrateDealFieldsFromB2BOverview(input);
+  input = { ...input, ...hydrated };
   const requestedStatus = input.status ? normalizeStatus(input.status) : "new";
   const encoded = encodeStatusForDb(
     requestedStatus,
@@ -452,6 +472,39 @@ export async function setSalesLeadArchived(
   return lead;
 }
 
+async function applyPendingSalesManagerFromLeadClient(
+  leadId: string,
+  corpClientId: string,
+  clientName?: string | null,
+): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("sales_clients")
+    .select("id, pending_sales_manager_user_id, pending_sales_manager_name, company_name")
+    .eq("lead_id", leadId)
+    .maybeSingle();
+  if (error || !data) return;
+  const pendingUserId =
+    typeof data.pending_sales_manager_user_id === "string" ? data.pending_sales_manager_user_id : null;
+  if (!pendingUserId) return;
+  await applyPendingSalesManagerToCorpClient(
+    corpClientId,
+    {
+      userId: pendingUserId,
+      name: typeof data.pending_sales_manager_name === "string" ? data.pending_sales_manager_name : null,
+    },
+    { clientName: clientName || (typeof data.company_name === "string" ? data.company_name : null) },
+  );
+  await supabase
+    .from("sales_clients")
+    .update({
+      pending_sales_manager_user_id: null,
+      pending_sales_manager_name: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", data.id);
+}
+
 export async function updateSalesLead(
   id: string,
   input: UpdateSalesLeadInput,
@@ -463,6 +516,32 @@ export async function updateSalesLead(
   if (!existing) throw new Error("Lead not found.");
 
   const now = new Date().toISOString();
+  if (input.corpClientId !== undefined || (!existing.corpClientId && input.companyName !== undefined)) {
+    const hydrated = await hydrateDealFieldsFromB2BOverview({
+      corpClientId: input.corpClientId !== undefined ? input.corpClientId : existing.corpClientId,
+      companyName: input.companyName !== undefined ? input.companyName : existing.companyName,
+      assignedManagerUserId:
+        input.assignedManagerUserId !== undefined
+          ? input.assignedManagerUserId
+          : existing.assignedManagerUserId,
+      assignedManagerName:
+        input.assignedManagerName !== undefined
+          ? input.assignedManagerName
+          : existing.assignedManagerName,
+    });
+    if (input.corpClientId !== undefined) input.corpClientId = hydrated.corpClientId;
+    if (input.companyName === undefined && !existing.companyName && hydrated.companyName) {
+      input.companyName = hydrated.companyName;
+    }
+    if (
+      input.assignedManagerUserId === undefined &&
+      !existing.assignedManagerUserId &&
+      hydrated.assignedManagerUserId
+    ) {
+      input.assignedManagerUserId = hydrated.assignedManagerUserId;
+      input.assignedManagerName = hydrated.assignedManagerName;
+    }
+  }
   const nextStatus = input.status ? normalizeStatus(input.status) : existing.status;
   if (nextStatus !== existing.status) {
     assertValidStatusTransition(existing.status, nextStatus);
@@ -582,6 +661,16 @@ export async function updateSalesLead(
     });
   }
 
+  const linkedCorpId = lead.corpClientId ? normalizeCorpClientId(lead.corpClientId) : "";
+  const previousCorpId = existing.corpClientId ? normalizeCorpClientId(existing.corpClientId) : "";
+  if (
+    linkedCorpId &&
+    (nextStatus === "signed" || existing.status === "signed") &&
+    (linkedCorpId !== previousCorpId || (nextStatus === "signed" && existing.status !== "signed"))
+  ) {
+    await applyPendingSalesManagerFromLeadClient(lead.id, linkedCorpId, lead.companyName || lead.fullName);
+  }
+
   if (nextStatus !== existing.status) {
     try {
       await runAutomationsForStatusChange(lead, existing.status, nextStatus);
@@ -697,12 +786,12 @@ export async function updateSalesClient(
   if (input.corpClientId !== undefined) {
     const normalized = input.corpClientId ? normalizeCorpClientId(input.corpClientId) : null;
     if (normalized) {
-      const registry = await getManagersByCorpClientIds([normalized]);
-      if (!registry.has(normalized)) {
-        throw new Error("B2B client not found in registry.");
-      }
+      const entry = await getB2BClientRegistryEntry(normalized);
+      if (!entry) throw new Error("B2B client not found in registry.");
+      clientPayload.corp_client_id = entry.corpClientId;
+    } else {
+      clientPayload.corp_client_id = null;
     }
-    clientPayload.corp_client_id = normalized;
   }
 
   const { data, error } = await supabase
@@ -723,10 +812,14 @@ export async function updateSalesClient(
   if (corpId) {
     const row = mapClientRow(data as Record<string, unknown>);
     if (row.pendingSalesManagerUserId) {
-      await applyPendingSalesManagerToCorpClient(corpId, {
-        userId: row.pendingSalesManagerUserId,
-        name: row.pendingSalesManagerName,
-      });
+      await applyPendingSalesManagerToCorpClient(
+        corpId,
+        {
+          userId: row.pendingSalesManagerUserId,
+          name: row.pendingSalesManagerName,
+        },
+        { clientName: row.companyName },
+      );
       await supabase
         .from("sales_clients")
         .update({

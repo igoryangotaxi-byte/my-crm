@@ -69,18 +69,19 @@ describe("sales operation stage gates", () => {
     );
   });
 
-  it("requires contract or corp id + account manager for signed", () => {
+  it("requires Corp Client ID + account manager for signed (contract alone is not enough)", () => {
     const missing = validateStageRequirements("negotiation", "signed", {
       hasContact: true,
       estimatedMonthlyPotential: 1000,
       pricingProposal: "Offer",
       followUpTaskProvided: true,
-      contractNumber: null,
+      contractNumber: "C-100",
       corpClientId: null,
       accountManagerUserId: null,
     });
-    assert.ok(missing.includes("contractOrClientId"));
+    assert.ok(missing.includes("corpClientId"));
     assert.ok(missing.includes("accountManager"));
+    assert.equal(missing.includes("contractOrClientId"), false);
 
     assert.deepEqual(
       validateStageRequirements("negotiation", "signed", {
@@ -88,6 +89,7 @@ describe("sales operation stage gates", () => {
         estimatedMonthlyPotential: 1000,
         pricingProposal: "Offer",
         contractNumber: "C-100",
+        corpClientId: "abc123",
         accountManagerUserId: "am-1",
       }),
       [],
