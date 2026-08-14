@@ -2,7 +2,7 @@ import { listMeetingsForUser } from "@/lib/sales-operation/meetings";
 import { listSalesTasksWithLead } from "@/lib/sales-operation/tasks";
 import { listPersonalTasks } from "@/lib/sales-operation/personal-space";
 import { getCalendarTokens, listGoogleCalendarEvents } from "@/lib/google/calendar";
-import { computeCalendarLoadScore } from "@/lib/ai/calendar-intelligence";
+import { computeCalendarLoadScore, mergeCalendarEntries } from "@/lib/ai/calendar-intelligence";
 import { getAiPreferences } from "@/lib/ai/repository";
 import { createNotification } from "@/lib/sales-operation/notifications";
 
@@ -19,10 +19,11 @@ export async function buildTomorrowBriefing(userId: string, email: string): Prom
   const google = (await getCalendarTokens(userId))
     ? await listGoogleCalendarEvents(userId, { from: start.toISOString(), to: end.toISOString() }).catch(() => [])
     : [];
-  const events = [
-    ...google.map((e) => ({ start: e.startsAt, end: e.endsAt, title: e.title })),
-    ...crm.map((e) => ({ start: e.startsAt, end: e.endsAt, title: e.title })),
-  ].sort((a, b) => a.start.localeCompare(b.start));
+  const events = mergeCalendarEntries({ google, crm }).map((entry) => ({
+    start: entry.start,
+    end: entry.end,
+    title: entry.title,
+  }));
   const load = computeCalendarLoadScore({
     events,
     timeZone: prefs.timezone,

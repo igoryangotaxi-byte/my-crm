@@ -82,7 +82,7 @@ export async function requestStructuredJson({
     throw new Error("OPENAI_API_KEY is not configured.");
   }
 
-  const model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+  const model = process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini";
   const envMax = Number(process.env.OPENAI_TARIFF_ANALYSIS_MAX_TOKENS ?? "4096");
   const maxTokens =
     maxTokensOption ?? (Number.isFinite(envMax) && envMax > 0 ? envMax : 4096);
@@ -167,7 +167,7 @@ export async function requestChatText({
     throw new Error("OPENAI_API_KEY is not configured.");
   }
 
-  const model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+  const model = process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini";
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 

@@ -4,6 +4,90 @@ export type CalendarBusyBlock = {
   title?: string;
 };
 
+export type UnifiedCalendarEntry = {
+  source: "google" | "crm";
+  title: string;
+  start: string;
+  end: string;
+  googleEventId: string | null;
+  crmMeetingId: string | null;
+  attendees: string[];
+  htmlLink: string | null;
+};
+
+function normalizeTitle(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** Same instant may be written as UTC or with an offset, so compare epoch millis. */
+function fingerprint(start: string, end: string, title: string): string {
+  return `${Date.parse(start)}|${Date.parse(end)}|${normalizeTitle(title)}`;
+}
+
+/**
+ * A meeting booked through the assistant exists twice: as a Google event and as
+ * its `sales_meetings` mirror. Reporting both would tell the user they have two
+ * meetings when they have one, so mirrors are folded into the Google entry.
+ */
+export function mergeCalendarEntries(input: {
+  google: Array<{
+    id: string;
+    title: string;
+    startsAt: string;
+    endsAt: string;
+    attendees?: string[];
+    htmlLink?: string | null;
+  }>;
+  crm: Array<{
+    id: string;
+    title: string;
+    startsAt: string;
+    endsAt: string;
+    googleEventId?: string | null;
+  }>;
+}): UnifiedCalendarEntry[] {
+  const entries: UnifiedCalendarEntry[] = input.google.map((event) => ({
+    source: "google",
+    title: event.title,
+    start: event.startsAt,
+    end: event.endsAt,
+    googleEventId: event.id,
+    crmMeetingId: null,
+    attendees: event.attendees ?? [],
+    htmlLink: event.htmlLink ?? null,
+  }));
+
+  const byGoogleId = new Map<string, UnifiedCalendarEntry>();
+  const byFingerprint = new Map<string, UnifiedCalendarEntry>();
+  for (const entry of entries) {
+    if (entry.googleEventId) byGoogleId.set(entry.googleEventId, entry);
+    byFingerprint.set(fingerprint(entry.start, entry.end, entry.title), entry);
+  }
+
+  for (const meeting of input.crm) {
+    const linked = meeting.googleEventId ? byGoogleId.get(meeting.googleEventId) : undefined;
+    const mirrored = linked ?? byFingerprint.get(fingerprint(meeting.startsAt, meeting.endsAt, meeting.title));
+    if (mirrored) {
+      mirrored.crmMeetingId = meeting.id;
+      continue;
+    }
+    const entry: UnifiedCalendarEntry = {
+      source: "crm",
+      title: meeting.title,
+      start: meeting.startsAt,
+      end: meeting.endsAt,
+      googleEventId: meeting.googleEventId ?? null,
+      crmMeetingId: meeting.id,
+      attendees: [],
+      htmlLink: null,
+    };
+    entries.push(entry);
+    byFingerprint.set(fingerprint(entry.start, entry.end, entry.title), entry);
+  }
+
+  return entries.sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+}
+
 export type CalendarLoadBreakdown = {
   meetingHours: number;
   meetingsPerDay: number;

@@ -18,23 +18,24 @@ import {
   computeCalendarLoadScore,
   findBestSlots,
   findOverlappingBusy,
+  mergeCalendarEntries,
   validateEventWindow,
 } from "@/lib/ai/calendar-intelligence";
 import { createConfirmation } from "@/lib/ai/repository";
-import type { AiToolResult } from "@/lib/ai/types";
+import type { AiToolResult, AiUiBlock } from "@/lib/ai/types";
 import type { ToolRun } from "@/lib/ai/tool-gateway/types";
+
+const CALENDAR_CONNECT_BLOCK: AiUiBlock = {
+  type: "connect",
+  integration: "googleCalendar",
+  text: "Connect Google Calendar in Settings → Integrations to read and schedule meetings.",
+};
 
 function needsCalendarConnect(): AiToolResult {
   return {
     ok: false,
     error: "Google Calendar is not connected.",
-    uiBlocks: [
-      {
-        type: "connect",
-        integration: "googleCalendar",
-        text: "Connect Google Calendar in Settings → Integrations to read and schedule meetings.",
-      },
-    ],
+    uiBlocks: [CALENDAR_CONNECT_BLOCK],
     userMessage: "Google Calendar is disconnected. Connect it to continue.",
   };
 }
@@ -44,11 +45,9 @@ async function loadBusy(run: ToolRun, from: string, to: string) {
   const google = (await getCalendarTokens(run.userId))
     ? await listGoogleCalendarEvents(run.userId, { from, to }).catch(() => [])
     : [];
-  const events = [
-    ...google.map((event) => ({ start: event.startsAt, end: event.endsAt, title: event.title })),
-    ...crm.map((event) => ({ start: event.startsAt, end: event.endsAt, title: event.title })),
-  ];
-  return { crm, google, events };
+  const merged = mergeCalendarEntries({ google, crm });
+  const events = merged.map((entry) => ({ start: entry.start, end: entry.end, title: entry.title }));
+  return { crm, google, merged, events };
 }
 
 export async function calendarGetEvents(run: ToolRun): Promise<AiToolResult> {
@@ -56,12 +55,27 @@ export async function calendarGetEvents(run: ToolRun): Promise<AiToolResult> {
   const to = String(run.args.to ?? "");
   if (!from || !to) return { ok: false, error: "from and to are required" };
   const connected = Boolean(await getCalendarTokens(run.userId));
-  if (!connected) return needsCalendarConnect();
-  const { crm, google } = await loadBusy(run, from, to);
+  const { merged } = await loadBusy(run, from, to);
+  const count = merged.length;
+  const summary = count === 1 ? "1 meeting" : `${count} meetings`;
   return {
     ok: true,
-    data: { google, crm },
-    userMessage: `${google.length} Google events and ${crm.length} CRM meetings.`,
+    data: {
+      count,
+      events: merged.map((entry) => ({
+        title: entry.title,
+        start: entry.start,
+        end: entry.end,
+        attendees: entry.attendees,
+        source: entry.source,
+        eventId: entry.googleEventId ?? entry.crmMeetingId,
+      })),
+      googleCalendarConnected: connected,
+    },
+    uiBlocks: connected ? undefined : [CALENDAR_CONNECT_BLOCK],
+    userMessage: connected
+      ? `${summary} in that window.`
+      : `${summary} from CRM only — Google Calendar is not connected.`,
   };
 }
 

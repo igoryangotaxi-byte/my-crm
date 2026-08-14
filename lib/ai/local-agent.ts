@@ -51,13 +51,16 @@ export async function runLocalAgentTurn(input: {
   if (!useOpenClaw && !apiKey) {
     throw new Error("OPENAI_API_KEY is not configured.");
   }
-  const model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+  // Deliberately not OPENAI_MODEL: that one is tuned cheap for tariff analysis,
+  // and a mini model plans tool calls badly.
+  const model = process.env.AI_ASSISTANT_MODEL?.trim() || "gpt-4.1";
   const messages: ChatMessage[] = [
     { role: "system", content: buildSystemPrompt({ context: input.context, prefs: input.prefs }) },
     ...input.history.slice(-20).map((msg) => ({ role: msg.role, content: msg.content })),
     { role: "user", content: input.userMessage },
   ];
   const uiBlocks: AiUiBlock[] = [];
+  let lastToolMessage = "";
   let text = "";
   let inputTokens = 0;
   let outputTokens = 0;
@@ -131,6 +134,7 @@ export async function runLocalAgentTurn(input: {
             }
           }
         }
+        if (result.userMessage) lastToolMessage = result.userMessage;
         messages.push({
           role: "tool",
           tool_call_id: call.id,
@@ -148,6 +152,13 @@ export async function runLocalAgentTurn(input: {
     text = (message?.content ?? "").trim();
     if (text) input.emit?.({ type: "delta", text });
     break;
+  }
+
+  // A silent turn (empty reply, or the round budget spent mid-plan) must still
+  // report what the tools did instead of leaving the drawer blank.
+  if (!text) {
+    text = lastToolMessage || "I could not finish that in one turn. Tell me which part to continue.";
+    input.emit?.({ type: "delta", text });
   }
 
   await bumpUsage({

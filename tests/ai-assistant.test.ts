@@ -6,6 +6,7 @@ import {
   computeCalendarLoadScore,
   findBestSlots,
   findOverlappingBusy,
+  mergeCalendarEntries,
   validateEventWindow,
 } from "@/lib/ai/calendar-intelligence";
 import { describeLeadStatuses, resolveLeadStatus } from "@/lib/ai/crm-status";
@@ -168,6 +169,62 @@ describe("calendar intelligence", () => {
       ).length,
       0,
     );
+  });
+
+  it("counts a Google event and its CRM mirror as one meeting", () => {
+    const merged = mergeCalendarEntries({
+      google: [
+        {
+          id: "gcal-1",
+          title: "Assistant test",
+          startsAt: "2026-08-15T12:00:00+03:00",
+          endsAt: "2026-08-15T12:30:00+03:00",
+          attendees: ["galben@yandex-team.ru"],
+        },
+        {
+          id: "gcal-2",
+          title: "Standup",
+          startsAt: "2026-08-15T09:00:00+03:00",
+          endsAt: "2026-08-15T09:15:00+03:00",
+        },
+      ],
+      crm: [
+        {
+          id: "crm-1",
+          title: "Assistant test",
+          startsAt: "2026-08-15T09:00:00.000Z",
+          endsAt: "2026-08-15T09:30:00.000Z",
+          googleEventId: "gcal-1",
+        },
+        {
+          id: "crm-2",
+          title: "Standup",
+          startsAt: "2026-08-15T06:00:00.000Z",
+          endsAt: "2026-08-15T06:15:00.000Z",
+          googleEventId: null,
+        },
+        {
+          id: "crm-3",
+          title: "CRM only call",
+          startsAt: "2026-08-15T14:00:00.000Z",
+          endsAt: "2026-08-15T14:30:00.000Z",
+          googleEventId: null,
+        },
+      ],
+    });
+
+    assert.equal(merged.length, 3, "two mirrors must fold into their Google events");
+    assert.deepEqual(
+      merged.map((entry) => entry.title),
+      ["Standup", "Assistant test", "CRM only call"],
+    );
+    const linked = merged.find((entry) => entry.googleEventId === "gcal-1");
+    assert.equal(linked?.crmMeetingId, "crm-1");
+    assert.equal(linked?.source, "google");
+    // Mirror matched by instant + title even without a stored google_event_id.
+    assert.equal(merged.find((entry) => entry.googleEventId === "gcal-2")?.crmMeetingId, "crm-2");
+    const crmOnly = merged.find((entry) => entry.crmMeetingId === "crm-3");
+    assert.equal(crmOnly?.source, "crm");
   });
 
   it("refuses to schedule an event the model dated in the past", () => {

@@ -53,6 +53,10 @@ ${page}
 
 ${UNTRUSTED_DATA_RULE}
 
+calendar.get_events already merges Google Calendar with its CRM mirrors and returns the true
+"count" plus one entry per real meeting. Report that list verbatim: never add a meeting because it
+appears in two systems, never invent entries, and if count is 0 say the day is clear.
+
 Pipeline statuses (use the key, never invent one): ${describeLeadStatuses()}.
 Map what the user says to a key yourself: “In Progress”, “в работе”, “proposal”, “won”, “lost” all resolve server-side.
 Moving a lead forward has stage gates (contact, monthly potential, pricing, follow-up task, corp client id, account manager).
