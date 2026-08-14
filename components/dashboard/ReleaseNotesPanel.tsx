@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-08-14",
+    title: "Appli AI executive assistant (0.2.55)",
+    notes:
+      "App version 0.2.55. Per-user AI copilot across Sales Operation: chat + push-to-talk voice (Alt+Space), conversation memory, and a tool gateway that runs everything as the signed-in user with RBAC, risk tiers, idempotency and an audit trail. Tools cover CRM search, lead status moves through the gated pipeline flow (crm.update_lead_status accepts \"In Progress\", \"в работе\", \"won\"), tasks, people workload, calendar (free/busy, slot finding, load score, create/update/cancel with conflict warnings), analytics, Gmail read/draft/send, reminders, briefings and Telegram. Everyday writes execute immediately; only sends, cancels and bulk actions raise a confirmation card. The system prompt carries the current date, so \"tomorrow\" resolves correctly, and calendar writes refuse past windows and send invites to attendees via sendUpdates=all. Google Calendar + Gmail now come from the main Google SSO login (combined offline scopes persisted per user), so no separate connect step. Telegram linking shows explicit state — code, one-tap deep link to the assistant bot, live polling and disconnect. New page key salesAiAssistant (Admin/SM/AM on, User off), permissions version 14. New APIs under /api/ai/** plus hourly /api/ai/cron/tick. SQL (run in Supabase): scripts/sql/supabase_ai_assistant.sql, also wired into npm run db:apply:sales-operation. Env (Vercel Production): OPENAI_API_KEY, OPENAI_MODEL, TELEGRAM_ASSISTANT_BOT_TOKEN, TELEGRAM_ASSISTANT_WEBHOOK_SECRET, optional AI_MONTHLY_BUDGET_USD and OpenClaw vars. Webhook: npm run telegram:set-assistant-webhook → https://applitaxi.space/api/ai/telegram/webhook. (f27ca691)",
+  },
+  {
     date: "2026-08-13",
     title: "Linear-primary Sales Operation redesign (0.2.54)",
     notes:
