@@ -10,6 +10,12 @@ function compact(parts: Array<string | null | undefined>): string {
   return parts.filter((part) => typeof part === "string" && part.trim()).join(" ");
 }
 
+/** Lets "0521234567" match a stored "+972 52-123-4567". */
+function digitsOf(value: string | null | undefined): string | null {
+  const digits = (value ?? "").replace(/\D+/g, "");
+  return digits.length >= 6 ? digits : null;
+}
+
 /**
  * Builds a lightweight in-memory index across leads, clients and contacts, then
  * ranks it against the query. Reused mapping keeps lead/client shapes correct.
@@ -42,8 +48,13 @@ export async function globalSearch(query: string, limit = 20): Promise<SearchRes
         lead.companyName,
         lead.email,
         lead.phone,
+        digitsOf(lead.phone),
         lead.legalName,
         lead.website,
+        lead.id,
+        lead.corpClientId,
+        lead.contractNumber,
+        lead.companyRegNumber,
       ]),
     });
   }
@@ -60,8 +71,11 @@ export async function globalSearch(query: string, limit = 20): Promise<SearchRes
         client.companyName,
         client.email,
         client.phone,
+        digitsOf(client.phone),
         client.corpClientId,
         client.corpClientName,
+        client.id,
+        client.leadId,
       ]),
     });
   }

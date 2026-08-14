@@ -12,7 +12,7 @@ import {
   writeAiAction,
 } from "@/lib/ai/repository";
 import type { ToolRun } from "@/lib/ai/tool-gateway/types";
-import { crmGetEntity, crmSearch, crmUpdateLeadStatus } from "@/lib/ai/tools/crm";
+import { crmGetEntity, crmLookup, crmSearch, crmUpdateLeadStatus } from "@/lib/ai/tools/crm";
 import {
   tasksAssign,
   tasksComment,
@@ -61,6 +61,7 @@ import { telegramSend } from "@/lib/ai/tools/telegram";
 
 const HANDLERS: Record<string, (run: ToolRun) => Promise<AiToolResult>> = {
   "crm.search": crmSearch,
+  "crm.lookup": crmLookup,
   "crm.get_entity": crmGetEntity,
   "crm.update_lead_status": crmUpdateLeadStatus,
   "tasks.search": tasksSearch,
@@ -163,6 +164,7 @@ export async function executeAiTool(input: {
     allowDirectSendEmail: input.prefs.allowDirectSendEmail,
     allowDirectSendTelegram: input.prefs.allowDirectSendTelegram,
     tool: spec.name,
+    toSelf: spec.name === "telegram.send" && !String(input.args.chatId ?? "").trim(),
   });
   if (needsConfirm && !input.confirmed) {
     const preview = {

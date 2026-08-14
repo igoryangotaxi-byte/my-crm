@@ -37,6 +37,20 @@ export const AI_TOOLS: RegisteredTool[] = [
     },
   },
   {
+    name: "crm.lookup",
+    description:
+      "Resolve one client, lead or company from anything the user says — lead id, client id, Corp Client ID, phone in any format, email, company name or person name — and return the full record: status, owner, deal figures, contacts, open tasks, recent notes and the signed-client card. Use this whenever the user asks 'who is X', 'what do we know about X', or names a client.",
+    risk: 0,
+    requiredPage: ["salesPipeline", "salesSignedClients", "salesB2BClients"],
+    parameters: {
+      type: "object",
+      properties: {
+        query: str("Id, Corp Client ID, phone, email, company or person name"),
+      },
+      required: ["query"],
+    },
+  },
+  {
     name: "crm.get_entity",
     description: "Get a lead or client by id.",
     risk: 0,
@@ -638,12 +652,16 @@ export const AI_TOOLS: RegisteredTool[] = [
   },
   {
     name: "telegram.send",
-    description: "Send a Telegram message to the user's linked chat, or to a chat id they own.",
+    description:
+      "Send a Telegram message. Omit chatId to message the user's own linked chat — that sends immediately with no confirmation. Pass chatId only for a different chat, which does raise a confirmation card.",
     risk: 2,
     requiredPage: "salesOperation",
     parameters: {
       type: "object",
-      properties: { text: str("Message text"), chatId: str("Optional chat id") },
+      properties: {
+        text: str("Message text"),
+        chatId: str("Only for a chat other than the user's own linked chat"),
+      },
       required: ["text"],
     },
   },

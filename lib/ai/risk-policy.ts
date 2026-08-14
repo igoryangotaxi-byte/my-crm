@@ -66,9 +66,13 @@ export function requiresConfirmation(input: {
   allowDirectSendEmail: boolean;
   allowDirectSendTelegram: boolean;
   tool: string;
+  /** True when the message goes to the user's own linked Telegram chat. */
+  toSelf?: boolean;
 }): boolean {
   if (input.risk >= 3) return true;
   if (input.risk === 2) {
+    // Messaging yourself is a note, not an external send — never gate it.
+    if (input.tool.startsWith("telegram.") && input.toSelf) return false;
     if (input.tool.startsWith("mail.") && input.allowDirectSendEmail) return false;
     if (input.tool.startsWith("telegram.") && input.allowDirectSendTelegram) return false;
     return true;
