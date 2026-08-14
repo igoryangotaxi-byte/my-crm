@@ -13,7 +13,7 @@
     },
     {
       "path": "/api/ai/cron/tick",
-      "schedule": "0 * * * *"
+      "schedule": "30 5 * * *"
     }
   ]
 }
