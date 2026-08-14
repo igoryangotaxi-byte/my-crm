@@ -66,7 +66,7 @@ function parseArgs(argv) {
   return out;
 }
 
-function buildCaption({ version, title, features, url }) {
+function buildCaption({ version, title, features, url, pptx }) {
   const lines = [
     `🚀 <b>Release ${escapeHtml(version)}</b> — ${escapeHtml(title)}`,
     "",
@@ -76,7 +76,9 @@ function buildCaption({ version, title, features, url }) {
   if (url) {
     lines.push("", `🔗 ${escapeHtml(url)}`);
   }
-  lines.push("", "📎 Presentation with screenshots attached.");
+  if (pptx) {
+    lines.push("", "📎 Presentation with screenshots attached.");
+  }
   return lines.join("\n");
 }
 
