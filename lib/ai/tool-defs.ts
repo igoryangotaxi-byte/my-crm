@@ -167,6 +167,174 @@ export const AI_TOOLS: RegisteredTool[] = [
     },
   },
   {
+    name: "tracker.list_queues",
+    description:
+      "List Tracker queues (boards/projects) with their columns and ticket counts. Call this before creating a ticket when you are unsure the queue exists.",
+    risk: 0,
+    requiredPage: "salesTracker",
+    parameters: {
+      type: "object",
+      properties: { includeArchived: { type: "boolean" } },
+    },
+  },
+  {
+    name: "tracker.create_queue",
+    description:
+      "Create a Tracker queue (board) with the default columns. Returns the existing queue instead of a duplicate when the name is taken.",
+    risk: 1,
+    requiredPage: "salesTracker",
+    parameters: {
+      type: "object",
+      properties: { name: str("Queue name"), description: str("Optional description") },
+      required: ["name"],
+    },
+  },
+  {
+    name: "tracker.list_tickets",
+    description:
+      "List Tracker tickets. Pass queue for one board; omit queue to list the tickets assigned to (or created by) a person.",
+    risk: 0,
+    requiredPage: "salesTracker",
+    parameters: {
+      type: "object",
+      properties: {
+        queue: str("Queue name or id"),
+        query: str("Optional title/description search"),
+        assignee: str("User id, name, or 'me'"),
+        scope: str("mine or created — used only when queue is omitted", { enum: ["mine", "created"] }),
+        includeDone: { type: "boolean", description: "Include tickets in done columns." },
+      },
+    },
+  },
+  {
+    name: "tracker.get_ticket",
+    description: "Get one Tracker ticket with description, checklist and recent comments.",
+    risk: 0,
+    requiredPage: "salesTracker",
+    parameters: {
+      type: "object",
+      properties: {
+        ticketId: str("Ticket id — preferred"),
+        ticketQuery: str("Ticket title when the id is unknown"),
+        queue: str("Queue name or id, narrows a title search"),
+      },
+    },
+  },
+  {
+    name: "tracker.create_ticket",
+    description:
+      "Create a Tracker ticket in a queue. Creates the queue when it does not exist yet, so 'make queue X and a ticket in it' is one call. Assignees accept 'me', names, or user ids.",
+    risk: 1,
+    requiredPage: "salesTracker",
+    parameters: {
+      type: "object",
+      properties: {
+        queue: str("Queue name or id"),
+        title: str("Ticket title"),
+        description: str("Ticket description"),
+        status: str("Column name, e.g. Backlog or In Progress. Defaults to the first open column."),
+        priority: str("low, normal, high or urgent", { enum: ["low", "normal", "high", "urgent"] }),
+        dueAt: str("ISO 8601 due date with UTC offset"),
+        assignees: {
+          type: "array",
+          description: "Assignees: 'me', staff names, or user ids.",
+          items: { type: "string" },
+        },
+        createQueueIfMissing: {
+          type: "boolean",
+          description: "Default true. Set false to fail instead of creating the queue.",
+        },
+      },
+      required: ["queue", "title"],
+    },
+  },
+  {
+    name: "tracker.update_ticket",
+    description:
+      "Update a Tracker ticket: move it to another column, change priority, due date, title or description.",
+    risk: 1,
+    requiredPage: "salesTracker",
+    parameters: {
+      type: "object",
+      properties: {
+        ticketId: str("Ticket id — preferred"),
+        ticketQuery: str("Ticket title when the id is unknown"),
+        queue: str("Queue name or id, narrows a title search"),
+        status: str("Target column name"),
+        priority: str("low, normal, high or urgent", { enum: ["low", "normal", "high", "urgent"] }),
+        dueAt: str("ISO 8601 due date with UTC offset"),
+        newTitle: str("New title"),
+        description: str("New description"),
+      },
+    },
+  },
+  {
+    name: "tracker.assign_ticket",
+    description: "Set Tracker ticket assignees. Accepts 'me', names, or user ids.",
+    risk: 1,
+    requiredPage: "salesTracker",
+    parameters: {
+      type: "object",
+      properties: {
+        ticketId: str("Ticket id — preferred"),
+        ticketQuery: str("Ticket title when the id is unknown"),
+        queue: str("Queue name or id, narrows a title search"),
+        assignees: { type: "array", items: { type: "string" }, description: "'me', names or ids." },
+        replace: {
+          type: "boolean",
+          description: "Default true (replace). Set false to add to current assignees.",
+        },
+      },
+      required: ["assignees"],
+    },
+  },
+  {
+    name: "tracker.comment_ticket",
+    description: "Comment on a Tracker ticket. @mentions notify staff.",
+    risk: 1,
+    requiredPage: "salesTracker",
+    parameters: {
+      type: "object",
+      properties: {
+        ticketId: str("Ticket id — preferred"),
+        ticketQuery: str("Ticket title when the id is unknown"),
+        queue: str("Queue name or id, narrows a title search"),
+        comment: str("Comment body"),
+      },
+      required: ["comment"],
+    },
+  },
+  {
+    name: "tracker.archive_ticket",
+    description: "Archive a Tracker ticket (reversible). Prefer this over deleting.",
+    risk: 1,
+    requiredPage: "salesTracker",
+    parameters: {
+      type: "object",
+      properties: {
+        ticketId: str("Ticket id — preferred"),
+        ticketQuery: str("Ticket title when the id is unknown"),
+        queue: str("Queue name or id, narrows a title search"),
+        archived: { type: "boolean", description: "Default true. False restores the ticket." },
+      },
+    },
+  },
+  {
+    name: "tracker.delete_ticket",
+    description:
+      "Delete a Tracker ticket permanently, including its comments and checklist. Use only when the user asks for deletion rather than archiving.",
+    risk: 3,
+    requiredPage: "salesTracker",
+    parameters: {
+      type: "object",
+      properties: {
+        ticketId: str("Ticket id — preferred"),
+        ticketQuery: str("Ticket title when the id is unknown"),
+        queue: str("Queue name or id, narrows a title search"),
+      },
+    },
+  },
+  {
     name: "people.search",
     description: "Search Appli staff by name or email.",
     risk: 0,

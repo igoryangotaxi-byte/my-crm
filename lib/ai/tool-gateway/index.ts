@@ -23,6 +23,18 @@ import {
 } from "@/lib/ai/tools/tasks";
 import { peopleGet, peopleSearch, peopleWorkload } from "@/lib/ai/tools/people";
 import {
+  trackerArchiveTicket,
+  trackerAssignTicket,
+  trackerCommentTicket,
+  trackerCreateQueue,
+  trackerCreateTicket,
+  trackerDeleteTicket,
+  trackerGetTicket,
+  trackerListQueues,
+  trackerListTickets,
+  trackerUpdateTicket,
+} from "@/lib/ai/tools/tracker";
+import {
   calendarAnalyzeLoad,
   calendarCancelEvent,
   calendarCreateEvent,
@@ -57,6 +69,16 @@ const HANDLERS: Record<string, (run: ToolRun) => Promise<AiToolResult>> = {
   "tasks.update": tasksUpdate,
   "tasks.assign": tasksAssign,
   "tasks.comment": tasksComment,
+  "tracker.list_queues": trackerListQueues,
+  "tracker.create_queue": trackerCreateQueue,
+  "tracker.list_tickets": trackerListTickets,
+  "tracker.get_ticket": trackerGetTicket,
+  "tracker.create_ticket": trackerCreateTicket,
+  "tracker.update_ticket": trackerUpdateTicket,
+  "tracker.assign_ticket": trackerAssignTicket,
+  "tracker.comment_ticket": trackerCommentTicket,
+  "tracker.archive_ticket": trackerArchiveTicket,
+  "tracker.delete_ticket": trackerDeleteTicket,
   "people.search": peopleSearch,
   "people.get": peopleGet,
   "people.workload": peopleWorkload,
@@ -243,6 +265,9 @@ function describePreview(tool: string, args: Record<string, unknown>): string {
   if (tool === "calendar.cancel_event") return `Cancel event ${args.eventId}`;
   if (tool === "crm.update_lead_status") {
     return `Move lead ${args.leadId ?? args.leadQuery} to ${args.status}`;
+  }
+  if (tool === "tracker.delete_ticket") {
+    return `Permanently delete tracker ticket ${args.ticketId ?? args.ticketQuery}, with its comments and checklist`;
   }
   return Object.entries(args)
     .slice(0, 6)

@@ -30,6 +30,7 @@ export type AgentTurnResult = {
 function toolStatusLine(name: string): string {
   if (name.startsWith("calendar.")) return "Checking your calendar…";
   if (name.startsWith("tasks.")) return "Looking at tasks…";
+  if (name.startsWith("tracker.")) return "Working in the tracker…";
   if (name === "crm.update_lead_status") return "Updating the pipeline…";
   if (name.startsWith("crm.") || name.startsWith("people.")) return "Searching the CRM…";
   if (name.startsWith("analytics.")) return "Pulling analytics…";
