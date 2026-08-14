@@ -8,6 +8,7 @@ import { SalesNotificationsBell } from "@/components/sales-operation/SalesNotifi
 import { SalesGlobalSearch } from "@/components/sales-operation/SalesGlobalSearch";
 import { OfficeModeToggle } from "@/components/sales-operation/office/OfficeModeToggle";
 import { DensityToggle } from "@/components/sales-operation/DensityToggle";
+import { AppliAssistant } from "@/components/ai/AppliAssistant";
 import { Avatar } from "@/components/ui/Avatar";
 import { useSalesSidebar } from "@/components/sales-operation/SalesSidebarContext";
 import {
@@ -88,6 +89,7 @@ export function SalesOperationHeader() {
       <div className="flex shrink-0 items-center gap-2">
         <OfficeModeToggle />
         <DensityToggle />
+        <AppliAssistant />
         <SalesGlobalSearch />
         <SalesNotificationsBell />
         <DropdownMenu>

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { firstAllowedSalesOperationPath } from "@/lib/role-permissions";
 
-type LoginErrorCode = "domain" | "oauth" | "config" | "rejected";
+type LoginErrorCode = "domain" | "oauth" | "config" | "rejected" | "consent";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,6 +24,7 @@ export default function LoginPage() {
           errorOAuth: "הכניסה נכשלה. נסו שוב.",
           errorConfig: "כניסת Google אינה מוגדרת. פנו למנהל המערכת.",
           errorRejected: "הגישה לחשבון נדחתה על ידי מנהל.",
+          errorConsent: "כדי להיכנס יש לאשר גישה ליומן ול-Gmail של ‎@appli.taxi.",
         }
       : language === "ru"
         ? {
@@ -36,6 +37,7 @@ export default function LoginPage() {
             errorOAuth: "Не удалось войти. Попробуйте ещё раз.",
             errorConfig: "Вход Google не настроен. Обратитесь к администратору.",
             errorRejected: "Администратор отклонил доступ.",
+            errorConsent: "Чтобы войти, подтвердите доступ к Calendar и Gmail @appli.taxi.",
           }
         : {
             loading: "Loading...",
@@ -47,13 +49,14 @@ export default function LoginPage() {
             errorOAuth: "Sign-in failed. Please try again.",
             errorConfig: "Google sign-in is not configured. Contact your administrator.",
             errorRejected: "Your account access was rejected by an admin.",
+            errorConsent: "Allow Calendar and Gmail access for your @appli.taxi account to continue.",
           };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const raw = params.get("error");
-    if (raw === "domain" || raw === "oauth" || raw === "config" || raw === "rejected") {
+    if (raw === "domain" || raw === "oauth" || raw === "config" || raw === "rejected" || raw === "consent") {
       setErrorCode(raw);
     }
   }, []);
@@ -76,9 +79,11 @@ export default function LoginPage() {
         ? copy.errorConfig
         : errorCode === "rejected"
           ? copy.errorRejected
-          : errorCode === "oauth"
-            ? copy.errorOAuth
-            : null;
+          : errorCode === "consent"
+            ? copy.errorConsent
+            : errorCode === "oauth"
+              ? copy.errorOAuth
+              : null;
 
   if (loading) {
     return (

@@ -1,7 +1,8 @@
 import { OAuth2Client } from "google-auth-library";
 import { getSupabaseAdminClient } from "@/lib/supabase";
+import { GOOGLE_CALENDAR_SCOPES } from "@/lib/google/workspace-oauth";
 
-const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+const CALENDAR_SCOPE = GOOGLE_CALENDAR_SCOPES.join(" ");
 
 export type GoogleCalendarTokenRow = {
   userId: string;
@@ -75,7 +76,12 @@ export async function exchangeCalendarCode(
 
 export async function upsertCalendarTokens(
   userId: string,
-  tokens: { refreshToken: string; accessToken: string | null; expiryDate: string | null },
+  tokens: {
+    refreshToken: string;
+    accessToken: string | null;
+    expiryDate: string | null;
+    scope?: string | null;
+  },
 ): Promise<void> {
   const supabase = getSupabaseAdminClient();
   const now = new Date().toISOString();
@@ -85,7 +91,7 @@ export async function upsertCalendarTokens(
       refresh_token: tokens.refreshToken,
       access_token: tokens.accessToken,
       expiry_date: tokens.expiryDate,
-      scope: CALENDAR_SCOPE,
+      scope: tokens.scope?.trim() || CALENDAR_SCOPE,
       updated_at: now,
       created_at: now,
     },
@@ -137,6 +143,7 @@ async function getAuthedClient(userId: string): Promise<OAuth2Client> {
       refreshToken: tokens.refresh_token || stored.refreshToken,
       accessToken: tokens.access_token ?? stored.accessToken,
       expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : stored.expiryDate,
+      scope: stored.scope,
     }).catch((error) => {
       console.error("Failed to persist refreshed Google Calendar tokens:", error);
     });
@@ -150,7 +157,99 @@ export type CalendarEventInput = {
   description?: string | null;
   startsAt: string;
   endsAt: string;
+  attendees?: string[];
+  timeZone?: string;
+  conference?: boolean;
 };
+
+export type GoogleCalendarEvent = {
+  id: string;
+  title: string;
+  description: string | null;
+  startsAt: string;
+  endsAt: string;
+  attendees: string[];
+  htmlLink: string | null;
+};
+
+async function calendarApi(userId: string, path: string, init?: RequestInit): Promise<Response> {
+  const client = await getAuthedClient(userId);
+  const { token } = await client.getAccessToken();
+  if (!token) throw new Error("Failed to obtain Google Calendar access token.");
+  return fetch(`https://www.googleapis.com/calendar/v3/${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
+}
+
+export async function listGoogleCalendarEvents(
+  userId: string,
+  range: { from: string; to: string },
+): Promise<GoogleCalendarEvent[]> {
+  const params = new URLSearchParams({
+    timeMin: range.from,
+    timeMax: range.to,
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: "100",
+  });
+  const res = await calendarApi(userId, `calendars/primary/events?${params.toString()}`);
+  const data = (await res.json()) as {
+    items?: Array<{
+      id?: string;
+      summary?: string;
+      description?: string;
+      start?: { dateTime?: string; date?: string };
+      end?: { dateTime?: string; date?: string };
+      attendees?: Array<{ email?: string }>;
+      htmlLink?: string;
+    }>;
+    error?: { message?: string };
+  };
+  if (!res.ok) throw new Error(data.error?.message ?? "Failed to list Google Calendar events.");
+  return (data.items ?? [])
+    .filter((item) => item.id)
+    .map((item) => ({
+      id: String(item.id),
+      title: item.summary ?? "(no title)",
+      description: item.description ?? null,
+      startsAt: item.start?.dateTime || item.start?.date || "",
+      endsAt: item.end?.dateTime || item.end?.date || "",
+      attendees: (item.attendees ?? []).map((a) => a.email).filter((e): e is string => Boolean(e)),
+      htmlLink: item.htmlLink ?? null,
+    }));
+}
+
+export async function queryGoogleFreeBusy(
+  userId: string,
+  range: { from: string; to: string },
+  calendars: string[] = ["primary"],
+): Promise<Array<{ start: string; end: string }>> {
+  const res = await calendarApi(userId, "freeBusy", {
+    method: "POST",
+    body: JSON.stringify({
+      timeMin: range.from,
+      timeMax: range.to,
+      items: calendars.map((id) => ({ id })),
+    }),
+  });
+  const data = (await res.json()) as {
+    calendars?: Record<string, { busy?: Array<{ start?: string; end?: string }> }>;
+    error?: { message?: string };
+  };
+  if (!res.ok) throw new Error(data.error?.message ?? "Failed to query free/busy.");
+  const busy: Array<{ start: string; end: string }> = [];
+  for (const cal of Object.values(data.calendars ?? {})) {
+    for (const block of cal.busy ?? []) {
+      if (block.start && block.end) busy.push({ start: block.start, end: block.end });
+    }
+  }
+  return busy;
+}
 
 export async function createGoogleCalendarEvent(
   userId: string,
@@ -160,19 +259,31 @@ export async function createGoogleCalendarEvent(
   const { token } = await client.getAccessToken();
   if (!token) throw new Error("Failed to obtain Google Calendar access token.");
 
-  const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+  const res = await fetch(
+    "https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        summary: input.title,
+        description: input.description ?? undefined,
+        start: { dateTime: input.startsAt, timeZone: input.timeZone },
+        end: { dateTime: input.endsAt, timeZone: input.timeZone },
+        attendees: input.attendees?.map((email) => ({ email })),
+        conferenceData: input.conference
+          ? {
+              createRequest: {
+                requestId: `appli-${Date.now()}`,
+                conferenceSolutionKey: { type: "hangoutsMeet" },
+              },
+            }
+          : undefined,
+      }),
     },
-    body: JSON.stringify({
-      summary: input.title,
-      description: input.description ?? undefined,
-      start: { dateTime: input.startsAt },
-      end: { dateTime: input.endsAt },
-    }),
-  });
+  );
   const data = (await res.json()) as { id?: string; error?: { message?: string } };
   if (!res.ok || !data.id) {
     throw new Error(data.error?.message ?? "Failed to create Google Calendar event.");
@@ -190,7 +301,7 @@ export async function updateGoogleCalendarEvent(
   if (!token) throw new Error("Failed to obtain Google Calendar access token.");
 
   const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`,
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
     {
       method: "PATCH",
       headers: {
@@ -217,7 +328,7 @@ export async function deleteGoogleCalendarEvent(userId: string, eventId: string)
   if (!token) throw new Error("Failed to obtain Google Calendar access token.");
 
   const res = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`,
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
     {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },

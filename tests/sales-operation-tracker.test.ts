@@ -31,7 +31,7 @@ describe("sales operation tracker MVP", () => {
 
   it("exposes salesTracker page key and defaults", () => {
     assert.ok((SALES_OPERATION_PAGE_KEYS as readonly string[]).includes("salesTracker"));
-    assert.equal(CURRENT_PERMISSIONS_VERSION, 13);
+    assert.equal(CURRENT_PERMISSIONS_VERSION, 14);
     assert.equal(defaultRolePermissions.Admin.salesTracker, true);
     assert.equal(defaultRolePermissions["Account Manager"].salesTracker, true);
     assert.equal(defaultRolePermissions.User.salesTracker, false);

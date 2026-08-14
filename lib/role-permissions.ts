@@ -28,11 +28,12 @@ export const SALES_OPERATION_PAGE_KEYS = [
   "salesSettings",
   "salesTracker",
   "salesLeadDiscovery",
+  "salesAiAssistant",
 ] as const satisfies readonly AppPageKey[];
 
 export type SalesOperationPageKey = (typeof SALES_OPERATION_PAGE_KEYS)[number];
 
-export const CURRENT_PERMISSIONS_VERSION = 13;
+export const CURRENT_PERMISSIONS_VERSION = 14;
 
 export function isAppRole(value: unknown): value is AppRole {
   return typeof value === "string" && (APP_ROLES as readonly string[]).includes(value);

@@ -13,6 +13,8 @@ import { ConfirmProvider } from "@/components/ui/ConfirmDialog";
 import { OfficeModeProvider } from "@/components/sales-operation/office/OfficeModeContext";
 import { SalesDensityProvider, useSalesDensity } from "@/components/sales-operation/SalesDensityContext";
 import { CommandPalette } from "@/components/patterns/CommandPalette";
+import { AiPageContextProvider } from "@/components/ai/AiPageContext";
+import { Suspense } from "react";
 
 function ShellInner({ children }: { children: React.ReactNode }) {
   const { language } = useAuth();
@@ -58,7 +60,11 @@ export function SalesOperationAppShell({ children }: { children: React.ReactNode
           <SalesSidebarProvider>
             <SalesDensityProvider>
               <OfficeModeProvider>
-                <ShellInner>{children}</ShellInner>
+                <Suspense fallback={null}>
+                  <AiPageContextProvider>
+                    <ShellInner>{children}</ShellInner>
+                  </AiPageContextProvider>
+                </Suspense>
               </OfficeModeProvider>
             </SalesDensityProvider>
           </SalesSidebarProvider>

@@ -5,6 +5,7 @@ import {
   isGoogleSsoConfigured,
   resolveRedirectUri,
 } from "@/lib/sso/google";
+import { persistGoogleWorkspaceTokens } from "@/lib/google/persist-workspace-tokens";
 import { findOrProvisionSsoUser } from "@/lib/sso/provision";
 import { buildSessionSetCookie } from "@/lib/server-session";
 
@@ -34,6 +35,9 @@ export async function GET(request: Request) {
     return loginRedirect(origin, "config");
   }
 
+  if (url.searchParams.get("error") === "access_denied") {
+    return loginRedirect(origin, "consent");
+  }
   if (url.searchParams.get("error")) {
     return loginRedirect(origin, "oauth");
   }
@@ -65,6 +69,15 @@ export async function GET(request: Request) {
     });
     if (!provisioned.ok) {
       return loginRedirect(origin, "rejected");
+    }
+
+    try {
+      await persistGoogleWorkspaceTokens(provisioned.user.id, {
+        ...identity.credentials,
+        email: identity.email,
+      });
+    } catch (error) {
+      console.error("Failed to persist Google Workspace tokens:", error);
     }
 
     const response = NextResponse.redirect(new URL("/sales-operation/pipeline", origin));

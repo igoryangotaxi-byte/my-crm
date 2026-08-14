@@ -10,6 +10,10 @@
     {
       "path": "/api/sales-operation/cron/discovery-tick",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/ai/cron/tick",
+      "schedule": "0 * * * *"
     }
   ]
 }

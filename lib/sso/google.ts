@@ -1,6 +1,11 @@
 import { OAuth2Client } from "google-auth-library";
+import {
+  GOOGLE_WORKSPACE_SCOPES,
+  type GoogleOAuthCredentials,
+} from "@/lib/google/workspace-oauth";
 
 export const DEFAULT_WORKSPACE_DOMAIN = "appli.taxi";
+export { GOOGLE_WORKSPACE_SCOPES };
 
 export type GoogleIdentity = {
   email: string;
@@ -54,24 +59,28 @@ export function buildGoogleAuthUrl(params: {
     client_id: clientId,
     redirect_uri: params.redirectUri,
     response_type: "code",
-    scope: "openid email profile",
+    scope: GOOGLE_WORKSPACE_SCOPES,
     hd: domain,
-    access_type: "online",
+    access_type: "offline",
     include_granted_scopes: "true",
-    prompt: "select_account",
+    prompt: "consent",
     state: params.state,
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${query.toString()}`;
 }
 
+export type GoogleAuthResult = GoogleIdentity & {
+  credentials: GoogleOAuthCredentials;
+};
+
 /**
  * Exchange the authorization code for tokens and verify the ID token signature/audience.
- * Returns the verified identity claims.
+ * Returns the verified identity claims plus OAuth credentials for Calendar/Gmail.
  */
 export async function exchangeCodeAndVerify(
   code: string,
   redirectUri: string,
-): Promise<GoogleIdentity> {
+): Promise<GoogleAuthResult> {
   const clientId = getClientId();
   const client = new OAuth2Client({
     clientId,
@@ -97,6 +106,12 @@ export async function exchangeCodeAndVerify(
     hostedDomain: payload.hd ? payload.hd.trim().toLowerCase() : null,
     name: payload.name ?? null,
     sub: payload.sub,
+    credentials: {
+      refreshToken: tokens.refresh_token ?? null,
+      accessToken: tokens.access_token ?? null,
+      expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
+      scope: tokens.scope ?? null,
+    },
   };
 }
 

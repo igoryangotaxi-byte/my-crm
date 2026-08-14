@@ -12,6 +12,7 @@ import { SectionHeader } from "@/components/patterns/SectionHeader";
 import { AccessManagementView } from "@/components/accesses/AccessManagementView";
 import { SalesEmailTemplatesSettings } from "@/components/sales-operation/settings/SalesEmailTemplatesSettings";
 import { SalesSignedHandoverSettings } from "@/components/sales-operation/settings/SalesSignedHandoverSettings";
+import { IntegrationsSettings } from "@/components/ai/IntegrationsSettings";
 import type { PipelineStage, SalesSegment } from "@/lib/sales-operation/types";
 
 type StageDraft = PipelineStage;
@@ -327,6 +328,8 @@ export function SalesSettingsView() {
       <SalesSignedHandoverSettings />
 
       <SalesEmailTemplatesSettings />
+
+      {showPipelineSettings || showAccess ? <IntegrationsSettings /> : null}
         </>
       ) : null}
     </section>

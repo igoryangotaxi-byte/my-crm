@@ -1,0 +1,11 @@
+{
+  "id": "appli-tools",
+  "name": "Appli Tool Gateway",
+  "description": "Forwards OpenClaw tool calls to the Appli Tool Gateway. No direct DB access.",
+  "contracts": {
+    "tools": ["appli_invoke"]
+  },
+  "activation": {
+    "onStartup": true
+  }
+}

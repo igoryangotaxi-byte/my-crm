@@ -1,0 +1,25 @@
+services:
+  openclaw-gateway:
+    image: ghcr.io/openclaw/openclaw:latest
+    restart: unless-stopped
+    environment:
+      OPENCLAW_GATEWAY_BIND: lan
+      OPENCLAW_GATEWAY_PORT: "18789"
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      APPLI_TOOL_GATEWAY_URL: ${APPLI_TOOL_GATEWAY_URL}
+      AI_TOOL_GATEWAY_SECRET: ${AI_TOOL_GATEWAY_SECRET}
+    volumes:
+      - ./openclaw.json:/home/node/.openclaw/openclaw.json:ro
+      - ./workspace:/home/node/.openclaw/workspace
+      - ./plugins/appli-tools:/home/node/.openclaw/extensions/appli-tools
+      - openclaw-state:/home/node/.openclaw/agents
+    ports:
+      - "127.0.0.1:18789:18789"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:18789/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  openclaw-state:

@@ -56,6 +56,7 @@ const accessSections: AccessSection[] = [
       { type: "page", key: "salesPipeline", label: "Pipeline" },
       { type: "page", key: "salesTracker", label: "Tracker" },
       { type: "page", key: "salesLeadDiscovery", label: "Lead Discovery" },
+      { type: "page", key: "salesAiAssistant", label: "Appli Assistant" },
       { type: "page", key: "salesSignedClients", label: "Signed Clients" },
       { type: "page", key: "salesB2BClients", label: "B2B Clients Overview" },
       { type: "page", key: "salesAnalytics", label: "Analytics" },
