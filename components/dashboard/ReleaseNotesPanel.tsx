@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-08-19",
+    title: "Sales Operation Documentation wiki (0.2.59)",
+    notes:
+      "App version 0.2.59. Shared team wiki at /sales-operation/documentation: a left rail of documents (create, inline rename, drag reorder, delete) and a Word-style TipTap editor with fonts, color, highlight, headings, lists, alignment and first-class tables. Import CSV, XLSX or DOCX into the current page (spreadsheets become editable tables; Word body text, lists and tables flatten via Mammoth). Content autosaves to Supabase (~800ms) as TipTap JSON with last-write-wins; original files are not stored. New page key salesDocumentation (permissions v15) — on for Admin / AM / SM, off for User / Team Lead. Sidebar after Tracker, ⌘K, Access matrix, en/he/ru. SQL: scripts/sql/supabase_sales_documentation.sql (already applied on the project database; also wired into npm run db:apply:sales-operation). Deck: Yango-Sales-Operations-Documentation-0-2-59.pptx. (7c7fcdf4)",
+  },
+  {
     date: "2026-08-14",
     title: "AI assistant: know any client, message yourself freely (0.2.58)",
     notes:
