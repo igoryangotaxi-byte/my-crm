@@ -25,6 +25,7 @@ export type AppPageKey =
   | "salesAutomation"
   | "salesSettings"
   | "salesTracker"
+  | "salesDocumentation"
   | "salesLeadDiscovery"
   | "salesAiAssistant"
   | "accesses"
@@ -118,6 +119,7 @@ const salesPagesAllTrue = {
   salesManagerAnalytics: true,
   salesAutomation: true,
   salesTracker: true,
+  salesDocumentation: true,
   salesLeadDiscovery: true,
   salesAiAssistant: true,
   // Admin-only by default; overridden per-role below.
@@ -133,6 +135,7 @@ const salesPagesAllFalse = {
   salesManagerAnalytics: false,
   salesAutomation: false,
   salesTracker: false,
+  salesDocumentation: false,
   salesLeadDiscovery: false,
   salesAiAssistant: false,
   salesSettings: false,

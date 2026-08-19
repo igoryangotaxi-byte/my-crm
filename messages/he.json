@@ -96,6 +96,7 @@
       "pipeline": "צינור",
       "leadDiscovery": "גילוי לידים",
       "tracker": "טראקר",
+      "documentation": "תיעוד",
       "mySpace": "המרחב שלי",
       "mySpaceTasks": "משימות",
       "calendar": "יומן",
@@ -116,6 +117,19 @@
       "apiHealthCheck": "בדיקת תקינות API",
       "office": "משרד תלת־ממד",
       "settings": "הגדרות"
+    },
+    "documentation": {
+      "title": "מסמכים",
+      "new": "מסמך חדש",
+      "untitled": "ללא שם",
+      "emptyTitle": "צרו את המסמך הראשון",
+      "emptyHint": "ויקי משותף לצוות. אפשר לייבא CSV, גיליון או קובץ Word אל הדף.",
+      "saving": "שומר…",
+      "saved": "נשמר",
+      "loadError": "לא ניתן לטעון מסמכים.",
+      "saveError": "לא ניתן לשמור.",
+      "conflict": "עודכן במקום אחר. נטענה הגרסה העדכנית.",
+      "deleteConfirm": "למחוק את המסמך? הוא ייעלם מהרשימה."
     },
     "collapse": "צמצם",
     "table": {
@@ -715,6 +729,10 @@
       "tracker": {
         "title": "טראקר",
         "subtitle": "פרויקטים ולוחות משימות לתפעול מכירות"
+      },
+      "documentation": {
+        "title": "תיעוד",
+        "subtitle": "ויקי משותף — מסמכים, טבלאות ועריכה בסגנון Word"
       },
       "tasks": {
         "title": "המרחב שלי",

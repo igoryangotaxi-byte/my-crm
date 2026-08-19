@@ -27,13 +27,14 @@ export const SALES_OPERATION_PAGE_KEYS = [
   "salesAutomation",
   "salesSettings",
   "salesTracker",
+  "salesDocumentation",
   "salesLeadDiscovery",
   "salesAiAssistant",
 ] as const satisfies readonly AppPageKey[];
 
 export type SalesOperationPageKey = (typeof SALES_OPERATION_PAGE_KEYS)[number];
 
-export const CURRENT_PERMISSIONS_VERSION = 14;
+export const CURRENT_PERMISSIONS_VERSION = 15;
 
 export function isAppRole(value: unknown): value is AppRole {
   return typeof value === "string" && (APP_ROLES as readonly string[]).includes(value);
@@ -139,6 +140,7 @@ export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: AppPageK
   { prefix: "/sales-operation/corp-register", page: "salesPipeline" },
   { prefix: "/sales-operation/lead-discovery", page: "salesLeadDiscovery" },
   { prefix: "/sales-operation/tracker", page: "salesTracker" },
+  { prefix: "/sales-operation/documentation", page: "salesDocumentation" },
   { prefix: "/sales-operation/portfolio", page: "salesSignedClients" },
   { prefix: "/sales-operation/b2b-clients", page: "salesB2BClients" },
   { prefix: "/sales-operation/manager-analytics", page: "salesManagerAnalytics" },
@@ -160,6 +162,7 @@ export function resolveSalesOperationPageKey(pathname: string): AppPageKey {
   if (pathname.startsWith("/sales-operation/corp-register")) return "salesPipeline";
   if (pathname.startsWith("/sales-operation/pipeline")) return "salesPipeline";
   if (pathname.startsWith("/sales-operation/tracker")) return "salesTracker";
+  if (pathname.startsWith("/sales-operation/documentation")) return "salesDocumentation";
   if (pathname.startsWith("/sales-operation/communications")) return "communications";
   if (pathname.startsWith("/sales-operation/pre-orders")) return "preOrders";
   if (pathname.startsWith("/sales-operation/route-bundles")) return "preOrders";

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Command } from "cmdk";
 import {
+  BookOpen,
   Briefcase,
   Building2,
   Calculator,
@@ -44,6 +45,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/sales-operation/office", labelKey: "office", page: "salesPipeline", icon: LayoutDashboard },
   { href: "/sales-operation/lead-discovery", labelKey: "leadDiscovery", page: "salesLeadDiscovery", icon: Search },
   { href: "/sales-operation/tracker", labelKey: "tracker", page: "salesTracker", icon: LayoutDashboard },
+  { href: "/sales-operation/documentation", labelKey: "documentation", page: "salesDocumentation", icon: BookOpen },
   { href: "/sales-operation/portfolio", labelKey: "portfolio", page: "salesSignedClients", icon: Briefcase },
   { href: "/sales-operation/b2b-clients", labelKey: "b2bClients", page: "salesB2BClients", icon: Building2 },
   { href: "/sales-operation/analytics", labelKey: "analyticsOverview", page: "salesAnalytics", icon: LineChart },

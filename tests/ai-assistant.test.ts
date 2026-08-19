@@ -30,7 +30,7 @@ describe("Appli AI assistant foundations", () => {
 
   it("defaults salesAiAssistant on for AM/SM/Admin and off for User", () => {
     assert.ok((SALES_OPERATION_PAGE_KEYS as readonly string[]).includes("salesAiAssistant"));
-    assert.equal(CURRENT_PERMISSIONS_VERSION, 14);
+    assert.equal(CURRENT_PERMISSIONS_VERSION, 15);
     assert.equal(defaultRolePermissions.Admin.salesAiAssistant, true);
     assert.equal(defaultRolePermissions["Account Manager"].salesAiAssistant, true);
     assert.equal(defaultRolePermissions["Sales Manager"].salesAiAssistant, true);

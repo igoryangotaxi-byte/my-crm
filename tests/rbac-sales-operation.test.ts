@@ -45,6 +45,7 @@ describe("sales operation RBAC", () => {
     assert.equal(merged.salesAutomation, true);
     // salesSettings stays Admin-only even when inheriting the legacy flag.
     assert.equal(merged.salesSettings, false);
-    assert.equal(CURRENT_PERMISSIONS_VERSION, 14);
+    assert.equal(merged.salesDocumentation, true);
+    assert.equal(CURRENT_PERMISSIONS_VERSION, 15);
   });
 });

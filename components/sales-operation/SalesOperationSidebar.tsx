@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  BookOpen,
   Briefcase,
   Building2,
   CalendarClock,
@@ -107,6 +108,7 @@ export function SalesOperationSidebar() {
       { kind: "leaf", href: "/sales-operation/office", labelKey: "office", page: "salesPipeline", icon: Box },
       { kind: "leaf", href: "/sales-operation/lead-discovery", labelKey: "leadDiscovery", page: "salesLeadDiscovery", icon: Search },
       { kind: "leaf", href: "/sales-operation/tracker", labelKey: "tracker", page: "salesTracker", icon: LayoutDashboard },
+      { kind: "leaf", href: "/sales-operation/documentation", labelKey: "documentation", page: "salesDocumentation", icon: BookOpen },
       { kind: "leaf", href: "/sales-operation/portfolio", labelKey: "portfolio", page: "salesSignedClients", icon: Briefcase },
       { kind: "leaf", href: "/sales-operation/b2b-clients", labelKey: "b2bClients", page: "salesB2BClients", icon: Building2 },
       {

@@ -1,0 +1,79 @@
+.documentation-editor .tiptap {
+  min-height: 60vh;
+  outline: none;
+  color: var(--so-text);
+  font-family: var(--font-yango-text), Arial, Helvetica, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.documentation-editor .tiptap p {
+  margin: 0 0 0.65em;
+}
+
+.documentation-editor .tiptap h1,
+.documentation-editor .tiptap h2,
+.documentation-editor .tiptap h3 {
+  font-family: var(--font-yango-headline), var(--font-yango-text), Arial, sans-serif;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 1.1em 0 0.4em;
+  color: var(--so-text);
+}
+
+.documentation-editor .tiptap h1 { font-size: 1.75rem; }
+.documentation-editor .tiptap h2 { font-size: 1.35rem; }
+.documentation-editor .tiptap h3 { font-size: 1.15rem; }
+
+.documentation-editor .tiptap ul,
+.documentation-editor .tiptap ol {
+  padding-left: 1.4em;
+  margin: 0 0 0.75em;
+}
+
+.documentation-editor .tiptap blockquote {
+  margin: 0 0 0.75em;
+  padding-left: 0.85em;
+  border-left: 3px solid var(--so-border);
+  color: var(--so-muted);
+}
+
+.documentation-editor .tiptap .documentation-table,
+.documentation-editor .tiptap table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75em 0 1em;
+  table-layout: auto;
+}
+
+.documentation-editor .tiptap th,
+.documentation-editor .tiptap td {
+  border: 1px solid var(--so-border);
+  padding: 6px 8px;
+  min-width: 56px;
+  vertical-align: top;
+}
+
+.documentation-editor .tiptap th {
+  background: var(--so-surface-2);
+  font-weight: 600;
+  text-align: left;
+}
+
+.documentation-editor .tiptap .selectedCell {
+  background: color-mix(in srgb, var(--so-accent, #ff2d2d) 12%, transparent);
+}
+
+.documentation-editor .tiptap .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--so-accent, #ff2d2d);
+  pointer-events: none;
+}
+
+.documentation-editor .tableWrapper {
+  overflow-x: auto;
+}

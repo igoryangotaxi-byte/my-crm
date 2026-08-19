@@ -96,6 +96,7 @@
       "pipeline": "Pipeline",
       "leadDiscovery": "Lead Discovery",
       "tracker": "Tracker",
+      "documentation": "Documentation",
       "mySpace": "My Space",
       "mySpaceTasks": "Tasks",
       "calendar": "Calendar",
@@ -116,6 +117,19 @@
       "apiHealthCheck": "API Healthy Check",
       "office": "3D Office",
       "settings": "Settings"
+    },
+    "documentation": {
+      "title": "Documents",
+      "new": "New document",
+      "untitled": "Untitled",
+      "emptyTitle": "Create the first document",
+      "emptyHint": "Shared wiki for the team. Import a CSV, spreadsheet or Word file into the page.",
+      "saving": "Saving…",
+      "saved": "Saved",
+      "loadError": "Could not load documents.",
+      "saveError": "Could not save.",
+      "conflict": "Updated elsewhere. Reloaded the latest version.",
+      "deleteConfirm": "Delete this document? It can be recovered from the database, but it leaves the list."
     },
     "collapse": "Collapse",
     "table": {
@@ -715,6 +729,10 @@
       "tracker": {
         "title": "Tracker",
         "subtitle": "Projects and task boards for sales operations"
+      },
+      "documentation": {
+        "title": "Documentation",
+        "subtitle": "Shared wiki — documents, tables, and Word-style editing"
       },
       "tasks": {
         "title": "My Space",
