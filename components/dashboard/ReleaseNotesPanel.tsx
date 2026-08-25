@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-08-25",
+    title: "Yango B2B API EU host — pre-orders restored (0.2.60)",
+    notes:
+      "App version 0.2.60. Yango moved B2B Integration to the EU host; the CRM still called b2b-api.yango.com, which kept answering auth/list but returned zero future orders for most cabinets — so Pre-Orders looked empty except one client. Default base URL is now https://b2b-api-e.yango.com/integration (override with YANGO_API_BASE_URL). Pre-order list/auth/info fetches use cache: no-store so shared URLs cannot mix cabinets in Next's data cache, and waiting is treated as in-progress so live rides stay on Orders. Same due_date > now rule; every configured token is polled, so new future scheduling on any cabinet appears automatically. (c89eee17)",
+  },
+  {
     date: "2026-08-19",
     title: "Sales Operation Documentation wiki (0.2.59)",
     notes:
