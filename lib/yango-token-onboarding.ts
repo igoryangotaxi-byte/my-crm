@@ -1,4 +1,7 @@
-const YANGO_BASE_URL = "https://b2b-api.yango.com/integration";
+/** Keep in sync with `lib/yango-api.ts` (EU B2B host). */
+const YANGO_BASE_URL = (
+  process.env.YANGO_API_BASE_URL?.trim() || "https://b2b-api-e.yango.com/integration"
+).replace(/\/$/, "");
 
 type YangoAuthListResponse = {
   clients?: Array<{ client_id: string; name: string }>;

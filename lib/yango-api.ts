@@ -35,7 +35,10 @@ import { loadAuthStore } from "@/lib/auth-store";
 import { googleGeocodeLatLon, normalizeAddressForGeocode } from "@/lib/google-geocoding";
 import { unstable_cache } from "next/cache";
 
-const YANGO_BASE_URL = "https://b2b-api.yango.com/integration";
+/** Yango B2B Integration API (EU host). Override with `YANGO_API_BASE_URL` if needed. */
+const YANGO_BASE_URL = (
+  process.env.YANGO_API_BASE_URL?.trim() || "https://b2b-api-e.yango.com/integration"
+).replace(/\/$/, "");
 const ORDERS_PAGE_LIMIT = 100;
 const PREORDERS_CACHE_REVALIDATE_SECONDS = 30;
 const B2B_DASHBOARD_CACHE_REVALIDATE_SECONDS = 60;
@@ -550,6 +553,7 @@ function isInProgressStatus(rawStatus?: string) {
     status.includes("search") ||
     status.includes("driving") ||
     status.includes("transporting") ||
+    status.includes("waiting") ||
     status.includes("arrived") ||
     status.includes("accepted") ||
     status.includes("in_progress")
@@ -668,9 +672,29 @@ function isFutureDate(input?: string) {
   return !Number.isNaN(date.getTime()) && date.getTime() > Date.now();
 }
 
-function getSinceDateTime() {
-  const now = new Date(Date.now() - 60 * 1000);
-  return now.toISOString();
+/** Pre-Orders window: due_date from ~now through N days ahead (Yango `since_datetime` is due-based). */
+function getPreOrdersListRange(): { since: string; till: string } {
+  const aheadDays = readPositiveIntEnv("YANGO_PREORDERS_AHEAD_DAYS", 180);
+  const since = new Date(Date.now() - 60 * 1000);
+  const till = new Date();
+  till.setDate(till.getDate() + aheadDays);
+  till.setHours(23, 59, 59, 999);
+  return { since: since.toISOString(), till: till.toISOString() };
+}
+
+/** Future due only; skip active/completed/cancelled (those belong on Orders). */
+function isPreOrderListCandidate(order: YangoOrder) {
+  if (!isFutureDate(order.due_date)) {
+    return false;
+  }
+  if (
+    isInProgressStatus(order.status) ||
+    isCompletedStatus(order.status) ||
+    isCancelledStatus(order.status)
+  ) {
+    return false;
+  }
+  return true;
 }
 
 async function getOrderDetails(
@@ -679,7 +703,7 @@ async function getOrderDetails(
   orderId: string,
 ) {
   try {
-    return await fetchJson<YangoOrderInfoResponse>(
+    return await fetchJsonNoCache<YangoOrderInfoResponse>(
       `${YANGO_BASE_URL}/2.0/orders/info?order_id=${orderId}`,
       tokenConfig.token,
       clientId,
@@ -690,21 +714,26 @@ async function getOrderDetails(
 }
 
 async function getClientPreOrders(tokenConfig: TokenConfig, client: YangoClient) {
-  const preOrders: PreOrder[] = [];
   let offset = 0;
   const limit = ORDERS_PAGE_LIMIT;
-  const sinceDateTime = getSinceDateTime();
+  const { since, till } = getPreOrdersListRange();
+  const maxPages = readPositiveIntEnv("YANGO_PREORDERS_MAX_LIST_PAGES", 20);
+  const candidateOrders: YangoOrder[] = [];
+  const seenIds = new Set<string>();
 
-  while (true) {
+  for (let page = 0; page < maxPages; page += 1) {
     const params = new URLSearchParams({
       limit: String(limit),
       offset: String(offset),
       sorting_field: "due_date",
+      /** Ascending: soonest future due first within [since≈now, till]. */
       sorting_direction: "1",
-      since_datetime: sinceDateTime,
+      since_datetime: since,
+      till_datetime: till,
     });
 
-    const response = await fetchJson<YangoOrderListResponse>(
+    // no-store: URL is shared across cabinets; Authorization / corp client live only in headers.
+    const response = await fetchJsonNoCache<YangoOrderListResponse>(
       `${YANGO_BASE_URL}/2.0/orders/list?${params.toString()}`,
       tokenConfig.token,
       client.client_id,
@@ -715,34 +744,38 @@ async function getClientPreOrders(tokenConfig: TokenConfig, client: YangoClient)
       break;
     }
 
-    const futureOrders = items.filter((order) => {
-      if (!isFutureDate(order.due_date)) {
-        return false;
-      }
-      // Hide already active/completed/cancelled rides from Pre-Orders
-      // so they appear in Orders with the correct lifecycle status.
-      if (
-        isInProgressStatus(order.status) ||
-        isCompletedStatus(order.status) ||
-        isCancelledStatus(order.status)
-      ) {
-        return false;
-      }
-      return true;
-    });
+    for (const order of items) {
+      if (!order.id || seenIds.has(order.id)) continue;
+      if (!isPreOrderListCandidate(order)) continue;
+      seenIds.add(order.id);
+      candidateOrders.push(order);
+    }
 
-    const orderDetailsList = await Promise.all(
-      futureOrders.map((order) =>
-        getOrderDetails(tokenConfig, client.client_id, order.id),
-      ),
-    );
-    const addressOverridesByOrderId = await loadRequestRideAddressSnapshotsBatch({
-      tokenLabel: tokenConfig.label,
-      clientId: client.client_id,
-      orderIds: futureOrders.map((order) => order.id),
-    });
+    offset += items.length;
+    if (items.length < limit) {
+      break;
+    }
+  }
 
-    for (const [index, order] of futureOrders.entries()) {
+  candidateOrders.sort((a, b) => {
+    const aTime = a.due_date ? new Date(a.due_date).getTime() : 0;
+    const bTime = b.due_date ? new Date(b.due_date).getTime() : 0;
+    return aTime - bTime;
+  });
+
+  const orderDetailsList = await Promise.all(
+    candidateOrders.map((order) =>
+      getOrderDetails(tokenConfig, client.client_id, order.id),
+    ),
+  );
+  const addressOverridesByOrderId = await loadRequestRideAddressSnapshotsBatch({
+    tokenLabel: tokenConfig.label,
+    clientId: client.client_id,
+    orderIds: candidateOrders.map((order) => order.id),
+  });
+
+  const enriched = await Promise.all(
+    candidateOrders.map(async (order, index) => {
       const orderDetails: YangoOrderInfoResponse | undefined =
         orderDetailsList[index];
       const addressOverride = addressOverridesByOrderId[order.id];
@@ -752,11 +785,14 @@ async function getClientPreOrders(tokenConfig: TokenConfig, client: YangoClient)
       );
       const performer: YangoPerformer | undefined = orderDetails?.performer;
       const names = splitDriverFullName(performer?.fullname);
-      const pointAAddress = addressOverride?.sourceAddress ?? order.source?.fullname ?? "Not available";
+      const pointAAddress =
+        addressOverride?.sourceAddress ?? order.source?.fullname ?? "Not available";
 
       const info = (orderDetails?.info ?? null) as Record<string, unknown> | null;
       const report = (orderDetails?.report ?? null) as Record<string, unknown> | null;
-      const orderSourcePoint = readGeopoint(order.source?.geopoint ?? order.source?.point ?? null);
+      const orderSourcePoint = readGeopoint(
+        order.source?.geopoint ?? order.source?.point ?? null,
+      );
       const detailsSourceObj =
         (info?.source as Record<string, unknown> | undefined) ??
         (report?.source as Record<string, unknown> | undefined) ??
@@ -767,7 +803,7 @@ async function getClientPreOrders(tokenConfig: TokenConfig, client: YangoClient)
       const geocodedPointA =
         orderSourcePoint ?? detailsSourcePoint ?? (await geocodePointA(pointAAddress));
 
-      preOrders.push({
+      const row: PreOrder = {
         id: `${tokenConfig.label}-${order.id}`,
         tokenLabel: tokenConfig.label,
         clientId: client.client_id,
@@ -779,7 +815,10 @@ async function getClientPreOrders(tokenConfig: TokenConfig, client: YangoClient)
         scheduledFor: formatDateTime(order.due_date),
         scheduledAt: order.due_date,
         pointA: pointAAddress,
-        pointB: addressOverride?.destinationAddress ?? order.destination?.fullname ?? "Not available",
+        pointB:
+          addressOverride?.destinationAddress ??
+          order.destination?.fullname ??
+          "Not available",
         pointALat: geocodedPointA?.lat ?? null,
         pointALon: geocodedPointA?.lon ?? null,
         driverAssigned: Boolean(performer?.fullname || performer?.phone || performer?.id),
@@ -787,23 +826,12 @@ async function getClientPreOrders(tokenConfig: TokenConfig, client: YangoClient)
         driverFirstName: names.firstName,
         driverLastName: names.lastName,
         driverPhone: performer?.phone ?? null,
-      });
-    }
+      };
+      return row;
+    }),
+  );
 
-    offset += items.length;
-    const reportedTotal =
-      typeof response.total_amount === "number" && response.total_amount > 0
-        ? response.total_amount
-        : null;
-    if (reportedTotal != null && offset >= reportedTotal) {
-      break;
-    }
-    if (items.length < limit) {
-      break;
-    }
-  }
-
-  return preOrders;
+  return enriched;
 }
 
 async function loadAllYangoPreOrders(scope?: YangoScope) {
@@ -829,7 +857,7 @@ async function loadAllYangoPreOrders(scope?: YangoScope) {
       }
 
       try {
-        const authResponse = await fetchJson<YangoAuthListResponse>(
+        const authResponse = await fetchJsonNoCache<YangoAuthListResponse>(
           `${YANGO_BASE_URL}/2.0/auth/list`,
           tokenConfig.token,
         );
@@ -931,7 +959,7 @@ async function loadAllYangoPreOrders(scope?: YangoScope) {
 
 export const getAllYangoPreOrders = unstable_cache(
   loadAllYangoPreOrders,
-  ["yango-preorders-v5"],
+  ["yango-preorders-v7"],
   { revalidate: PREORDERS_CACHE_REVALIDATE_SECONDS, tags: ["yango-preorders"] },
 );
 
