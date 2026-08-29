@@ -784,18 +784,27 @@ async function getClientPreOrders(tokenConfig: TokenConfig, client: YangoClient)
         orderDetails ?? null,
       );
       const performer: YangoPerformer | undefined = orderDetails?.performer;
-      const names = splitDriverFullName(performer?.fullname);
+      const reportRecord =
+        orderDetails?.report && typeof orderDetails.report === "object"
+          ? (orderDetails.report as Record<string, unknown>)
+          : null;
+      const driverDetails = extractDriverDetails(performer, reportRecord);
+      const namesFromPerformer = splitDriverFullName(
+        performer?.fullname ?? (performer as { name?: string } | undefined)?.name,
+      );
+      const firstName = driverDetails.driverFirstName ?? namesFromPerformer.firstName;
+      const lastName = driverDetails.driverLastName ?? namesFromPerformer.lastName;
       const pointAAddress =
         addressOverride?.sourceAddress ?? order.source?.fullname ?? "Not available";
 
       const info = (orderDetails?.info ?? null) as Record<string, unknown> | null;
-      const report = (orderDetails?.report ?? null) as Record<string, unknown> | null;
+      const reportObj = reportRecord;
       const orderSourcePoint = readGeopoint(
         order.source?.geopoint ?? order.source?.point ?? null,
       );
       const detailsSourceObj =
         (info?.source as Record<string, unknown> | undefined) ??
-        (report?.source as Record<string, unknown> | undefined) ??
+        (reportObj?.source as Record<string, unknown> | undefined) ??
         null;
       const detailsSourcePoint = readGeopoint(
         detailsSourceObj?.geopoint ?? detailsSourceObj?.point ?? null,
@@ -821,11 +830,18 @@ async function getClientPreOrders(tokenConfig: TokenConfig, client: YangoClient)
           "Not available",
         pointALat: geocodedPointA?.lat ?? null,
         pointALon: geocodedPointA?.lon ?? null,
-        driverAssigned: Boolean(performer?.fullname || performer?.phone || performer?.id),
+        driverAssigned: Boolean(
+          performer?.fullname ||
+            performer?.phone ||
+            performer?.id ||
+            driverDetails.driverName,
+        ),
         driverId: performer?.id ?? null,
-        driverFirstName: names.firstName,
-        driverLastName: names.lastName,
+        driverFirstName: firstName,
+        driverLastName: lastName,
         driverPhone: performer?.phone ?? null,
+        driverCarModel: driverDetails.carModel,
+        driverCarPlate: driverDetails.carPlate,
       };
       return row;
     }),
@@ -957,9 +973,14 @@ async function loadAllYangoPreOrders(scope?: YangoScope) {
   return { preOrders, errors, diagnostics };
 }
 
+/** Fresh (uncached) pre-orders load for Controller Live feed. */
+export async function loadAllYangoPreOrdersFresh(scope?: YangoScope) {
+  return loadAllYangoPreOrders(scope);
+}
+
 export const getAllYangoPreOrders = unstable_cache(
   loadAllYangoPreOrders,
-  ["yango-preorders-v7"],
+  ["yango-preorders-v8"],
   { revalidate: PREORDERS_CACHE_REVALIDATE_SECONDS, tags: ["yango-preorders"] },
 );
 

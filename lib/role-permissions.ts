@@ -30,6 +30,7 @@ export const SALES_OPERATION_PAGE_KEYS = [
   "salesDocumentation",
   "salesLeadDiscovery",
   "salesAiAssistant",
+  "preOrders",
 ] as const satisfies readonly AppPageKey[];
 
 export type SalesOperationPageKey = (typeof SALES_OPERATION_PAGE_KEYS)[number];

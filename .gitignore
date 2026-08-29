@@ -31,6 +31,7 @@
 /.cache/
 /data/request-rides-user-map.json
 /data/client-employee-links.json
+/data/preorder-operator-marks.json
 
 # debug
 npm-debug.log*

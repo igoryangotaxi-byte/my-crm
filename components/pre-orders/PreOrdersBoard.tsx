@@ -1,9 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import {
   segmentedTabInactiveClass,
@@ -12,39 +9,39 @@ import {
 } from "@/components/crm/segmented-tab-classes";
 import { PreOrdersMapView } from "@/components/pre-orders/PreOrdersMapView";
 import { FilterBar, FilterChip } from "@/components/patterns/FilterBar";
-import type { PreOrder } from "@/types/crm";
+import {
+  formatDriverDisplayName,
+  getPreOrderUrgencyLabel,
+  getPreOrderUrgencyLevel,
+  isPreOrderDriverAssigned,
+  minutesUntilScheduled,
+  preOrderUrgencyRailClass,
+  preOrderUrgencyTintClass,
+} from "@/lib/preorders/urgency";
+import type { PreOrder, PreOrderOperatorContactStatus } from "@/types/crm";
 
 type PreOrdersBoardProps = {
   preOrders: PreOrder[];
   errors: string[];
+  /** HUB Controller: uncached live poll + shared operator marks. */
+  enableControllerLive?: boolean;
 };
 
 type FilterMode = "all" | "today" | "tomorrow" | "range";
 type ViewMode = "list" | "onMap";
 
-function IconCalendar({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <path d="M16 2v4M8 2v4M3 10h18" />
-    </svg>
-  );
-}
+const LIVE_POLL_MS = 15_000;
+const CLOCK_TICK_MS = 1_000;
+
+const CONTACT_OPTIONS: Array<{ value: PreOrderOperatorContactStatus; label: string }> = [
+  { value: "driver_confirmed", label: "Driver confirmed" },
+  { value: "no_answer", label: "No answer" },
+  { value: "issue", label: "Issue" },
+  { value: "none", label: "Clear mark" },
+];
 
 function getScheduledDate(preOrder: PreOrder) {
-  if (!preOrder.scheduledAt) {
-    return null;
-  }
-
+  if (!preOrder.scheduledAt) return null;
   const date = new Date(preOrder.scheduledAt);
   return Number.isNaN(date.getTime()) ? null : date;
 }
@@ -61,46 +58,78 @@ function endOfDay(date: Date) {
   return copy;
 }
 
-function isDriverAssigned(preOrder: PreOrder) {
-  const status = preOrder.orderStatus?.toLowerCase() ?? "";
-  const assignedStatuses = new Set([
-    "driving",
-    "transporting",
-    "waiting",
-    "pickup",
-    "assigned",
-  ]);
+function formatClock(iso: string | null | undefined) {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Jerusalem",
+  }).format(date);
+}
 
-  return preOrder.driverAssigned || assignedStatuses.has(status);
+function contactLabel(status: PreOrderOperatorContactStatus | undefined) {
+  switch (status) {
+    case "driver_confirmed":
+      return "✓ Confirmed";
+    case "no_answer":
+      return "No answer";
+    case "issue":
+      return "Issue";
+    default:
+      return "Mark contact";
+  }
+}
+
+function contactChipClass(status: PreOrderOperatorContactStatus | undefined) {
+  switch (status) {
+    case "driver_confirmed":
+      return "border-emerald-200 bg-emerald-50 text-emerald-800";
+    case "no_answer":
+      return "border-amber-200 bg-amber-50 text-amber-900";
+    case "issue":
+      return "border-rose-200 bg-rose-50 text-rose-800";
+    default:
+      return "border-slate-200 bg-white text-slate-600";
+  }
 }
 
 function buildYangoB2CHandoffUrl(preOrder: PreOrder) {
-  const baseUrl = new URL("https://yango.com/en_int/order/");
-  const comment = `CRM fallback from B2B pre-order ${preOrder.orderId}`;
-  const params = baseUrl.searchParams;
-  // Best-effort aliases because Yango web can read different keys in different locales/versions.
+  const url = new URL("https://yango.com/en_int/order/");
+  const params = url.searchParams;
   params.set("pickup", preOrder.pointA);
-  params.set("from", preOrder.pointA);
-  params.set("source", preOrder.pointA);
   params.set("destination", preOrder.pointB);
-  params.set("to", preOrder.pointB);
-  params.set("dropoff", preOrder.pointB);
-  params.set("comment", comment);
-  params.set("notes", comment);
+  params.set("comment", `CRM fallback from B2B pre-order ${preOrder.orderId}`);
   params.set("scheduled_for", preOrder.scheduledFor);
-  params.set("when", preOrder.scheduledFor);
   params.set("ride_class", "comfortplus");
-  params.set("class", "comfortplus");
   params.set("utm_source", "crm_b2c_handoff");
-  return baseUrl.toString();
+  return url.toString();
 }
 
-export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
-  const tPreOrders = useTranslations("preOrdersPage");
+export function PreOrdersBoard({
+  preOrders: initialPreOrders,
+  errors: initialErrors,
+  enableControllerLive = false,
+}: PreOrdersBoardProps) {
   const { currentUser } = useAuth();
   const isClientScopedUser = currentUser?.accountType === "client";
   const canUseOnMap = !isClientScopedUser;
-  const router = useRouter();
+  const controllerMode = enableControllerLive && !isClientScopedUser;
+
+  const [rows, setRows] = useState<PreOrder[]>(initialPreOrders);
+  const [feedErrors, setFeedErrors] = useState<string[]>(initialErrors);
+  const [fetchedAt, setFetchedAt] = useState<string | null>(
+    enableControllerLive ? null : new Date().toISOString(),
+  );
+  const [isLive, setIsLive] = useState(false);
+  const [isStale, setIsStale] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [removedNotice, setRemovedNotice] = useState<string | null>(null);
+
   const [selectedPreOrder, setSelectedPreOrder] = useState<PreOrder | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
@@ -109,16 +138,159 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
-  const [fallbackActionError, setFallbackActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [handoffMessage, setHandoffMessage] = useState<string | null>(null);
   const [handoffPreOrder, setHandoffPreOrder] = useState<PreOrder | null>(null);
-  const [handoffOpenedOrderId, setHandoffOpenedOrderId] = useState<string | null>(null);
+  const [markBusyKey, setMarkBusyKey] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!canUseOnMap && viewMode === "onMap") {
-      setViewMode("list");
-    }
+    if (!canUseOnMap && viewMode === "onMap") setViewMode("list");
   }, [canUseOnMap, viewMode]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), CLOCK_TICK_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const refreshLive = useCallback(async () => {
+    if (!controllerMode) return;
+    setIsRefreshing(true);
+    try {
+      const response = await fetch("/api/sales-operation/pre-orders/live", {
+        method: "GET",
+        cache: "no-store",
+      });
+      const data = (await response.json()) as {
+        ok?: boolean;
+        preOrders?: PreOrder[];
+        errors?: string[];
+        fetchedAt?: string;
+        error?: string;
+      };
+      if (!response.ok || !data.ok || !Array.isArray(data.preOrders)) {
+        setIsStale(true);
+        if (data.error) {
+          setFeedErrors((prev) => [...new Set([...prev, data.error!])]);
+        }
+        return;
+      }
+
+      setRows((prev) => {
+        const nextIds = new Set(data.preOrders!.map((row) => row.id));
+        const vanished = prev.filter((row) => !nextIds.has(row.id));
+        if (vanished.length === 1) {
+          setRemovedNotice(
+            `Order ${vanished[0].orderId} left the live board (cancelled or completed).`,
+          );
+        } else if (vanished.length > 1) {
+          setRemovedNotice(`${vanished.length} orders left the live board.`);
+        }
+        return data.preOrders!;
+      });
+      setFeedErrors(Array.isArray(data.errors) ? data.errors : []);
+      setFetchedAt(data.fetchedAt ?? new Date().toISOString());
+      setIsLive(true);
+      setIsStale(false);
+    } catch (error) {
+      setIsStale(true);
+      setFeedErrors((prev) => [
+        ...new Set([...prev, error instanceof Error ? error.message : "Live refresh failed."]),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [controllerMode]);
+
+  useEffect(() => {
+    if (!controllerMode) return;
+    void refreshLive();
+    const timer = window.setInterval(() => {
+      void refreshLive();
+    }, LIVE_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [controllerMode, refreshLive]);
+
+  useEffect(() => {
+    if (!removedNotice) return;
+    const timer = window.setTimeout(() => setRemovedNotice(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [removedNotice]);
+
+  const activeRows = useMemo(() => {
+    return rows
+      .filter((row) => {
+        if (!row.scheduledAt) return true;
+        const due = new Date(row.scheduledAt).getTime();
+        return Number.isFinite(due) ? due > nowMs : true;
+      })
+      .slice()
+      .sort((a, b) => {
+        const aTime = a.scheduledAt ? new Date(a.scheduledAt).getTime() : 0;
+        const bTime = b.scheduledAt ? new Date(b.scheduledAt).getTime() : 0;
+        return aTime - bTime;
+      });
+  }, [rows, nowMs]);
+
+  useEffect(() => {
+    setSelectedPreOrder((prev) => {
+      if (!prev) return prev;
+      if (!activeRows.some((row) => row.id === prev.id)) return null;
+      return activeRows.find((row) => row.id === prev.id) ?? prev;
+    });
+  }, [activeRows]);
+
+  const filteredPreOrders = useMemo(() => {
+    const now = new Date(nowMs);
+    const todayStart = startOfDay(now);
+    const todayEnd = endOfDay(now);
+    const tomorrowStart = startOfDay(
+      new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1),
+    );
+    const tomorrowEnd = endOfDay(
+      new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1),
+    );
+
+    return activeRows.filter((preOrder) => {
+      const scheduledDate = getScheduledDate(preOrder);
+      if (!scheduledDate) return filterMode === "all";
+      if (filterMode === "today") return scheduledDate >= todayStart && scheduledDate <= todayEnd;
+      if (filterMode === "tomorrow") {
+        return scheduledDate >= tomorrowStart && scheduledDate <= tomorrowEnd;
+      }
+      if (filterMode === "range") {
+        const from = fromDate ? startOfDay(new Date(fromDate)) : null;
+        const to = toDate ? endOfDay(new Date(toDate)) : null;
+        if (from && Number.isNaN(from.getTime())) return true;
+        if (to && Number.isNaN(to.getTime())) return true;
+        if (from && scheduledDate < from) return false;
+        if (to && scheduledDate > to) return false;
+        return true;
+      }
+      return true;
+    });
+  }, [activeRows, filterMode, fromDate, toDate, nowMs]);
+
+  const counters = useMemo(() => {
+    let unassigned = 0;
+    let atRisk = 0;
+    for (const row of filteredPreOrders) {
+      const level = getPreOrderUrgencyLevel(row, nowMs);
+      if (level !== "green") unassigned += 1;
+      if (level === "red" || level === "yellow") atRisk += 1;
+    }
+    return { live: filteredPreOrders.length, unassigned, atRisk };
+  }, [filteredPreOrders, nowMs]);
+
+  const copyToClipboard = async (fieldKey: string, value?: string | null) => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedField(fieldKey);
+      window.setTimeout(() => setCopiedField((prev) => (prev === fieldKey ? null : prev)), 1200);
+    } catch {
+      // ignore
+    }
+  };
 
   const cancelPreOrder = async (preOrder: PreOrder) => {
     if (
@@ -146,8 +318,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
       }
       setSelectedPreOrder(null);
       setHandoffPreOrder(null);
-      setHandoffOpenedOrderId(null);
-      router.refresh();
+      await refreshLive();
     } catch (error) {
       setCancelError(error instanceof Error ? error.message : "Failed to cancel order.");
     } finally {
@@ -155,10 +326,65 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
     }
   };
 
-  const getDriverFallbackText = (preOrder: PreOrder) =>
-    preOrder.orderStatus === "scheduling"
-      ? "Not provided by API yet"
-      : "Not assigned";
+  const setContactStatus = async (
+    preOrder: PreOrder,
+    status: PreOrderOperatorContactStatus,
+    event?: MouseEvent,
+  ) => {
+    if (!controllerMode) return;
+    event?.stopPropagation();
+    const key = `${preOrder.tokenLabel}:${preOrder.clientId}:${preOrder.orderId}`;
+    setMarkBusyKey(key);
+    setActionError(null);
+    try {
+      const response = await fetch("/api/sales-operation/pre-orders/marks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tokenLabel: preOrder.tokenLabel,
+          clientId: preOrder.clientId,
+          orderId: preOrder.orderId,
+          status,
+        }),
+      });
+      const data = (await response.json()) as {
+        ok?: boolean;
+        mark?: {
+          status: PreOrderOperatorContactStatus;
+          markedByUserId: string | null;
+          markedByName: string | null;
+          markedAt: string | null;
+          note: string | null;
+        };
+        error?: string;
+      };
+      if (!response.ok || !data.ok || !data.mark) {
+        throw new Error(data.error ?? "Failed to save contact mark.");
+      }
+      const contact =
+        status === "none"
+          ? null
+          : {
+              status: data.mark.status,
+              markedByUserId: data.mark.markedByUserId,
+              markedByName: data.mark.markedByName,
+              markedAt: data.mark.markedAt,
+              note: data.mark.note,
+            };
+      const patch = (row: PreOrder) =>
+        row.tokenLabel === preOrder.tokenLabel &&
+        row.clientId === preOrder.clientId &&
+        row.orderId === preOrder.orderId
+          ? { ...row, operatorContact: contact }
+          : row;
+      setRows((prev) => prev.map(patch));
+      setSelectedPreOrder((prev) => (prev ? patch(prev) : prev));
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Failed to save mark.");
+    } finally {
+      setMarkBusyKey(null);
+    }
+  };
 
   const handoffTextForPreOrder = (preOrder: PreOrder) =>
     [
@@ -170,157 +396,78 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
       `Comment: CRM fallback from B2B pre-order ${preOrder.orderId}`,
     ].join("\n");
 
-  const openB2CWebOrder = async (preOrder: PreOrder) => {
-    setFallbackActionError(null);
-    setHandoffMessage(null);
-    setHandoffPreOrder(preOrder);
-    setHandoffOpenedOrderId(null);
-  };
-
-  const openYangoOrderPageFromHandoff = (preOrder: PreOrder) => {
-    window.open(buildYangoB2CHandoffUrl(preOrder), "_blank", "noopener,noreferrer");
-    setHandoffOpenedOrderId(preOrder.orderId);
-  };
-
-  const copyHandoffDetails = async (preOrder: PreOrder) => {
-    try {
-      await navigator.clipboard.writeText(handoffTextForPreOrder(preOrder));
-      setHandoffMessage("Ride details copied to clipboard.");
-    } catch {
-      setHandoffMessage("Could not copy automatically. Copy route details manually from the modal.");
-    }
-  };
-
-  const fallbackPillClass =
-    "inline-flex rounded-md border px-2 py-0.5 text-[10px] font-medium";
-
-  const fallbackStatusBadge = (preOrder: PreOrder) => {
-    const status = preOrder.fallback?.status;
-    if (!status || status === "idle") return null;
-    if (status === "completed") {
-      return (
-        <span
-          className={`${fallbackPillClass} border-sky-200 bg-sky-50 text-sky-800`}
-        >
-          Fallback to B2C
-        </span>
-      );
-    }
-    if (status === "failed") {
-      return (
-        <span
-          className={`${fallbackPillClass} border-amber-200 bg-amber-50 text-amber-800`}
-        >
-          Fallback failed
-        </span>
-      );
-    }
-    if (status === "in_progress") {
-      return (
-        <span
-          className={`${fallbackPillClass} border-slate-200 bg-slate-50 text-slate-700`}
-        >
-          Fallback running
-        </span>
-      );
-    }
-    return (
-      <span
-        className={`${fallbackPillClass} border-slate-200 bg-slate-50 text-slate-700`}
-      >
-        Fallback skipped
-      </span>
-    );
-  };
-
-  const copyToClipboard = async (fieldKey: string, value?: string | null) => {
-    if (!value) {
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopiedField(fieldKey);
-      setTimeout(() => setCopiedField((prev) => (prev === fieldKey ? null : prev)), 1200);
-    } catch {
-      // Silently ignore clipboard errors to keep UI simple.
-    }
-  };
-
-  const filteredPreOrders = useMemo(() => {
-    const now = new Date();
-    const todayStart = startOfDay(now);
-    const todayEnd = endOfDay(now);
-    const tomorrowStart = startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
-    const tomorrowEnd = endOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
-
-    return preOrders.filter((preOrder) => {
-      const scheduledDate = getScheduledDate(preOrder);
-      if (!scheduledDate) {
-        return filterMode === "all";
-      }
-
-      if (filterMode === "today") {
-        return scheduledDate >= todayStart && scheduledDate <= todayEnd;
-      }
-
-      if (filterMode === "tomorrow") {
-        return scheduledDate >= tomorrowStart && scheduledDate <= tomorrowEnd;
-      }
-
-      if (filterMode === "range") {
-        const from = fromDate ? startOfDay(new Date(fromDate)) : null;
-        const to = toDate ? endOfDay(new Date(toDate)) : null;
-
-        if (from && Number.isNaN(from.getTime())) {
-          return true;
-        }
-
-        if (to && Number.isNaN(to.getTime())) {
-          return true;
-        }
-
-        if (from && scheduledDate < from) {
-          return false;
-        }
-
-        if (to && scheduledDate > to) {
-          return false;
-        }
-
-        return true;
-      }
-
-      return true;
-    });
-  }, [preOrders, filterMode, fromDate, toDate]);
-  const preOrdersCounts = useMemo(() => {
-    const assigned = filteredPreOrders.filter((item) => isDriverAssigned(item)).length;
-    return {
-      assigned,
-      unassigned: filteredPreOrders.length - assigned,
-    };
-  }, [filteredPreOrders]);
-
   return (
     <section className="crm-page">
-      {errors.length > 0 ? (
+      <div className="sticky top-0 z-20 mb-2 space-y-2 rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)]/95 px-3 py-2.5 shadow-sm backdrop-blur">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {controllerMode ? (
+              <>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                    isStale
+                      ? "border-amber-200 bg-amber-50 text-amber-800"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      isStale ? "bg-amber-500" : "animate-pulse bg-emerald-500"
+                    }`}
+                  />
+                  {isStale ? "Stale" : isLive ? "Live" : "Connecting"}
+                </span>
+                <span className="text-xs tabular-nums text-muted">
+                  Last updated:{" "}
+                  <strong className="font-semibold text-slate-900">{formatClock(fetchedAt)}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void refreshLive()}
+                  disabled={isRefreshing}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                >
+                  {isRefreshing ? "Refreshing…" : "Refresh now"}
+                </button>
+              </>
+            ) : (
+              <span className="text-xs font-semibold text-slate-700">Active pre-orders</span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+            <span>
+              {controllerMode ? "Live" : "Active"}{" "}
+              <strong className="tabular-nums text-slate-900">{counters.live}</strong>
+            </span>
+            <span className="text-slate-300">·</span>
+            <span>
+              Unassigned{" "}
+              <strong className="tabular-nums text-slate-900">{counters.unassigned}</strong>
+            </span>
+            <span className="text-slate-300">·</span>
+            <span>
+              At risk <strong className="tabular-nums text-rose-700">{counters.atRisk}</strong>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {feedErrors.length > 0 ? (
         <div className="mb-0.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <p className="font-semibold">Some clients are unavailable</p>
-          <p className="mt-1">{errors.join(" | ")}</p>
+          <p className="mt-1">{feedErrors.join(" | ")}</p>
         </div>
       ) : null}
-
       {cancelError ? (
         <div className="mb-0.5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
           <p className="font-semibold">Could not cancel order</p>
           <p className="mt-1">{cancelError}</p>
         </div>
       ) : null}
-      {fallbackActionError ? (
+      {actionError ? (
         <div className="mb-0.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <p className="font-semibold">Fallback warning</p>
-          <p className="mt-1">{fallbackActionError}</p>
+          <p className="font-semibold">Action warning</p>
+          <p className="mt-1">{actionError}</p>
         </div>
       ) : null}
       {handoffMessage ? (
@@ -329,105 +476,65 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
           <p className="mt-1">{handoffMessage}</p>
         </div>
       ) : null}
-
-      <div className={segmentedTabTrackClass}>
-          <button
-            type="button"
-            onClick={() => setViewMode("list")}
-            className={`flex-1 rounded-xl px-2 py-2.5 text-xs font-semibold sm:px-3 sm:text-sm ${
-              viewMode === "list"
-                ? segmentedTabSelectedClass
-                : segmentedTabInactiveClass
-            }`}
-          >
-            {tPreOrders("tabList")}
-          </button>
-        {canUseOnMap ? (
-          <button
-            type="button"
-            onClick={() => setViewMode("onMap")}
-            className={`flex-1 rounded-xl px-2 py-2.5 text-xs font-semibold sm:px-3 sm:text-sm ${
-              viewMode === "onMap"
-                ? segmentedTabSelectedClass
-                : segmentedTabInactiveClass
-            }`}
-          >
-            {tPreOrders("tabOnMap")}
-          </button>
-        ) : null}
-      </div>
-
-      {viewMode === "list" ? (
-        <div className="mb-0.5 rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface)] p-2 shadow-[var(--so-shadow-xs)]">
-          <div className="flex w-full min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between lg:gap-3">
-            <FilterBar>
-              {([
-                { mode: "all", label: "All" },
-                { mode: "today", label: "Today" },
-                { mode: "tomorrow", label: "Tomorrow" },
-                { mode: "range", label: "Date range" },
-              ] as const).map((item) => (
-                <FilterChip
-                  key={item.mode}
-                  active={filterMode === item.mode}
-                  onClick={() => setFilterMode(item.mode)}
-                >
-                  {item.label}
-                </FilterChip>
-              ))}
-            </FilterBar>
-
-            <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 lg:w-auto lg:flex-1 lg:justify-center">
-              <div className="relative min-w-0 flex-1 sm:max-w-[11rem]">
-                <IconCalendar className="pointer-events-none absolute left-2.5 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="date"
-                  value={fromDate}
-                  aria-label="From date"
-                  onChange={(event) => {
-                    setFilterMode("range");
-                    setFromDate(event.target.value);
-                  }}
-                  className="crm-input h-9 w-full min-w-0 rounded-lg border-slate-200 bg-white pl-9 pr-2 text-sm text-slate-800"
-                />
-              </div>
-              <div className="relative min-w-0 flex-1 sm:max-w-[11rem]">
-                <IconCalendar className="pointer-events-none absolute left-2.5 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="date"
-                  value={toDate}
-                  aria-label="To date"
-                  onChange={(event) => {
-                    setFilterMode("range");
-                    setToDate(event.target.value);
-                  }}
-                  className="crm-input h-9 w-full min-w-0 rounded-lg border-slate-200 bg-white pl-9 pr-2 text-sm text-slate-800"
-                />
-              </div>
-            </div>
-
-            <div
-              className="inline-flex h-9 w-full min-w-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-600 lg:w-auto lg:shrink-0 lg:justify-end"
-              title="Assignment counts for the current filter"
-            >
-              <span className="flex -space-x-1 pr-0.5" aria-hidden>
-                <span className="relative z-10 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white" />
-                <span className="relative z-[2] h-2 w-2 rounded-full bg-amber-400 ring-2 ring-white" />
-                <span className="relative z-[3] h-2 w-2 rounded-full bg-slate-400 ring-2 ring-white" />
-              </span>
-              <span className="whitespace-nowrap">
-                Assigned{" "}
-                <strong className="tabular-nums font-semibold text-slate-900">{preOrdersCounts.assigned}</strong>
-              </span>
-              <span className="text-slate-300">·</span>
-              <span className="whitespace-nowrap">
-                Unassigned{" "}
-                <strong className="tabular-nums font-semibold text-slate-900">{preOrdersCounts.unassigned}</strong>
-              </span>
-            </div>
-          </div>
+      {removedNotice ? (
+        <div className="mb-0.5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
+          {removedNotice}
         </div>
       ) : null}
+
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className={segmentedTabTrackClass}>
+          <button
+            type="button"
+            className={viewMode === "list" ? segmentedTabSelectedClass : segmentedTabInactiveClass}
+            onClick={() => setViewMode("list")}
+          >
+            List
+          </button>
+          {canUseOnMap ? (
+            <button
+              type="button"
+              className={
+                viewMode === "onMap" ? segmentedTabSelectedClass : segmentedTabInactiveClass
+              }
+              onClick={() => setViewMode("onMap")}
+            >
+              On map
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <FilterBar className="mb-2">
+        <FilterChip active={filterMode === "all"} onClick={() => setFilterMode("all")}>
+          All
+        </FilterChip>
+        <FilterChip active={filterMode === "today"} onClick={() => setFilterMode("today")}>
+          Today
+        </FilterChip>
+        <FilterChip active={filterMode === "tomorrow"} onClick={() => setFilterMode("tomorrow")}>
+          Tomorrow
+        </FilterChip>
+        <FilterChip active={filterMode === "range"} onClick={() => setFilterMode("range")}>
+          Range
+        </FilterChip>
+        {filterMode === "range" ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(event) => setFromDate(event.target.value)}
+              className="crm-input h-9 rounded-lg border-slate-200 bg-white px-2 text-sm"
+            />
+            <input
+              type="date"
+              value={toDate}
+              onChange={(event) => setToDate(event.target.value)}
+              className="crm-input h-9 rounded-lg border-slate-200 bg-white px-2 text-sm"
+            />
+          </div>
+        ) : null}
+      </FilterBar>
 
       {viewMode === "onMap" && canUseOnMap ? (
         <PreOrdersMapView
@@ -436,7 +543,7 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
         />
       ) : filteredPreOrders.length === 0 ? (
         <div className="so-card rounded-[12px] px-4 py-10 text-center text-sm text-muted">
-          No pre-orders found for selected filter.
+          No active pre-orders for the current filters.
         </div>
       ) : (
         <section className="so-card mt-0.5 overflow-hidden rounded-[12px]">
@@ -444,122 +551,149 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
             <table className="min-w-full border-separate border-spacing-y-2">
               <thead className="bg-[#f6f6f8]">
                 <tr>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-muted">
                     Pre-order
                   </th>
                   {!isClientScopedUser ? (
-                    <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
+                    <th className="px-3 py-2.5 text-center text-xs font-medium text-muted">
                       Client
                     </th>
                   ) : null}
-                  <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
-                    Status
-                  </th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-muted">Status</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-muted">Driver</th>
+                  {controllerMode ? (
+                    <th className="px-3 py-2.5 text-center text-xs font-medium text-muted">Contact</th>
+                  ) : null}
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-muted">
                     Scheduled for
                   </th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
-                    Route
-                  </th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
-                    Adminka
-                  </th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium tracking-[0.01em] text-muted">
-                    Action
-                  </th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-muted">Route</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-muted">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredPreOrders.map((preOrder) => {
-                  const assigned = isDriverAssigned(preOrder);
-                  const rowTint = assigned ? "[&>td]:bg-emerald-50/45" : "[&>td]:bg-rose-50/45";
+                  const assigned = isPreOrderDriverAssigned(preOrder);
+                  const urgency = getPreOrderUrgencyLevel(preOrder, nowMs);
+                  const minutes = minutesUntilScheduled(preOrder.scheduledAt, nowMs);
+                  const driverName = formatDriverDisplayName(preOrder);
+                  const contact = preOrder.operatorContact;
+                  const busyKey = `${preOrder.tokenLabel}:${preOrder.clientId}:${preOrder.orderId}`;
                   return (
                     <tr
                       key={preOrder.id}
-                      className={`group cursor-pointer transition-colors duration-150 ease-out ${rowTint} hover:[&>td]:bg-[var(--so-surface-hover)]`}
+                      title={getPreOrderUrgencyLabel(urgency, minutes)}
+                      className={`group cursor-pointer transition-colors duration-150 ${preOrderUrgencyTintClass(urgency)} hover:[&>td]:bg-[var(--so-surface-hover)]`}
                       onClick={() => setSelectedPreOrder(preOrder)}
                     >
-                      <td className="rounded-l-xl border border-transparent px-3 py-2.5 text-center text-sm font-medium text-slate-900 transition-colors duration-200">
+                      <td
+                        className={`rounded-l-xl border border-transparent px-3 py-2.5 text-center text-sm font-medium text-slate-900 ${preOrderUrgencyRailClass(urgency)}`}
+                      >
                         {preOrder.orderId}
                       </td>
                       {!isClientScopedUser ? (
-                        <td className="border border-transparent px-3 py-2.5 text-center text-sm text-slate-700 transition-colors duration-200">
+                        <td className="border border-transparent px-3 py-2.5 text-center text-sm text-slate-700">
                           {preOrder.clientName}
                         </td>
                       ) : null}
-                      <td className="border border-transparent px-3 py-2.5 text-center text-sm transition-colors duration-200">
-                        <div className="flex flex-wrap items-center justify-center gap-1.5">
-                          <span
-                            className={`inline-flex rounded-md border px-2.5 py-1 text-xs font-medium ${
-                              assigned
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                                : "border-rose-200 bg-rose-50 text-rose-800"
-                            }`}
-                          >
-                            {assigned ? "Assigned" : "Unassigned"}
-                          </span>
-                          {fallbackStatusBadge(preOrder)}
-                        </div>
-                      </td>
-                      <td className="border border-transparent px-3 py-2.5 text-center text-sm text-slate-700 transition-colors duration-200">
-                        {preOrder.scheduledFor}
-                      </td>
-                      <td className="border border-transparent px-3 py-2.5 text-center text-sm text-slate-700 transition-colors duration-200">
-                        <span className="mx-auto block max-w-[22rem] truncate">
-                          {preOrder.pointA} {"->"} {preOrder.pointB}
+                      <td className="border border-transparent px-3 py-2.5 text-center text-sm">
+                        <span
+                          className={`inline-flex rounded-md border px-2.5 py-1 text-xs font-medium ${
+                            assigned
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                              : "border-rose-200 bg-rose-50 text-rose-800"
+                          }`}
+                        >
+                          {assigned ? "Assigned" : "Unassigned"}
                         </span>
                       </td>
-                      <td className="border border-transparent px-3 py-2.5 text-center text-sm transition-colors duration-200">
-                        <Link
-                          href={`https://go-admin-frontend.taxi.yandex-team.ru/orders/${preOrder.orderId}`}
-                          className="inline-flex items-center rounded-lg border border-slate-200 bg-white/85 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-white"
-                          onClick={(event) => event.stopPropagation()}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Order in Adminka
-                        </Link>
-                      </td>
-                      <td className="rounded-r-xl border border-transparent px-3 py-2.5 text-center text-sm transition-colors duration-200">
-                        <div className="flex flex-wrap items-center justify-center gap-1.5">
-                          <button
-                            type="button"
-                            disabled={cancellingOrderId === preOrder.orderId}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void cancelPreOrder(preOrder);
-                            }}
-                            className="inline-flex items-center rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {cancellingOrderId === preOrder.orderId ? "Cancelling…" : "Cancel in Yango"}
-                          </button>
-                          {!isClientScopedUser ? (
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void openB2CWebOrder(preOrder);
-                              }}
-                              className="inline-flex items-center rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      <td className="border border-transparent px-3 py-2.5 text-center text-sm text-slate-700">
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="font-medium text-slate-900">{driverName}</span>
+                          {preOrder.driverPhone ? (
+                            <a
+                              href={`tel:${preOrder.driverPhone}`}
+                              onClick={(event) => event.stopPropagation()}
+                              className="text-xs text-sky-700 hover:underline"
                             >
-                              Open in Yango B2C
-                            </button>
+                              {preOrder.driverPhone}
+                            </a>
+                          ) : null}
+                          {preOrder.driverId ? (
+                            <span className="text-[10px] text-muted">ID {preOrder.driverId}</span>
+                          ) : null}
+                          {preOrder.driverCarModel || preOrder.driverCarPlate ? (
+                            <span className="text-[10px] text-muted">
+                              {[preOrder.driverCarModel, preOrder.driverCarPlate]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
                           ) : null}
                         </div>
+                      </td>
+                      {controllerMode ? (
+                        <td className="border border-transparent px-3 py-2.5 text-center text-sm">
+                          <div
+                            className="relative inline-flex"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <details>
+                              <summary
+                                className={`list-none inline-flex cursor-pointer rounded-md border px-2.5 py-1 text-[11px] font-semibold ${contactChipClass(contact?.status)}`}
+                              >
+                                {markBusyKey === busyKey
+                                  ? "Saving…"
+                                  : contactLabel(contact?.status)}
+                              </summary>
+                              <div className="absolute left-1/2 z-30 mt-1 w-44 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                                {CONTACT_OPTIONS.map((option) => (
+                                  <button
+                                    key={option.value}
+                                    type="button"
+                                    className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                    onClick={(event) =>
+                                      void setContactStatus(preOrder, option.value, event)
+                                    }
+                                  >
+                                    {option.label}
+                                  </button>
+                                ))}
+                                {contact?.markedByName && contact.markedAt ? (
+                                  <p className="border-t border-slate-100 px-2.5 py-1.5 text-[10px] text-muted">
+                                    {contact.markedByName} · {formatClock(contact.markedAt)}
+                                  </p>
+                                ) : null}
+                              </div>
+                            </details>
+                          </div>
+                        </td>
+                      ) : null}
+                      <td className="border border-transparent px-3 py-2.5 text-center text-sm text-slate-700">
+                        {preOrder.scheduledFor}
+                      </td>
+                      <td className="border border-transparent px-3 py-2.5 text-center text-sm text-slate-700">
+                        <div
+                          className="mx-auto max-w-[220px] truncate"
+                          title={`${preOrder.pointA} → ${preOrder.pointB}`}
+                        >
+                          {preOrder.pointA} → {preOrder.pointB}
+                        </div>
+                      </td>
+                      <td className="rounded-r-xl border border-transparent px-3 py-2.5 text-center text-sm">
+                        <button
+                          type="button"
+                          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedPreOrder(preOrder);
+                          }}
+                        >
+                          Open
+                        </button>
                       </td>
                     </tr>
                   );
                 })}
-                {filteredPreOrders.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={isClientScopedUser ? 6 : 7}
-                      className="px-3 py-8 text-center text-sm text-muted"
-                    >
-                      No pre-orders for selected filters.
-                    </td>
-                  </tr>
-                ) : null}
               </tbody>
             </table>
           </div>
@@ -568,353 +702,167 @@ export function PreOrdersBoard({ preOrders, errors }: PreOrdersBoardProps) {
 
       {selectedPreOrder ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-8 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6 backdrop-blur-sm"
           onClick={() => setSelectedPreOrder(null)}
         >
           <div
-            className="crm-modal-surface w-full max-w-3xl rounded-[16px] p-3 lg:p-4"
+            className="crm-modal-surface max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-[16px] p-4"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mb-4 flex items-start justify-between gap-3 px-1">
-              <h3 className="text-xl font-semibold text-foreground">
-                Order at {selectedPreOrder.scheduledFor}
-              </h3>
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  Pre-order {selectedPreOrder.orderId}
+                </h3>
+                <p className="text-sm text-muted">{selectedPreOrder.clientName}</p>
+              </div>
               <button
                 type="button"
                 onClick={() => setSelectedPreOrder(null)}
-                className="crm-hover-lift inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-lg font-semibold leading-none text-slate-700"
-                aria-label="Close modal"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-lg font-semibold text-slate-700"
               >
                 ×
               </button>
             </div>
-
-            <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr]">
-              <section className="space-y-4">
-                <div className="overflow-hidden rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)]">
-                  <div className="h-44 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.9),rgba(226,232,240,0.6)),linear-gradient(135deg,#e2e8f0,#f8fafc)] p-3">
-                    <div className="grid h-full grid-rows-2 gap-4">
-                      <div className="rounded-2xl border border-slate-200 bg-white/80 p-3">
-                        <p className="text-xs font-medium tracking-[0.01em] text-muted">
-                          Pickup
-                        </p>
-                        <p className="mt-2 text-sm font-medium text-slate-900">
-                          {selectedPreOrder.pointA}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-slate-200 bg-white/80 p-3">
-                        <p className="text-xs font-medium tracking-[0.01em] text-muted">
-                          Destination
-                        </p>
-                        <p className="mt-2 text-sm font-medium text-slate-900">
-                          {selectedPreOrder.pointB}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-4">
-                  <h4 className="mb-3 text-xl font-semibold text-slate-900">Route</h4>
-                  <dl className="space-y-3 text-sm">
-                    <div className="rounded-xl bg-white px-3 py-2.5">
-                      <dt className="text-muted">Client</dt>
-                      <dd className="font-medium text-slate-900">{selectedPreOrder.clientName}</dd>
-                    </div>
-                    <div className="rounded-xl bg-white px-3 py-2.5">
-                      <dt className="text-muted">Scheduled for</dt>
-                      <dd className="font-medium text-slate-900">
-                        {selectedPreOrder.scheduledFor}
-                      </dd>
-                    </div>
-                    <div className="rounded-xl bg-white px-3 py-2.5">
-                      <dt className="text-muted">Created at</dt>
-                      <dd className="font-medium text-slate-900">
-                        {selectedPreOrder.requestedAt}
-                      </dd>
-                    </div>
-                  </dl>
-
-                  <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3.5">
-                    <p className="text-xs font-medium tracking-[0.01em] text-muted">
-                      Driver details
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                <p className="text-xs text-muted">Pickup</p>
+                <p className="mt-1 font-medium text-slate-900">{selectedPreOrder.pointA}</p>
+                <p className="mt-3 text-xs text-muted">Destination</p>
+                <p className="mt-1 font-medium text-slate-900">{selectedPreOrder.pointB}</p>
+                <p className="mt-3 text-xs text-muted">Scheduled for</p>
+                <p className="mt-1 font-medium text-slate-900">{selectedPreOrder.scheduledFor}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                <p className="text-xs text-muted">Driver</p>
+                <p className="mt-1 font-medium text-slate-900">
+                  {formatDriverDisplayName(selectedPreOrder)}
+                </p>
+                <p className="mt-2 text-xs text-muted">Phone</p>
+                <p className="mt-1 font-medium text-slate-900">
+                  {selectedPreOrder.driverPhone ?? "—"}
+                  {selectedPreOrder.driverPhone ? (
+                    <button
+                      type="button"
+                      className="ml-2 text-xs text-sky-700"
+                      onClick={() =>
+                        void copyToClipboard("driverPhone", selectedPreOrder.driverPhone)
+                      }
+                    >
+                      {copiedField === "driverPhone" ? "Copied" : "Copy"}
+                    </button>
+                  ) : null}
+                </p>
+                <p className="mt-2 text-xs text-muted">Driver ID</p>
+                <p className="mt-1 font-medium text-slate-900">
+                  {selectedPreOrder.driverId ?? "—"}
+                </p>
+                <p className="mt-2 text-xs text-muted">Vehicle</p>
+                <p className="mt-1 font-medium text-slate-900">
+                  {[selectedPreOrder.driverCarModel, selectedPreOrder.driverCarPlate]
+                    .filter(Boolean)
+                    .join(" · ") || "—"}
+                </p>
+                {controllerMode ? (
+                  <>
+                    <p className="mt-2 text-xs text-muted">Contact</p>
+                    <p className="mt-1 font-medium text-slate-900">
+                      {contactLabel(selectedPreOrder.operatorContact?.status)}
+                      {selectedPreOrder.operatorContact?.markedByName
+                        ? ` · ${selectedPreOrder.operatorContact.markedByName}`
+                        : ""}
+                      {selectedPreOrder.operatorContact?.markedAt
+                        ? ` · ${formatClock(selectedPreOrder.operatorContact.markedAt)}`
+                        : ""}
                     </p>
-                    <dl className="mt-2 space-y-2.5 text-sm">
-                      <div>
-                        <dt className="text-muted">Driver ID</dt>
-                        <dd className="flex items-center gap-2 font-medium text-slate-900">
-                          <span>
-                            {selectedPreOrder.driverId ?? getDriverFallbackText(selectedPreOrder)}
-                          </span>
-                          {selectedPreOrder.driverId ? (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                copyToClipboard("driverId", selectedPreOrder.driverId)
-                              }
-                              className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-200"
-                            >
-                              {copiedField === "driverId" ? "Copied" : "Copy"}
-                            </button>
-                          ) : null}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-muted">Driver phone</dt>
-                        <dd className="flex items-center gap-2 font-medium text-slate-900">
-                          <span>
-                            {selectedPreOrder.driverPhone ??
-                              getDriverFallbackText(selectedPreOrder)}
-                          </span>
-                          {selectedPreOrder.driverPhone ? (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                copyToClipboard("driverPhone", selectedPreOrder.driverPhone)
-                              }
-                              className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-200"
-                            >
-                              {copiedField === "driverPhone" ? "Copied" : "Copy"}
-                            </button>
-                          ) : null}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-muted">Driver name</dt>
-                        <dd className="font-medium text-slate-900">
-                          {selectedPreOrder.driverFirstName && selectedPreOrder.driverLastName
-                            ? `${selectedPreOrder.driverFirstName} ${selectedPreOrder.driverLastName}`
-                            : getDriverFallbackText(selectedPreOrder)}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-muted">Driver assignment status</dt>
-                        <dd className="font-medium text-slate-900">
-                          {isDriverAssigned(selectedPreOrder)
-                            ? "Assigned"
-                            : getDriverFallbackText(selectedPreOrder)}
-                        </dd>
-                      </div>
-                      {selectedPreOrder.fallback?.status &&
-                      selectedPreOrder.fallback.status !== "idle" ? (
-                        <div>
-                          <dt className="text-muted">Fallback status</dt>
-                          <dd className="font-medium text-slate-900">
-                            {selectedPreOrder.fallback.status}
-                            {selectedPreOrder.fallback.fallbackOrderId
-                              ? ` -> ${selectedPreOrder.fallback.fallbackOrderId}`
-                              : ""}
-                            {selectedPreOrder.fallback.reason
-                              ? ` (${selectedPreOrder.fallback.reason})`
-                              : ""}
-                          </dd>
-                        </div>
-                      ) : null}
-                    </dl>
-                  </div>
-                </div>
-              </section>
-
-              <aside className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] p-4">
-                <h4 className="mb-4 text-2xl font-semibold text-slate-900">Details</h4>
-                <dl className="space-y-4 text-sm">
-                  <div>
-                    <dt className="text-muted">Ride type</dt>
-                    <dd className="font-medium text-slate-900">Regular request</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted">Service class</dt>
-                    <dd className="font-medium text-slate-900">Estimated price</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted">Pickup time</dt>
-                    <dd className="font-medium text-slate-900">
-                      {selectedPreOrder.scheduledFor}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted">Request creation date</dt>
-                    <dd className="font-medium text-slate-900">
-                      {selectedPreOrder.requestedAt}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted">User</dt>
-                    <dd className="font-medium text-slate-900">{selectedPreOrder.clientName}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted">Price for client</dt>
-                    <dd className="font-semibold text-slate-900">{selectedPreOrder.clientPrice}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted">Order ID</dt>
-                    <dd className="font-medium text-slate-900">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          copyToClipboard("orderId", selectedPreOrder.orderId)
-                        }
-                        className="relative inline-flex cursor-copy items-center rounded-lg bg-white px-2.5 py-1 transition hover:bg-slate-100"
-                      >
-                        <span>{selectedPreOrder.orderId}</span>
-                        {copiedField === "orderId" ? (
-                          <span className="absolute -top-7 left-1/2 -translate-x-1/2 rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-white">
-                            Copied
-                          </span>
-                        ) : null}
-                      </button>
-                    </dd>
-                  </div>
-                </dl>
-
+                  </>
+                ) : null}
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={cancellingOrderId === selectedPreOrder.orderId}
+                onClick={() => void cancelPreOrder(selectedPreOrder)}
+                className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800 hover:bg-rose-100 disabled:opacity-60"
+              >
+                {cancellingOrderId === selectedPreOrder.orderId
+                  ? "Cancelling…"
+                  : "Cancel order in Yango"}
+              </button>
+              {!isClientScopedUser ? (
                 <button
                   type="button"
-                  disabled={cancellingOrderId === selectedPreOrder.orderId}
-                  onClick={() => void cancelPreOrder(selectedPreOrder)}
-                  className="mt-5 w-full rounded-xl border border-rose-200 bg-rose-50 py-2.5 text-sm font-semibold text-rose-800 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => {
+                    setHandoffPreOrder(selectedPreOrder);
+                    setHandoffMessage(null);
+                  }}
+                  className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-800 hover:bg-sky-100"
                 >
-                  {cancellingOrderId === selectedPreOrder.orderId
-                    ? "Cancelling in Yango…"
-                    : "Cancel order in Yango"}
+                  Open in Yango B2C
                 </button>
-                {!isClientScopedUser ? (
-                  <button
-                    type="button"
-                    onClick={() => void openB2CWebOrder(selectedPreOrder)}
-                    className="mt-2 w-full rounded-xl border border-sky-200 bg-sky-50 py-2.5 text-sm font-semibold text-sky-800 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Open in Yango B2C
-                  </button>
-                ) : null}
-              </aside>
+              ) : null}
+              {controllerMode
+                ? CONTACT_OPTIONS.filter((option) => option.value !== "none").map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => void setContactStatus(selectedPreOrder, option.value)}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      {option.label}
+                    </button>
+                  ))
+                : null}
             </div>
           </div>
         </div>
       ) : null}
+
       {handoffPreOrder && !isClientScopedUser ? (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/45 px-4 py-6 backdrop-blur-sm"
-          onClick={() => {
-            setHandoffPreOrder(null);
-            setHandoffOpenedOrderId(null);
-          }}
+          onClick={() => setHandoffPreOrder(null)}
         >
           <div
-            className="crm-modal-surface grid h-[86vh] w-full max-w-7xl gap-3 rounded-[16px] p-3 lg:grid-cols-[1.7fr_0.9fr]"
+            className="crm-modal-surface w-full max-w-3xl rounded-[16px] p-5"
             onClick={(event) => event.stopPropagation()}
           >
-            <section className="flex min-h-[420px] flex-col justify-center rounded-2xl border border-slate-200 bg-white p-5">
-              <h3 className="text-lg font-semibold text-slate-900">Yango web order</h3>
-              <p className="mt-2 text-sm text-slate-600">
-                Yango blocks embedding its order page in an iframe, so open it in a new tab and use the
-                copied route details from the panel on the right.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <a
-                  href={buildYangoB2CHandoffUrl(handoffPreOrder)}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    openYangoOrderPageFromHandoff(handoffPreOrder);
-                  }}
-                  className="crm-button-primary rounded-xl px-3 py-2 text-sm font-semibold"
-                >
-                  Open Yango order page
-                </a>
-                <button
-                  type="button"
-                  onClick={() => void copyHandoffDetails(handoffPreOrder)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                >
-                  Copy full details
-                </button>
-              </div>
-            </section>
-            <aside className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-3">
-              <div className="mb-2 flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-semibold text-slate-900">B2C order details</h3>
-                  <p className="text-xs text-slate-500">
-                    Copy addresses and paste if the page did not auto-fill.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setHandoffPreOrder(null);
-                    setHandoffOpenedOrderId(null);
-                  }}
-                  className="crm-hover-lift inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-lg font-semibold leading-none text-slate-700"
-                  aria-label="Close B2C order modal"
-                >
-                  ×
-                </button>
-              </div>
-              <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                <p>
-                  <span className="font-semibold text-slate-900">Order ID:</span> {handoffPreOrder.orderId}
-                </p>
-                <p>
-                  <span className="font-semibold text-slate-900">Client:</span> {handoffPreOrder.clientName}
-                </p>
-                <p>
-                  <span className="font-semibold text-slate-900">Scheduled for:</span> {handoffPreOrder.scheduledFor}
-                </p>
-              </div>
-              <div className="mt-3 space-y-2">
-                <div className="rounded-xl border border-slate-200 bg-white p-2.5">
-                  <p className="text-xs font-medium tracking-[0.01em] text-slate-500">Pickup</p>
-                  <p className="mt-1 text-sm font-medium text-slate-900">{handoffPreOrder.pointA}</p>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard("handoffPickup", handoffPreOrder.pointA)}
-                    className="mt-2 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
-                  >
-                    {copiedField === "handoffPickup" ? "Copied" : "Copy pickup"}
-                  </button>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-white p-2.5">
-                  <p className="text-xs font-medium tracking-[0.01em] text-slate-500">Destination</p>
-                  <p className="mt-1 text-sm font-medium text-slate-900">{handoffPreOrder.pointB}</p>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard("handoffDestination", handoffPreOrder.pointB)}
-                    className="mt-2 rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
-                  >
-                    {copiedField === "handoffDestination" ? "Copied" : "Copy destination"}
-                  </button>
-                </div>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void copyHandoffDetails(handoffPreOrder)}
-                  className="crm-hover-lift rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                >
-                  Copy full details
-                </button>
-                <a
-                  href={buildYangoB2CHandoffUrl(handoffPreOrder)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setHandoffOpenedOrderId(handoffPreOrder.orderId)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                >
-                  Open in new tab
-                </a>
-                {handoffOpenedOrderId === handoffPreOrder.orderId ? (
-                  <button
-                    type="button"
-                    disabled={cancellingOrderId === handoffPreOrder.orderId}
-                    onClick={() => void cancelPreOrder(handoffPreOrder)}
-                    className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {cancellingOrderId === handoffPreOrder.orderId
-                      ? "Cancelling B2B order..."
-                      : "Cancel B2B order"}
-                  </button>
-                ) : null}
-              </div>
-            </aside>
+            <h3 className="text-lg font-semibold text-slate-900">Yango B2C handoff</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Open Yango in a new tab and paste route details if the form did not auto-fill.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <a
+                href={buildYangoB2CHandoffUrl(handoffPreOrder)}
+                target="_blank"
+                rel="noreferrer"
+                className="crm-button-primary rounded-xl px-3 py-2 text-sm font-semibold"
+              >
+                Open Yango order page
+              </a>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(handoffTextForPreOrder(handoffPreOrder));
+                    setHandoffMessage("Ride details copied to clipboard.");
+                  } catch {
+                    setHandoffMessage("Could not copy automatically.");
+                  }
+                }}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700"
+              >
+                Copy full details
+              </button>
+              <button
+                type="button"
+                onClick={() => setHandoffPreOrder(null)}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

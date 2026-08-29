@@ -42,7 +42,27 @@ export type PreOrder = {
   driverFirstName: string | null;
   driverLastName: string | null;
   driverPhone: string | null;
+  /** Vehicle model from Yango performer, when available. */
+  driverCarModel?: string | null;
+  /** Licence plate from Yango performer, when available. */
+  driverCarPlate?: string | null;
+  /** Operator contact mark (merged from CRM store / live API). */
+  operatorContact?: PreOrderOperatorContact | null;
   fallback?: PreOrderFallbackSnapshot | null;
+};
+
+export type PreOrderOperatorContactStatus =
+  | "none"
+  | "driver_confirmed"
+  | "no_answer"
+  | "issue";
+
+export type PreOrderOperatorContact = {
+  status: PreOrderOperatorContactStatus;
+  markedByUserId: string | null;
+  markedByName: string | null;
+  markedAt: string | null;
+  note: string | null;
 };
 
 export type PreOrderFallbackStatus =

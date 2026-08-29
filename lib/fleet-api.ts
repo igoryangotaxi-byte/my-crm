@@ -52,7 +52,10 @@ type DriverProfileRow = {
   /** Same as order.driver_profile.id when present; used to merge with orders. */
   driverProfileId: string;
   name: string;
+  firstName: string | null;
+  lastName: string | null;
   carNumber: string | null;
+  carModel: string | null;
   callsign: string | null;
   phone: string | null;
   /** e.g. working | not_working | fired — from driver_profile when API returns it. */
@@ -62,6 +65,16 @@ type DriverProfileRow = {
   /** Last known point from `current_status` (when Fleet returns it) — needed to place markers. */
   profileLat: number | null;
   profileLon: number | null;
+};
+
+export type FleetDriverEnrichment = {
+  driverId: string;
+  driverFirstName: string | null;
+  driverLastName: string | null;
+  driverPhone: string | null;
+  driverCarPlate: string | null;
+  driverCarModel: string | null;
+  displayName: string;
 };
 
 type FleetDriverProfilesListResponse = {
@@ -753,6 +766,58 @@ function buildDisplayNameFromProfile(
   return name.trim() || (idFallback ? `Driver ${idFallback.slice(0, 6)}` : "Driver");
 }
 
+function extractFirstLastFromProfile(
+  row: Record<string, unknown>,
+  driverNested: Record<string, unknown> | null,
+): { firstName: string | null; lastName: string | null } {
+  const person = asRecord((row as { person?: unknown }).person);
+  const rowNameObj = asRecord((row as { name?: unknown }).name);
+  const driverNameObj = driverNested ? asRecord((driverNested as { name?: unknown }).name) : null;
+  const firstName =
+    asString((driverNested as { first_name?: string } | null)?.first_name) ??
+    asString((driverNested as { first?: string } | null)?.first) ??
+    asString((row as { first_name?: string }).first_name) ??
+    asString((person as { first_name?: string } | null)?.first_name) ??
+    asString(rowNameObj?.first) ??
+    asString((rowNameObj as { first_name?: string } | null)?.first_name) ??
+    asString(driverNameObj?.first) ??
+    asString((driverNameObj as { first_name?: string } | null)?.first_name) ??
+    null;
+  const lastName =
+    asString((driverNested as { last_name?: string } | null)?.last_name) ??
+    asString((driverNested as { last?: string } | null)?.last) ??
+    asString((row as { last_name?: string }).last_name) ??
+    asString((person as { last_name?: string } | null)?.last_name) ??
+    asString(rowNameObj?.last) ??
+    asString((rowNameObj as { last_name?: string } | null)?.last_name) ??
+    asString(driverNameObj?.last) ??
+    asString((driverNameObj as { last_name?: string } | null)?.last_name) ??
+    null;
+  return { firstName, lastName };
+}
+
+function extractCarModelFromCar(car: Record<string, unknown> | null): string | null {
+  if (!car) return null;
+  const brand = asString(car.brand) ?? asString(car.make) ?? asString(car.vendor);
+  const model = asString(car.model) ?? asString(car.model_name);
+  if (brand && model) return `${brand} ${model}`;
+  return model ?? brand ?? asString(car.color) ?? null;
+}
+
+function extractPhoneFromProfile(
+  row: Record<string, unknown>,
+  driverNested: Record<string, unknown> | null,
+): string | null {
+  return (
+    asString((row as { phone?: string }).phone) ??
+    asString((row as { msisdn?: string }).msisdn) ??
+    asString((driverNested as { phone?: string } | null)?.phone) ??
+    asString((driverNested as { phones?: string[] } | null)?.phones?.[0]) ??
+    asString((row as { phones?: string[] }).phones?.[0]) ??
+    null
+  );
+}
+
 function buildDriverProfileRow(row: Record<string, unknown>): DriverProfileRow | null {
   const driverNested = asRecord(row.driver_profile);
   const car = asRecord(row.car) ?? (driverNested ? asRecord(driverNested.car) : null);
@@ -765,11 +830,10 @@ function buildDriverProfileRow(row: Record<string, unknown>): DriverProfileRow |
   }
   const idForDisplay = (contractorProfileId || driverProfileId) ?? "";
   const name = buildDisplayNameFromProfile(row, driverNested, idForDisplay);
+  const { firstName, lastName } = extractFirstLastFromProfile(row, driverNested);
   const carNumber = asString(license?.number) ?? asString(row.license_number) ?? (car ? asString(car.number) : null) ?? null;
   const callsign = car ? asString(car.callsign) : asString((row as { callsign?: string }).callsign);
-  const phone =
-    asString((row as { personal_phone_id?: string; phone?: string; msisdn?: string }).phone) ??
-    asString((row as { personal_phone_id?: string; phone?: string; msisdn?: string }).msisdn);
+  const phone = extractPhoneFromProfile(row, driverNested);
   const workStatus = extractWorkStatusFromProfile(row, driverNested);
   const currentStatus = extractCurrentStatusFromRow(row);
   const { lat: profileLat, lon: profileLon } = extractProfilePositionFromRow(row, driverNested);
@@ -777,7 +841,10 @@ function buildDriverProfileRow(row: Record<string, unknown>): DriverProfileRow |
     contractorProfileId: contractorProfileId || driverProfileId!,
     driverProfileId: driverProfileId || contractorProfileId!,
     name,
+    firstName,
+    lastName,
     carNumber,
+    carModel: extractCarModelFromCar(car),
     callsign: callsign,
     phone: phone ?? null,
     workStatus,
@@ -1736,4 +1803,93 @@ export async function getDriversOnMapDataOptimized(input: {
       message: `Fleet API unavailable: ${errorMessage}`,
     };
   }
+}
+
+function normalizePhoneDigits(value: string | null | undefined): string | null {
+  if (!value) return null;
+  let digits = value.replace(/\D+/g, "");
+  if (digits.length < 8) return null;
+  // Israel local → E.164 digits without +: 05x… → 9725x…
+  if (digits.startsWith("0") && digits.length >= 9) {
+    digits = `972${digits.slice(1)}`;
+  }
+  return digits;
+}
+
+function splitDisplayName(name: string): { firstName: string | null; lastName: string | null } {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: null, lastName: null };
+  if (parts.length === 1) return { firstName: parts[0], lastName: null };
+  return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
+}
+
+function rowToFleetEnrichment(row: DriverProfileRow): FleetDriverEnrichment {
+  const fromName = splitDisplayName(row.name);
+  return {
+    driverId: row.driverProfileId || row.contractorProfileId,
+    driverFirstName: row.firstName ?? fromName.firstName,
+    driverLastName: row.lastName ?? fromName.lastName,
+    driverPhone: row.phone,
+    driverCarPlate: row.carNumber,
+    driverCarModel: row.carModel,
+    displayName: row.name,
+  };
+}
+
+/** Cached Fleet driver profiles for Pre-Orders / Controller enrichment. */
+async function getCachedFleetDriverProfiles(): Promise<DriverProfileRow[]> {
+  if (!FLEET_API_KEY || !FLEET_CLIENT_ID || !FLEET_PARK_ID) {
+    return [];
+  }
+  if (driverProfilesCache && Date.now() - driverProfilesCache.at < FLEET_PROFILES_CACHE_TTL_MS) {
+    return driverProfilesCache.rows;
+  }
+  try {
+    const rows = await fetchAllDriverProfileRows();
+    driverProfilesCache = { at: Date.now(), rows };
+    return rows;
+  } catch {
+    return driverProfilesCache?.rows ?? [];
+  }
+}
+
+export type FleetDriverLookupIndexes = {
+  byId: Map<string, FleetDriverEnrichment>;
+  byPhone: Map<string, FleetDriverEnrichment>;
+  profileCount: number;
+};
+
+export async function getFleetDriverLookupIndexes(): Promise<FleetDriverLookupIndexes> {
+  const rows = await getCachedFleetDriverProfiles();
+  const byId = new Map<string, FleetDriverEnrichment>();
+  const byPhone = new Map<string, FleetDriverEnrichment>();
+  for (const row of rows) {
+    const enrichment = rowToFleetEnrichment(row);
+    byId.set(row.driverProfileId, enrichment);
+    byId.set(row.contractorProfileId, enrichment);
+    const phoneKey = normalizePhoneDigits(row.phone);
+    if (phoneKey && !byPhone.has(phoneKey)) {
+      byPhone.set(phoneKey, enrichment);
+    }
+  }
+  return { byId, byPhone, profileCount: rows.length };
+}
+
+export function lookupFleetDriverEnrichment(
+  indexes: FleetDriverLookupIndexes,
+  input: { driverId?: string | null; driverPhone?: string | null },
+): FleetDriverEnrichment | null {
+  if (input.driverId) {
+    const byId = indexes.byId.get(input.driverId.trim());
+    if (byId) return byId;
+  }
+  const phoneKey = normalizePhoneDigits(input.driverPhone);
+  if (phoneKey) {
+    return indexes.byPhone.get(phoneKey) ?? null;
+  }
+  return null;
+}
+
+export function isFleetApiConfigured(): boolean {
+  return Boolean(FLEET_API_KEY && FLEET_CLIENT_ID && FLEET_PARK_ID);
 }

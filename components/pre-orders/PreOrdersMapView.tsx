@@ -4,6 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl, { LngLatBounds } from "maplibre-gl";
 import type { PreOrder } from "@/types/crm";
 import { useTranslations } from "next-intl";
+import {
+  getPreOrderUrgencyLevel,
+  type PreOrderUrgencyLevel,
+} from "@/lib/preorders/urgency";
 
 type PreOrdersMapViewProps = {
   preOrders: PreOrder[];
@@ -51,11 +55,24 @@ function buildOrderPopupHtml(preOrder: PreOrder, nowMs: number): string {
   `;
 }
 
-function createOrderMarkerElement(): HTMLDivElement {
+function urgencyMarkerFill(level: PreOrderUrgencyLevel): string {
+  switch (level) {
+    case "green":
+      return "#10b981";
+    case "yellow":
+      return "#f59e0b";
+    case "red":
+      return "#f43f5e";
+    default:
+      return "#94a3b8";
+  }
+}
+
+function createOrderMarkerElement(level: PreOrderUrgencyLevel): HTMLDivElement {
   const root = document.createElement("div");
   const w = 28;
   const h = 34;
-  const fill = "#0ea5e9";
+  const fill = urgencyMarkerFill(level);
   const stroke = "#ffffff";
   root.style.cssText =
     `width:${w}px;height:${h}px;max-width:${w}px;min-width:${w}px;overflow:visible;pointer-events:auto;display:block;box-sizing:border-box;cursor:pointer;`;
@@ -205,7 +222,8 @@ export function PreOrdersMapView({ preOrders, onOpenFull }: PreOrdersMapViewProp
     for (const preOrder of mappable) {
       const lon = preOrder.pointALon as number;
       const lat = preOrder.pointALat as number;
-      const el = createOrderMarkerElement();
+      const urgency = getPreOrderUrgencyLevel(preOrder, nowMsRef.current || Date.now());
+      const el = createOrderMarkerElement(urgency);
       const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
         .setLngLat([lon, lat])
         .addTo(map);

@@ -6,5 +6,5 @@ export const dynamic = "force-dynamic";
 export default async function SalesOperationPreOrdersPage() {
   const { preOrders, errors } = await getAllYangoPreOrders();
 
-  return <PreOrdersBoard preOrders={preOrders} errors={errors} />;
+  return <PreOrdersBoard preOrders={preOrders} errors={errors} enableControllerLive />;
 }
