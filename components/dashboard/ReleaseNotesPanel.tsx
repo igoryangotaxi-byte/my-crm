@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-08-29",
+    title: "Pre-Orders Controller Live (0.2.61)",
+    notes:
+      "App version 0.2.61. HUB Pre-Orders becomes an operator live board: uncached /api/sales-operation/pre-orders/live with 15s poll and Last updated (Asia/Jerusalem); past due and cancelled rows leave the list; urgency left-rail (green assigned / yellow 10–30 min / red under 10 min); Driver confirmed / No answer / Issue marks with who+when; Driver column (name, phone, car); sticky Live / Unassigned / At risk counters; map markers match urgency. SQL: scripts/sql/supabase_preorder_operator_marks.sql (apply in Supabase for shared marks across operators). Fleet park enrichment adapter is wired but not finished — fleet-api.yango.tech still returns 403 on the park API key; waiting on Yango / Yandex Fleet support (trace 629384d315dcbb7172e2a89ff0c4d968); UI keeps Unknown Driver fallback from B2B performer. Deck: Yango-Sales-Operations-Pre-Orders-Controller-0-2-61.pptx. (0ccfd1ad)",
+  },
+  {
     date: "2026-08-25",
     title: "Yango B2B API EU host — pre-orders restored (0.2.60)",
     notes:
