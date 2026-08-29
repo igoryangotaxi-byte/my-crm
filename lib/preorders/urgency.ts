@@ -84,9 +84,11 @@ export function preOrderUrgencyTintClass(level: PreOrderUrgencyLevel): string {
     case "green":
       return "[&>td]:bg-emerald-50/40";
     case "yellow":
-      return "[&>td]:bg-amber-50/50";
+      // At risk (10–30 min): pale red wash
+      return "[&>td]:bg-rose-50/60";
     case "red":
-      return "[&>td]:bg-rose-50/55";
+      // At risk (<10 min): slightly stronger pale red
+      return "[&>td]:bg-rose-100/70";
     default:
       return "[&>td]:bg-white";
   }

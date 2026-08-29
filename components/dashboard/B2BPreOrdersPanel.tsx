@@ -2,15 +2,22 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckSquare, Download, HandCoins, Split, Wallet, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { b2bDashboardOrderKey, type B2BOrdersListCursors } from "@/lib/b2b-orders-keys";
 import { StatTile } from "@/components/ui/StatTile";
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Dialog";
+import { FilterBar, FilterChip } from "@/components/patterns/FilterBar";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type { GpTripsImportResult } from "@/lib/gp-trips-import";
+import {
+  getOrdersStatusDisplay,
+  ordersStatusRailClass,
+  ordersStatusTintClass,
+  resolveOrdersStatusBucket,
+} from "@/lib/orders/lifecycle-status";
 import {
   getAccountManagerUserOptions,
   getSalesManagerUserOptions,
@@ -22,6 +29,7 @@ import type {
   YangoSupabaseOrderMetric,
 } from "@/types/crm";
 import { buildSalesOperationB2BClientTripsHref } from "@/lib/sales-operation/b2b-client-trips-href";
+import { cn } from "@/lib/ui/cn";
 
 type SortMode = "date_desc" | "date_asc" | "client_asc" | "client_desc";
 type StatusFilter = "all" | "completed" | "cancelled" | "pending" | "in_progress";
@@ -1324,54 +1332,11 @@ function orderRowMatchesOrdersDateFilter(
 }
 
 function resolveDashboardStatus(row: B2BDashboardOrder): Exclude<StatusFilter, "all"> {
-  const rawStatus = (row.statusRaw ?? "").toLowerCase();
-  if (
-    rawStatus === "complete" ||
-    rawStatus === "completed" ||
-    rawStatus === "finished" ||
-    rawStatus === "transporting_finished"
-  ) {
-    return "completed";
-  }
-  if (rawStatus.includes("cancel")) return "cancelled";
-  if (
-    rawStatus.includes("search") ||
-    rawStatus.includes("driving") ||
-    rawStatus.includes("transporting") ||
-    rawStatus.includes("arrived") ||
-    rawStatus.includes("accepted") ||
-    rawStatus.includes("in_progress")
-  ) {
-    return "in_progress";
-  }
-
-  const scheduledTs = new Date(row.scheduledAt).getTime();
-  if (!Number.isNaN(scheduledTs) && scheduledTs > Date.now()) {
-    return "pending";
-  }
-
-  return "pending";
+  return resolveOrdersStatusBucket(row);
 }
 
-function getOrderStatusDisplay(row: B2BDashboardOrder): {
-  label: string;
-  tone: "completed" | "cancelled" | "in_progress" | "neutral";
-} {
-  const normalized = resolveDashboardStatus(row);
-  if (normalized === "completed") {
-    return { label: "Completed", tone: "completed" };
-  }
-  if (normalized === "cancelled") {
-    return { label: "Canceled", tone: "cancelled" };
-  }
-  if (normalized === "in_progress") {
-    return { label: "In Progress", tone: "in_progress" };
-  }
-  const raw = row.statusRaw?.trim();
-  return {
-    label: raw && raw.length > 0 ? raw : "Unknown",
-    tone: "neutral",
-  };
+function getOrderStatusDisplay(row: B2BDashboardOrder) {
+  return getOrdersStatusDisplay(row);
 }
 
 export function B2BPreOrdersPanel({
@@ -1445,6 +1410,9 @@ export function B2BPreOrdersPanel({
   const [hasMoreRemote, setHasMoreRemote] = useState(() => ordersRemote?.initialHasMore ?? false);
   const [remoteLoading, setRemoteLoading] = useState(false);
   const [remoteError, setRemoteError] = useState<string | null>(null);
+  const [ordersFetchedAt, setOrdersFetchedAt] = useState<string | null>(null);
+  const [ordersLive, setOrdersLive] = useState(false);
+  const [ordersStale, setOrdersStale] = useState(false);
   const isB2bClientsOverview = view === "b2bClientsOverview";
   const canSeeApiData = view !== "dashboard" || canAccessDashboardBlock("apiData");
   const canSeeYangoData =
@@ -1509,15 +1477,20 @@ export function B2BPreOrdersPanel({
   const scopedRows = useMemo(() => {
     return apiRowsForView.filter((row) => {
       if (effectiveClientFilter !== "all" && row.clientName !== effectiveClientFilter) return false;
-      if (statusFilter !== "all" && resolveDashboardStatus(row) !== statusFilter) return false;
+      // Orders: status applied after date filter so counters stay stable.
+      if (view !== "orders" && statusFilter !== "all" && resolveDashboardStatus(row) !== statusFilter) {
+        return false;
+      }
       return true;
     });
-  }, [apiRowsForView, effectiveClientFilter, statusFilter]);
+  }, [apiRowsForView, effectiveClientFilter, statusFilter, view]);
 
   const filteredRows = useMemo(() => {
     const result = scopedRows.filter((row) => {
       if (view === "orders") {
-        return orderRowMatchesOrdersDateFilter(row, fromDate || null, toDate || null);
+        if (!orderRowMatchesOrdersDateFilter(row, fromDate || null, toDate || null)) return false;
+        if (statusFilter !== "all" && resolveDashboardStatus(row) !== statusFilter) return false;
+        return true;
       }
       const from = fromDate ? new Date(`${fromDate}T00:00:00`) : null;
       const to = toDate ? new Date(`${toDate}T23:59:59`) : null;
@@ -1540,7 +1513,15 @@ export function B2BPreOrdersPanel({
     });
 
     return result;
-  }, [scopedRows, fromDate, toDate, sortMode, view]);
+  }, [scopedRows, fromDate, toDate, sortMode, view, statusFilter]);
+
+  const ordersDateScopedRows = useMemo(() => {
+    if (view !== "orders") return [];
+    return apiRowsForView.filter((row) => {
+      if (effectiveClientFilter !== "all" && row.clientName !== effectiveClientFilter) return false;
+      return orderRowMatchesOrdersDateFilter(row, fromDate || null, toDate || null);
+    });
+  }, [apiRowsForView, effectiveClientFilter, fromDate, toDate, view]);
   const uiDatesToApiIso = useCallback((from: string, to: string) => {
     return {
       since: new Date(`${from}T00:00:00`).toISOString(),
@@ -1614,8 +1595,12 @@ export function B2BPreOrdersPanel({
       setLoadedOrders(next);
       setListCursors(result.nextCursors);
       setHasMoreRemote(result.hasMore);
+      setOrdersFetchedAt(new Date().toISOString());
+      setOrdersLive(true);
+      setOrdersStale(false);
     } catch (error) {
       setRemoteError(error instanceof Error ? error.message : "Failed to load more orders.");
+      setOrdersStale(true);
     } finally {
       setRemoteLoading(false);
     }
@@ -1630,14 +1615,57 @@ export function B2BPreOrdersPanel({
     view,
   ]);
 
+  const refreshOrdersLive = useCallback(async () => {
+    if (!ordersRemote || view !== "orders") return;
+    const { since, till } = uiDatesToApiIso(fromDate, toDate);
+    try {
+      const result = await fetchOrdersRemoteBatch({
+        since,
+        till,
+        cursors: {},
+        excludeKeys: new Set(),
+        targetCount: 60,
+      });
+      setLoadedOrders((prev) => {
+        const merged = new Map<string, B2BDashboardOrder>();
+        for (const row of prev) {
+          merged.set(b2bDashboardOrderKey(row), row);
+        }
+        for (const row of result.rows) {
+          merged.set(b2bDashboardOrderKey(row), row);
+        }
+        return [...merged.values()].sort(
+          (a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime(),
+        );
+      });
+      setListCursors(result.nextCursors);
+      setHasMoreRemote(result.hasMore);
+      setOrdersFetchedAt(new Date().toISOString());
+      setOrdersLive(true);
+      setOrdersStale(false);
+      setRemoteError(null);
+    } catch (error) {
+      setOrdersStale(true);
+      setRemoteError(error instanceof Error ? error.message : "Live refresh failed.");
+    }
+  }, [fetchOrdersRemoteBatch, fromDate, ordersRemote, toDate, uiDatesToApiIso, view]);
+
+  useEffect(() => {
+    if (view !== "orders" || !ordersRemote) return;
+    void refreshOrdersLive();
+    const timer = window.setInterval(() => {
+      void refreshOrdersLive();
+    }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [view, ordersRemote, fromDate, toDate, refreshOrdersLive]);
+
   const ordersSummary = useMemo(() => {
-    const completed = filteredRows.filter((row) => resolveDashboardStatus(row) === "completed").length;
-    const cancelled = filteredRows.filter((row) => resolveDashboardStatus(row) === "cancelled").length;
-    const inProgressTotal = filteredRows.filter((row) => resolveDashboardStatus(row) === "in_progress").length;
-    const todayKey = toDateInputValue(new Date());
-    const inProgress = fromDate <= todayKey && toDate >= todayKey ? inProgressTotal : 0;
-    return { completed, cancelled, inProgress };
-  }, [filteredRows, fromDate, toDate]);
+    const source = view === "orders" ? ordersDateScopedRows : filteredRows;
+    const completed = source.filter((row) => resolveDashboardStatus(row) === "completed").length;
+    const cancelled = source.filter((row) => resolveDashboardStatus(row) === "cancelled").length;
+    const inProgress = source.filter((row) => resolveDashboardStatus(row) === "in_progress").length;
+    return { completed, cancelled, inProgress, live: source.length };
+  }, [filteredRows, ordersDateScopedRows, view]);
 
   const dashboardData = useMemo(() => {
     const byDate = new Map<
@@ -2529,43 +2557,149 @@ export function B2BPreOrdersPanel({
       <div
         className={
           view === "orders"
-            ? "mb-0.5 so-card overflow-hidden rounded-[12px] p-4"
+            ? "mb-2 so-card overflow-hidden rounded-[12px] p-3"
             : "mb-0.5 rounded-2xl border border-border bg-panel p-3"
         }
       >
+        {view === "orders" ? (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-[var(--so-border)] pb-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-semibold",
+                  ordersStale
+                    ? "border-amber-200 bg-amber-50 text-amber-800"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-800",
+                )}
+              >
+                <span
+                  className={cn(
+                    "h-1.5 w-1.5 rounded-full",
+                    ordersStale ? "bg-amber-500" : "animate-pulse bg-emerald-500",
+                  )}
+                />
+                {ordersStale ? "Stale" : ordersLive ? "Live" : "Connecting"}
+              </span>
+              <span className="text-xs tabular-nums text-muted">
+                Last updated:{" "}
+                <strong className="font-semibold text-[var(--so-text)]">
+                  {ordersFetchedAt
+                    ? new Intl.DateTimeFormat("en-GB", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                        hour12: false,
+                        timeZone: "Asia/Jerusalem",
+                      }).format(new Date(ordersFetchedAt))
+                    : "—"}
+                </strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => void refreshOrdersLive()}
+                disabled={remoteLoading}
+                className="rounded-[8px] border border-[var(--so-border-strong)] bg-[var(--so-surface)] px-2.5 py-1 text-[11px] font-semibold text-[var(--so-text)] transition hover:bg-[var(--so-surface-hover)] disabled:opacity-60"
+              >
+                {remoteLoading ? "Refreshing…" : "Refresh now"}
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-1 text-xs text-[var(--so-muted)]">
+              <button
+                type="button"
+                onClick={() => setStatusFilter("all")}
+                className={cn(
+                  "rounded-[6px] px-2 py-1 transition-colors",
+                  statusFilter === "all"
+                    ? "bg-[var(--so-accent-soft)] text-[var(--so-accent-strong)]"
+                    : "hover:bg-[var(--so-surface-hover)]",
+                )}
+              >
+                Live <strong className="tabular-nums text-[var(--so-text)]">{ordersSummary.live}</strong>
+              </button>
+              <span className="text-[var(--so-border-strong)]">·</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setStatusFilter((prev) => (prev === "completed" ? "all" : "completed"))
+                }
+                className={cn(
+                  "rounded-[6px] px-2 py-1 transition-colors",
+                  statusFilter === "completed"
+                    ? "bg-emerald-50 text-emerald-800"
+                    : "hover:bg-[var(--so-surface-hover)]",
+                )}
+              >
+                Completed{" "}
+                <strong className="tabular-nums text-[var(--so-text)]">{ordersSummary.completed}</strong>
+              </button>
+              <span className="text-[var(--so-border-strong)]">·</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setStatusFilter((prev) => (prev === "in_progress" ? "all" : "in_progress"))
+                }
+                className={cn(
+                  "rounded-[6px] px-2 py-1 transition-colors",
+                  statusFilter === "in_progress"
+                    ? "bg-sky-50 text-sky-800"
+                    : "hover:bg-[var(--so-surface-hover)]",
+                )}
+              >
+                In progress{" "}
+                <strong className="tabular-nums text-sky-700">{ordersSummary.inProgress}</strong>
+              </button>
+              <span className="text-[var(--so-border-strong)]">·</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setStatusFilter((prev) => (prev === "cancelled" ? "all" : "cancelled"))
+                }
+                className={cn(
+                  "rounded-[6px] px-2 py-1 transition-colors",
+                  statusFilter === "cancelled"
+                    ? "bg-rose-50 text-rose-800"
+                    : "hover:bg-[var(--so-surface-hover)]",
+                )}
+              >
+                Canceled{" "}
+                <strong className="tabular-nums text-rose-700">{ordersSummary.cancelled}</strong>
+              </button>
+            </div>
+          </div>
+        ) : null}
         <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
-          <label className="flex min-w-0 flex-col items-center text-center text-xs font-medium tracking-[0.01em] text-muted">
+          <label className="flex min-w-0 flex-col text-xs font-medium text-muted">
             From
             <input
               type="date"
               value={fromDate}
               onChange={(event) => setFromDate(event.target.value)}
-              className="crm-input mt-1.5 block h-10 min-h-10 w-full min-w-0 px-2.5 text-center text-sm text-slate-800"
+              className="crm-input mt-1.5 block h-9 min-h-9 w-full min-w-0 rounded-[8px] px-2.5 text-sm text-slate-800"
             />
           </label>
-          <label className="flex min-w-0 flex-col items-center text-center text-xs font-medium tracking-[0.01em] text-muted">
+          <label className="flex min-w-0 flex-col text-xs font-medium text-muted">
             To
             <input
               type="date"
               value={toDate}
               onChange={(event) => setToDate(event.target.value)}
-              className="crm-input mt-1.5 block h-10 min-h-10 w-full min-w-0 px-2.5 text-center text-sm text-slate-800"
+              className="crm-input mt-1.5 block h-9 min-h-9 w-full min-w-0 rounded-[8px] px-2.5 text-sm text-slate-800"
             />
           </label>
           {isClientScopedUser ? (
-            <label className="flex min-w-0 flex-col items-center text-center text-xs font-medium tracking-[0.01em] text-muted">
+            <label className="flex min-w-0 flex-col text-xs font-medium text-muted">
               Client
-              <div className="crm-input mt-1.5 flex h-10 min-h-10 w-full min-w-0 items-center justify-center px-2.5 text-center text-sm font-semibold text-slate-800">
+              <div className="crm-input mt-1.5 flex h-9 min-h-9 w-full min-w-0 items-center rounded-[8px] px-2.5 text-sm font-semibold text-slate-800">
                 {fixedClientName ?? "Client from your cabinet"}
               </div>
             </label>
           ) : (
-            <label className="flex min-w-0 flex-col items-center text-center text-xs font-medium tracking-[0.01em] text-muted">
+            <label className="flex min-w-0 flex-col text-xs font-medium text-muted">
               Client
               <select
                 value={clientFilter}
                 onChange={(event) => setClientFilter(event.target.value)}
-                className="crm-input mt-1.5 block h-10 min-h-10 w-full min-w-0 px-2.5 text-center text-sm text-slate-800"
+                className="crm-input mt-1.5 block h-9 min-h-9 w-full min-w-0 rounded-[8px] px-2.5 text-sm text-slate-800"
               >
                 {clientOptions.map((option) => (
                   <option key={option} value={option}>
@@ -2575,26 +2709,27 @@ export function B2BPreOrdersPanel({
               </select>
             </label>
           )}
-          <label className="flex min-w-0 flex-col items-center text-center text-xs font-medium tracking-[0.01em] text-muted">
-            Status
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-              className="crm-input mt-1.5 block h-10 min-h-10 w-full min-w-0 px-2.5 text-center text-sm text-slate-800"
-            >
-              <option value="all">All statuses</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-              {view === "orders" ? <option value="in_progress">In Progress</option> : null}
-              {view === "dashboard" ? <option value="pending">Pending</option> : null}
-            </select>
-          </label>
-          <label className="flex min-w-0 flex-col items-center text-center text-xs font-medium tracking-[0.01em] text-muted">
+          {view === "dashboard" ? (
+            <label className="flex min-w-0 flex-col text-xs font-medium text-muted">
+              Status
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+                className="crm-input mt-1.5 block h-9 min-h-9 w-full min-w-0 rounded-[8px] px-2.5 text-sm text-slate-800"
+              >
+                <option value="all">All statuses</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+                <option value="pending">Pending</option>
+              </select>
+            </label>
+          ) : null}
+          <label className="flex min-w-0 flex-col text-xs font-medium text-muted">
             Sort
             <select
               value={sortMode}
               onChange={(event) => setSortMode(event.target.value as SortMode)}
-              className="crm-input mt-1.5 block h-10 min-h-10 w-full min-w-0 px-2.5 text-center text-sm text-slate-800"
+              className="crm-input mt-1.5 block h-9 min-h-9 w-full min-w-0 rounded-[8px] px-2.5 text-sm text-slate-800"
             >
               <option value="date_desc">Date desc</option>
               <option value="date_asc">Date asc</option>
@@ -2603,48 +2738,47 @@ export function B2BPreOrdersPanel({
             </select>
           </label>
         </div>
+        {view === "orders" ? (
+          <FilterBar className="mt-3">
+            <FilterChip active={statusFilter === "all"} onClick={() => setStatusFilter("all")}>
+              All status
+            </FilterChip>
+            <FilterChip
+              active={statusFilter === "completed"}
+              onClick={() => setStatusFilter("completed")}
+              className={
+                statusFilter === "completed"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-50"
+                  : undefined
+              }
+            >
+              Completed
+            </FilterChip>
+            <FilterChip
+              active={statusFilter === "in_progress"}
+              onClick={() => setStatusFilter("in_progress")}
+              className={
+                statusFilter === "in_progress"
+                  ? "border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-50"
+                  : undefined
+              }
+            >
+              In progress
+            </FilterChip>
+            <FilterChip
+              active={statusFilter === "cancelled"}
+              onClick={() => setStatusFilter("cancelled")}
+              className={
+                statusFilter === "cancelled"
+                  ? "border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-50"
+                  : undefined
+              }
+            >
+              Canceled
+            </FilterChip>
+          </FilterBar>
+        ) : null}
       </div>
-      ) : null}
-
-      {view === "orders" ? (
-        <div className="mb-0.5 grid gap-2 md:grid-cols-3">
-          <button
-            type="button"
-            onClick={() =>
-              setStatusFilter((prev) => (prev === "completed" ? "all" : "completed"))
-            }
-            className={`rounded-2xl border border-emerald-200/70 bg-[linear-gradient(180deg,#ffffff_0%,#ecfdf5_100%)] p-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_10px_22px_rgba(16,185,129,0.12)] transition hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_14px_28px_rgba(16,185,129,0.18)] ${
-              statusFilter === "completed" ? "ring-2 ring-emerald-300" : ""
-            }`}
-          >
-            <p className="text-xs text-muted">Completed orders</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900">{ordersSummary.completed}</p>
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              setStatusFilter((prev) => (prev === "cancelled" ? "all" : "cancelled"))
-            }
-            className={`rounded-2xl border border-rose-200/70 bg-[linear-gradient(180deg,#ffffff_0%,#fff1f2_100%)] p-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_10px_22px_rgba(244,63,94,0.12)] transition hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_14px_28px_rgba(244,63,94,0.18)] ${
-              statusFilter === "cancelled" ? "ring-2 ring-rose-300" : ""
-            }`}
-          >
-            <p className="text-xs text-muted">Canceled</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900">{ordersSummary.cancelled}</p>
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              setStatusFilter((prev) => (prev === "in_progress" ? "all" : "in_progress"))
-            }
-            className={`rounded-2xl border border-amber-200/70 bg-[linear-gradient(180deg,#ffffff_0%,#fffbeb_100%)] p-3 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_10px_22px_rgba(245,158,11,0.12)] transition hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_14px_28px_rgba(245,158,11,0.18)] ${
-              statusFilter === "in_progress" ? "ring-2 ring-amber-300" : ""
-            }`}
-          >
-            <p className="text-xs text-muted">In Progress</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900">{ordersSummary.inProgress}</p>
-          </button>
-        </div>
       ) : null}
 
       {view === "dashboard" ? (
@@ -3277,21 +3411,18 @@ export function B2BPreOrdersPanel({
             <tbody>
               {filteredRows.map((row) => {
                 const displayStatus = getOrderStatusDisplay(row);
-                const rowTint =
-                  displayStatus.tone === "completed"
-                    ? "[&>td]:bg-emerald-50/45"
-                    : displayStatus.tone === "cancelled"
-                      ? "[&>td]:bg-rose-50/45"
-                      : displayStatus.tone === "in_progress"
-                        ? "[&>td]:bg-sky-50/45"
-                        : "[&>td]:bg-slate-50/45";
+                const rowTint = ordersStatusTintClass(displayStatus.tone);
+                const rowRail = ordersStatusRailClass(displayStatus.tone);
                 return (
                   <tr
                     key={`${row.tokenLabel}:${row.orderId}`}
+                    title={`${displayStatus.label} · raw: ${displayStatus.raw}`}
                     className={`group cursor-pointer transition-colors duration-150 ease-out ${rowTint} hover:[&>td]:bg-[var(--so-surface-hover)]`}
                     onClick={() => openOrderModal(row)}
                   >
-                    <td className="rounded-l-xl border border-transparent px-3 py-2.5 text-center text-sm font-medium text-slate-900 transition-colors duration-200">
+                    <td
+                      className={`rounded-l-xl border border-transparent px-3 py-2.5 text-center text-sm font-medium text-slate-900 transition-colors duration-200 ${rowRail}`}
+                    >
                       {row.orderId}
                     </td>
                     {!isClientScopedUser ? (
@@ -3300,17 +3431,18 @@ export function B2BPreOrdersPanel({
                       </td>
                     ) : null}
                     <td className="border border-transparent px-3 py-2.5 text-center text-sm transition-colors duration-200">
-                      <div className="flex flex-wrap items-center justify-center gap-1.5">
+                      <div className="flex flex-col items-center justify-center gap-0.5">
                         <span
-                          className={`crm-status-pill ${
+                          className={cn(
+                            "inline-flex rounded-md border px-2.5 py-1 text-xs font-medium",
                             displayStatus.tone === "completed"
-                              ? "crm-status-pill--completed"
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                               : displayStatus.tone === "cancelled"
-                                ? "crm-status-pill--danger"
+                                ? "border-rose-200 bg-rose-50 text-rose-800"
                                 : displayStatus.tone === "in_progress"
-                                  ? "crm-status-pill--progress"
-                                  : "crm-status-pill--muted"
-                          }`}
+                                  ? "border-sky-200 bg-sky-50 text-sky-800"
+                                  : "border-slate-200 bg-slate-50 text-slate-700",
+                          )}
                         >
                           {displayStatus.label}
                         </span>

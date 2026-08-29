@@ -2,13 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
-import {
-  segmentedTabInactiveClass,
-  segmentedTabSelectedClass,
-  segmentedTabTrackClass,
-} from "@/components/crm/segmented-tab-classes";
 import { PreOrdersMapView } from "@/components/pre-orders/PreOrdersMapView";
 import { FilterBar, FilterChip } from "@/components/patterns/FilterBar";
+import { cn } from "@/lib/ui/cn";
 import {
   formatDriverDisplayName,
   getPreOrderUrgencyLabel,
@@ -28,10 +24,17 @@ type PreOrdersBoardProps = {
 };
 
 type FilterMode = "all" | "today" | "tomorrow" | "range";
+type StatusFilter = "all" | "assigned" | "unassigned" | "at_risk";
 type ViewMode = "list" | "onMap";
 
 const LIVE_POLL_MS = 15_000;
 const CLOCK_TICK_MS = 1_000;
+
+const VIEW_TAB_BASE =
+  "relative -mb-px px-3 py-2 text-xs font-medium transition-colors so-focus-ring rounded-t-[6px]";
+const VIEW_TAB_ACTIVE =
+  "text-[var(--so-text)] after:absolute after:inset-x-1 after:bottom-0 after:h-0.5 after:rounded-full after:bg-[#FF2D2D]";
+const VIEW_TAB_IDLE = "text-[var(--so-muted)] hover:text-[var(--so-text)]";
 
 const CONTACT_OPTIONS: Array<{ value: PreOrderOperatorContactStatus; label: string }> = [
   { value: "driver_confirmed", label: "Driver confirmed" },
@@ -133,6 +136,7 @@ export function PreOrdersBoard({
   const [selectedPreOrder, setSelectedPreOrder] = useState<PreOrder | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -239,7 +243,7 @@ export function PreOrdersBoard({
     });
   }, [activeRows]);
 
-  const filteredPreOrders = useMemo(() => {
+  const dateFilteredPreOrders = useMemo(() => {
     const now = new Date(nowMs);
     const todayStart = startOfDay(now);
     const todayEnd = endOfDay(now);
@@ -271,15 +275,28 @@ export function PreOrdersBoard({
   }, [activeRows, filterMode, fromDate, toDate, nowMs]);
 
   const counters = useMemo(() => {
+    let assigned = 0;
     let unassigned = 0;
     let atRisk = 0;
-    for (const row of filteredPreOrders) {
+    for (const row of dateFilteredPreOrders) {
       const level = getPreOrderUrgencyLevel(row, nowMs);
-      if (level !== "green") unassigned += 1;
+      if (level === "green") assigned += 1;
+      else unassigned += 1;
       if (level === "red" || level === "yellow") atRisk += 1;
     }
-    return { live: filteredPreOrders.length, unassigned, atRisk };
-  }, [filteredPreOrders, nowMs]);
+    return { live: dateFilteredPreOrders.length, assigned, unassigned, atRisk };
+  }, [dateFilteredPreOrders, nowMs]);
+
+  const filteredPreOrders = useMemo(() => {
+    return dateFilteredPreOrders.filter((preOrder) => {
+      if (statusFilter === "all") return true;
+      const level = getPreOrderUrgencyLevel(preOrder, nowMs);
+      if (statusFilter === "assigned") return level === "green";
+      if (statusFilter === "unassigned") return level !== "green";
+      if (statusFilter === "at_risk") return level === "red" || level === "yellow";
+      return true;
+    });
+  }, [dateFilteredPreOrders, statusFilter, nowMs]);
 
   const copyToClipboard = async (fieldKey: string, value?: string | null) => {
     if (!value) return;
@@ -434,20 +451,71 @@ export function PreOrdersBoard({
               <span className="text-xs font-semibold text-slate-700">Active pre-orders</span>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-            <span>
+          <div className="flex flex-wrap items-center gap-1 text-xs text-slate-600">
+            <button
+              type="button"
+              onClick={() => setStatusFilter("all")}
+              className={cn(
+                "rounded-[6px] px-2 py-1 transition-colors so-focus-ring",
+                statusFilter === "all"
+                  ? "bg-[var(--so-accent-soft)] text-[var(--so-accent-strong)]"
+                  : "hover:bg-[var(--so-surface-hover)]",
+              )}
+              title="Show all"
+            >
               {controllerMode ? "Live" : "Active"}{" "}
               <strong className="tabular-nums text-slate-900">{counters.live}</strong>
-            </span>
+            </button>
             <span className="text-slate-300">·</span>
-            <span>
+            <button
+              type="button"
+              onClick={() =>
+                setStatusFilter((prev) => (prev === "assigned" ? "all" : "assigned"))
+              }
+              className={cn(
+                "rounded-[6px] px-2 py-1 transition-colors so-focus-ring",
+                statusFilter === "assigned"
+                  ? "bg-emerald-50 text-emerald-800"
+                  : "hover:bg-[var(--so-surface-hover)]",
+              )}
+              title="Show assigned only"
+            >
+              Assigned{" "}
+              <strong className="tabular-nums text-slate-900">{counters.assigned}</strong>
+            </button>
+            <span className="text-slate-300">·</span>
+            <button
+              type="button"
+              onClick={() =>
+                setStatusFilter((prev) => (prev === "unassigned" ? "all" : "unassigned"))
+              }
+              className={cn(
+                "rounded-[6px] px-2 py-1 transition-colors so-focus-ring",
+                statusFilter === "unassigned"
+                  ? "bg-[var(--so-accent-soft)] text-[var(--so-accent-strong)]"
+                  : "hover:bg-[var(--so-surface-hover)]",
+              )}
+              title="Show unassigned only"
+            >
               Unassigned{" "}
               <strong className="tabular-nums text-slate-900">{counters.unassigned}</strong>
-            </span>
+            </button>
             <span className="text-slate-300">·</span>
-            <span>
+            <button
+              type="button"
+              onClick={() =>
+                setStatusFilter((prev) => (prev === "at_risk" ? "all" : "at_risk"))
+              }
+              className={cn(
+                "rounded-[6px] px-2 py-1 transition-colors so-focus-ring",
+                statusFilter === "at_risk"
+                  ? "bg-rose-50 text-rose-800"
+                  : "hover:bg-[var(--so-surface-hover)]",
+              )}
+              title="Show at risk only (red + yellow)"
+            >
               At risk <strong className="tabular-nums text-rose-700">{counters.atRisk}</strong>
-            </span>
+            </button>
           </div>
         </div>
       </div>
@@ -482,11 +550,17 @@ export function PreOrdersBoard({
         </div>
       ) : null}
 
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className={segmentedTabTrackClass}>
+      <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+        <nav
+          className="flex items-center gap-0.5 border-b border-[var(--so-border)]"
+          role="tablist"
+          aria-label="Pre-orders view"
+        >
           <button
             type="button"
-            className={viewMode === "list" ? segmentedTabSelectedClass : segmentedTabInactiveClass}
+            role="tab"
+            aria-selected={viewMode === "list"}
+            className={cn(VIEW_TAB_BASE, viewMode === "list" ? VIEW_TAB_ACTIVE : VIEW_TAB_IDLE)}
             onClick={() => setViewMode("list")}
           >
             List
@@ -494,20 +568,23 @@ export function PreOrdersBoard({
           {canUseOnMap ? (
             <button
               type="button"
-              className={
-                viewMode === "onMap" ? segmentedTabSelectedClass : segmentedTabInactiveClass
-              }
+              role="tab"
+              aria-selected={viewMode === "onMap"}
+              className={cn(
+                VIEW_TAB_BASE,
+                viewMode === "onMap" ? VIEW_TAB_ACTIVE : VIEW_TAB_IDLE,
+              )}
               onClick={() => setViewMode("onMap")}
             >
               On map
             </button>
           ) : null}
-        </div>
+        </nav>
       </div>
 
       <FilterBar className="mb-2">
         <FilterChip active={filterMode === "all"} onClick={() => setFilterMode("all")}>
-          All
+          All dates
         </FilterChip>
         <FilterChip active={filterMode === "today"} onClick={() => setFilterMode("today")}>
           Today
@@ -534,6 +611,36 @@ export function PreOrdersBoard({
             />
           </div>
         ) : null}
+        <span className="mx-1 h-4 w-px bg-[var(--so-border)]" aria-hidden />
+        <FilterChip
+          active={statusFilter === "all"}
+          onClick={() => setStatusFilter("all")}
+        >
+          All status
+        </FilterChip>
+        <FilterChip
+          active={statusFilter === "assigned"}
+          onClick={() => setStatusFilter("assigned")}
+        >
+          Assigned
+        </FilterChip>
+        <FilterChip
+          active={statusFilter === "unassigned"}
+          onClick={() => setStatusFilter("unassigned")}
+        >
+          Unassigned
+        </FilterChip>
+        <FilterChip
+          active={statusFilter === "at_risk"}
+          onClick={() => setStatusFilter("at_risk")}
+          className={
+            statusFilter === "at_risk"
+              ? "border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-50"
+              : undefined
+          }
+        >
+          At risk
+        </FilterChip>
       </FilterBar>
 
       {viewMode === "onMap" && canUseOnMap ? (
