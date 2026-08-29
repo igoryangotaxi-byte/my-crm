@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-08-29",
+    title: "Orders Live + Pre-Orders polish (0.2.62)",
+    notes:
+      "App version 0.2.62. Orders: 15s live refresh with Last updated; clearer lifecycle buckets (transporting_finished → Completed; waiting/pickup/driving/transporting → In progress with raw Yango status on the badge); clickable Completed / In progress / Canceled counters and FilterChips; flat SO styling with status left-rail (no gradient tiles). Pre-Orders: List/On map SO underline tabs; Assigned / Unassigned / At risk filters; pale-red wash for at-risk rows. Fleet enrichment still pending Yango API support (from 0.2.61). Deck: Yango-Sales-Operations-Orders-Live-0-2-62.pptx. (c0894599)",
+  },
+  {
+    date: "2026-08-29",
     title: "Pre-Orders Controller Live (0.2.61)",
     notes:
       "App version 0.2.61. HUB Pre-Orders becomes an operator live board: uncached /api/sales-operation/pre-orders/live with 15s poll and Last updated (Asia/Jerusalem); past due and cancelled rows leave the list; urgency left-rail (green assigned / yellow 10–30 min / red under 10 min); Driver confirmed / No answer / Issue marks with who+when; Driver column (name, phone, car); sticky Live / Unassigned / At risk counters; map markers match urgency. SQL: scripts/sql/supabase_preorder_operator_marks.sql (apply in Supabase for shared marks across operators). Fleet park enrichment adapter is wired but not finished — fleet-api.yango.tech still returns 403 on the park API key; waiting on Yango / Yandex Fleet support (trace 629384d315dcbb7172e2a89ff0c4d968); UI keeps Unknown Driver fallback from B2B performer. Deck: Yango-Sales-Operations-Pre-Orders-Controller-0-2-61.pptx. (0ccfd1ad)",
