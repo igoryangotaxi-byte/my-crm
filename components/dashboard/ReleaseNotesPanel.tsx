@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-08-31",
+    title: "Call Center + Request Rides + change intermediate stops (0.2.63)",
+    notes:
+      "App version 0.2.63. Call Center in SO HUB: map CRM users to a 3CX extension, operator status, click-to-call on driver phones, incoming toast (mute CRM notifications), Call Control dial/answer/hangup (audio on 3CX). Bar Oz CRM webhooks (lookup / add contact / Call Report) store history + recording URL. Request Rides restored under HUB with full-bleed map shell. Intermediate stops can be edited or added via Yango change-destinations without cancelling — Pre-Orders drawer + Scheduled ride card; confirm when a driver is assigned. SQL: scripts/sql/supabase_call_center.sql (apply in Supabase). Env: THREECX_BASE_URL, THREECX_CLIENT_ID, THREECX_CLIENT_SECRET, THREECX_CRM_WEBHOOK_SECRET. Deck: Yango-Sales-Operations-Call-Center-Request-Rides-0-2-63.pptx. (3423afff)",
+  },
+  {
     date: "2026-08-29",
     title: "Orders Live + Pre-Orders polish (0.2.62)",
     notes:
