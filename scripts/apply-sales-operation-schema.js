@@ -58,6 +58,7 @@ async function main() {
     "supabase_preorder_route_bundles.sql",
     "supabase_ai_assistant.sql",
     "supabase_sales_documentation.sql",
+    "supabase_call_center.sql",
   ];
   const client = new Client({
     connectionString: resolveDatabaseUrl(),

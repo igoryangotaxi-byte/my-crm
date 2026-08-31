@@ -12,6 +12,8 @@ describe("sales operation RBAC", () => {
     for (const role of ["User", "Team Lead"] as const) {
       const permissions = defaultRolePermissions[role];
       for (const key of SALES_OPERATION_PAGE_KEYS) {
+        // preOrders is also a primary CRM page (on for User / Team Lead).
+        if (key === "preOrders") continue;
         assert.equal(permissions[key], false, `${role} should not access ${key} by default`);
       }
     }
@@ -46,6 +48,6 @@ describe("sales operation RBAC", () => {
     // salesSettings stays Admin-only even when inheriting the legacy flag.
     assert.equal(merged.salesSettings, false);
     assert.equal(merged.salesDocumentation, true);
-    assert.equal(CURRENT_PERMISSIONS_VERSION, 15);
+    assert.equal(CURRENT_PERMISSIONS_VERSION, 16);
   });
 });

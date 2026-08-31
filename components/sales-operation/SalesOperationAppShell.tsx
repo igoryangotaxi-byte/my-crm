@@ -14,13 +14,18 @@ import { OfficeModeProvider } from "@/components/sales-operation/office/OfficeMo
 import { SalesDensityProvider, useSalesDensity } from "@/components/sales-operation/SalesDensityContext";
 import { CommandPalette } from "@/components/patterns/CommandPalette";
 import { AiPageContextProvider } from "@/components/ai/AiPageContext";
+import { CallCenterRuntime } from "@/components/call-center/CallCenterRuntime";
 import { Suspense } from "react";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/ui/cn";
 
 function ShellInner({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const { language } = useAuth();
   const { collapsed } = useSalesSidebar();
   const { density } = useSalesDensity();
   const rtl = language === "he";
+  const mapFullBleed = pathname.startsWith("/sales-operation/request-rides");
   const offset = rtl
     ? collapsed
       ? "lg:pr-[72px]"
@@ -33,16 +38,34 @@ function ShellInner({ children }: { children: React.ReactNode }) {
     <div
       data-module="sales-operation"
       data-density={density}
-      className="relative flex min-h-screen overflow-x-hidden bg-[var(--so-bg)]"
+      className={cn(
+        "relative flex overflow-x-hidden bg-[var(--so-bg)]",
+        mapFullBleed ? "h-dvh min-h-0" : "min-h-screen",
+      )}
     >
       <CommandPalette />
       <SalesOperationSidebar />
       <div
-        className={`relative z-[1] flex min-h-screen min-w-0 flex-1 flex-col p-2 sm:p-2.5 ${offset}`}
+        className={cn(
+          "relative z-[1] flex min-w-0 flex-1 flex-col",
+          mapFullBleed ? "h-dvh min-h-0 p-2 sm:p-2.5" : "min-h-screen p-2 sm:p-2.5",
+          offset,
+        )}
       >
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[16px] border border-[var(--so-border)] bg-[var(--so-surface)] shadow-[var(--so-shadow-sm)]">
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 flex-col overflow-hidden rounded-[16px] border border-[var(--so-border)] bg-[var(--so-surface)] shadow-[var(--so-shadow-sm)]",
+          )}
+        >
           <SalesOperationHeader />
-          <main className="make-shell-main min-h-0 min-w-0 flex-1 overflow-auto px-4 py-4 sm:px-5 lg:px-6">
+          <main
+            className={cn(
+              "make-shell-main min-h-0 min-w-0 flex-1",
+              mapFullBleed
+                ? "relative flex flex-col overflow-hidden p-0"
+                : "overflow-auto px-4 py-4 sm:px-5 lg:px-6",
+            )}
+          >
             {children}
           </main>
         </div>
@@ -62,7 +85,9 @@ export function SalesOperationAppShell({ children }: { children: React.ReactNode
               <OfficeModeProvider>
                 <Suspense fallback={null}>
                   <AiPageContextProvider>
-                    <ShellInner>{children}</ShellInner>
+                    <CallCenterRuntime>
+                      <ShellInner>{children}</ShellInner>
+                    </CallCenterRuntime>
                   </AiPageContextProvider>
                 </Suspense>
               </OfficeModeProvider>

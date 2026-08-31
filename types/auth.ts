@@ -28,6 +28,7 @@ export type AppPageKey =
   | "salesDocumentation"
   | "salesLeadDiscovery"
   | "salesAiAssistant"
+  | "salesCallCenter"
   | "accesses"
   | "notes";
 
@@ -122,6 +123,7 @@ const salesPagesAllTrue = {
   salesDocumentation: true,
   salesLeadDiscovery: true,
   salesAiAssistant: true,
+  salesCallCenter: true,
   // Admin-only by default; overridden per-role below.
   salesSettings: false,
 } as const;
@@ -138,6 +140,7 @@ const salesPagesAllFalse = {
   salesDocumentation: false,
   salesLeadDiscovery: false,
   salesAiAssistant: false,
+  salesCallCenter: false,
   salesSettings: false,
 } as const;
 

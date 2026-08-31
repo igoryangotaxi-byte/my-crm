@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { DriverCallButton } from "@/components/call-center/DriverCallButton";
 import { BundleEmptyState } from "@/components/route-bundles/BundleEmptyState";
 import { BundleHealthBadge } from "@/components/route-bundles/BundleHealthBadge";
 import { BundleOrderList } from "@/components/route-bundles/BundleOrderList";
@@ -366,16 +367,6 @@ export function RouteBundlesView() {
     await loadOpportunities();
   }
 
-  async function copyPhone() {
-    if (!driverForm.driverPhone) return;
-    try {
-      await navigator.clipboard.writeText(driverForm.driverPhone);
-      setBanner(`Copied ${driverForm.driverPhone}`);
-    } catch {
-      setError("Could not copy phone");
-    }
-  }
-
   return (
     <div className="flex h-[calc(100vh-7.5rem)] min-h-[560px] flex-col gap-3 px-3 pb-3 lg:px-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -594,21 +585,7 @@ export function RouteBundlesView() {
                     className="min-w-0 flex-1 rounded-lg border border-[var(--so-border)] px-2 py-1.5 text-xs"
                   />
                   {driverForm.driverPhone ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => void copyPhone()}
-                        className="rounded-lg border border-[var(--so-border)] px-2.5 py-1.5 text-xs font-semibold"
-                      >
-                        Copy
-                      </button>
-                      <a
-                        href={`tel:${driverForm.driverPhone}`}
-                        className="rounded-lg bg-[var(--so-accent)] px-2.5 py-1.5 text-xs font-bold text-white"
-                      >
-                        Call
-                      </a>
-                    </>
+                    <DriverCallButton phone={driverForm.driverPhone} compact />
                   ) : null}
                 </div>
                 <input

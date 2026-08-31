@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { usePathname } from "next/navigation";
 import {
   RequestRidesMap,
   type RequestRidesMapFitPadding,
@@ -24,6 +25,7 @@ import { publicErrorMessage } from "@/lib/public-error-message";
 import { downloadBulkUploadSampleXlsx } from "@/lib/xlsx-bulk-upload-sample";
 import { parseXlsxRidesFile } from "@/lib/xlsx-rides-parser";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { OrderRouteEditor } from "@/components/pre-orders/PreOrderRouteEditor";
 import type {
   RequestRideResult,
   RequestRideStatus,
@@ -300,12 +302,17 @@ function RequestedRideAccordionCard({
   index,
   deletingOrderId,
   onRemove,
+  onRouteUpdated,
   language = "en",
 }: {
   ride: RequestedRideItem;
   index: number;
   deletingOrderId: string | null;
   onRemove: (orderId: string) => void | Promise<void>;
+  onRouteUpdated?: (
+    orderId: string,
+    patch: { sourceAddress?: string; destinationAddress?: string },
+  ) => void;
   language?: "en" | "he" | "ru";
 }) {
   const isRtl = language === "he";
@@ -327,7 +334,7 @@ function RequestedRideAccordionCard({
             <p className="mt-1 text-xs text-slate-500">
               {isRtl
                 ? "נתחיל לחפש רכב מראש ונעדכן אותך כשהכול יהיה מוכן"
-                : "We&apos;ll start looking for a car in advance and notify you when it&apos;s ready"}
+                : "We'll start looking for a car in advance and notify you when it's ready"}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -355,6 +362,24 @@ function RequestedRideAccordionCard({
             <p>{isRtl ? "טלפון" : "Phone"}: {ride.riderPhone}</p>
             <p>{isRtl ? "מחלקה" : "Class"}: {ride.rideClass}</p>
             <p>{isRtl ? "לקוח" : "Client"}: {ride.tokenLabel}</p>
+            <OrderRouteEditor
+              compact
+              order={{
+                tokenLabel: ride.tokenLabel,
+                clientId: ride.clientId,
+                orderId: ride.orderId,
+                driverAssigned: Boolean(ride.status?.driverPhone || ride.status?.driverName),
+                orderStatus: ride.status?.statusRaw ?? ride.status?.lifecycleStatus ?? null,
+                pointA: ride.sourceAddress,
+                pointB: ride.destinationAddress,
+              }}
+              onRouteUpdated={(route) => {
+                onRouteUpdated?.(ride.orderId, {
+                  sourceAddress: route.source?.fullname,
+                  destinationAddress: route.destination?.fullname,
+                });
+              }}
+            />
             <div className="pt-1">
               <button
                 type="button"
@@ -379,6 +404,8 @@ function RequestedRideAccordionCard({
 }
 
 export default function RequestRidesPage() {
+  const pathname = usePathname();
+  const embeddedInSalesOperation = pathname.startsWith("/sales-operation/");
   const { currentUser, users, language } = useAuth();
   const isRtl = language === "he";
   const copy = isRtl
@@ -571,13 +598,13 @@ export default function RequestRidesPage() {
   }, []);
 
   const mapFitPadding = useMemo((): RequestRidesMapFitPadding => {
-    /** Map is `fixed inset-0`; pad for sidebar + form column (aligned with header title). */
+    /** Map fills the page shell; pad for the left glass form column (+ right list on xl). */
     if (overlayWideLayout) {
-      /** Left pad matches sidebar + glass column (≈36rem form + outer shell padding). */
-      return { top: 56, bottom: 56, left: 724, right: rightOverlayVisible ? 288 : 56 };
+      const left = embeddedInSalesOperation ? 620 : 724;
+      return { top: 56, bottom: 56, left, right: rightOverlayVisible ? 288 : 56 };
     }
-    return { top: 88, bottom: 40, left: 148, right: 20 };
-  }, [overlayWideLayout, rightOverlayVisible]);
+    return { top: 88, bottom: 40, left: embeddedInSalesOperation ? 24 : 148, right: 20 };
+  }, [overlayWideLayout, rightOverlayVisible, embeddedInSalesOperation]);
 
   const pollAttemptRef = useRef(0);
   const pollTimerRef = useRef<number | null>(null);
@@ -2096,6 +2123,23 @@ export default function RequestRidesPage() {
     }
   };
 
+  const patchRequestedRideRoute = (
+    orderId: string,
+    patch: { sourceAddress?: string; destinationAddress?: string },
+  ) => {
+    setRequestedRides((prev) =>
+      prev.map((ride) =>
+        ride.orderId === orderId
+          ? {
+              ...ride,
+              sourceAddress: patch.sourceAddress?.trim() || ride.sourceAddress,
+              destinationAddress: patch.destinationAddress?.trim() || ride.destinationAddress,
+            }
+          : ride,
+      ),
+    );
+  };
+
   const applySuggestionToField = (fieldId: string, suggestion: AddressSuggestion) => {
     setAddressFieldById(fieldId, () => ({
       text: suggestion.label || suggestion.displayName,
@@ -2226,9 +2270,9 @@ export default function RequestRidesPage() {
   const dropdownOptionClass = "rr-dropdown-option";
 
   return (
-    <section className="relative flex min-h-0 flex-1 flex-col gap-0 overflow-visible">
-      <div className="relative min-h-0 flex-1 w-full overflow-visible">
-          <div className="fixed inset-0 z-0 bg-gradient-to-br from-gray-100 via-gray-50 to-gray-100">
+    <section className="relative flex h-full min-h-0 flex-1 flex-col gap-0 overflow-hidden">
+      <div className="relative h-full min-h-0 w-full flex-1 overflow-hidden">
+          <div className="absolute inset-0 z-0 bg-gradient-to-br from-gray-100 via-gray-50 to-gray-100">
             <RequestRidesMap
               points={effectiveMapPoints}
               routeCoordinates={mapRouteCoordinates}
@@ -2240,10 +2284,14 @@ export default function RequestRidesPage() {
           </div>
 
           <div
-            className={`pointer-events-none absolute inset-0 z-10 pb-4 pt-[39px] ${
+            className={`pointer-events-none absolute inset-0 z-10 pb-4 pt-3 lg:pt-4 ${
               isRtl
-                ? "pr-[calc(0.75rem+4rem+1.25rem)] pl-3 lg:pr-[calc(0.75rem+4rem+1.5rem)] lg:pl-4"
-                : "pl-[calc(0.75rem+4rem+1.25rem)] pr-3 lg:pl-[calc(0.75rem+4rem+1.5rem)] lg:pr-4"
+                ? embeddedInSalesOperation
+                  ? "pr-3 pl-3 lg:pr-4 lg:pl-4"
+                  : "pr-[calc(0.75rem+4rem+1.25rem)] pl-3 lg:pr-[calc(0.75rem+4rem+1.5rem)] lg:pl-4"
+                : embeddedInSalesOperation
+                  ? "pl-3 pr-3 lg:pl-4 lg:pr-4"
+                  : "pl-[calc(0.75rem+4rem+1.25rem)] pr-3 lg:pl-[calc(0.75rem+4rem+1.5rem)] lg:pr-4"
             }`}
           >
             <div className="rr-glass-column-shell pointer-events-auto flex h-full w-full max-w-[min(36rem,calc(100vw-1.5rem))] flex-col overflow-x-hidden rounded-3xl p-3 lg:p-4">
@@ -2890,6 +2938,7 @@ export default function RequestRidesPage() {
                           index={index}
                           deletingOrderId={deletingOrderId}
                           onRemove={removeRequestedRide}
+                          onRouteUpdated={patchRequestedRideRoute}
                           language={language}
                         />
                       ))}
@@ -3087,6 +3136,7 @@ export default function RequestRidesPage() {
                       index={index}
                       deletingOrderId={deletingOrderId}
                       onRemove={removeRequestedRide}
+                      onRouteUpdated={patchRequestedRideRoute}
                       language={language}
                     />
                   ))}

@@ -3328,6 +3328,106 @@ export async function cancelYangoOrder(input: {
   );
 }
 
+export async function getYangoOrderRoute(input: {
+  tokenLabel: string;
+  clientId: string;
+  orderId: string;
+}): Promise<import("@/lib/yango-change-destinations").YangoOrderRouteSnapshot> {
+  const { parseYangoOrderRoute } = await import("@/lib/yango-change-destinations");
+  const tokenConfig = await resolveTokenConfig(input.tokenLabel);
+  const info = await fetchJsonNoCache<Record<string, unknown>>(
+    `${YANGO_BASE_URL}/2.0/orders/info?order_id=${encodeURIComponent(input.orderId)}`,
+    tokenConfig.token,
+    input.clientId,
+  );
+  return parseYangoOrderRoute(input.orderId, info);
+}
+
+/**
+ * Changes route points after the start (interims + final) via Yango change-destinations.
+ * Override path with YANGO_CHANGE_DESTINATIONS_ENDPOINT if needed.
+ */
+export async function changeYangoOrderDestinations(input: {
+  tokenLabel: string;
+  clientId: string;
+  orderId: string;
+  destinations: Array<{ fullname: string; geopoint: [number, number] }>;
+  createdTime?: string;
+}): Promise<{
+  changedDestinations: unknown;
+  route: import("@/lib/yango-change-destinations").YangoOrderRouteSnapshot;
+}> {
+  const {
+    destinationsToApiBody,
+    formatChangeDestinationsCreatedTime,
+    parseYangoOrderRoute,
+    toYangoRoutePoint,
+  } = await import("@/lib/yango-change-destinations");
+  const tokenConfig = await resolveTokenConfig(input.tokenLabel);
+  if (!input.destinations.length) {
+    throw new Error("destinations must include at least the final drop-off.");
+  }
+
+  const endpoint =
+    process.env.YANGO_CHANGE_DESTINATIONS_ENDPOINT?.trim() ||
+    "/2.0/orders/change-destinations";
+  const url = `${YANGO_BASE_URL}${endpoint}?order_id=${encodeURIComponent(input.orderId)}`;
+
+  const normalized = input.destinations.map((point) => {
+    const fullname = point.fullname.trim();
+    if (!fullname) throw new Error("Each destination requires fullname.");
+    const [lon, lat] = point.geopoint;
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+      throw new Error("Each destination requires geopoint [lon, lat].");
+    }
+    return toYangoRoutePoint(fullname, lat, lon);
+  });
+
+  const postOnce = async (createdTime: string) =>
+    fetchJsonNoCache<Record<string, unknown>>(
+      url,
+      tokenConfig.token,
+      input.clientId,
+      {
+        method: "POST",
+        headers: {
+          "X-Idempotency-Token": globalThis.crypto.randomUUID(),
+          "Accept-Language": "en",
+        },
+        body: JSON.stringify({
+          created_time: createdTime,
+          destinations: destinationsToApiBody(normalized),
+        }),
+      },
+    );
+
+  let response: Record<string, unknown>;
+  try {
+    response = await postOnce(input.createdTime ?? formatChangeDestinationsCreatedTime());
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes("HTTP 409")) throw error;
+    response = await postOnce(formatChangeDestinationsCreatedTime());
+  }
+
+  const route = await getYangoOrderRoute({
+    tokenLabel: input.tokenLabel,
+    clientId: input.clientId,
+    orderId: input.orderId,
+  }).catch(() =>
+    parseYangoOrderRoute(input.orderId, {
+      destination: normalized[normalized.length - 1],
+      interim_destinations: normalized.slice(0, -1),
+      changed_destinations: response.changed_destinations,
+    }),
+  );
+
+  return {
+    changedDestinations: response.changed_destinations ?? response.changedDestinations ?? null,
+    route,
+  };
+}
+
 export async function getRequestRideStatus(input: {
   tokenLabel: string;
   clientId: string;

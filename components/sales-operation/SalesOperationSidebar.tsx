@@ -27,7 +27,9 @@ import {
   MessageSquare,
   Calculator,
   Box,
+  Car,
   Network,
+  Phone,
   Route,
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -131,10 +133,12 @@ export function SalesOperationSidebar() {
         icon: Network,
         children: [
           { href: "/sales-operation/pre-orders", labelKey: "preOrders", page: "preOrders", icon: ClipboardList },
+          { href: "/sales-operation/request-rides", labelKey: "requestRides", page: "requestRides", icon: Car },
           { href: "/sales-operation/route-bundles", labelKey: "routeBundles", page: "preOrders", icon: Route },
           { href: "/sales-operation/orders", labelKey: "orders", page: "orders", icon: Package },
           { href: "/sales-operation/price-calculator", labelKey: "priceCalculator", page: "priceCalculator", icon: Calculator },
           { href: "/sales-operation/api-health-check", labelKey: "apiHealthCheck", page: "notes", icon: ShieldCheck },
+          { href: "/sales-operation/call-center", labelKey: "callCenter", page: "salesCallCenter", icon: Phone },
         ],
       },
       { kind: "leaf", href: "/sales-operation/settings", labelKey: "settings", page: "salesSettings", icon: Settings },

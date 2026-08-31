@@ -10,6 +10,7 @@ import { StatTile } from "@/components/ui/StatTile";
 import { Button } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Dialog";
 import { FilterBar, FilterChip } from "@/components/patterns/FilterBar";
+import { DriverCallButton } from "@/components/call-center/DriverCallButton";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type { GpTripsImportResult } from "@/lib/gp-trips-import";
 import {
@@ -3618,7 +3619,13 @@ export function B2BPreOrdersPanel({
                       </div>
                       <div className="rounded-xl bg-white px-3 py-2.5">
                         <dt className="text-muted">Driver phone</dt>
-                        <dd className="font-medium text-slate-900">{getValue(performer?.phone)}</dd>
+                        <dd className="font-medium text-slate-900">
+                          {performer?.phone ? (
+                            <DriverCallButton phone={String(performer.phone)} />
+                          ) : (
+                            getValue(performer?.phone)
+                          )}
+                        </dd>
                       </div>
                       <div className="rounded-xl bg-white px-3 py-2.5">
                         <dt className="text-muted">Vehicle model</dt>

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { DriverCallButton } from "@/components/call-center/DriverCallButton";
+import { PreOrderRouteEditor } from "@/components/pre-orders/PreOrderRouteEditor";
 import { PreOrdersMapView } from "@/components/pre-orders/PreOrdersMapView";
 import { FilterBar, FilterChip } from "@/components/patterns/FilterBar";
 import { cn } from "@/lib/ui/cn";
@@ -139,7 +141,6 @@ export function PreOrdersBoard({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-  const [copiedField, setCopiedField] = useState<string | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -297,17 +298,6 @@ export function PreOrdersBoard({
       return true;
     });
   }, [dateFilteredPreOrders, statusFilter, nowMs]);
-
-  const copyToClipboard = async (fieldKey: string, value?: string | null) => {
-    if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopiedField(fieldKey);
-      window.setTimeout(() => setCopiedField((prev) => (prev === fieldKey ? null : prev)), 1200);
-    } catch {
-      // ignore
-    }
-  };
 
   const cancelPreOrder = async (preOrder: PreOrder) => {
     if (
@@ -718,13 +708,7 @@ export function PreOrdersBoard({
                         <div className="flex flex-col items-center gap-0.5">
                           <span className="font-medium text-slate-900">{driverName}</span>
                           {preOrder.driverPhone ? (
-                            <a
-                              href={`tel:${preOrder.driverPhone}`}
-                              onClick={(event) => event.stopPropagation()}
-                              className="text-xs text-sky-700 hover:underline"
-                            >
-                              {preOrder.driverPhone}
-                            </a>
+                            <DriverCallButton phone={preOrder.driverPhone} compact />
                           ) : null}
                           {preOrder.driverId ? (
                             <span className="text-[10px] text-muted">ID {preOrder.driverId}</span>
@@ -846,20 +830,13 @@ export function PreOrdersBoard({
                   {formatDriverDisplayName(selectedPreOrder)}
                 </p>
                 <p className="mt-2 text-xs text-muted">Phone</p>
-                <p className="mt-1 font-medium text-slate-900">
-                  {selectedPreOrder.driverPhone ?? "—"}
+                <div className="mt-1">
                   {selectedPreOrder.driverPhone ? (
-                    <button
-                      type="button"
-                      className="ml-2 text-xs text-sky-700"
-                      onClick={() =>
-                        void copyToClipboard("driverPhone", selectedPreOrder.driverPhone)
-                      }
-                    >
-                      {copiedField === "driverPhone" ? "Copied" : "Copy"}
-                    </button>
-                  ) : null}
-                </p>
+                    <DriverCallButton phone={selectedPreOrder.driverPhone} />
+                  ) : (
+                    <span className="font-medium text-slate-900">—</span>
+                  )}
+                </div>
                 <p className="mt-2 text-xs text-muted">Driver ID</p>
                 <p className="mt-1 font-medium text-slate-900">
                   {selectedPreOrder.driverId ?? "—"}
@@ -886,6 +863,35 @@ export function PreOrdersBoard({
                 ) : null}
               </div>
             </div>
+            <PreOrderRouteEditor
+              preOrder={selectedPreOrder}
+              onRouteUpdated={(route) => {
+                if (route.destination?.fullname) {
+                  setRows((prev) =>
+                    prev.map((row) =>
+                      row.id === selectedPreOrder.id
+                        ? {
+                            ...row,
+                            pointB: route.destination?.fullname ?? row.pointB,
+                            driverAssigned: route.driverAssigned || row.driverAssigned,
+                            orderStatus: route.status ?? row.orderStatus,
+                          }
+                        : row,
+                    ),
+                  );
+                  setSelectedPreOrder((prev) =>
+                    prev && prev.id === selectedPreOrder.id
+                      ? {
+                          ...prev,
+                          pointB: route.destination?.fullname ?? prev.pointB,
+                          driverAssigned: route.driverAssigned || prev.driverAssigned,
+                          orderStatus: route.status ?? prev.orderStatus,
+                        }
+                      : prev,
+                  );
+                }
+              }}
+            />
             <div className="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"

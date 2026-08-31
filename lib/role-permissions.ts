@@ -30,12 +30,13 @@ export const SALES_OPERATION_PAGE_KEYS = [
   "salesDocumentation",
   "salesLeadDiscovery",
   "salesAiAssistant",
+  "salesCallCenter",
   "preOrders",
 ] as const satisfies readonly AppPageKey[];
 
 export type SalesOperationPageKey = (typeof SALES_OPERATION_PAGE_KEYS)[number];
 
-export const CURRENT_PERMISSIONS_VERSION = 15;
+export const CURRENT_PERMISSIONS_VERSION = 16;
 
 export function isAppRole(value: unknown): value is AppRole {
   return typeof value === "string" && (APP_ROLES as readonly string[]).includes(value);
@@ -150,14 +151,17 @@ export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: AppPageK
   { prefix: "/sales-operation/automation", page: "salesAutomation" },
   { prefix: "/sales-operation/communications", page: "communications" },
   { prefix: "/sales-operation/pre-orders", page: "preOrders" },
+  { prefix: "/sales-operation/request-rides", page: "requestRides" },
   { prefix: "/sales-operation/route-bundles", page: "preOrders" },
   { prefix: "/sales-operation/orders", page: "orders" },
   { prefix: "/sales-operation/price-calculator", page: "priceCalculator" },
   { prefix: "/sales-operation/api-health-check", page: "notes" },
   { prefix: "/sales-operation/settings", page: "salesSettings" },
+  { prefix: "/sales-operation/call-center", page: "salesCallCenter" },
 ];
 
 export function resolveSalesOperationPageKey(pathname: string): AppPageKey {
+  if (pathname.startsWith("/sales-operation/call-center")) return "salesCallCenter";
   if (pathname.startsWith("/sales-operation/lead-discovery")) return "salesLeadDiscovery";
   if (pathname.startsWith("/sales-operation/office")) return "salesPipeline";
   if (pathname.startsWith("/sales-operation/corp-register")) return "salesPipeline";
@@ -166,6 +170,7 @@ export function resolveSalesOperationPageKey(pathname: string): AppPageKey {
   if (pathname.startsWith("/sales-operation/documentation")) return "salesDocumentation";
   if (pathname.startsWith("/sales-operation/communications")) return "communications";
   if (pathname.startsWith("/sales-operation/pre-orders")) return "preOrders";
+  if (pathname.startsWith("/sales-operation/request-rides")) return "requestRides";
   if (pathname.startsWith("/sales-operation/route-bundles")) return "preOrders";
   if (pathname.startsWith("/sales-operation/orders")) return "orders";
   if (pathname.startsWith("/sales-operation/price-calculator")) return "priceCalculator";
