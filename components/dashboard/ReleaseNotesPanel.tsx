@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-09-06",
+    title: "Public ticket form for unregistered users (0.2.64)",
+    notes:
+      "App version 0.2.64. Public CRM-styled form at /submit-ticket (no login): Title, Description, Priority, and up to 5 photo/file attachments. Submissions create Tracker tickets in project 2cc7d354-1f6f-42d5-bb37-1efd6768f689 column To Do as External form. Rate limit + honeypot; optional PUBLIC_TRACKER_PROJECT_ID / PUBLIC_TRACKER_STATUS_NAME. Deck: Yango-Sales-Operations-Public-Ticket-Form-0-2-64.pptx. (7b8a9235)",
+  },
+  {
     date: "2026-08-31",
     title: "Call Center + Request Rides + change intermediate stops (0.2.63)",
     notes:
