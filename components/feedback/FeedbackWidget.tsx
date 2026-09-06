@@ -10,7 +10,12 @@ import { cn } from "@/lib/ui/cn";
 import type { FeedbackRequest } from "@/lib/feedback/types";
 import { feedbackStatusLabel } from "@/lib/feedback/types";
 
-const HIDDEN_PREFIXES = ["/login", "/unsubscribe", "/sales-operation/corp-register"];
+const HIDDEN_PREFIXES = [
+  "/login",
+  "/unsubscribe",
+  "/submit-ticket",
+  "/sales-operation/corp-register",
+];
 
 export function FeedbackWidget() {
   const { currentUser } = useAuth();
