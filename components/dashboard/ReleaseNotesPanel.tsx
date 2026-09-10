@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-09-10",
+    title: "Telegram Support bot → Tracker To Do (0.2.65)",
+    notes:
+      "App version 0.2.65. Public Telegram support bot (@hubteamlead_bot): Select the Title → Change price and coupons / Technical problems in the app / Bad service from the driver / Other → Description → Tracker ticket in project 2cc7d354-…6768f689 column To Do (author Telegram support). Webhook /api/telegram/support/webhook. SQL: scripts/sql/supabase_telegram_support_sessions.sql. Env: TELEGRAM_SUPPORT_BOT_TOKEN, TELEGRAM_SUPPORT_WEBHOOK_SECRET. Deck: Yango-Sales-Operations-Telegram-Support-Bot-0-2-65.pptx. (7467801e)",
+  },
+  {
     date: "2026-09-06",
     title: "Public ticket form for unregistered users (0.2.64)",
     notes:
