@@ -60,6 +60,7 @@ async function main() {
     "supabase_sales_documentation.sql",
     "supabase_call_center.sql",
     "supabase_telegram_support_sessions.sql",
+    "supabase_yango_token_registry.sql",
   ];
   const client = new Client({
     connectionString: resolveDatabaseUrl(),

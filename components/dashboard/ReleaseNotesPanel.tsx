@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-09-10",
+    title: "Yango token registry durable (0.2.66)",
+    notes:
+      "App version 0.2.66. Hotfix: Upstash KV hit max request quota so Token diagnostics lost registry-only cabinets. Token registry now loads/saves via Supabase Storage (system/yango-token-registry-v1.json) + optional SQL table, mirrors to KV best-effort, never overwrites KV with an empty snapshot. Re-synced env cabinets into durable storage. Optional SQL: scripts/sql/supabase_yango_token_registry.sql. If CLIENT_* cabinets are still missing, re-add via Token onboarding or restore from Upstash after quota upgrade.",
+  },
+  {
+    date: "2026-09-10",
     title: "Telegram Support bot → Tracker To Do (0.2.65)",
     notes:
       "App version 0.2.65. Public Telegram support bot (@hubteamlead_bot): Select the Title → Change price and coupons / Technical problems in the app / Bad service from the driver / Other → Description → Tracker ticket in project 2cc7d354-…6768f689 column To Do (author Telegram support). Webhook /api/telegram/support/webhook. SQL: scripts/sql/supabase_telegram_support_sessions.sql. Env: TELEGRAM_SUPPORT_BOT_TOKEN, TELEGRAM_SUPPORT_WEBHOOK_SECRET. Deck: Yango-Sales-Operations-Telegram-Support-Bot-0-2-65.pptx. (7467801e)",

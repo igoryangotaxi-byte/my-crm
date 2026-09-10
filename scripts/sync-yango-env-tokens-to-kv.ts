@@ -90,11 +90,13 @@ async function main() {
   }
   dotenv.config({ path: envPath });
 
+  // Durable registry: Supabase Storage (+ table when applied). KV is best-effort mirror.
   if (
     !dryRun &&
-    (!(process.env.KV_REST_API_URL ?? "").trim() || !(process.env.KV_REST_API_TOKEN ?? "").trim())
+    (!(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim() ||
+      !(process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim())
   ) {
-    console.error("KV_REST_API_URL and KV_REST_API_TOKEN must be set (same as prod KV).");
+    console.error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.");
     process.exit(1);
   }
 
@@ -163,7 +165,7 @@ async function main() {
 
   console.log(`\nDone. ${dryRun ? "Would write" : "Wrote"} ${written} entries, skipped ${skipped} (empty env).`);
   console.log(
-    "KV registry `appli:yango:token-registry:v1` is the single runtime source when precedence is registry. On laptop, stale KV vs good .env.local: set YANGO_TOKEN_LOCAL_PREFER_ENV=true (next dev only) or run this script after filling YANGO_TOKEN_*.",
+    "Registry is persisted to Supabase Storage (system/yango-token-registry-v1.json) and optionally mirrored to KV when quota allows.",
   );
 }
 
