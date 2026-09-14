@@ -95,7 +95,13 @@
       "telegramCheck": "בדיקה",
       "telegramChecking": "בודק…",
       "telegramLinked": "טלגרם מחובר: {account}. העוזר יכול לשלוח לכם הודעות שם.",
-      "telegramNotConfigured": "הבוט לא מוגדר"
+      "telegramNotConfigured": "הבוט לא מוגדר",
+      "welcomeBrief": "אני על הטוקנים המחוברים — מציע פעולות, אתם מאשרים. הצ׳אט משני.",
+      "welcomeDismiss": "הבנתי",
+      "statusReady": "מוכן על טוקנים מחוברים",
+      "statusThinking": "עובד…",
+      "statusConfirm": "נדרש Approve",
+      "statusTokenDead": "בעיית טוקן — בדקו את הרצועה"
     },
     "tab": {
       "pipeline": "צינור",

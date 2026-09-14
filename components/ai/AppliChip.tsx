@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 export type AppliChipState = "idle" | "thinking" | "needs-confirm" | "token-dead";
 
 export function AppliChip({
@@ -22,17 +24,31 @@ export function AppliChip({
       type="button"
       onClick={onClick}
       data-appli-state={state}
-      className={`so-focus-ring relative inline-flex h-9 items-center gap-1.5 rounded-[8px] border px-2.5 text-sm transition-colors ${
+      className={`so-focus-ring relative inline-flex h-9 items-center gap-1.5 rounded-[8px] border px-2.5 text-sm font-medium transition-colors ${
         thinking
-          ? "appli-chip-thinking border-[var(--so-accent)] text-[var(--so-accent-strong)]"
+          ? "appli-chip-thinking border-[var(--so-accent)] bg-[color-mix(in_srgb,var(--so-accent)_8%,white)] text-[var(--so-accent-strong)]"
           : needsConfirm
-            ? "border-[var(--so-border-strong)] text-[var(--so-text)] hover:bg-[var(--so-surface-hover)]"
+            ? "border-[var(--so-accent)] bg-[color-mix(in_srgb,var(--so-accent)_6%,white)] text-[var(--so-text)] hover:bg-[var(--so-surface-hover)]"
             : tokenDead
-              ? "border-[var(--so-border)] text-[var(--so-muted)] hover:bg-[var(--so-surface-hover)]"
-              : "border-[var(--so-border)] text-[var(--so-muted)] hover:bg-[var(--so-surface-hover)] hover:text-[var(--so-text)]"
+              ? "border-[var(--so-border-strong)] text-[var(--so-muted)] hover:bg-[var(--so-surface-hover)]"
+              : "border-[color-mix(in_srgb,#FF2D2D_35%,var(--so-border))] bg-[color-mix(in_srgb,#FF2D2D_6%,white)] text-[var(--so-text)] hover:bg-[color-mix(in_srgb,#FF2D2D_10%,white)]"
       }`}
       aria-label={label}
     >
+      <Image
+        src="/brand/appli-logo.png"
+        alt=""
+        width={16}
+        height={16}
+        className="h-4 w-4 shrink-0 object-contain"
+        aria-hidden
+      />
+      {!tokenDead ? (
+        <span
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${thinking ? "bg-[var(--so-accent)]" : "bg-[#FF2D2D]"}`}
+          aria-hidden
+        />
+      ) : null}
       <span className="hidden sm:inline">{label}</span>
       <span className="sm:hidden">A</span>
       {needsConfirm && confirmCount > 0 ? (

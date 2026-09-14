@@ -38,6 +38,8 @@ export function AppliAssistant() {
   const [chatExpanded, setChatExpanded] = useState(false);
   const [tokens, setTokens] = useState<AppliTokenChip[]>([]);
   const [tokensLoading, setTokensLoading] = useState(false);
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const [dockSeenReady, setDockSeenReady] = useState(false);
   const [confirmMarks, setConfirmMarks] = useState<Record<string, ConfirmMark>>({});
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -111,6 +113,32 @@ export function AppliAssistant() {
     window.addEventListener(APPLI_OPEN_EVENT, onOpen);
     return () => window.removeEventListener(APPLI_OPEN_EVENT, onOpen);
   }, [allowed]);
+
+  useEffect(() => {
+    if (!allowed || typeof window === "undefined") return;
+    try {
+      const seen = window.localStorage.getItem("appli-dock-seen") === "1";
+      setWelcomeDismissed(seen);
+      if (!seen) setOpen(true);
+    } catch {
+      // localStorage blocked — skip auto-open
+    } finally {
+      setDockSeenReady(true);
+    }
+  }, [allowed]);
+
+  const markDockSeen = useCallback(() => {
+    setWelcomeDismissed(true);
+    try {
+      window.localStorage.setItem("appli-dock-seen", "1");
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const dismissWelcome = useCallback(() => {
+    markDockSeen();
+  }, [markDockSeen]);
 
   const cancelInFlight = useCallback(() => {
     abortRef.current?.abort();
@@ -347,8 +375,18 @@ export function AppliAssistant() {
 
   const suggestions = [t("suggestSchedule"), t("suggestTask"), t("suggestLeads"), t("suggestFind")];
   const showCards = proposeBlocks.length > 0;
+  const showWelcome = dockSeenReady && !welcomeDismissed && !showCards;
+  const statusLine =
+    chipState === "thinking"
+      ? t("statusThinking")
+      : chipState === "needs-confirm"
+        ? t("statusConfirm")
+        : chipState === "token-dead"
+          ? t("statusTokenDead")
+          : t("statusReady");
 
   return (
+
     <>
       <AppliChip
         state={chipState}
@@ -358,15 +396,18 @@ export function AppliAssistant() {
       />
 
       {open ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/20" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/20" onClick={() => {
+            markDockSeen();
+            setOpen(false);
+          }}>
           <aside
             className="flex h-full w-full max-w-[400px] flex-col border-l border-[var(--so-border)] bg-[var(--so-surface)] shadow-[var(--so-shadow-md)] sm:w-[380px]"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="flex items-center justify-between border-b border-[var(--so-border)] px-4 py-2.5">
-              <div>
-                <div className="text-sm font-medium text-[var(--so-text)]">{t("title")}</div>
-                <div className="ycds-small text-[var(--so-muted)]">{t("subtitle")}</div>
+              <div className="min-w-0">
+                <div className="ycds-h2 text-[var(--so-text)]">{t("title")}</div>
+                <div className="ycds-small mt-0.5 text-[var(--so-muted)]">{statusLine}</div>
               </div>
               <div className="flex items-center gap-1">
                 {busy ? (
@@ -393,7 +434,10 @@ export function AppliAssistant() {
                 <button
                   type="button"
                   className="so-focus-ring inline-flex h-8 w-8 items-center justify-center rounded-[8px] hover:bg-[var(--so-surface-hover)]"
-                  onClick={() => setOpen(false)}
+                  onClick={() => {
+                    markDockSeen();
+                    setOpen(false);
+                  }}
                   aria-label={t("close")}
                 >
                   <X className="h-4 w-4" />
@@ -409,6 +453,18 @@ export function AppliAssistant() {
             />
 
             <div className="min-h-0 flex-1 overflow-auto px-4 py-3">
+              {showWelcome ? (
+                <div className="mb-3 rounded-[12px] border border-[color-mix(in_srgb,#FF2D2D_28%,var(--so-border))] bg-[color-mix(in_srgb,#FF2D2D_5%,white)] p-3">
+                  <p className="text-sm text-[var(--so-text)]">{t("welcomeBrief")}</p>
+                  <button
+                    type="button"
+                    className="crm-button-secondary mt-2 inline-flex h-8 items-center rounded-[8px] border border-[color-mix(in_srgb,#FF2D2D_40%,var(--so-border))] px-3 text-xs font-medium text-[var(--so-accent-strong)] hover:bg-[color-mix(in_srgb,#FF2D2D_8%,white)]"
+                    onClick={dismissWelcome}
+                  >
+                    {t("welcomeDismiss")}
+                  </button>
+                </div>
+              ) : null}
               {showCards ? (
                 <div className="space-y-2">
                   {proposeBlocks.map((block, index) => {
@@ -536,7 +592,8 @@ export function AppliAssistant() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="so-focus-ring fixed bottom-4 end-4 z-40 hidden h-10 w-10 items-center justify-center rounded-full border border-[var(--so-border)] bg-[var(--so-surface)] text-xs text-[var(--so-muted)] shadow-[var(--so-shadow-xs)] hover:bg-[var(--so-surface-hover)] md:inline-flex"
+          title={t("brand")}
+          className="so-focus-ring fixed bottom-4 end-4 z-40 hidden h-10 w-10 items-center justify-center rounded-full border border-[var(--so-accent)] bg-[var(--so-accent)] text-xs font-medium text-white shadow-[var(--so-shadow-xs)] hover:bg-[var(--so-accent-strong)] md:inline-flex"
           aria-label={t("open")}
         >
           A

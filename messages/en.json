@@ -95,7 +95,13 @@
       "telegramCheck": "Check now",
       "telegramChecking": "Checking…",
       "telegramLinked": "Telegram is linked: {account}. The assistant can message you there.",
-      "telegramNotConfigured": "Bot not configured"
+      "telegramNotConfigured": "Bot not configured",
+      "welcomeBrief": "I'm on your connected tokens — propose actions, you approve. Chat is secondary.",
+      "welcomeDismiss": "Got it",
+      "statusReady": "Ready on connected tokens",
+      "statusThinking": "Working…",
+      "statusConfirm": "Needs your approve",
+      "statusTokenDead": "Token issue — check strip"
     },
     "tab": {
       "pipeline": "Pipeline",
