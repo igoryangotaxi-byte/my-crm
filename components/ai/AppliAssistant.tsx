@@ -107,6 +107,91 @@ export function AppliAssistant() {
     return () => window.clearInterval(timer);
   }, [allowed, loadTokens]);
 
+  const hydrateConversation = useCallback(async () => {
+    try {
+      let targetId: string | null = null;
+      try {
+        targetId = window.localStorage.getItem("appli-conversation-id");
+      } catch {
+        targetId = null;
+      }
+
+      if (targetId) {
+        const res = await fetch(`/api/ai/assistant/conversations?id=${encodeURIComponent(targetId)}`, {
+          cache: "no-store",
+        });
+        const json = (await res.json()) as {
+          ok?: boolean;
+          messages?: Array<{
+            id: string;
+            role: string;
+            content: string;
+            uiBlocks?: AiUiBlock[];
+          }>;
+        };
+        if (json.ok && Array.isArray(json.messages)) {
+          setConversationId(targetId);
+          const mapped: ChatItem[] = json.messages
+            .filter((row) => row.role === "user" || row.role === "assistant")
+            .map((row) => ({
+              id: row.id,
+              role: row.role as "user" | "assistant",
+              content: row.content,
+              blocks: row.uiBlocks?.length ? row.uiBlocks : undefined,
+            }));
+          setItems(mapped);
+          if (mapped.length > 0) setChatExpanded(true);
+          return;
+        }
+      }
+
+      const listRes = await fetch("/api/ai/assistant/conversations", { cache: "no-store" });
+      const listJson = (await listRes.json()) as {
+        ok?: boolean;
+        conversations?: Array<{ id: string }>;
+      };
+      const latest = listJson.ok ? listJson.conversations?.[0] : null;
+      if (!latest?.id) return;
+
+      const res = await fetch(`/api/ai/assistant/conversations?id=${encodeURIComponent(latest.id)}`, {
+        cache: "no-store",
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        messages?: Array<{
+          id: string;
+          role: string;
+          content: string;
+          uiBlocks?: AiUiBlock[];
+        }>;
+      };
+      if (!json.ok || !Array.isArray(json.messages)) return;
+      setConversationId(latest.id);
+      try {
+        window.localStorage.setItem("appli-conversation-id", latest.id);
+      } catch {
+        // ignore
+      }
+      const mapped: ChatItem[] = json.messages
+        .filter((row) => row.role === "user" || row.role === "assistant")
+        .map((row) => ({
+          id: row.id,
+          role: row.role as "user" | "assistant",
+          content: row.content,
+          blocks: row.uiBlocks?.length ? row.uiBlocks : undefined,
+        }));
+      setItems(mapped);
+      if (mapped.length > 0) setChatExpanded(true);
+    } catch {
+      // history optional — chat still works without hydrate
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!allowed) return;
+    void hydrateConversation();
+  }, [allowed, hydrateConversation]);
+
   useEffect(() => {
     if (!allowed) return;
     const onOpen = () => setOpen(true);
@@ -203,6 +288,11 @@ export function AppliAssistant() {
               setVoiceState("confirm");
             } else if (event.type === "done") {
               setConversationId(event.conversationId);
+              try {
+                window.localStorage.setItem("appli-conversation-id", event.conversationId);
+              } catch {
+                // ignore
+              }
             } else if (event.type === "error") {
               throw new Error(event.error);
             }
