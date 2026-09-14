@@ -1,8 +1,14 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from "react";
+import {
+  DEFAULT_UI_DENSITY,
+  SO_DENSITY_STORAGE_KEY,
+  resolveUiDensity,
+  type UiDensity,
+} from "@/lib/sales-operation/ui-density";
 
-export type UiDensity = "comfortable" | "compact";
+export type { UiDensity };
 
 type DensityContextValue = {
   density: UiDensity;
@@ -11,27 +17,44 @@ type DensityContextValue = {
 };
 
 const DensityContext = createContext<DensityContextValue | null>(null);
-const STORAGE_KEY = "so-ui-density";
+
+const listeners = new Set<() => void>();
+
+function emitDensityChange() {
+  listeners.forEach((listener) => listener());
+}
+
+function subscribe(onStoreChange: () => void) {
+  listeners.add(onStoreChange);
+  window.addEventListener("storage", onStoreChange);
+  return () => {
+    listeners.delete(onStoreChange);
+    window.removeEventListener("storage", onStoreChange);
+  };
+}
+
+function readStoredDensity(): UiDensity {
+  try {
+    return resolveUiDensity(window.localStorage.getItem(SO_DENSITY_STORAGE_KEY));
+  } catch {
+    return DEFAULT_UI_DENSITY;
+  }
+}
+
+function getServerSnapshot(): UiDensity {
+  return DEFAULT_UI_DENSITY;
+}
 
 export function SalesDensityProvider({ children }: { children: React.ReactNode }) {
-  const [density, setDensityState] = useState<UiDensity>("comfortable");
-
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored === "compact" || stored === "comfortable") setDensityState(stored);
-    } catch {
-      // ignore
-    }
-  }, []);
+  const density = useSyncExternalStore(subscribe, readStoredDensity, getServerSnapshot);
 
   const setDensity = useCallback((value: UiDensity) => {
-    setDensityState(value);
     try {
-      window.localStorage.setItem(STORAGE_KEY, value);
+      window.localStorage.setItem(SO_DENSITY_STORAGE_KEY, value);
     } catch {
       // ignore
     }
+    emitDensityChange();
   }, []);
 
   const toggle = useCallback(() => {
