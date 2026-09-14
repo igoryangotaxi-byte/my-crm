@@ -198,8 +198,8 @@ export function SalesOperationSidebar() {
         )}
       >
         {/* Brand */}
-        <div className="flex items-center gap-2.5 px-3.5 py-4">
-          <div className="flex min-w-0 items-center gap-2.5">
+        <div className="flex items-center px-3 py-3">
+          <div className="flex min-w-0 items-center gap-2">
             <img
               src="/brand/appli-logo.png"
               alt="Appli"
@@ -209,10 +209,10 @@ export function SalesOperationSidebar() {
             />
             {showExpanded ? (
               <span className="min-w-0">
-                <span className="ycds-h2 block truncate text-[var(--so-text)]">
+                <span className="ycds-h3 block truncate text-[var(--so-text)]">
                   {tSales("sectionLabel")}
                 </span>
-                <span className="block truncate text-xs text-[var(--so-muted)]">
+                <span className="ycds-small block truncate text-[var(--so-muted)]">
                   {tSales("brandSubtitle")}
                 </span>
               </span>
@@ -277,6 +277,26 @@ function Badge({ count }: { count: number }) {
   );
 }
 
+function navRowClass(active: boolean, extra?: string) {
+  return cn(
+    "so-focus-ring so-nav-row relative flex items-center gap-2.5 rounded-[8px] px-2.5 text-sm font-medium transition-colors",
+    extra,
+    active
+      ? "bg-[var(--so-accent-soft)] text-[var(--so-accent-strong)]"
+      : "text-[var(--so-muted)] hover:bg-[var(--so-surface-hover)] hover:text-[var(--so-text)]",
+  );
+}
+
+function NavActiveRail({ active }: { active: boolean }) {
+  if (!active) return null;
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute inset-y-1 start-0 w-[2px] rounded-full bg-[var(--so-accent)]"
+    />
+  );
+}
+
 function NavLink({
   node,
   active,
@@ -296,17 +316,9 @@ function NavLink({
       href={node.href}
       aria-current={active ? "page" : undefined}
       onClick={() => onNavigate(node.href)}
-      className={cn(
-        "so-focus-ring group relative flex items-center gap-2.5 rounded-[8px] px-2.5 py-2 text-sm font-medium transition-colors",
-        collapsed ? "lg:justify-center" : "",
-        active
-          ? "bg-[var(--so-accent-soft)] text-[var(--so-accent-strong)]"
-          : "text-[var(--so-muted)] hover:bg-[var(--so-surface-hover)] hover:text-[var(--so-text)]",
-      )}
+      className={navRowClass(active, collapsed ? "lg:justify-center" : undefined)}
     >
-      {active ? (
-        <span className="absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-[var(--so-accent)] lg:block" />
-      ) : null}
+      <NavActiveRail active={active} />
       <Icon className="h-[18px] w-[18px] shrink-0" />
       {!collapsed ? <span className="flex-1 truncate">{label}</span> : null}
       {!collapsed && node.badge ? <Badge count={node.badge} /> : null}
@@ -340,12 +352,13 @@ function NavGroupItem({
 }) {
   const childActive = group.children.some((c) => pathname.startsWith(c.href));
   const [open, setOpen] = useState(childActive);
+  const [wasChildActive, setWasChildActive] = useState(childActive);
+  if (childActive !== wasChildActive) {
+    setWasChildActive(childActive);
+    if (childActive) setOpen(true);
+  }
   const Icon = group.icon;
   const label = t(`tab.${group.labelKey}`);
-
-  useEffect(() => {
-    if (childActive) setOpen(true);
-  }, [childActive]);
 
   // Collapsed rail: show group icon; tooltip lists it, clicking goes to first child.
   if (collapsed) {
@@ -357,13 +370,9 @@ function NavGroupItem({
             href={first?.href ?? "#"}
             onClick={() => first && onNavigate(first.href)}
             aria-current={childActive ? "page" : undefined}
-            className={cn(
-              "so-focus-ring flex items-center justify-center rounded-[10px] px-2.5 py-2 transition-colors",
-              childActive
-                ? "bg-[var(--so-accent-soft)] text-[var(--so-accent-strong)]"
-                : "text-[var(--so-muted)] hover:bg-[var(--so-surface-hover)] hover:text-[var(--so-text)]",
-            )}
+            className={navRowClass(childActive, "justify-center")}
           >
+            <NavActiveRail active={childActive} />
             <Icon className="h-[18px] w-[18px]" />
           </Link>
         </Tooltip>
@@ -377,13 +386,9 @@ function NavGroupItem({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className={cn(
-          "so-focus-ring flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-sm font-medium transition-colors",
-          childActive && !open
-            ? "text-[var(--so-accent-strong)]"
-            : "text-[var(--so-muted)] hover:bg-[var(--so-surface-hover)] hover:text-[var(--so-text)]",
-        )}
+        className={navRowClass(childActive && !open, "w-full")}
       >
+        <NavActiveRail active={childActive && !open} />
         <Icon className="h-[18px] w-[18px] shrink-0" />
         <span className="flex-1 truncate text-left">{label}</span>
         <ChevronDown
@@ -398,32 +403,16 @@ function NavGroupItem({
       >
         <div className="overflow-hidden">
           <div className="mt-0.5 space-y-0.5 pl-3.5">
-            {group.children.map((child) => {
-              const active = pathname.startsWith(child.href);
-              return (
-                <Link
-                  key={child.href}
-                  href={child.href}
-                  aria-current={active ? "page" : undefined}
-                  onClick={() => onNavigate(child.href)}
-                  className={cn(
-                    "so-focus-ring relative flex items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-sm font-medium transition-colors",
-                    active
-                      ? "bg-[var(--so-accent-soft)] text-[var(--so-accent-strong)]"
-                      : "text-[var(--so-muted)] hover:bg-[var(--so-surface-hover)] hover:text-[var(--so-text)]",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "h-1.5 w-1.5 shrink-0 rounded-full",
-                      active ? "bg-[var(--so-accent)]" : "bg-[var(--so-border-strong)]",
-                    )}
-                  />
-                  <span className="flex-1 truncate">{t(`tab.${child.labelKey}`)}</span>
-                  {child.badge ? <Badge count={child.badge} /> : null}
-                </Link>
-              );
-            })}
+            {group.children.map((child) => (
+              <NavLink
+                key={child.href}
+                node={{ kind: "leaf", ...child }}
+                active={pathname.startsWith(child.href)}
+                collapsed={false}
+                label={t(`tab.${child.labelKey}`)}
+                onNavigate={onNavigate}
+              />
+            ))}
           </div>
         </div>
       </div>

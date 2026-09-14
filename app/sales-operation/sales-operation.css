@@ -15,6 +15,7 @@
   background: var(--so-bg);
   --ease-ui: cubic-bezier(0.16, 1, 0.3, 1);
   --so-dur: 160ms;
+  --so-nav-row: 32px;
 }
 
 [data-module="sales-operation"]::before,
@@ -105,16 +106,46 @@
 [data-module="sales-operation"][data-density="comfortable"] {
   --density-row: var(--density-row-comfortable);
   --density-card-pad: 12px;
+  --so-nav-row: 40px;
 }
 
 [data-module="sales-operation"][data-density="compact"] {
   --density-row: var(--density-row-compact);
   --density-card-pad: 8px;
+  --so-nav-row: 32px;
 }
 
 [data-module="sales-operation"][data-density="compact"] .make-shell-main {
-  padding-top: 1rem;
-  padding-bottom: 1rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.so-nav-row {
+  min-height: var(--so-nav-row, 32px);
+}
+
+.so-shell-header {
+  min-height: 2.75rem;
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+}
+
+[data-module="sales-operation"][data-density="comfortable"] .so-shell-header {
+  min-height: 3.25rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+/*
+ * Yango Headline Black is unicase (a–z cmap to the same glyphs as A–Z), which
+ * forced shell titles into ALL CAPS. Keep ycds-h1 metrics; use Yango Text so
+ * sentence case (Pre-orders, My space, Pipeline) is visible.
+ */
+[data-module="sales-operation"] .so-shell-header h1.ycds-h1 {
+  font-family: var(--font-yango-text), Arial, Helvetica, sans-serif;
+  font-weight: 700;
+  text-transform: none;
+  color: var(--so-text);
 }
 
 [data-module="sales-operation"] .so-kanban-card {
