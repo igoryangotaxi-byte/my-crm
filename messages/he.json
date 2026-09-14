@@ -101,7 +101,8 @@
       "statusReady": "מוכן על טוקנים מחוברים",
       "statusThinking": "עובד…",
       "statusConfirm": "נדרש Approve",
-      "statusTokenDead": "בעיית טוקן — בדקו את הרצועה"
+      "statusTokenDead": "בעיית טוקן — בדקו את הרצועה",
+      "newChat": "צ׳אט חדש"
     },
     "tab": {
       "pipeline": "צינור",

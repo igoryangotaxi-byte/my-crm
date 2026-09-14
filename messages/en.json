@@ -101,7 +101,8 @@
       "statusReady": "Ready on connected tokens",
       "statusThinking": "Working…",
       "statusConfirm": "Needs your approve",
-      "statusTokenDead": "Token issue — check strip"
+      "statusTokenDead": "Token issue — check strip",
+      "newChat": "New chat"
     },
     "tab": {
       "pipeline": "Pipeline",

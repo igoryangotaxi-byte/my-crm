@@ -48,6 +48,8 @@ export function AppliAssistant() {
   const holdTalkRef = useRef(false);
   const busyRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   const allowed = canAccess("salesAiAssistant") && canAccess("salesOperation");
   voiceModeRef.current = voiceMode;
@@ -193,6 +195,12 @@ export function AppliAssistant() {
   }, [allowed, hydrateConversation]);
 
   useEffect(() => {
+    if (!open) return;
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [open, items, proposeBlocks.length, chatExpanded]);
+
+
+  useEffect(() => {
     if (!allowed) return;
     const onOpen = () => setOpen(true);
     window.addEventListener(APPLI_OPEN_EVENT, onOpen);
@@ -234,6 +242,23 @@ export function AppliAssistant() {
     setStatus(null);
     setVoiceState("idle");
   }, []);
+
+  const startNewChat = useCallback(() => {
+    cancelInFlight();
+    setConversationId(null);
+    setItems([]);
+    setConfirmMarks({});
+    setStatus(null);
+    setChatExpanded(false);
+    setInput("");
+    try {
+      window.localStorage.removeItem("appli-conversation-id");
+    } catch {
+      // ignore
+    }
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }, [cancelInFlight]);
+
 
   const send = useCallback(
     async (text: string, opts?: { speak?: boolean }) => {
@@ -500,6 +525,13 @@ export function AppliAssistant() {
                 <div className="ycds-small mt-0.5 text-[var(--so-muted)]">{statusLine}</div>
               </div>
               <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  className="so-focus-ring rounded-[8px] px-2 py-1 text-xs font-medium text-[var(--so-muted)] hover:bg-[var(--so-surface-hover)] hover:text-[var(--so-text)]"
+                  onClick={startNewChat}
+                >
+                  {t("newChat")}
+                </button>
                 {busy ? (
                   <button
                     type="button"
@@ -634,6 +666,7 @@ export function AppliAssistant() {
               ) : status ? (
                 <p className="mt-2 ycds-small text-[var(--so-muted)]">{status}</p>
               ) : null}
+              <div ref={chatEndRef} />
             </div>
 
             <form
@@ -645,6 +678,7 @@ export function AppliAssistant() {
             >
               <div className="flex items-end gap-2">
                 <textarea
+                  ref={inputRef}
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
                   onKeyDown={(event) => {

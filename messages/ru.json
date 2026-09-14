@@ -51,7 +51,8 @@
       "statusReady": "Готов на подключённых токенах",
       "statusThinking": "Работаю…",
       "statusConfirm": "Нужен Approve",
-      "statusTokenDead": "Проблема с токеном — смотри strip"
+      "statusTokenDead": "Проблема с токеном — смотри strip",
+      "newChat": "Новый чат"
     },
     "density": {
       "label": "Плотность",
