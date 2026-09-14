@@ -1146,6 +1146,8 @@ details.rr-make-panel[open] > .rr-make-panel-body-clip > .rr-make-panel-body {
     animation: none;
   }
 }
+
+@keyframes so-pop-in {
   from {
     opacity: 0;
     transform: scale(0.96) translateY(-2px);
