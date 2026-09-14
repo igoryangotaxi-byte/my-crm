@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-09-14",
+    title: "Login flicker fix (0.2.67)",
+    notes:
+      "App version 0.2.67. Hotfix: after Google SSO some users saw the page flicker and never land — OAuth always redirected to /sales-operation/pipeline, then SO layout bounced User / Team Lead (salesOperation off) back to /login. Post-login now resolves the first allowed SO or legacy CRM page; approved users with no pages stay on /login?error=noaccess. Deck: Yango-Sales-Operations-Login-Flicker-Fix-0-2-67.pptx. (ee1e2d0d)",
+  },
+  {
     date: "2026-09-10",
     title: "Yango token registry durable (0.2.66)",
     notes:
