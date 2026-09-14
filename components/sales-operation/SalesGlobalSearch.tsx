@@ -83,7 +83,7 @@ export function SalesGlobalSearch() {
           }}
           onFocus={() => setOpen(true)}
           placeholder={t("search.placeholder")}
-          className="so-focus-ring h-9 w-52 rounded-[8px] border border-[var(--so-border)] bg-[var(--so-surface-2)] py-1.5 pl-8 pr-12 text-sm text-[var(--so-text)] outline-none transition-[width,border-color,box-shadow] focus:w-72 focus:border-[rgba(255,45,45,0.5)] focus:bg-[var(--so-surface)] focus:shadow-[var(--so-focus-ring)]"
+          className="so-focus-ring h-9 w-52 rounded-[8px] border border-[var(--so-border)] bg-[var(--so-surface-2)] py-1.5 pl-8 pr-12 text-sm text-[var(--so-text)] outline-none transition-[width,background-color] focus:w-72 focus:bg-[var(--so-surface)]"
           aria-label={t("search.placeholder")}
         />
         <span className="pointer-events-none absolute right-1.5 top-1/2 hidden -translate-y-1/2 sm:inline-flex">

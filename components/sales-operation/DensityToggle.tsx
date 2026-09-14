@@ -19,10 +19,10 @@ export function DensityToggle() {
         aria-label={label}
         onClick={() => setDensity(value)}
         className={cn(
-          "so-focus-ring inline-flex h-8 items-center gap-1.5 rounded-[8px] px-2 text-xs font-medium transition-colors",
+          "so-focus-ring inline-flex h-8 items-center gap-1.5 rounded-[8px] border px-2 text-xs font-medium transition-colors",
           density === value
-            ? "bg-[var(--so-accent-soft)] text-[var(--so-accent-strong)]"
-            : "text-[var(--so-muted)] hover:bg-[var(--so-surface-hover)] hover:text-[var(--so-text)]",
+            ? "border-[var(--so-accent)] bg-transparent text-[var(--so-accent-strong)]"
+            : "border-transparent text-[var(--so-muted)] hover:bg-[var(--so-surface-hover)] hover:text-[var(--so-text)]",
         )}
       >
         {icon}
