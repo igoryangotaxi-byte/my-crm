@@ -31,6 +31,11 @@ import {
   loadYangoTokenRegistry,
   normalizeYangoTokenRegistryLabel,
 } from "@/lib/yango-token-registry";
+import {
+  classifyYangoTokenProbe,
+  safeYangoTokenMessage,
+  type YangoTokenHealth,
+} from "@/lib/yango-token-health";
 import { loadAuthStore } from "@/lib/auth-store";
 import { googleGeocodeLatLon, normalizeAddressForGeocode } from "@/lib/google-geocoding";
 import { unstable_cache } from "next/cache";
@@ -355,6 +360,70 @@ function dedupeTokenConfigsByTokenValue(entries: TokenConfig[]): TokenConfig[] {
     out.push(row);
   }
   return out;
+}
+
+const TOKEN_HEALTH_TTL_MS = 20_000;
+let tokenHealthCache: { at: number; rows: YangoTokenHealth[] } | null = null;
+
+async function probeTokenConfig(cfg: TokenConfig): Promise<YangoTokenHealth> {
+  const configured = Boolean(cfg.token);
+  if (!configured) {
+    const status = classifyYangoTokenProbe({ configured: false });
+    return {
+      label: cfg.label,
+      clientName: cfg.crmClientName ?? null,
+      status,
+      message: safeYangoTokenMessage(status),
+    };
+  }
+  try {
+    await fetchJsonNoCache<YangoAuthListResponse>(`${YANGO_BASE_URL}/2.0/auth/list`, cfg.token);
+    const status = classifyYangoTokenProbe({ configured: true });
+    return {
+      label: cfg.label,
+      clientName: cfg.crmClientName ?? null,
+      status,
+      message: null,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unexpected error";
+    const status = classifyYangoTokenProbe({ configured: true, errorMessage });
+    return {
+      label: cfg.label,
+      clientName: cfg.crmClientName ?? null,
+      status,
+      message: safeYangoTokenMessage(status, errorMessage),
+    };
+  }
+}
+
+/** Labels + live/dead only. Never returns the token secret. Probes each cabinet once (no retry). */
+export async function listYangoTokenHealth(options?: { force?: boolean }): Promise<YangoTokenHealth[]> {
+  if (!options?.force && tokenHealthCache && Date.now() - tokenHealthCache.at < TOKEN_HEALTH_TTL_MS) {
+    return tokenHealthCache.rows;
+  }
+  const configs = await getTokenConfigs();
+  const rows = await Promise.all(configs.map((cfg) => probeTokenConfig(cfg)));
+  tokenHealthCache = { at: Date.now(), rows };
+  return rows;
+}
+
+export async function probeYangoTokenByLabel(tokenLabel: string): Promise<YangoTokenHealth> {
+  const configs = await getTokenConfigs();
+  const wanted = normalizeYangoTokenRegistryLabel(tokenLabel);
+  const cfg = configs.find(
+    (item) =>
+      item.label === tokenLabel || normalizeYangoTokenRegistryLabel(item.label) === wanted,
+  );
+  if (!cfg) {
+    return {
+      label: tokenLabel,
+      clientName: null,
+      status: "empty",
+      message: `Unknown token label: ${tokenLabel}`,
+    };
+  }
+  return probeTokenConfig(cfg);
 }
 
 let dashboardInMemoryCache:

@@ -51,7 +51,7 @@ export async function getAiPreferences(userId: string): Promise<AiUserPreference
     avoidEnd: String(data.avoid_end ?? "13:00"),
     preferredFocus: String(data.preferred_focus ?? "mornings"),
     meetingProvider: String(data.meeting_provider ?? "google_meet"),
-    autoLowRiskWrites: Boolean(data.auto_low_risk_writes ?? true),
+    autoLowRiskWrites: Boolean(data.auto_low_risk_writes ?? DEFAULT_AI_PREFERENCES.autoLowRiskWrites),
     allowDirectSendEmail: Boolean(data.allow_direct_send_email ?? false),
     allowDirectSendTelegram: Boolean(data.allow_direct_send_telegram ?? false),
     voiceShortcut: String(data.voice_shortcut ?? "Alt+Space"),
@@ -272,27 +272,32 @@ export async function createConfirmation(input: {
   return token;
 }
 
-export async function consumeConfirmation(token: string, userId: string) {
+async function consumeConfirmationRow(token: string, userId: string) {
   const supabase = getSupabaseAdminClient();
   const { data, error } = await supabase
     .from("ai_confirmations")
-    .select("*")
+    .update({ consumed_at: new Date().toISOString() })
     .eq("token", token)
     .eq("user_id", userId)
+    .is("consumed_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .select("*")
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) return null;
-  if (data.consumed_at) return null;
-  if (new Date(String(data.expires_at)).getTime() < Date.now()) return null;
-  await supabase
-    .from("ai_confirmations")
-    .update({ consumed_at: new Date().toISOString() })
-    .eq("token", token);
   return {
     tool: String(data.tool),
     args: (data.args ?? {}) as Record<string, unknown>,
     preview: (data.preview ?? {}) as Record<string, unknown>,
   };
+}
+
+export async function consumeConfirmation(token: string, userId: string) {
+  return consumeConfirmationRow(token, userId);
+}
+
+export async function rejectConfirmation(token: string, userId: string) {
+  return consumeConfirmationRow(token, userId);
 }
 
 export async function getTelegramLink(userId: string) {

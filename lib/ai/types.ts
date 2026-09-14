@@ -65,11 +65,23 @@ export type AiUiBlock =
       title: string;
       body: string;
       tool: string;
+      risk?: AiRiskLevel;
+      why?: string;
+      href?: string;
+    }
+  | {
+      type: "propose";
+      title: string;
+      body: string;
+      why?: string;
+      risk: AiRiskLevel;
+      href?: string;
     }
   | {
       type: "connect";
-      integration: "googleCalendar" | "gmail" | "telegram";
+      integration: "googleCalendar" | "gmail" | "telegram" | "yango" | "notes";
       text: string;
+      href?: string;
     };
 
 export type AiToolResult = {
@@ -119,7 +131,7 @@ export const DEFAULT_AI_PREFERENCES: Omit<AiUserPreferences, "userId"> = {
   avoidEnd: "13:00",
   preferredFocus: "mornings",
   meetingProvider: "google_meet",
-  autoLowRiskWrites: true,
+  autoLowRiskWrites: false,
   allowDirectSendEmail: false,
   allowDirectSendTelegram: false,
   voiceShortcut: "Alt+Space",

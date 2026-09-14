@@ -666,6 +666,53 @@ export const AI_TOOLS: RegisteredTool[] = [
     },
   },
   {
+    name: "yango.tokens.list",
+    description:
+      "List Yango cabinet labels and live/dead status from the token registry. Never prints secrets. Dead or expired tokens fail closed — tell the user to reconnect in Notes / API Health Check.",
+    risk: 0,
+    requiredPage: ["preOrders", "requestRides", "notes"],
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "yango.preorders.at_risk",
+    description:
+      "List upcoming unassigned Yango pre-orders in the yellow/red urgency window. Does not include completed or historical rides. If a tokenLabel is dead, the tool fails closed with no retry.",
+    risk: 0,
+    requiredPage: "preOrders",
+    parameters: {
+      type: "object",
+      properties: {
+        tokenLabel: str("Optional Yango token label to filter"),
+        clientId: str("Optional corp client id"),
+      },
+    },
+  },
+  {
+    name: "yango.orders.propose_create",
+    description:
+      "Propose creating a Yango CORP ride. Always confirm-gated (R2). After Approve, creates via existing orders/create only when token is live and cabinet, phone, addresses and geopoints resolve; otherwise returns a deep-link to Request Rides. Never writes money, payouts, tariffs, or completed rides.",
+    risk: 2,
+    requiredPage: "requestRides",
+    parameters: {
+      type: "object",
+      properties: {
+        tokenLabel: str("Yango token label / cabinet"),
+        clientId: str("Corp client id"),
+        sourceAddress: str("Pickup address"),
+        destinationAddress: str("Dropoff address"),
+        phoneNumber: str("Rider phone"),
+        userId: str("Optional Yango user_id when already known"),
+        rideClass: str("Optional class, default comfortplus_b2b"),
+        sourceLat: { type: "number" },
+        sourceLon: { type: "number" },
+        destinationLat: { type: "number" },
+        destinationLon: { type: "number" },
+        comment: str("Optional comment"),
+        scheduleAtIso: str("Optional ISO due time"),
+      },
+    },
+  },
+  {
     name: "reminders.create",
     description: "Create a natural-language reminder for the current user.",
     risk: 1,
@@ -685,7 +732,7 @@ export function toolDefsForOpenAi(): OpenAiToolDef[] {
   return AI_TOOLS.map((tool) => ({
     type: "function",
     function: {
-      name: tool.name.replace(".", "_"),
+      name: tool.name.replaceAll(".", "_"),
       description: tool.description,
       parameters: tool.parameters,
     },
@@ -693,8 +740,10 @@ export function toolDefsForOpenAi(): OpenAiToolDef[] {
 }
 
 export function resolveToolName(openaiName: string): string {
-  const dotted = AI_TOOLS.find((tool) => tool.name === openaiName);
-  if (dotted) return dotted.name;
+  const exact = AI_TOOLS.find((tool) => tool.name === openaiName);
+  if (exact) return exact.name;
+  const fromOpenAi = AI_TOOLS.find((tool) => tool.name.replaceAll(".", "_") === openaiName);
+  if (fromOpenAi) return fromOpenAi.name;
   const underscored = openaiName.replace("_", ".");
   const match = AI_TOOLS.find((tool) => tool.name === underscored || tool.name.replace(".", "_") === openaiName);
   return match?.name ?? openaiName.replace("_", ".");

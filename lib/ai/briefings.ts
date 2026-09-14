@@ -6,6 +6,8 @@ import { computeCalendarLoadScore, mergeCalendarEntries } from "@/lib/ai/calenda
 import { getAiPreferences } from "@/lib/ai/repository";
 import { createNotification } from "@/lib/sales-operation/notifications";
 
+/** Briefings are calendar + open tasks only. Never load or mutate Yango rides (completed or otherwise). */
+
 export async function buildTomorrowBriefing(userId: string, email: string): Promise<string> {
   const prefs = await getAiPreferences(userId);
   const now = new Date();

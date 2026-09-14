@@ -63,7 +63,12 @@
       "done": "בוצע.",
       "error": "משהו השתבש.",
       "confirm": "אישור",
+      "approve": "אישור",
       "cancel": "ביטול",
+      "cancelled": "בוטל.",
+      "tokensEmpty": "אין טוקנים של Yango.",
+      "tokensConnect": "חיבור",
+      "chatToggle": "שיחה",
       "pushToTalk": "לחיצה לדיבור",
       "conversation": "מצב שיחה",
       "endConversation": "סיום שיחה",
@@ -514,7 +519,8 @@
       "search": "חיפוש",
       "actions": "פעולות",
       "createLead": "יצירת ליד",
-      "createTask": "פתח משימות"
+      "createTask": "פתח משימות",
+      "openAppli": "פתח את Appli"
     },
     "dedup": {
       "warning": "{count, plural, one {נמצאה כפילות אפשרית אחת} other {נמצאו # כפילויות אפשריות}}",

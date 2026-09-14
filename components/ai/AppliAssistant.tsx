@@ -1,11 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Mic, Sparkles, Square, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Mic, Square, X } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { useAiPageContext } from "@/components/ai/AiPageContext";
+import { AppliChip, type AppliChipState } from "@/components/ai/AppliChip";
+import { AppliProposeCard } from "@/components/ai/AppliProposeCard";
+import { AppliTokenStrip, type AppliTokenChip } from "@/components/ai/AppliTokenStrip";
+import { APPLI_OPEN_EVENT } from "@/components/ai/appli-events";
 import type { AiSseEvent, AiUiBlock } from "@/lib/ai/types";
 
 type ChatItem = {
@@ -16,6 +20,7 @@ type ChatItem = {
 };
 
 type VoiceState = "idle" | "listening" | "thinking" | "working" | "speaking" | "confirm";
+type ConfirmMark = "busy" | "approved" | "cancelled";
 
 export function AppliAssistant() {
   const t = useTranslations("salesOperation.ai");
@@ -30,22 +35,100 @@ export function AppliAssistant() {
   const [voiceMode, setVoiceMode] = useState(false);
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
   const [holdTalk, setHoldTalk] = useState(false);
+  const [chatExpanded, setChatExpanded] = useState(false);
+  const [tokens, setTokens] = useState<AppliTokenChip[]>([]);
+  const [tokensLoading, setTokensLoading] = useState(false);
+  const [confirmMarks, setConfirmMarks] = useState<Record<string, ConfirmMark>>({});
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const voiceModeRef = useRef(false);
   const holdTalkRef = useRef(false);
   const busyRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const allowed = canAccess("salesAiAssistant") && canAccess("salesOperation");
   voiceModeRef.current = voiceMode;
   busyRef.current = busy;
   holdTalkRef.current = holdTalk;
 
+  const pendingConfirmTokens = useMemo(() => {
+    const tokensPending: string[] = [];
+    for (const item of items) {
+      for (const block of item.blocks ?? []) {
+        if (block.type !== "confirmation") continue;
+        const mark = confirmMarks[block.token];
+        if (!mark || mark === "busy") tokensPending.push(block.token);
+      }
+    }
+    return tokensPending;
+  }, [items, confirmMarks]);
+
+  const proposeBlocks = useMemo(() => {
+    const out: AiUiBlock[] = [];
+    for (const item of items) {
+      for (const block of item.blocks ?? []) {
+        if (block.type === "confirmation" || block.type === "propose" || block.type === "connect") {
+          out.push(block);
+        }
+      }
+    }
+    return out;
+  }, [items]);
+
+  const deadCount = tokens.filter((row) => row.status === "dead").length;
+  const chipState: AppliChipState = busy
+    ? "thinking"
+    : pendingConfirmTokens.length > 0
+      ? "needs-confirm"
+      : deadCount > 0
+        ? "token-dead"
+        : "idle";
+
+  const loadTokens = useCallback(async () => {
+    setTokensLoading(true);
+    try {
+      const res = await fetch("/api/ai/assistant/tokens", { cache: "no-store" });
+      const json = (await res.json()) as { ok?: boolean; tokens?: AppliTokenChip[] };
+      if (json.ok && Array.isArray(json.tokens)) setTokens(json.tokens);
+    } catch {
+      // strip stays honest; empty + connect if we never loaded
+    } finally {
+      setTokensLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!allowed) return;
+    void loadTokens();
+    const timer = window.setInterval(() => void loadTokens(), 60_000);
+    return () => window.clearInterval(timer);
+  }, [allowed, loadTokens]);
+
+  useEffect(() => {
+    if (!allowed) return;
+    const onOpen = () => setOpen(true);
+    window.addEventListener(APPLI_OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(APPLI_OPEN_EVENT, onOpen);
+  }, [allowed]);
+
+  const cancelInFlight = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    audioRef.current?.pause();
+    audioRef.current = null;
+    setBusy(false);
+    setStatus(null);
+    setVoiceState("idle");
+  }, []);
+
   const send = useCallback(
     async (text: string, opts?: { speak?: boolean }) => {
       const trimmed = text.trim();
       if (!trimmed || busy) return;
+      abortRef.current?.abort();
+      const abort = new AbortController();
+      abortRef.current = abort;
       setBusy(true);
       setStatus(t("thinking"));
       setVoiceState("thinking");
@@ -59,6 +142,7 @@ export function AppliAssistant() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: trimmed, conversationId, pageContext }),
+          signal: abort.signal,
         });
         if (!res.ok || !res.body) {
           const json = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -68,6 +152,7 @@ export function AppliAssistant() {
         const decoder = new TextDecoder();
         let buffer = "";
         while (true) {
+          if (abort.signal.aborted) throw new DOMException("Aborted", "AbortError");
           const { done, value } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
@@ -110,6 +195,7 @@ export function AppliAssistant() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ text: assistantText }),
+            signal: abort.signal,
           });
           if (speakRes.ok) {
             const blob = await speakRes.blob();
@@ -124,15 +210,23 @@ export function AppliAssistant() {
           }
         }
       } catch (error) {
-        setItems((prev) => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            content: error instanceof Error ? error.message : t("error"),
-          },
-        ]);
+        if (error instanceof DOMException && error.name === "AbortError") {
+          setItems((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), role: "assistant", content: t("cancelled") },
+          ]);
+        } else {
+          setItems((prev) => [
+            ...prev,
+            {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: error instanceof Error ? error.message : t("error"),
+            },
+          ]);
+        }
       } finally {
+        if (abortRef.current === abort) abortRef.current = null;
         setBusy(false);
         setStatus(null);
         if (voiceModeRef.current) {
@@ -146,20 +240,38 @@ export function AppliAssistant() {
   );
 
   const confirm = async (token: string) => {
+    setConfirmMarks((prev) => ({ ...prev, [token]: "busy" }));
     const res = await fetch("/api/ai/assistant/confirm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ token, action: "approve" }),
     });
-    const json = (await res.json()) as { ok?: boolean; result?: { userMessage?: string; error?: string } };
+    const json = (await res.json()) as {
+      ok?: boolean;
+      result?: { userMessage?: string; error?: string; uiBlocks?: AiUiBlock[] };
+    };
+    setConfirmMarks((prev) => ({ ...prev, [token]: "approved" }));
+    const extraBlocks = json.result?.uiBlocks ?? [];
     setItems((prev) => [
       ...prev,
       {
         id: crypto.randomUUID(),
         role: "assistant",
         content: json.result?.userMessage ?? json.result?.error ?? (json.ok ? t("done") : t("error")),
+        blocks: extraBlocks,
       },
     ]);
+    setVoiceState("idle");
+  };
+
+  const reject = async (token: string) => {
+    setConfirmMarks((prev) => ({ ...prev, [token]: "busy" }));
+    await fetch("/api/ai/assistant/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, action: "reject" }),
+    }).catch(() => null);
+    setConfirmMarks((prev) => ({ ...prev, [token]: "cancelled" }));
     setVoiceState("idle");
   };
 
@@ -233,40 +345,39 @@ export function AppliAssistant() {
 
   if (!allowed) return null;
 
-  const suggestions = [
-    t("suggestSchedule"),
-    t("suggestTask"),
-    t("suggestLeads"),
-    t("suggestFind"),
-  ];
+  const suggestions = [t("suggestSchedule"), t("suggestTask"), t("suggestLeads"), t("suggestFind")];
+  const showCards = proposeBlocks.length > 0;
 
   return (
     <>
-      <button
-        type="button"
+      <AppliChip
+        state={chipState}
+        label={t("brand")}
+        confirmCount={pendingConfirmTokens.length}
         onClick={() => setOpen(true)}
-        className="so-focus-ring inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-[var(--so-border-strong)] px-2.5 text-sm text-[var(--so-text)] transition-colors hover:bg-[var(--so-surface-hover)]"
-        aria-label={t("open")}
-      >
-        <Sparkles className="h-4 w-4 text-[var(--primary)]" />
-        <span className="hidden sm:inline">{t("brand")}</span>
-      </button>
+      />
 
       {open ? (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/20" onClick={() => setOpen(false)}>
           <aside
-            className="flex h-full w-full max-w-md flex-col border-l border-[var(--so-border)] bg-[var(--so-surface)] shadow-[var(--so-shadow-md)]"
+            className="flex h-full w-full max-w-[400px] flex-col border-l border-[var(--so-border)] bg-[var(--so-surface)] shadow-[var(--so-shadow-md)] sm:w-[380px]"
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="flex items-center justify-between border-b border-[var(--so-border)] px-4 py-3">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-[var(--primary)]" />
-                <div>
-                  <div className="text-sm font-medium text-[var(--so-text)]">{t("title")}</div>
-                  <div className="text-xs text-[var(--so-muted)]">{t("subtitle")}</div>
-                </div>
+            <header className="flex items-center justify-between border-b border-[var(--so-border)] px-4 py-2.5">
+              <div>
+                <div className="text-sm font-medium text-[var(--so-text)]">{t("title")}</div>
+                <div className="ycds-small text-[var(--so-muted)]">{t("subtitle")}</div>
               </div>
               <div className="flex items-center gap-1">
+                {busy ? (
+                  <button
+                    type="button"
+                    className="so-focus-ring rounded-[8px] px-2 py-1 text-xs text-[var(--so-muted)] hover:bg-[var(--so-surface-hover)]"
+                    onClick={cancelInFlight}
+                  >
+                    {t("cancel")}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="so-focus-ring inline-flex h-8 w-8 items-center justify-center rounded-[8px] hover:bg-[var(--so-surface-hover)]"
@@ -277,7 +388,7 @@ export function AppliAssistant() {
                   }}
                   aria-label={t("conversation")}
                 >
-                  <Mic className="h-4 w-4" />
+                  <Mic className="h-4 w-4 text-[var(--so-muted)]" />
                 </button>
                 <button
                   type="button"
@@ -290,10 +401,36 @@ export function AppliAssistant() {
               </div>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-auto px-4 py-4">
-              {items.length === 0 ? (
+            <AppliTokenStrip
+              tokens={tokens}
+              loading={tokensLoading}
+              emptyLabel={t("tokensEmpty")}
+              connectLabel={t("tokensConnect")}
+            />
+
+            <div className="min-h-0 flex-1 overflow-auto px-4 py-3">
+              {showCards ? (
                 <div className="space-y-2">
-                  <p className="text-sm text-[var(--so-muted)]">{t("empty")}</p>
+                  {proposeBlocks.map((block, index) => {
+                    const token = block.type === "confirmation" ? block.token : `propose-${index}`;
+                    const mark = block.type === "confirmation" ? confirmMarks[block.token] : undefined;
+                    return (
+                      <AppliProposeCard
+                        key={token}
+                        block={block}
+                        approveLabel={t("approve")}
+                        cancelLabel={t("cancel")}
+                        busy={mark === "busy"}
+                        settled={mark === "approved" || mark === "cancelled" ? mark : undefined}
+                        onApprove={(value) => void confirm(value)}
+                        onCancel={(value) => void reject(value)}
+                      />
+                    );
+                  })}
+                </div>
+              ) : items.length === 0 ? (
+                <div className="space-y-2">
+                  <p className="ycds-small text-[var(--so-muted)]">{t("empty")}</p>
                   {suggestions.map((label) => (
                     <button
                       key={label}
@@ -305,33 +442,52 @@ export function AppliAssistant() {
                     </button>
                   ))}
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {items.map((item) => (
-                    <div key={item.id} className={item.role === "user" ? "text-right" : ""}>
-                      <div
-                        className={`inline-block max-w-[90%] whitespace-pre-wrap rounded-[12px] px-3 py-2 text-sm ${
-                          item.role === "user"
-                            ? "bg-[var(--so-surface-2)] text-[var(--so-text)]"
-                            : "bg-transparent text-[var(--so-text)]"
-                        }`}
-                      >
-                        {item.content}
-                      </div>
-                      {item.blocks?.map((block, index) => (
-                        <BlockCard
-                          key={`${item.id}-${index}`}
-                          block={block}
-                          onConfirm={(token) => void confirm(token)}
-                          confirmLabel={t("confirm")}
-                          cancelLabel={t("cancel")}
-                        />
+              ) : null}
+
+              <button
+                type="button"
+                className="mt-3 flex items-center gap-1 text-xs text-[var(--so-muted)]"
+                onClick={() => setChatExpanded((value) => !value)}
+              >
+                {chatExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                {t("chatToggle")}
+              </button>
+
+              {chatExpanded || (!showCards && items.length > 0) ? (
+                <div className="mt-2 space-y-3">
+                  {items.length === 0 ? (
+                    <div className="space-y-2">
+                      {suggestions.map((label) => (
+                        <button
+                          key={label}
+                          type="button"
+                          className="block w-full rounded-[8px] border border-[var(--so-border)] px-3 py-2 text-left text-sm text-[var(--so-text)] hover:bg-[var(--so-surface-hover)]"
+                          onClick={() => void send(label)}
+                        >
+                          {label}
+                        </button>
                       ))}
                     </div>
-                  ))}
-                  {status ? <p className="text-xs text-[var(--so-muted)]">{status}</p> : null}
+                  ) : (
+                    items.map((item) => (
+                      <div key={item.id} className={item.role === "user" ? "text-right" : ""}>
+                        <div
+                          className={`inline-block max-w-[90%] whitespace-pre-wrap rounded-[12px] px-3 py-2 text-sm ${
+                            item.role === "user"
+                              ? "bg-[var(--so-surface-2)] text-[var(--so-text)]"
+                              : "bg-transparent text-[var(--so-text)]"
+                          }`}
+                        >
+                          {item.content}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  {status ? <p className="ycds-small text-[var(--so-muted)]">{status}</p> : null}
                 </div>
-              )}
+              ) : status ? (
+                <p className="mt-2 ycds-small text-[var(--so-muted)]">{status}</p>
+              ) : null}
             </div>
 
             <form
@@ -352,7 +508,9 @@ export function AppliAssistant() {
                 <button
                   type="button"
                   className={`so-focus-ring inline-flex h-10 w-10 items-center justify-center rounded-[8px] border ${
-                    holdTalk ? "border-[var(--primary)] bg-[var(--primary)] text-white" : "border-[var(--so-border-strong)]"
+                    holdTalk
+                      ? "border-[var(--primary)] bg-[var(--primary)] text-white"
+                      : "border-[var(--so-border-strong)] text-[var(--so-muted)]"
                   }`}
                   onMouseDown={() => {
                     setHoldTalk(true);
@@ -374,7 +532,16 @@ export function AppliAssistant() {
             </form>
           </aside>
         </div>
-      ) : null}
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="so-focus-ring fixed bottom-4 end-4 z-40 hidden h-10 w-10 items-center justify-center rounded-full border border-[var(--so-border)] bg-[var(--so-surface)] text-xs text-[var(--so-muted)] shadow-[var(--so-shadow-xs)] hover:bg-[var(--so-surface-hover)] md:inline-flex"
+          aria-label={t("open")}
+        >
+          A
+        </button>
+      )}
 
       {voiceMode ? (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
@@ -421,94 +588,4 @@ export function AppliAssistant() {
       ) : null}
     </>
   );
-}
-
-function BlockCard({
-  block,
-  onConfirm,
-  confirmLabel,
-  cancelLabel,
-}: {
-  block: AiUiBlock;
-  onConfirm: (token: string) => void;
-  confirmLabel: string;
-  cancelLabel: string;
-}) {
-  if (block.type === "confirmation") {
-    return (
-      <div className="mt-2 rounded-[12px] border border-[var(--so-border)] p-3 text-left text-sm">
-        <div className="font-medium">{block.title}</div>
-        <p className="mt-1 whitespace-pre-wrap text-[var(--so-muted)]">{block.body}</p>
-        <div className="mt-3 flex gap-2">
-          <Button size="sm" onClick={() => onConfirm(block.token)}>
-            {confirmLabel}
-          </Button>
-          <Button size="sm" variant="secondary">
-            {cancelLabel}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-  if (block.type === "meeting_slots") {
-    return (
-      <div className="mt-2 space-y-1 rounded-[12px] border border-[var(--so-border)] p-3 text-left text-sm">
-        {block.slots.map((slot) => (
-          <div key={slot.start}>
-            {new Date(slot.start).toLocaleString()} — {slot.reason}
-          </div>
-        ))}
-      </div>
-    );
-  }
-  if (block.type === "metric") {
-    return (
-      <div className="mt-2 rounded-[12px] border border-[var(--so-border)] p-3 text-left text-sm">
-        <div className="font-medium">{block.title}</div>
-        <p className="mt-1">{block.fact}</p>
-        {block.inference ? <p className="mt-1 text-[var(--so-muted)]">{block.inference}</p> : null}
-        {block.recommendation ? <p className="mt-1">{block.recommendation}</p> : null}
-      </div>
-    );
-  }
-  if (block.type === "meeting_preview") {
-    return (
-      <div className="mt-2 rounded-[12px] border border-[var(--so-border)] p-3 text-left text-sm">
-        <div className="font-medium">{block.title}</div>
-        <p className="mt-1 text-[var(--so-muted)]">
-          {new Date(block.start).toLocaleString()} – {new Date(block.end).toLocaleString()}
-        </p>
-        {block.attendees?.length ? <p className="mt-1">{block.attendees.join(", ")}</p> : null}
-      </div>
-    );
-  }
-  if (block.type === "task_preview") {
-    return (
-      <div className="mt-2 rounded-[12px] border border-[var(--so-border)] p-3 text-left text-sm">
-        <div className="font-medium">{block.title}</div>
-        <p className="mt-1 text-[var(--so-muted)]">
-          {[block.assignee, block.dueAt ? new Date(block.dueAt).toLocaleString() : null]
-            .filter(Boolean)
-            .join(" · ")}
-        </p>
-      </div>
-    );
-  }
-  if (block.type === "status") {
-    return <p className="mt-2 text-xs text-[var(--so-muted)]">{block.text}</p>;
-  }
-  if (block.type === "connect") {
-    const href =
-      block.integration === "gmail"
-        ? "/api/ai/integrations/gmail/connect"
-        : block.integration === "googleCalendar"
-          ? "/api/google/calendar/connect"
-          : "/sales-operation/settings";
-    return (
-      <a href={href} className="mt-2 block rounded-[12px] border border-[var(--so-border)] p-3 text-left text-sm">
-        {block.text}
-      </a>
-    );
-  }
-  return null;
 }

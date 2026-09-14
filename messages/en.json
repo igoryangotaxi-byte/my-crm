@@ -63,7 +63,12 @@
       "done": "Done.",
       "error": "Something went wrong.",
       "confirm": "Confirm",
+      "approve": "Approve",
       "cancel": "Cancel",
+      "cancelled": "Cancelled.",
+      "tokensEmpty": "No Yango tokens connected.",
+      "tokensConnect": "Connect",
+      "chatToggle": "Chat",
       "pushToTalk": "Push to talk",
       "conversation": "Conversation mode",
       "endConversation": "End conversation",
@@ -514,7 +519,8 @@
       "search": "Search",
       "actions": "Actions",
       "createLead": "Create lead",
-      "createTask": "Open tasks"
+      "createTask": "Open tasks",
+      "openAppli": "Open Appli"
     },
     "dedup": {
       "warning": "{count, plural, one {# possible duplicate found} other {# possible duplicates found}}",
