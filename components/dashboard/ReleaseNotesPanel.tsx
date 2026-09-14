@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-09-14",
+    title: "Appli Jarvis presence (0.2.68)",
+    notes:
+      "App version 0.2.68. Appli upgrades from quiet chat to visible agency: header chip (logo + soft #FF2D2D), card-first right dock (~380px), token strip, first-open welcome once (appli-dock-seen), New chat secondary, Enter=send / Shift+Enter=newline, conversation hydrate from Supabase so history is not forgotten. Soft-confirm for R1 always; Yango read/propose tools with fail-closed dead tokens; create ride stays R2 confirm + idempotent Approve. No unsupervised money/history recalculation. Deck: Yango-Sales-Operations-Appli-Jarvis-0-2-68.pptx.",
+  },
+  {
+    date: "2026-09-14",
     title: "Login flicker fix (0.2.67)",
     notes:
       "App version 0.2.67. Hotfix: after Google SSO some users saw the page flicker and never land — OAuth always redirected to /sales-operation/pipeline, then SO layout bounced User / Team Lead (salesOperation off) back to /login. Post-login now resolves the first allowed SO or legacy CRM page; approved users with no pages stay on /login?error=noaccess. Deck: Yango-Sales-Operations-Login-Flicker-Fix-0-2-67.pptx. (ee1e2d0d)",
