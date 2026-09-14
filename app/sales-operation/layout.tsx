@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { SalesOperationAppShell } from "@/components/sales-operation/SalesOperationAppShell";
 import {
   canAccessSalesOperationPath,
+  firstAllowedLegacyCrmPath,
   firstAllowedSalesOperationPath,
 } from "@/lib/role-permissions";
 
@@ -33,13 +34,18 @@ export default function SalesOperationLayout({
     }
 
     if (!canAccess("salesOperation")) {
-      router.replace("/login");
+      // Do not bounce approved legacy-CRM users through /login (that re-sent them to pipeline).
+      const legacy = firstAllowedLegacyCrmPath(canAccess);
+      router.replace(legacy ?? "/login?error=noaccess");
       return;
     }
 
     if (!canAccessSalesOperationPath(pathname, canAccess)) {
-      const fallback = firstAllowedSalesOperationPath(canAccess);
-      router.replace(fallback ?? "/login");
+      const fallback =
+        firstAllowedSalesOperationPath(canAccess) ??
+        firstAllowedLegacyCrmPath(canAccess) ??
+        "/login?error=noaccess";
+      router.replace(fallback);
     }
   }, [loading, currentUser, canAccess, pathname, router]);
 

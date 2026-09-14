@@ -7,6 +7,8 @@ import {
 } from "@/lib/sso/google";
 import { persistGoogleWorkspaceTokens } from "@/lib/google/persist-workspace-tokens";
 import { findOrProvisionSsoUser } from "@/lib/sso/provision";
+import { resolvePostLoginPathForUser } from "@/lib/sso/post-login-path";
+import { loadAuthStore } from "@/lib/auth-store";
 import { buildSessionSetCookie } from "@/lib/server-session";
 
 export const dynamic = "force-dynamic";
@@ -80,7 +82,19 @@ export async function GET(request: Request) {
       console.error("Failed to persist Google Workspace tokens:", error);
     }
 
-    const response = NextResponse.redirect(new URL("/sales-operation/pipeline", origin));
+    // Land on a page the user can actually open. Hardcoding /sales-operation/pipeline
+    // caused a login ↔ pipeline flicker for roles without Appli Taxi CRM access (e.g. User).
+    let landing = "/login";
+    try {
+      const store = await loadAuthStore();
+      landing =
+        resolvePostLoginPathForUser(store, provisioned.user) ?? "/login?error=noaccess";
+    } catch (error) {
+      console.error("Failed to resolve post-login path:", error);
+      landing = "/login";
+    }
+
+    const response = NextResponse.redirect(new URL(landing, origin));
     response.cookies.set(buildSessionSetCookie(provisioned.user.id));
     response.cookies.set({
       name: STATE_COOKIE_NAME,

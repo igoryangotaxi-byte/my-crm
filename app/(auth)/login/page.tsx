@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { firstAllowedSalesOperationPath } from "@/lib/role-permissions";
+import { resolvePostLoginPath } from "@/lib/role-permissions";
 
-type LoginErrorCode = "domain" | "oauth" | "config" | "rejected" | "consent";
+type LoginErrorCode = "domain" | "oauth" | "config" | "rejected" | "consent" | "noaccess";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,6 +25,8 @@ export default function LoginPage() {
           errorConfig: "כניסת Google אינה מוגדרת. פנו למנהל המערכת.",
           errorRejected: "הגישה לחשבון נדחתה על ידי מנהל.",
           errorConsent: "כדי להיכנס יש לאשר גישה ליומן ול-Gmail של ‎@appli.taxi.",
+          errorNoAccess:
+            "החשבון מאושר, אבל אין הרשאות לדפים. פנו למנהל כדי להפעיל גישה ב-Access management.",
         }
       : language === "ru"
         ? {
@@ -38,6 +40,8 @@ export default function LoginPage() {
             errorConfig: "Вход Google не настроен. Обратитесь к администратору.",
             errorRejected: "Администратор отклонил доступ.",
             errorConsent: "Чтобы войти, подтвердите доступ к Calendar и Gmail @appli.taxi.",
+            errorNoAccess:
+              "Аккаунт одобрен, но нет доступа ни к одной странице. Попросите администратора выдать права в Access management.",
           }
         : {
             loading: "Loading...",
@@ -50,26 +54,40 @@ export default function LoginPage() {
             errorConfig: "Google sign-in is not configured. Contact your administrator.",
             errorRejected: "Your account access was rejected by an admin.",
             errorConsent: "Allow Calendar and Gmail access for your @appli.taxi account to continue.",
+            errorNoAccess:
+              "Your account is approved, but no pages are enabled. Ask an admin to grant access in Access management.",
           };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const raw = params.get("error");
-    if (raw === "domain" || raw === "oauth" || raw === "config" || raw === "rejected" || raw === "consent") {
+    if (
+      raw === "domain" ||
+      raw === "oauth" ||
+      raw === "config" ||
+      raw === "rejected" ||
+      raw === "consent" ||
+      raw === "noaccess"
+    ) {
       setErrorCode(raw);
     }
   }, []);
 
   useEffect(() => {
-    if (!loading && currentUser?.status === "approved") {
-      if (currentUser.accountType === "client") {
-        router.replace("/client/request-rides");
-        return;
-      }
-      const soPath = firstAllowedSalesOperationPath(canAccess);
-      router.replace(soPath ?? "/sales-operation/pipeline");
+    if (loading) return;
+    if (currentUser?.status !== "approved") return;
+
+    const landing = resolvePostLoginPath({
+      accountType: currentUser.accountType,
+      canAccess,
+    });
+    if (landing) {
+      router.replace(landing);
+      return;
     }
+    // Approved but no pages — stay on login and show a clear message (do not bounce to pipeline).
+    setErrorCode((prev) => prev ?? "noaccess");
   }, [loading, currentUser, canAccess, router]);
 
   const errorMessage =
@@ -83,7 +101,9 @@ export default function LoginPage() {
             ? copy.errorConsent
             : errorCode === "oauth"
               ? copy.errorOAuth
-              : null;
+              : errorCode === "noaccess"
+                ? copy.errorNoAccess
+                : null;
 
   if (loading) {
     return (

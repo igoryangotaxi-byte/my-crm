@@ -64,7 +64,7 @@ export default function CrmLayout({
 
     const pageKey = resolvePageKey(pathname);
     if (!canAccess(pageKey)) {
-      router.replace(soPath ?? "/login");
+      router.replace(soPath ?? "/login?error=noaccess");
     }
   }, [loading, currentUser, canAccess, pathname, router]);
 

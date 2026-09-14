@@ -3,9 +3,11 @@ import { describe, it } from "node:test";
 import {
   CURRENT_PERMISSIONS_VERSION,
   mergeRolePermissions,
+  resolvePostLoginPath,
   SALES_OPERATION_PAGE_KEYS,
 } from "@/lib/role-permissions";
-import { defaultRolePermissions } from "@/types/auth";
+import { resolvePostLoginPathForUser } from "@/lib/sso/post-login-path";
+import { defaultRolePermissions, type AuthStoreData } from "@/types/auth";
 
 describe("sales operation RBAC", () => {
   it("defaults sales operation off for User and Team Lead", () => {
@@ -49,5 +51,41 @@ describe("sales operation RBAC", () => {
     assert.equal(merged.salesSettings, false);
     assert.equal(merged.salesDocumentation, true);
     assert.equal(CURRENT_PERMISSIONS_VERSION, 16);
+  });
+
+  it("does not land User role on SO pipeline (prevents login flicker loop)", () => {
+    const canAccess = (page: string) =>
+      Boolean(defaultRolePermissions.User[page as keyof (typeof defaultRolePermissions)["User"]]);
+    const path = resolvePostLoginPath({ accountType: "internal", canAccess });
+    assert.ok(path);
+    assert.equal(path?.startsWith("/sales-operation"), false);
+    assert.equal(path, "/dashboard");
+  });
+
+  it("lands Account Manager on an SO page", () => {
+    const canAccess = (page: string) =>
+      Boolean(
+        defaultRolePermissions["Account Manager"][
+          page as keyof (typeof defaultRolePermissions)["Account Manager"]
+        ],
+      );
+    const path = resolvePostLoginPath({ accountType: "internal", canAccess });
+    assert.equal(path, "/sales-operation/pipeline");
+  });
+
+  it("resolvePostLoginPathForUser matches role defaults for User", () => {
+    const store = {
+      users: [],
+      rolePermissions: defaultRolePermissions,
+      roleAreaAccess: {} as AuthStoreData["roleAreaAccess"],
+      roleDashboardBlockAccess: {} as AuthStoreData["roleDashboardBlockAccess"],
+      storeMeta: { permissionsVersion: CURRENT_PERMISSIONS_VERSION },
+    } as AuthStoreData;
+    const path = resolvePostLoginPathForUser(store, {
+      role: "User",
+      accountType: "internal",
+      status: "approved",
+    });
+    assert.equal(path, "/dashboard");
   });
 });

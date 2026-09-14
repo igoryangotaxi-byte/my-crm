@@ -216,3 +216,43 @@ export function firstAllowedSalesOperationPath(
   }
   return null;
 }
+
+/** Legacy Main CRM pages used when the user has no Appli Taxi CRM (SO) page access. */
+export const LEGACY_CRM_ROUTE_PAGES: Array<{ path: string; page: AppPageKey }> = [
+  { path: "/dashboard", page: "dashboard" },
+  { path: "/orders", page: "orders" },
+  { path: "/pre-orders", page: "preOrders" },
+  { path: "/request-rides", page: "requestRides" },
+  { path: "/clients", page: "clients" },
+  { path: "/communications", page: "communications" },
+  { path: "/bussiness-center", page: "financialCenter" },
+  { path: "/price-calculator", page: "priceCalculator" },
+  { path: "/drivers-map", page: "driversMap" },
+  { path: "/heat-map", page: "heatMap" },
+  { path: "/notes", page: "notes" },
+  { path: "/accesses", page: "accesses" },
+];
+
+export function firstAllowedLegacyCrmPath(
+  canAccess: (page: AppPageKey) => boolean,
+): string | null {
+  for (const route of LEGACY_CRM_ROUTE_PAGES) {
+    if (canAccess(route.page)) return route.path;
+  }
+  return null;
+}
+
+/**
+ * Post-login / post-OAuth landing. Never returns a Sales Operation URL the user cannot open
+ * (that caused a login ↔ /sales-operation/pipeline flicker loop for User / Team Lead).
+ */
+export function resolvePostLoginPath(input: {
+  accountType?: string | null;
+  canAccess: (page: AppPageKey) => boolean;
+}): string | null {
+  if (input.accountType === "client") return "/client/request-rides";
+  return (
+    firstAllowedSalesOperationPath(input.canAccess) ??
+    firstAllowedLegacyCrmPath(input.canAccess)
+  );
+}
