@@ -63,7 +63,12 @@
       "done": "Done.",
       "error": "Something went wrong.",
       "confirm": "Confirm",
+      "approve": "Approve",
       "cancel": "Cancel",
+      "cancelled": "Cancelled.",
+      "tokensEmpty": "No Yango tokens connected.",
+      "tokensConnect": "Connect",
+      "chatToggle": "Chat",
       "pushToTalk": "Push to talk",
       "conversation": "Conversation mode",
       "endConversation": "End conversation",
@@ -90,7 +95,14 @@
       "telegramCheck": "Check now",
       "telegramChecking": "Checking…",
       "telegramLinked": "Telegram is linked: {account}. The assistant can message you there.",
-      "telegramNotConfigured": "Bot not configured"
+      "telegramNotConfigured": "Bot not configured",
+      "welcomeBrief": "I'm on your connected tokens — propose actions, you approve. Chat is secondary.",
+      "welcomeDismiss": "Got it",
+      "statusReady": "Ready on connected tokens",
+      "statusThinking": "Working…",
+      "statusConfirm": "Needs your approve",
+      "statusTokenDead": "Token issue — check strip",
+      "newChat": "New chat"
     },
     "tab": {
       "pipeline": "Pipeline",
@@ -514,7 +526,8 @@
       "search": "Search",
       "actions": "Actions",
       "createLead": "Create lead",
-      "createTask": "Open tasks"
+      "createTask": "Open tasks",
+      "openAppli": "Open Appli"
     },
     "dedup": {
       "warning": "{count, plural, one {# possible duplicate found} other {# possible duplicates found}}",

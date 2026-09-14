@@ -32,6 +32,20 @@ export function isDeniedHostTool(name: string): boolean {
 export function riskForTool(name: string): AiRiskLevel {
   const n = name.trim().toLowerCase();
   if (isDeniedHostTool(n)) return 3;
+  if (n.startsWith("yango.")) {
+    if (n.includes("cancel") || n.includes("delete")) return 3;
+    if (
+      n.includes("create") ||
+      n.includes("assign") ||
+      n.includes("propose") ||
+      n.includes("payout") ||
+      n.includes("tariff") ||
+      (n.includes("token") && (n.includes("write") || n.includes("save") || n.includes("upsert")))
+    ) {
+      return 2;
+    }
+    return 0;
+  }
   if (
     n.includes("delete") ||
     n.includes("cancel") ||
@@ -71,13 +85,16 @@ export function requiresConfirmation(input: {
 }): boolean {
   if (input.risk >= 3) return true;
   if (input.risk === 2) {
+    // Yango pre-order / assign / money / token writes are confirm-only.
+    if (input.tool.startsWith("yango.")) return true;
     // Messaging yourself is a note, not an external send — never gate it.
     if (input.tool.startsWith("telegram.") && input.toSelf) return false;
     if (input.tool.startsWith("mail.") && input.allowDirectSendEmail) return false;
     if (input.tool.startsWith("telegram.") && input.allowDirectSendTelegram) return false;
     return true;
   }
-  if (input.risk === 1) return !input.autoLowRiskWrites;
+  // Jarvis v1: R1 is always soft-confirm. autoLowRiskWrites must not silent-auto writes.
+  if (input.risk === 1) return true;
   return false;
 }
 
@@ -85,7 +102,15 @@ export function redactParams(params: Record<string, unknown>): Record<string, un
   const redacted: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(params)) {
     const k = key.toLowerCase();
-    if (k.includes("token") || k.includes("secret") || k.includes("password") || k.includes("refresh")) {
+    const looksLikeSecret =
+      k === "token" ||
+      k.endsWith("_token") ||
+      (k.endsWith("token") && k !== "tokenlabel") ||
+      k.includes("secret") ||
+      k.includes("password") ||
+      k.includes("refresh");
+    const allowLabel = k === "tokenlabel" || k === "token_label";
+    if (looksLikeSecret && !allowLabel) {
       redacted[key] = "[redacted]";
       continue;
     }

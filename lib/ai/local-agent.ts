@@ -28,6 +28,9 @@ export type AgentTurnResult = {
 };
 
 function toolStatusLine(name: string): string {
+  if (name.startsWith("yango.tokens")) return "Checking Yango tokens…";
+  if (name.startsWith("yango.preorders")) return "Checking pre-orders…";
+  if (name.startsWith("yango.")) return "Checking Yango…";
   if (name.startsWith("calendar.")) return "Checking your calendar…";
   if (name.startsWith("tasks.")) return "Looking at tasks…";
   if (name.startsWith("tracker.")) return "Working in the tracker…";

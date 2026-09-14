@@ -58,6 +58,8 @@ import {
   notificationsSchedule,
 } from "@/lib/ai/tools/notifications";
 import { telegramSend } from "@/lib/ai/tools/telegram";
+import { yangoOrdersProposeCreate, yangoPreordersAtRisk, yangoTokensList } from "@/lib/ai/tools/yango";
+import { withAiAudit } from "@/lib/ai/audit-time";
 
 const HANDLERS: Record<string, (run: ToolRun) => Promise<AiToolResult>> = {
   "crm.search": crmSearch,
@@ -105,6 +107,9 @@ const HANDLERS: Record<string, (run: ToolRun) => Promise<AiToolResult>> = {
   "notifications.list": notificationsList,
   "notifications.cancel": notificationsCancel,
   "telegram.send": telegramSend,
+  "yango.tokens.list": yangoTokensList,
+  "yango.preorders.at_risk": yangoPreordersAtRisk,
+  "yango.orders.propose_create": yangoOrdersProposeCreate,
   "reminders.create": async (run) => {
     const id = await createReminder({
       userId: run.userId,
@@ -130,13 +135,12 @@ export async function executeAiTool(input: {
   idempotencyKey?: string | null;
 }): Promise<AiToolResult> {
   const started = Date.now();
-  const tool = input.tool.includes(".") ? input.tool : input.tool.replace("_", ".");
-  if (isDeniedHostTool(tool)) {
+  if (isDeniedHostTool(input.tool)) {
     return { ok: false, status: "denied", error: "This host tool is disabled for Appli Assistant." };
   }
-  const spec = getToolSpec(tool);
+  const spec = getToolSpec(input.tool);
   if (!spec || !HANDLERS[spec.name]) {
-    return { ok: false, error: `Unknown tool: ${tool}` };
+    return { ok: false, error: `Unknown tool: ${input.tool}` };
   }
   if (!input.context.permissions.salesAiAssistant) {
     return { ok: false, status: "denied", error: "You do not have access to Appli Assistant." };
@@ -191,16 +195,19 @@ export async function executeAiTool(input: {
           title: spec.name.replace(".", " · "),
           body: describePreview(spec.name, input.args),
           tool: spec.name,
+          risk,
+          why: confirmWhy(risk, spec.name),
+          href: spec.name === "yango.orders.propose_create" ? "/sales-operation/request-rides" : undefined,
         },
       ],
-      userMessage: "This action needs your confirmation.",
+      userMessage: risk === 1 ? "Approve to run this write." : "This action needs your confirmation.",
     };
     await writeAiAction({
       userId: input.context.userId,
       conversationId: input.conversationId,
       tool: spec.name,
       action: "preview",
-      paramsRedacted: redactParams(input.args),
+      paramsRedacted: withAiAudit(redactParams(input.args)),
       resultStatus: "needs_confirmation",
       approvalState: "pending",
       latencyMs: Date.now() - started,
@@ -231,7 +238,7 @@ export async function executeAiTool(input: {
       conversationId: input.conversationId,
       tool: spec.name,
       action: spec.name.split(".")[1] ?? spec.name,
-      paramsRedacted: redactParams(input.args),
+      paramsRedacted: withAiAudit(redactParams(input.args)),
       resultStatus: result.ok ? result.status ?? "ok" : "error",
       approvalState: input.confirmed ? "approved" : "none",
       latencyMs: Date.now() - started,
@@ -248,7 +255,7 @@ export async function executeAiTool(input: {
       conversationId: input.conversationId,
       tool: spec.name,
       action: spec.name.split(".")[1] ?? spec.name,
-      paramsRedacted: redactParams(input.args),
+      paramsRedacted: withAiAudit(redactParams(input.args)),
       resultStatus: "error",
       approvalState: input.confirmed ? "approved" : "none",
       latencyMs: Date.now() - started,
@@ -256,6 +263,15 @@ export async function executeAiTool(input: {
     });
     return { ok: false, error: message };
   }
+}
+
+function confirmWhy(risk: number, tool: string): string {
+  if (tool.startsWith("yango.orders")) {
+    return "Creates a Yango ride in a live cabinet. Confirm-only — no silent write, no retry on a dead token.";
+  }
+  if (risk >= 3) return "Destructive action. Confirm before it runs.";
+  if (risk === 2) return "External send or operational write. Confirm before it runs.";
+  return "CRM write. Approve once — Appli will not auto-run this.";
 }
 
 function describePreview(tool: string, args: Record<string, unknown>): string {
@@ -270,6 +286,12 @@ function describePreview(tool: string, args: Record<string, unknown>): string {
   }
   if (tool === "tracker.delete_ticket") {
     return `Permanently delete tracker ticket ${args.ticketId ?? args.ticketQuery}, with its comments and checklist`;
+  }
+  if (tool === "yango.orders.propose_create") {
+    const from = String(args.sourceAddress ?? "pickup");
+    const to = String(args.destinationAddress ?? "dropoff");
+    const cabinet = String(args.tokenLabel ?? "cabinet");
+    return `Create ride ${from} → ${to} on ${cabinet}`;
   }
   return Object.entries(args)
     .slice(0, 6)

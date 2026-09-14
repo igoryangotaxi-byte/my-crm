@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type ComponentType } from "r
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Command } from "cmdk";
+import { requestOpenAppli } from "@/components/ai/appli-events";
 import {
   BookOpen,
   Briefcase,
@@ -24,6 +25,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Sparkles,
   Target,
   Users,
   Workflow,
@@ -207,24 +209,41 @@ export function CommandPalette() {
               })}
             </Command.Group>
 
-            {canAccess("salesPipeline") ? (
+            {canAccess("salesAiAssistant") || canAccess("salesPipeline") ? (
               <Command.Group heading={t("command.actions")} className="text-[0.65rem] font-medium tracking-[0.01em] text-[var(--so-muted-2)]">
-                <Command.Item
-                  value={t("command.createLead")}
-                  onSelect={() => go("/sales-operation/pipeline")}
-                  className="flex cursor-pointer items-center gap-2 rounded-[8px] px-2.5 py-2 text-sm text-[var(--so-text)] data-[selected=true]:bg-[var(--so-surface-hover)]"
-                >
-                  <Plus className="h-4 w-4 text-[var(--so-muted)]" />
-                  {t("command.createLead")}
-                </Command.Item>
-                <Command.Item
-                  value={t("command.createTask")}
-                  onSelect={() => go("/sales-operation/tasks")}
-                  className="flex cursor-pointer items-center gap-2 rounded-[8px] px-2.5 py-2 text-sm text-[var(--so-text)] data-[selected=true]:bg-[var(--so-surface-hover)]"
-                >
-                  <Plus className="h-4 w-4 text-[var(--so-muted)]" />
-                  {t("command.createTask")}
-                </Command.Item>
+                {canAccess("salesAiAssistant") ? (
+                  <Command.Item
+                    value={t("command.openAppli")}
+                    onSelect={() => {
+                      setOpen(false);
+                      requestOpenAppli();
+                    }}
+                    className="flex cursor-pointer items-center gap-2 rounded-[8px] px-2.5 py-2 text-sm text-[var(--so-text)] data-[selected=true]:bg-[var(--so-surface-hover)]"
+                  >
+                    <Sparkles className="h-4 w-4 text-[var(--so-muted)]" />
+                    {t("command.openAppli")}
+                  </Command.Item>
+                ) : null}
+                {canAccess("salesPipeline") ? (
+                  <>
+                    <Command.Item
+                      value={t("command.createLead")}
+                      onSelect={() => go("/sales-operation/pipeline")}
+                      className="flex cursor-pointer items-center gap-2 rounded-[8px] px-2.5 py-2 text-sm text-[var(--so-text)] data-[selected=true]:bg-[var(--so-surface-hover)]"
+                    >
+                      <Plus className="h-4 w-4 text-[var(--so-muted)]" />
+                      {t("command.createLead")}
+                    </Command.Item>
+                    <Command.Item
+                      value={t("command.createTask")}
+                      onSelect={() => go("/sales-operation/tasks")}
+                      className="flex cursor-pointer items-center gap-2 rounded-[8px] px-2.5 py-2 text-sm text-[var(--so-text)] data-[selected=true]:bg-[var(--so-surface-hover)]"
+                    >
+                      <Plus className="h-4 w-4 text-[var(--so-muted)]" />
+                      {t("command.createTask")}
+                    </Command.Item>
+                  </>
+                ) : null}
               </Command.Group>
             ) : null}
           </Command.List>

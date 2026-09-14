@@ -1,7 +1,15 @@
 import { requireSalesOperationPage } from "@/lib/sales-operation/require-sales-access";
 import { isSupabaseConfigured } from "@/lib/supabase";
-import { consumeConfirmation, getAiPreferences } from "@/lib/ai/repository";
+import {
+  consumeConfirmation,
+  getAiPreferences,
+  getIdempotentResult,
+  rejectConfirmation,
+  writeAiAction,
+} from "@/lib/ai/repository";
+import { withAiAudit } from "@/lib/ai/audit-time";
 import { buildTrustedAiContext } from "@/lib/ai/context";
+import { redactParams } from "@/lib/ai/risk-policy";
 import { executeAiTool } from "@/lib/ai/tool-gateway";
 
 export const runtime = "nodejs";
@@ -13,10 +21,41 @@ export async function POST(request: Request) {
   if (!isSupabaseConfigured()) {
     return Response.json({ ok: false, error: "Supabase is not configured." }, { status: 500 });
   }
-  const body = (await request.json().catch(() => null)) as { token?: string } | null;
+  const body = (await request.json().catch(() => null)) as {
+    token?: string;
+    action?: "approve" | "reject";
+  } | null;
   if (!body?.token) return Response.json({ ok: false, error: "token is required" }, { status: 400 });
+  const action = body.action === "reject" ? "reject" : "approve";
+  const idempotencyKey = `confirm:${body.token}`;
+
+  if (action === "reject") {
+    const pending = await rejectConfirmation(body.token, auth.user.id);
+    if (!pending) {
+      return Response.json({ ok: false, error: "Confirmation expired or already used." }, { status: 410 });
+    }
+    await writeAiAction({
+      userId: auth.user.id,
+      tool: pending.tool,
+      action: "reject",
+      paramsRedacted: withAiAudit(redactParams(pending.args)),
+      resultStatus: "cancelled",
+      approvalState: "rejected",
+    });
+    return Response.json({ ok: true, result: { ok: true, userMessage: "Cancelled." } });
+  }
+
+  const cached = await getIdempotentResult(auth.user.id, idempotencyKey).catch(() => null);
+  if (cached) {
+    return Response.json({ ok: true, result: cached, idempotent: true });
+  }
+
   const pending = await consumeConfirmation(body.token, auth.user.id);
   if (!pending) {
+    const replay = await getIdempotentResult(auth.user.id, idempotencyKey).catch(() => null);
+    if (replay) {
+      return Response.json({ ok: true, result: replay, idempotent: true });
+    }
     return Response.json({ ok: false, error: "Confirmation expired or already used." }, { status: 410 });
   }
   const context = await buildTrustedAiContext(auth.user);
@@ -27,6 +66,7 @@ export async function POST(request: Request) {
     context,
     prefs,
     confirmed: true,
+    idempotencyKey,
   });
   return Response.json({ ok: result.ok, result });
 }

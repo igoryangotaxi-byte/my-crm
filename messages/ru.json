@@ -13,7 +13,12 @@
       "done": "Готово.",
       "error": "Что-то пошло не так.",
       "confirm": "Подтвердить",
+      "approve": "Одобрить",
       "cancel": "Отмена",
+      "cancelled": "Отменено.",
+      "tokensEmpty": "Нет токенов Yango.",
+      "tokensConnect": "Подключить",
+      "chatToggle": "Чат",
       "pushToTalk": "Нажмите, чтобы говорить",
       "conversation": "Режим разговора",
       "endConversation": "Завершить разговор",
@@ -40,7 +45,14 @@
       "telegramCheck": "Проверить",
       "telegramChecking": "Проверяем…",
       "telegramLinked": "Telegram подключён: {account}. Ассистент может писать вам туда.",
-      "telegramNotConfigured": "Бот не настроен"
+      "telegramNotConfigured": "Бот не настроен",
+      "welcomeBrief": "Я на подключённых токенах — предлагаю действия, ты подтверждаешь. Чат вторичен.",
+      "welcomeDismiss": "Понятно",
+      "statusReady": "Готов на подключённых токенах",
+      "statusThinking": "Работаю…",
+      "statusConfirm": "Нужен Approve",
+      "statusTokenDead": "Проблема с токеном — смотри strip",
+      "newChat": "Новый чат"
     },
     "density": {
       "label": "Плотность",
@@ -55,7 +67,8 @@
       "search": "Поиск",
       "actions": "Действия",
       "createLead": "Создать лид",
-      "createTask": "Открыть задачи"
+      "createTask": "Открыть задачи",
+      "openAppli": "Открыть Appli"
     },
     "tab": {
       "leadDiscovery": "Поиск лидов",
