@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-09-18",
+    title: "Call Center Bar Oz usable (0.2.69)",
+    notes:
+      "App version 0.2.69. Call Center ops-ready for Bar Oz/3CX: Lookup/Create/Call Report match the PDF (Israel phone normalize, fail-closed webhook key, empty lookup miss, idempotent call reports + Recording URL). Screen-pop right drawer (~400px) with primary Dial and Open card; labeled Dial on driver/customer cards; dense call log in Asia/Jerusalem. Dial no longer falls back to tel: (macOS FaceTime). SO shell stage-1: Compact density default, red rail active nav, outline Classic|3D and Comfortable|Compact. Env: THREECX_BASE_URL, THREECX_CLIENT_ID, THREECX_CLIENT_SECRET (Dial), THREECX_CRM_WEBHOOK_SECRET (webhooks already live). SQL: scripts/sql/supabase_call_center.sql if not applied. Deck: Yango-Sales-Operations-Call-Center-Bar-Oz-0-2-69.pptx.",
+  },
+  {
     date: "2026-09-14",
     title: "Appli Jarvis presence (0.2.68)",
     notes:
