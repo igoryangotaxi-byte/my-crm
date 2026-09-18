@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it, afterEach } from "node:test";
 import {
+  callLogLegs,
+  callerPhoneFromParty,
   formatCallAtJerusalem,
   israelPhoneKey,
   israelPhonesMatch,
@@ -17,6 +19,7 @@ import { parseCallAt } from "@/lib/call-center/calls-repository";
 import {
   assertThreeCxWebhookAuthorized,
   contactUrlForClient,
+  contactUrlForDriver,
   contactUrlForLead,
   parseBarOzRequestBody,
   readBarOzString,
@@ -212,8 +215,8 @@ describe("Bar Oz body + create response", () => {
         "https://applitaxi.space/sales-operation/pipeline?lead=lead-1",
       );
       assert.equal(
-        contactUrlForClient("client-9"),
-        "https://applitaxi.space/sales-operation/b2b-clients/client-9",
+        contactUrlForDriver("0541234567", "drv-1"),
+        "https://applitaxi.space/drivers-map?phone=0541234567&driver=drv-1",
       );
     } finally {
       if (prev === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
@@ -240,5 +243,31 @@ describe("call history timestamps", () => {
     assert.match(label, /07/);
     assert.match(label, /2020/);
     assert.match(label, /10:15/);
+  });
+});
+
+describe("call log legs + caller phone", () => {
+  it("maps inbound from caller to agent", () => {
+    assert.deepEqual(
+      callLogLegs({
+        direction: "Inbound",
+        phone: "0541234567",
+        agentExtension: "101",
+        agentName: "Dana",
+      }),
+      { from: "0541234567", to: "Dana" },
+    );
+  });
+
+  it("maps outbound from agent to destination", () => {
+    assert.deepEqual(
+      callLogLegs({ direction: "Outbound", phone: "0541234567", agentExtension: "101" }),
+      { from: "101", to: "0541234567" },
+    );
+  });
+
+  it("strips sip: caller ids", () => {
+    assert.equal(callerPhoneFromParty("sip:+972541234567@pbx.local"), "+972541234567");
+    assert.equal(callerPhoneFromParty("0541234567"), "0541234567");
   });
 });

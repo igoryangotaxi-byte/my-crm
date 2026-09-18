@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DriverCallButton } from "@/components/call-center/DriverCallButton";
+import { israelPhonesMatch } from "@/lib/call-center/phone";
 import { DriversMap } from "@/components/drivers-map/DriversMap";
 import type {
   DriverGeoDebugEvent,
@@ -76,6 +77,7 @@ export default function DriversMapPage() {
   const [serverMessage, setServerMessage] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("none");
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
+  const phoneDeepLinkApplied = useRef(false);
   const [driverGeoDebug, setDriverGeoDebug] = useState<Record<string, DriverGeoDebugEvent[]>>({});
   const [showPartnerDropdown, setShowPartnerDropdown] = useState(false);
   const [selectedPartnerKey, setSelectedPartnerKey] = useState("");
@@ -177,6 +179,26 @@ export default function DriversMapPage() {
     loadMutexRef.current = next.catch(() => undefined);
     return next as Promise<{ rateLimited: boolean }>;
   }, []);
+
+  useEffect(() => {
+    if (phoneDeepLinkApplied.current || drivers.length === 0) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const phone = params.get("phone");
+      const driverId = params.get("driver");
+      const match = driverId
+        ? drivers.find((d) => d.id === driverId)
+        : phone
+          ? drivers.find((d) => israelPhonesMatch(d.phone, phone))
+          : null;
+      if (match) {
+        setSelectedDriverId(match.id);
+        phoneDeepLinkApplied.current = true;
+      }
+    } catch {
+      phoneDeepLinkApplied.current = true;
+    }
+  }, [drivers]);
 
   const applyStatusFilter = useCallback((next: StatusFilter) => {
     setStatusFilter(next);

@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Phone, PhoneOff, PhoneForwarded, ExternalLink } from "lucide-react";
+import { Phone, PhoneOff, PhoneForwarded } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useCallCenterLiveOptional } from "@/components/call-center/CallCenterLiveContext";
+import { CallCenterHistoryTable } from "@/components/call-center/CallCenterHistoryTable";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { cn } from "@/lib/ui/cn";
-import { formatCallAtJerusalem } from "@/lib/call-center/phone";
+import type { CallCenterCallRecord } from "@/lib/call-center/calls-repository";
 
 type StatusPayload = {
   ok?: boolean;
@@ -25,34 +26,7 @@ type StatusPayload = {
 
 type Device = { id: string; name: string | null; userAgent: string | null };
 
-type CallHistoryRow = {
-  id: string;
-  phone: string;
-  direction: string | null;
-  callType: string | null;
-  contactName: string | null;
-  agentExtension: string | null;
-  agentName: string | null;
-  durationSec: number | null;
-  callAt: string | null;
-  description: string | null;
-  recordingUrl: string | null;
-  summary: string | null;
-  transcription: string | null;
-};
-
 const STATUSES = ["available", "away", "dnd", "offline"] as const;
-
-function formatDuration(sec: number | null): string {
-  if (sec == null) return "—";
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-function formatCallAt(iso: string | null): string {
-  return formatCallAtJerusalem(iso);
-}
 
 export function CallCenterView() {
   const t = useTranslations("salesOperation.callCenter");
@@ -72,17 +46,16 @@ export function CallCenterView() {
   const [actionBusy, setActionBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [calls, setCalls] = useState<CallHistoryRow[]>([]);
+  const [calls, setCalls] = useState<CallCenterCallRecord[]>([]);
   const [callsLoading, setCallsLoading] = useState(false);
   const [historyScope, setHistoryScope] = useState<"mine" | "all">("mine");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const loadCalls = useCallback(async () => {
     setCallsLoading(true);
     try {
       const qs = historyScope === "all" ? "?scope=all" : "";
       const res = await fetch(`/api/sales-operation/call-center/calls${qs}`, { cache: "no-store" });
-      const json = (await res.json()) as { ok?: boolean; calls?: CallHistoryRow[]; error?: string };
+      const json = (await res.json()) as { ok?: boolean; calls?: CallCenterCallRecord[]; error?: string };
       if (res.ok && json.ok) setCalls(json.calls ?? []);
     } finally {
       setCallsLoading(false);
@@ -528,77 +501,11 @@ export function CallCenterView() {
           </div>
         </div>
         <p className="text-xs text-[var(--so-muted)]">{t("historyHint")}</p>
-        {calls.length === 0 ? (
-          <p className="text-sm text-[var(--so-muted)]">{t("historyEmpty")}</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[40rem] border-collapse text-left text-xs">
-              <thead>
-                <tr className="border-b border-[var(--so-border)] text-[var(--so-muted)]">
-                  <th className="px-2 py-2 font-semibold">{t("historyWhen")}</th>
-                  <th className="px-2 py-2 font-semibold">{t("historyDir")}</th>
-                  <th className="px-2 py-2 font-semibold">{t("historyPhone")}</th>
-                  <th className="px-2 py-2 font-semibold">{t("historyDuration")}</th>
-                  <th className="px-2 py-2 font-semibold">{t("historyRecording")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {calls.map((call) => (
-                  <tr key={call.id} className="border-b border-[var(--so-border)] align-top">
-                    <td className="px-2 py-2 text-[var(--so-text)]">{formatCallAt(call.callAt)}</td>
-                    <td className="px-2 py-2 text-[var(--so-text)]">
-                      {[call.direction, call.callType].filter(Boolean).join(" / ") || "—"}
-                    </td>
-                    <td className="px-2 py-2 text-[var(--so-text)]">
-                      <div className="font-medium">{call.contactName || call.phone}</div>
-                      {call.contactName ? (
-                        <div className="text-[var(--so-muted)]">{call.phone}</div>
-                      ) : null}
-                    </td>
-                    <td className="px-2 py-2 tabular-nums text-[var(--so-text)]">
-                      {formatDuration(call.durationSec)}
-                    </td>
-                    <td className="px-2 py-2">
-                      {call.recordingUrl ? (
-                        <div className="flex flex-col gap-1">
-                          <audio controls preload="none" className="h-8 max-w-[14rem]" src={call.recordingUrl} />
-                          <a
-                            href={call.recordingUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-[var(--so-accent)] hover:underline"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            {t("historyOpenRecording")}
-                          </a>
-                        </div>
-                      ) : (
-                        <span className="text-[var(--so-muted)]">{t("historyNoRecording")}</span>
-                      )}
-                      {(call.summary || call.transcription) && (
-                        <button
-                          type="button"
-                          className="mt-1 text-[10px] text-sky-700 hover:underline"
-                          onClick={() =>
-                            setExpandedId((id) => (id === call.id ? null : call.id))
-                          }
-                        >
-                          {expandedId === call.id ? t("historyHideNotes") : t("historyShowNotes")}
-                        </button>
-                      )}
-                      {expandedId === call.id ? (
-                        <div className="mt-1 max-w-md space-y-1 text-[10px] text-[var(--so-muted)]">
-                          {call.summary ? <p>{call.summary}</p> : null}
-                          {call.transcription ? <p className="whitespace-pre-wrap">{call.transcription}</p> : null}
-                        </div>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <CallCenterHistoryTable
+          calls={calls}
+          loading={callsLoading}
+          onOpenContact={(phone, name) => live?.openScreenPop({ phone, name })}
+        />
       </section>
 
       <section className="so-card space-y-2 p-5 lg:col-span-2">

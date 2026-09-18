@@ -2478,7 +2478,6 @@ export default function RequestRidesPage() {
                         <ClickToCallButton
                           phone={phoneNumber}
                           compact
-                          hideNumber
                           emptyReason="No rider phone"
                         />
                       </div>

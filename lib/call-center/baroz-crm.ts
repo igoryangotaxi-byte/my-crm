@@ -1,6 +1,21 @@
 import { israelPhoneKey, israelPhonesMatch } from "@/lib/call-center/phone";
+import { getFleetDriverLookupIndexes } from "@/lib/fleet-api";
 import { createSalesLead } from "@/lib/sales-operation/repository";
 import { getSupabaseAdminClient, isSupabaseConfigured } from "@/lib/supabase";
+
+export type CrmCallEntityType = "lead" | "client" | "driver";
+
+export type CrmScreenPopEntity = {
+  entityType: CrmCallEntityType;
+  id: string;
+  name: string;
+  phone: string;
+  contactUrl: string;
+  companyName: string;
+  email?: string;
+  businessPhone?: string;
+  mobile2?: string;
+};
 
 export type BarOzLookupContact = {
   ID: string;
@@ -45,6 +60,15 @@ export function contactUrlForLead(leadId: string): string {
 
 export function contactUrlForClient(clientId: string): string {
   return `${appOrigin()}/sales-operation/b2b-clients/${encodeURIComponent(clientId)}`;
+}
+
+export function contactUrlForDriver(phone: string, driverId?: string | null): string {
+  const origin = appOrigin();
+  const params = new URLSearchParams();
+  if (phone.trim()) params.set("phone", phone.trim());
+  if (driverId?.trim()) params.set("driver", driverId.trim());
+  const qs = params.toString();
+  return `${origin}/drivers-map${qs ? `?${qs}` : ""}`;
 }
 
 function splitName(fullName: string): { first: string; last: string } {
@@ -131,9 +155,53 @@ function rowPhone(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-/** Lookup lead / contact / signed client by Israel-normalized phone. */
-export async function lookupContactByPhone(phoneRaw: string): Promise<BarOzLookupContact | null> {
-  if (!isSupabaseConfigured()) return null;
+function entityToLookupContact(entity: CrmScreenPopEntity): BarOzLookupContact {
+  const { first, last } = splitName(entity.name || "Unknown");
+  return {
+    ID: entity.id,
+    First_Name: first,
+    Last_Name: last,
+    Company_Name: entity.companyName,
+    Email: entity.email?.trim() || "",
+    Phone_Business: entity.businessPhone?.trim() || "",
+    Phone_Business2: "",
+    Phone_Mobile: entity.phone,
+    Phone_Mobile2: entity.mobile2?.trim() || "",
+    Contact_URL: entity.contactUrl,
+  };
+}
+
+async function lookupDriverByPhone(phoneRaw: string): Promise<CrmScreenPopEntity | null> {
+  try {
+    const indexes = await getFleetDriverLookupIndexes();
+    for (const row of indexes.byPhone.values()) {
+      if (!israelPhonesMatch(row.driverPhone, phoneRaw)) continue;
+      const name = row.displayName?.trim() || [row.driverFirstName, row.driverLastName].filter(Boolean).join(" ") || "Driver";
+      const phone = row.driverPhone?.trim() || phoneRaw;
+      return {
+        entityType: "driver",
+        id: row.driverId || phone,
+        name,
+        phone,
+        contactUrl: contactUrlForDriver(phone, row.driverId),
+        companyName: "",
+      };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/** CRM entity for screen-pop / call-log links (lead, signed client, or driver). */
+export async function lookupCrmEntityByPhone(
+  phoneRaw: string,
+  options: { includeDrivers?: boolean } = {},
+): Promise<CrmScreenPopEntity | null> {
+  const includeDrivers = options.includeDrivers !== false;
+  if (!isSupabaseConfigured()) {
+    return includeDrivers ? lookupDriverByPhone(phoneRaw) : null;
+  }
   const phoneKey = israelPhoneKey(phoneRaw);
   if (!phoneKey) return null;
 
@@ -151,15 +219,17 @@ export async function lookupContactByPhone(phoneRaw: string): Promise<BarOzLooku
     const office = rowPhone(row.office_phone);
     if (israelPhonesMatch(mobile, phoneRaw) || israelPhonesMatch(office, phoneRaw)) {
       const leadId = typeof row.lead_id === "string" && row.lead_id ? row.lead_id : String(row.id);
-      return toLookupContact({
+      return {
+        entityType: "lead",
         id: leadId,
-        fullName: String(row.full_name ?? "Unknown"),
-        email: typeof row.email === "string" ? row.email : null,
+        name: String(row.full_name ?? "Unknown"),
         phone: mobile || office,
-        business: office || null,
-        mobile2: mobile && office && !israelPhonesMatch(mobile, office) ? office : null,
         contactUrl: contactUrlForLead(leadId),
-      });
+        companyName: "",
+        email: typeof row.email === "string" ? row.email : "",
+        businessPhone: office || "",
+        mobile2: mobile && office && !israelPhonesMatch(mobile, office) ? office : "",
+      };
     }
   }
 
@@ -174,14 +244,15 @@ export async function lookupContactByPhone(phoneRaw: string): Promise<BarOzLooku
   for (const row of leads ?? []) {
     const phone = rowPhone(row.phone);
     if (israelPhonesMatch(phone, phoneRaw)) {
-      return toLookupContact({
+      return {
+        entityType: "lead",
         id: String(row.id),
-        fullName: String(row.full_name ?? "Unknown"),
-        companyName: typeof row.company_name === "string" ? row.company_name : null,
-        email: typeof row.email === "string" ? row.email : null,
+        name: String(row.full_name ?? "Unknown"),
         phone,
         contactUrl: contactUrlForLead(String(row.id)),
-      });
+        companyName: typeof row.company_name === "string" ? row.company_name : "",
+        email: typeof row.email === "string" ? row.email : "",
+      };
     }
   }
 
@@ -196,18 +267,26 @@ export async function lookupContactByPhone(phoneRaw: string): Promise<BarOzLooku
   for (const row of clients ?? []) {
     const phone = rowPhone(row.phone);
     if (israelPhonesMatch(phone, phoneRaw)) {
-      return toLookupContact({
+      return {
+        entityType: "client",
         id: String(row.id),
-        fullName: String(row.full_name ?? "Unknown"),
-        companyName: typeof row.company_name === "string" ? row.company_name : null,
-        email: typeof row.email === "string" ? row.email : null,
+        name: String(row.full_name ?? "Unknown"),
         phone,
         contactUrl: contactUrlForClient(String(row.id)),
-      });
+        companyName: typeof row.company_name === "string" ? row.company_name : "",
+        email: typeof row.email === "string" ? row.email : "",
+      };
     }
   }
 
-  return null;
+  return includeDrivers ? lookupDriverByPhone(phoneRaw) : null;
+}
+
+/** Lookup lead/contact/client/driver by phone for Bar Oz Lookup By Phone. */
+export async function lookupContactByPhone(phoneRaw: string): Promise<BarOzLookupContact | null> {
+  const entity = await lookupCrmEntityByPhone(phoneRaw, { includeDrivers: false });
+  if (!entity) return null;
+  return entityToLookupContact(entity);
 }
 
 export async function createContactFromThreeCx(input: {

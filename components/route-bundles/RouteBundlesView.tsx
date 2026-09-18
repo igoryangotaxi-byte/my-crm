@@ -587,7 +587,6 @@ export function RouteBundlesView() {
                   <DriverCallButton
                     phone={driverForm.driverPhone}
                     compact
-                    hideNumber
                     emptyReason="No phone for this driver"
                   />
                 </div>

@@ -488,7 +488,6 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
                   <ClickToCallButton
                     phone={profileDraft.phone}
                     compact
-                    hideNumber
                     emptyReason="No phone on this customer"
                   />
                 </span>

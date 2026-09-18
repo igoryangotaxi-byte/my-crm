@@ -593,8 +593,8 @@ export function SalesLeadDetailSidebar({
         <div className="flex flex-wrap gap-1.5">
           <ClickToCallButton
             phone={d.phone}
-            variant="pill"
-            pillLabel={t("quick.call")}
+            variant="dial"
+            label="Dial"
             emptyReason="No phone on this lead"
             stopPropagation={false}
           />

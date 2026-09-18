@@ -68,3 +68,43 @@ export function formatCallAtJerusalem(iso: string | null | undefined): string {
     hour12: false,
   });
 }
+
+export function jerusalemDateKey(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-CA", { timeZone: CALL_CENTER_DISPLAY_TZ });
+}
+
+export function formatCallDuration(sec: number | null | undefined): string {
+  if (sec == null || !Number.isFinite(sec)) return "—";
+  const total = Math.max(0, Math.round(sec));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/** 3CX may send sip:user, +972…, or an extension. Prefer a dialable number. */
+export function callerPhoneFromParty(raw: string | null | undefined): string {
+  if (!raw) return "";
+  let value = raw.trim();
+  if (value.toLowerCase().startsWith("sip:")) {
+    value = value.slice(4);
+    const at = value.indexOf("@");
+    if (at > 0) value = value.slice(0, at);
+  }
+  return value.replace(/^tel:/i, "").trim();
+}
+
+export function callLogLegs(input: {
+  direction?: string | null;
+  phone?: string | null;
+  agentExtension?: string | null;
+  agentName?: string | null;
+  queue?: string | null;
+}): { from: string; to: string } {
+  const phone = input.phone?.trim() || "—";
+  const agent = input.agentName?.trim() || input.agentExtension?.trim() || input.queue?.trim() || "—";
+  const outbound = (input.direction ?? "").toLowerCase().includes("out");
+  return outbound ? { from: agent, to: phone } : { from: phone, to: agent };
+}

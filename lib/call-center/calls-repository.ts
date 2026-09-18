@@ -1,6 +1,10 @@
 import { getSupabaseAdminClient, isSupabaseConfigured } from "@/lib/supabase";
 import { israelPhoneKey } from "@/lib/call-center/phone";
 import { jerusalemWallToUtcMs } from "@/lib/jerusalem-wall-time";
+import {
+  lookupCrmEntityByPhone,
+  type CrmCallEntityType,
+} from "@/lib/call-center/baroz-crm";
 
 export type CallCenterCallRecord = {
   id: string;
@@ -19,8 +23,34 @@ export type CallCenterCallRecord = {
   recordingUrl: string | null;
   summary: string | null;
   transcription: string | null;
+  entityType: CrmCallEntityType | null;
+  entityUrl: string | null;
+  entityName: string | null;
   createdAt: string;
 };
+
+function readStoredEntity(raw: unknown): {
+  entityType: CrmCallEntityType | null;
+  entityUrl: string | null;
+  entityName: string | null;
+} {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { entityType: null, entityUrl: null, entityName: null };
+  }
+  const entity = (raw as { crm_entity?: unknown }).crm_entity;
+  if (!entity || typeof entity !== "object" || Array.isArray(entity)) {
+    return { entityType: null, entityUrl: null, entityName: null };
+  }
+  const row = entity as Record<string, unknown>;
+  const typeRaw = typeof row.entityType === "string" ? row.entityType : "";
+  const entityType: CrmCallEntityType | null =
+    typeRaw === "lead" || typeRaw === "client" || typeRaw === "driver" ? typeRaw : null;
+  return {
+    entityType,
+    entityUrl: typeof row.contactUrl === "string" && row.contactUrl.trim() ? row.contactUrl.trim() : null,
+    entityName: typeof row.name === "string" && row.name.trim() ? row.name.trim() : null,
+  };
+}
 
 function mapCallRow(row: Record<string, unknown>): CallCenterCallRecord {
   return {
@@ -43,6 +73,7 @@ function mapCallRow(row: Record<string, unknown>): CallCenterCallRecord {
     recordingUrl: typeof row.recording_url === "string" ? row.recording_url : null,
     summary: typeof row.summary === "string" ? row.summary : null,
     transcription: typeof row.transcription === "string" ? row.transcription : null,
+    ...readStoredEntity(row.raw),
     createdAt: String(row.created_at ?? new Date().toISOString()),
   };
 }
@@ -147,6 +178,20 @@ export async function insertCallCenterCall(
   const durationSec = parseDuration(input.durationSec ?? null);
   const callAt = parseCallAt(input.callAt ?? null);
   const recordingUrl = input.recordingUrl?.trim() || null;
+  let storedEntity: Record<string, unknown> | null = null;
+  try {
+    const entity = await lookupCrmEntityByPhone(phone, { includeDrivers: true });
+    if (entity) {
+      storedEntity = {
+        entityType: entity.entityType,
+        id: entity.id,
+        name: entity.name,
+        contactUrl: entity.contactUrl,
+      };
+    }
+  } catch {
+    storedEntity = null;
+  }
 
   const supabase = getSupabaseAdminClient();
 
@@ -199,7 +244,10 @@ export async function insertCallCenterCall(
     recording_url: recordingUrl,
     summary: input.summary?.trim() || null,
     transcription: input.transcription?.trim() || null,
-    raw: input.raw ?? {},
+    raw: {
+      ...(input.raw ?? {}),
+      ...(storedEntity ? { crm_entity: storedEntity } : {}),
+    },
   };
 
   const { data, error } = await supabase
@@ -246,4 +294,23 @@ export async function listCallCenterCalls(params: {
         (userId && c.crmUserId === userId) || (ext && c.agentExtension === ext),
     )
     .slice(0, limit);
+}
+
+export async function getLastCallCenterCallByPhone(
+  phoneRaw: string,
+): Promise<CallCenterCallRecord | null> {
+  if (!isSupabaseConfigured()) return null;
+  const phoneKey = israelPhoneKey(phoneRaw);
+  if (!phoneKey) return null;
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("call_center_calls")
+    .select("*")
+    .eq("phone_key", phoneKey)
+    .order("call_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  const row = data?.[0];
+  return row ? mapCallRow(row as Record<string, unknown>) : null;
 }

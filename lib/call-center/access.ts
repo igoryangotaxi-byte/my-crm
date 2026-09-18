@@ -2,8 +2,8 @@ import { loadAuthStore } from "@/lib/auth-store";
 import { requireApprovedUser } from "@/lib/server-auth";
 import { getCallCenterUserSettings, type CallCenterUserSettings } from "@/lib/call-center/repository";
 
-export async function requireCallCenterDialAccess(request: Request): Promise<
-  | { ok: true; user: { id: string }; settings: CallCenterUserSettings }
+export async function requireCallCenterOperatorAccess(request: Request): Promise<
+  | { ok: true; user: { id: string } }
   | { ok: false; response: Response }
 > {
   const auth = await requireApprovedUser(request);
@@ -11,18 +11,27 @@ export async function requireCallCenterDialAccess(request: Request): Promise<
 
   const store = await loadAuthStore();
   const permissions = store.rolePermissions[auth.user.role];
-  const canDial =
+  const allowed =
     Boolean(permissions?.salesOperation) ||
     Boolean(permissions?.salesCallCenter) ||
     Boolean(permissions?.driversMap) ||
     Boolean(permissions?.preOrders) ||
     Boolean(permissions?.orders);
-  if (!canDial) {
+  if (!allowed) {
     return {
       ok: false,
       response: Response.json({ ok: false, error: "Forbidden." }, { status: 403 }),
     };
   }
+  return { ok: true, user: auth.user };
+}
+
+export async function requireCallCenterDialAccess(request: Request): Promise<
+  | { ok: true; user: { id: string }; settings: CallCenterUserSettings }
+  | { ok: false; response: Response }
+> {
+  const auth = await requireCallCenterOperatorAccess(request);
+  if (!auth.ok) return auth;
 
   const settings = await getCallCenterUserSettings(auth.user.id);
   if (!settings?.extension) {

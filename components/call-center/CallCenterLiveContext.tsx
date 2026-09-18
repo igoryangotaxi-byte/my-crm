@@ -26,6 +26,11 @@ export type CallCenterParticipant = {
   legId: number | null;
 };
 
+export type CallCenterScreenPopRequest = {
+  phone: string;
+  name?: string | null;
+};
+
 type CallCenterLiveState = {
   linked: boolean;
   extension: string | null;
@@ -34,10 +39,13 @@ type CallCenterLiveState = {
   participants: CallCenterParticipant[];
   incoming: CallCenterParticipant | null;
   active: CallCenterParticipant | null;
+  screenPopRequest: CallCenterScreenPopRequest | null;
   error: string | null;
   refresh: () => Promise<void>;
   setOperatorStatus: (status: string) => Promise<void>;
   setNotificationsMuted: (muted: boolean) => Promise<void>;
+  openScreenPop: (request: CallCenterScreenPopRequest) => void;
+  closeScreenPop: () => void;
   runAction: (
     participantId: number,
     action: "answer" | "drop" | "divert" | "transferto",
@@ -74,6 +82,7 @@ export function CallCenterLiveProvider({ children }: { children: ReactNode }) {
   const [operatorStatus, setOperatorStatusState] = useState("available");
   const [notificationsMuted, setNotificationsMutedState] = useState(false);
   const [participants, setParticipants] = useState<CallCenterParticipant[]>([]);
+  const [screenPopRequest, setScreenPopRequest] = useState<CallCenterScreenPopRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const enabledRef = useRef(true);
 
@@ -190,6 +199,16 @@ export function CallCenterLiveProvider({ children }: { children: ReactNode }) {
     [refresh],
   );
 
+  const openScreenPop = useCallback((request: CallCenterScreenPopRequest) => {
+    const phone = request.phone.trim();
+    if (!phone) return;
+    setScreenPopRequest({ phone, name: request.name ?? null });
+  }, []);
+
+  const closeScreenPop = useCallback(() => {
+    setScreenPopRequest(null);
+  }, []);
+
   const value = useMemo<CallCenterLiveState>(
     () => ({
       linked,
@@ -199,10 +218,13 @@ export function CallCenterLiveProvider({ children }: { children: ReactNode }) {
       participants,
       incoming: pickIncoming(participants),
       active: pickActive(participants),
+      screenPopRequest,
       error,
       refresh,
       setOperatorStatus,
       setNotificationsMuted,
+      openScreenPop,
+      closeScreenPop,
       runAction,
       makecall,
     }),
@@ -212,10 +234,13 @@ export function CallCenterLiveProvider({ children }: { children: ReactNode }) {
       operatorStatus,
       notificationsMuted,
       participants,
+      screenPopRequest,
       error,
       refresh,
       setOperatorStatus,
       setNotificationsMuted,
+      openScreenPop,
+      closeScreenPop,
       runAction,
       makecall,
     ],

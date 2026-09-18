@@ -243,25 +243,30 @@ export function SalesLeadContactsSection({ leadId }: { leadId: string }) {
                 {contact.mobilePhone || contact.officePhone ? (
                   <>
                     {contact.mobilePhone ? (
-                      <ClickToCallButton
-                        phone={contact.mobilePhone}
-                        compact
-                        emptyReason="No mobile phone"
-                      />
+                      <div className="flex items-center gap-2">
+                        <span className="tabular-nums">{contact.mobilePhone}</span>
+                        <ClickToCallButton
+                          phone={contact.mobilePhone}
+                          compact
+                          emptyReason="No mobile phone"
+                        />
+                      </div>
                     ) : null}
                     {contact.officePhone ? (
-                      <ClickToCallButton
-                        phone={contact.officePhone}
-                        compact
-                        emptyReason="No office phone"
-                      />
+                      <div className="flex items-center gap-2">
+                        <span className="tabular-nums">{contact.officePhone}</span>
+                        <ClickToCallButton
+                          phone={contact.officePhone}
+                          compact
+                          emptyReason="No office phone"
+                        />
+                      </div>
                     ) : null}
                   </>
                 ) : (
                   <ClickToCallButton
                     phone={null}
                     compact
-                    hideNumber
                     emptyReason="No phone on this contact"
                   />
                 )}

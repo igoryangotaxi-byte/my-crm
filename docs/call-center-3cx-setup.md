@@ -46,6 +46,7 @@ Pass the secret as **`?key=SECRET`** (recommended in the URL below) **or** a hea
 
 - Sales contact / lead → `https://applitaxi.space/sales-operation/pipeline?lead=<id>`
 - Signed B2B client → `https://applitaxi.space/sales-operation/b2b-clients/<id>`
+- Driver → `https://applitaxi.space/drivers-map?phone=<number>`
 
 Phones are matched with Israel-aware normalization (`054…` / `+972…` / `972…`).
 
@@ -59,10 +60,10 @@ Phones are matched with Israel-aware normalization (`054…` / `+972…` / `972�
 
 1. Open Call Center → save **extension** (+ device).
 2. Keep **3CX Web Client** (or desk phone) registered for audio.
-3. Set status **Available** to receive inbound toasts.
-4. **Dial a driver:** Call icon on assigned-driver surfaces (Pre-Orders, Drivers map, Route Bundles, order driver card). No phone → button stays visible, disabled, with reason.
-5. **Dial a customer / CRM user:** Call on the pipeline lead card, lead contacts, B2B client profile, and Request Rides rider phone. Same disabled + reason when the field is empty.
-6. Dialer on `/sales-operation/call-center` for an ad-hoc number; Answer on toast or Active call panel.
+3. Set status **Available** so inbound **screen-pop** (right drawer, ~400px) opens with name, phone, entity type, last call, primary **Dial**, and **Open card**. Miss → «No contact» + Create.
+4. **Dial a driver / customer:** labeled Dial (icon + text) on assigned-driver and customer cards. No phone → disabled + tooltip reason. Not a FAB; red only on the screen-pop primary Dial.
+5. Call log on `/sales-operation/call-center`: dense rows (Asia/Jerusalem), filters for date / direction / agent. Click a row to screen-pop.
+6. Dialer on the same page for an ad-hoc number; Answer / Decline stay in the screen-pop when ringing.
 
 ## 5. QA notes
 
@@ -75,5 +76,7 @@ Phones are matched with Israel-aware normalization (`054…` / `+972…` / `972�
 | Create same phone again | `200` same `ID` (no duplicate) |
 | Call Report | `200` empty body; row in Call history with recording URL if sent |
 | Repeat Call Report | still one history row |
-| Dial with no phone | control disabled + reason text |
+| Dial with no phone | Dial disabled + tooltip reason |
 | Dial with phone | 3CX makecall (or `tel:` fallback if PBX not linked) |
+| Inbound screen-pop miss | «No contact» + Create |
+| Call log | time (Asia/Jerusalem), direction, from/to, duration, agent, entity link |
