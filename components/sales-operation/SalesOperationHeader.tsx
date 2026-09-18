@@ -70,7 +70,7 @@ export function SalesOperationHeader() {
       .join("") || "AO";
 
   return (
-    <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-[var(--so-border)] bg-[var(--so-surface)] px-4 py-2.5 lg:px-5">
+    <header className="so-shell-header flex shrink-0 items-center justify-between gap-3 border-b border-[var(--so-border)] bg-[var(--so-surface)] px-4 lg:px-5">
       <div className="flex min-w-0 items-center gap-3">
         <button
           type="button"
@@ -82,7 +82,7 @@ export function SalesOperationHeader() {
         </button>
         <div className="min-w-0">
           <h1 className="ycds-h1 truncate text-[var(--so-text)]">{tSales(currentPage.titleKey)}</h1>
-          <p className="mt-0.5 line-clamp-1 text-[0.75rem] text-[var(--so-muted)] max-sm:hidden">
+          <p className="ycds-small mt-px line-clamp-1 text-[var(--so-muted)] max-sm:hidden">
             {tSales(currentPage.subtitleKey)}
           </p>
         </div>

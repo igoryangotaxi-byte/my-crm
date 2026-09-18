@@ -738,7 +738,7 @@
         "subtitle": "Lead kanban — New, In Progress, Proposal Sent, Signed, Rejected"
       },
       "leadDiscovery": {
-        "title": "Lead Discovery",
+        "title": "Lead discovery",
         "subtitle": "Create a search, run it, and review companies for corporate taxi"
       },
       "tracker": {
@@ -750,7 +750,7 @@
         "subtitle": "Shared wiki — documents, tables, and Word-style editing"
       },
       "tasks": {
-        "title": "My Space",
+        "title": "My space",
         "subtitle": "Your personal tasks, assigned work, notes, and scorecard"
       },
       "calendar": {
@@ -758,11 +758,11 @@
         "subtitle": "Meetings synced with Google Calendar, personal tasks in-app"
       },
       "portfolio": {
-        "title": "AM Portfolio",
+        "title": "AM portfolio",
         "subtitle": "Clients grouped by account manager with health status"
       },
       "b2bClients": {
-        "title": "B2B Clients Overview",
+        "title": "B2B clients overview",
         "subtitle": "Yango B2B client performance — spend, decoupling, and trip metrics"
       },
       "b2bClientTrips": {
@@ -774,11 +774,11 @@
         "subtitle": "Pipeline KPIs and campaign performance"
       },
       "managerAnalytics": {
-        "title": "Manager Analytics",
+        "title": "Manager analytics",
         "subtitle": "Account and Sales Manager portfolio performance"
       },
       "performance": {
-        "title": "Team Performance",
+        "title": "Team performance",
         "subtitle": "KPI actuals vs admin-set targets, per manager and period"
       },
       "automation": {
@@ -794,11 +794,11 @@
         "subtitle": "Team messaging and notification center"
       },
       "preOrders": {
-        "title": "Pre-Orders",
+        "title": "Pre-orders",
         "subtitle": "Upcoming scheduled rides from Yango API"
       },
       "routeBundles": {
-        "title": "Route Bundles",
+        "title": "Route bundles",
         "subtitle": "Traffic-aware chains of compatible pre-orders for one driver"
       },
       "orders": {
@@ -806,19 +806,19 @@
         "subtitle": "B2B orders with filters and details"
       },
       "priceCalculator": {
-        "title": "Price Calculator",
+        "title": "Price calculator",
         "subtitle": "Tariffs, transcripts, and driver price comparison"
       },
       "apiHealthCheck": {
-        "title": "API Healthy Check",
+        "title": "API healthy check",
         "subtitle": "Validate, register, and diagnose Yango API tokens"
       },
       "callCenter": {
-        "title": "Call Center",
+        "title": "Call center",
         "subtitle": "Extension link, operator status, dialer, and live inbound control"
       },
       "office": {
-        "title": "3D Office",
+        "title": "3D office",
         "subtitle": "Attention queue, My Desk, and Team — live CRM cues in 3D"
       },
       "clientDetail": {

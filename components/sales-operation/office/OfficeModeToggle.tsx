@@ -21,10 +21,10 @@ export function OfficeModeToggle() {
           setMode("classic");
           if (inOffice) router.push(returnToClassicPath || "/sales-operation/pipeline");
         }}
-        className={`inline-flex h-8 items-center gap-1 rounded-[8px] px-2.5 text-xs font-semibold transition-colors ${
+        className={`so-focus-ring inline-flex h-8 items-center gap-1 rounded-[8px] border px-2.5 text-xs font-medium transition-colors ${
           !inOffice && mode !== "office"
-            ? "bg-[var(--so-accent-soft)] text-[var(--so-accent-strong)]"
-            : "text-[var(--so-muted)] hover:text-[var(--so-text)]"
+            ? "border-[var(--so-accent)] bg-transparent text-[var(--so-accent-strong)]"
+            : "border-transparent text-[var(--so-muted)] hover:bg-[var(--so-surface-hover)] hover:text-[var(--so-text)]"
         }`}
         title={t("classicMode")}
       >
@@ -39,10 +39,10 @@ export function OfficeModeToggle() {
           }
           setMode("office");
         }}
-        className={`inline-flex h-8 items-center gap-1 rounded-[8px] px-2.5 text-xs font-semibold transition-colors ${
+        className={`so-focus-ring inline-flex h-8 items-center gap-1 rounded-[8px] border px-2.5 text-xs font-medium transition-colors ${
           inOffice
-            ? "bg-[var(--so-accent-soft)] text-[var(--so-accent-strong)]"
-            : "text-[var(--so-muted)] hover:text-[var(--so-text)]"
+            ? "border-[var(--so-accent)] bg-transparent text-[var(--so-accent-strong)]"
+            : "border-transparent text-[var(--so-muted)] hover:bg-[var(--so-surface-hover)] hover:text-[var(--so-text)]"
         }`}
         title={t("title")}
       >
