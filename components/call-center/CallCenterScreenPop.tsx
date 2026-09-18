@@ -187,7 +187,7 @@ export function CallCenterScreenPop() {
       aria-label="Call screen pop"
     >
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-[var(--so-border)] px-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--so-muted)]">
+        <p className="text-xs font-semibold text-[var(--so-muted)]">
           {showIncoming ? "Incoming call" : "Contact"}
         </p>
         <button
@@ -269,7 +269,7 @@ export function CallCenterScreenPop() {
               type="button"
               disabled={busy}
               onClick={() => void onAnswer(incoming)}
-              className="so-focus-ring inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[8px] border border-[var(--so-border-strong)] px-3 text-xs font-semibold text-[var(--so-text)] hover:bg-[var(--so-surface-hover)]"
+              className="crm-button-primary inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[8px] px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Phone className="h-3.5 w-3.5" />
               Answer
