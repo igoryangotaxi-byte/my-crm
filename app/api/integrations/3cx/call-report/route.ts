@@ -1,4 +1,8 @@
-import { assertThreeCxWebhookAuthorized, readBarOzString } from "@/lib/call-center/baroz-crm";
+import {
+  assertThreeCxWebhookAuthorized,
+  parseBarOzRequestBody,
+  readBarOzString,
+} from "@/lib/call-center/baroz-crm";
 import { insertCallCenterCall } from "@/lib/call-center/calls-repository";
 
 export const runtime = "nodejs";
@@ -6,13 +10,13 @@ export const dynamic = "force-dynamic";
 
 /**
  * Bar Oz Call Report — 3CX POST when a call ends (includes Recording URL).
- * Always return 200 with empty body on success (per PDF).
+ * Always return 200 with empty body on success (per PDF). Duplicate reports are idempotent.
  */
 export async function POST(request: Request) {
   const denied = assertThreeCxWebhookAuthorized(request);
   if (denied) return denied;
 
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const body = await parseBarOzRequestBody(request);
   if (!body) {
     return new Response(null, { status: 200 });
   }

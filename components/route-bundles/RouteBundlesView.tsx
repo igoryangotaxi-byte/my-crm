@@ -584,9 +584,12 @@ export function RouteBundlesView() {
                     placeholder="Phone"
                     className="min-w-0 flex-1 rounded-lg border border-[var(--so-border)] px-2 py-1.5 text-xs"
                   />
-                  {driverForm.driverPhone ? (
-                    <DriverCallButton phone={driverForm.driverPhone} compact />
-                  ) : null}
+                  <DriverCallButton
+                    phone={driverForm.driverPhone}
+                    compact
+                    hideNumber
+                    emptyReason="No phone for this driver"
+                  />
                 </div>
                 <input
                   value={driverForm.driverId}

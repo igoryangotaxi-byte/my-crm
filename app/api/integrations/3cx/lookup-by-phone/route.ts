@@ -1,6 +1,7 @@
 import {
   assertThreeCxWebhookAuthorized,
   lookupContactByPhone,
+  lookupPhoneFromRequest,
 } from "@/lib/call-center/baroz-crm";
 
 export const runtime = "nodejs";
@@ -8,17 +9,13 @@ export const dynamic = "force-dynamic";
 
 /**
  * Bar Oz Lookup By Phone — 3CX GET when an inbound call arrives.
- * Miss → 200 with empty body (per PDF).
+ * Auth is fail-closed. Miss → 200 with empty body (per PDF).
  */
 export async function GET(request: Request) {
   const denied = assertThreeCxWebhookAuthorized(request);
   if (denied) return denied;
 
-  const url = new URL(request.url);
-  const phone =
-    url.searchParams.get("Phone")?.trim() ||
-    url.searchParams.get("phone")?.trim() ||
-    "";
+  const phone = lookupPhoneFromRequest(request);
   if (!phone) {
     return new Response(null, { status: 200 });
   }

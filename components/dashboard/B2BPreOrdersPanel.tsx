@@ -3620,11 +3620,10 @@ export function B2BPreOrdersPanel({
                       <div className="rounded-xl bg-white px-3 py-2.5">
                         <dt className="text-muted">Driver phone</dt>
                         <dd className="font-medium text-slate-900">
-                          {performer?.phone ? (
-                            <DriverCallButton phone={String(performer.phone)} />
-                          ) : (
-                            getValue(performer?.phone)
-                          )}
+                          <DriverCallButton
+                            phone={performer?.phone ? String(performer.phone) : null}
+                            emptyReason="No phone for this driver"
+                          />
                         </dd>
                       </div>
                       <div className="rounded-xl bg-white px-3 py-2.5">

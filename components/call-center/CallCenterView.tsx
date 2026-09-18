@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { useCallCenterLiveOptional } from "@/components/call-center/CallCenterLiveContext";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { cn } from "@/lib/ui/cn";
+import { formatCallAtJerusalem } from "@/lib/call-center/phone";
 
 type StatusPayload = {
   ok?: boolean;
@@ -50,10 +51,7 @@ function formatDuration(sec: number | null): string {
 }
 
 function formatCallAt(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString();
+  return formatCallAtJerusalem(iso);
 }
 
 export function CallCenterView() {

@@ -25,6 +25,7 @@ import { publicErrorMessage } from "@/lib/public-error-message";
 import { downloadBulkUploadSampleXlsx } from "@/lib/xlsx-bulk-upload-sample";
 import { parseXlsxRidesFile } from "@/lib/xlsx-rides-parser";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { ClickToCallButton } from "@/components/call-center/DriverCallButton";
 import { OrderRouteEditor } from "@/components/pre-orders/PreOrderRouteEditor";
 import type {
   RequestRideResult,
@@ -2438,7 +2439,8 @@ export default function RequestRidesPage() {
                   })}
                   <label className={`block ${!selectedClient ? "cursor-not-allowed" : ""}`}>
                     <span className="crm-label block">{copy.riderPhone}</span>
-                    <div ref={phoneSuggestAnchorRef} className="relative">
+                    <div className="flex items-start gap-2">
+                    <div ref={phoneSuggestAnchorRef} className="relative min-w-0 flex-1">
                       <input
                         value={phoneNumber}
                         disabled={!selectedClient}
@@ -2471,6 +2473,15 @@ export default function RequestRidesPage() {
                         }
                         required={Boolean(selectedClient)}
                       />
+                    </div>
+                      <div className="pt-1">
+                        <ClickToCallButton
+                          phone={phoneNumber}
+                          compact
+                          hideNumber
+                          emptyReason="No rider phone"
+                        />
+                      </div>
                     </div>
                   </label>
                   <button

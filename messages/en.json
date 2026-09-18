@@ -883,7 +883,7 @@
       "statusSaved": "Status updated",
       "liveError": "Live call feed error",
       "historyTitle": "Call history",
-      "historyHint": "Filled by 3CX Call Report after each call. Recordings require PBX recording + Bar Oz webhook.",
+      "historyHint": "Filled by 3CX Call Report after each call (times in Asia/Jerusalem). Recordings require PBX recording + Bar Oz webhook.",
       "historyEmpty": "No call reports yet.",
       "historyLoading": "Loading…",
       "historyRefresh": "Refresh",

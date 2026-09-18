@@ -164,7 +164,7 @@
       "statusSaved": "Статус обновлён",
       "liveError": "Ошибка ленты звонков",
       "historyTitle": "История звонков",
-      "historyHint": "Заполняется Call Report из 3CX. Записи нужны с записью на PBX и webhook.",
+      "historyHint": "Заполняется Call Report из 3CX (время Asia/Jerusalem). Записи нужны с записью на PBX и webhook.",
       "historyEmpty": "Пока нет отчётов о звонках.",
       "historyLoading": "Загрузка…",
       "historyRefresh": "Обновить",

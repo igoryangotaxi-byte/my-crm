@@ -569,11 +569,13 @@ export default function DriversMapPage() {
                           <p className="mt-1 text-xs text-slate-500">
                             {(selectedDriver.phone ?? "n/a")} · {(selectedDriver.carNumber ?? "n/a")}
                           </p>
-                          {selectedDriver.phone ? (
-                            <div className="mt-2">
-                              <DriverCallButton phone={selectedDriver.phone} compact />
-                            </div>
-                          ) : null}
+                          <div className="mt-2">
+                            <DriverCallButton
+                              phone={selectedDriver.phone}
+                              compact
+                              emptyReason="No phone for this driver"
+                            />
+                          </div>
                         </div>
                         <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${statusDotClass(selectedDriver.status)}`} />
                       </div>

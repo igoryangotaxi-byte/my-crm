@@ -1,5 +1,6 @@
 import { getSupabaseAdminClient, isSupabaseConfigured } from "@/lib/supabase";
-import { normalizePhone } from "@/lib/sales-operation/dedup";
+import { israelPhoneKey } from "@/lib/call-center/phone";
+import { jerusalemWallToUtcMs } from "@/lib/jerusalem-wall-time";
 
 export type CallCenterCallRecord = {
   id: string;
@@ -54,20 +55,51 @@ function parseDuration(value: unknown): number | null {
   return null;
 }
 
-function parseCallAt(value: unknown): string | null {
+function jerusalemIso(y: number, mo: number, d: number, h: number, mi: number, s = 0): string | null {
+  const ms = jerusalemWallToUtcMs({ y, mo, d, h, mi, s });
+  const dt = new Date(ms);
+  return Number.isNaN(dt.getTime()) ? null : dt.toISOString();
+}
+
+/** Exported for tests. ISO with Z/offset kept; naive / Bar Oz dotted times are Asia/Jerusalem. */
+export function parseCallAt(value: unknown): string | null {
   if (typeof value !== "string" || !value.trim()) return null;
   const raw = value.trim();
-  const iso = new Date(raw);
-  if (!Number.isNaN(iso.getTime())) return iso.toISOString();
-  // Bar Oz sample: "21.7.2020 10:15" (d.M.yyyy H:mm)
-  const m = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})/);
-  if (m) {
-    const [, d, mo, y, h, mi] = m;
-    const dt = new Date(
-      Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), 0),
-    );
-    if (!Number.isNaN(dt.getTime())) return dt.toISOString();
+
+  if (/Z$|[+-]\d{2}:?\d{2}$/.test(raw)) {
+    const iso = new Date(raw);
+    if (!Number.isNaN(iso.getTime())) return iso.toISOString();
   }
+
+  const isoLocal = raw.match(
+    /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/,
+  );
+  if (isoLocal) {
+    return jerusalemIso(
+      Number(isoLocal[1]),
+      Number(isoLocal[2]),
+      Number(isoLocal[3]),
+      Number(isoLocal[4]),
+      Number(isoLocal[5]),
+      isoLocal[6] ? Number(isoLocal[6]) : 0,
+    );
+  }
+
+  // Bar Oz sample: "21.7.2020 10:15" (d.M.yyyy H:mm) — local Israel wall clock.
+  const dotted = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (dotted) {
+    return jerusalemIso(
+      Number(dotted[3]),
+      Number(dotted[2]),
+      Number(dotted[1]),
+      Number(dotted[4]),
+      Number(dotted[5]),
+      dotted[6] ? Number(dotted[6]) : 0,
+    );
+  }
+
+  const fallback = new Date(raw);
+  if (!Number.isNaN(fallback.getTime())) return fallback.toISOString();
   return null;
 }
 
@@ -111,11 +143,49 @@ export async function insertCallCenterCall(
 
   const agentExtension = input.agentExtension?.trim() || null;
   const crmUserId = agentExtension ? await findCrmUserIdByExtension(agentExtension) : null;
+  const phoneKey = israelPhoneKey(phone) || null;
+  const durationSec = parseDuration(input.durationSec ?? null);
+  const callAt = parseCallAt(input.callAt ?? null);
+  const recordingUrl = input.recordingUrl?.trim() || null;
 
   const supabase = getSupabaseAdminClient();
+
+  if (phoneKey && agentExtension && callAt) {
+    let existingQuery = supabase
+      .from("call_center_calls")
+      .select("*")
+      .eq("phone_key", phoneKey)
+      .eq("agent_extension", agentExtension)
+      .eq("call_at", callAt)
+      .limit(1);
+    existingQuery =
+      durationSec == null
+        ? existingQuery.is("duration_sec", null)
+        : existingQuery.eq("duration_sec", durationSec);
+    const { data: existingRows } = await existingQuery;
+    const existing = existingRows?.[0] as Record<string, unknown> | undefined;
+    if (existing) {
+      if (recordingUrl && !existing.recording_url) {
+        const { data: updated, error: updateError } = await supabase
+          .from("call_center_calls")
+          .update({
+            recording_url: recordingUrl,
+            summary: input.summary?.trim() || existing.summary || null,
+            transcription: input.transcription?.trim() || existing.transcription || null,
+            raw: input.raw ?? existing.raw ?? {},
+          })
+          .eq("id", String(existing.id))
+          .select("*")
+          .maybeSingle();
+        if (!updateError && updated) return mapCallRow(updated as Record<string, unknown>);
+      }
+      return mapCallRow(existing);
+    }
+  }
+
   const payload = {
     phone,
-    phone_key: normalizePhone(phone) || null,
+    phone_key: phoneKey,
     queue: input.queue?.trim() || null,
     direction: input.direction?.trim() || null,
     call_type: input.callType?.trim() || null,
@@ -123,10 +193,10 @@ export async function insertCallCenterCall(
     agent_extension: agentExtension,
     agent_name: input.agentName?.trim() || null,
     crm_user_id: crmUserId,
-    duration_sec: parseDuration(input.durationSec ?? null),
-    call_at: parseCallAt(input.callAt ?? null),
+    duration_sec: durationSec,
+    call_at: callAt,
     description: input.description?.trim() || null,
-    recording_url: input.recordingUrl?.trim() || null,
+    recording_url: recordingUrl,
     summary: input.summary?.trim() || null,
     transcription: input.transcription?.trim() || null,
     raw: input.raw ?? {},

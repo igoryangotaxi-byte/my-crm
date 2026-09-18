@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Check, Loader2, Mail, MessageSquare, Pencil, Phone, Plus, Search, X } from "lucide-react";
+import { Check, Loader2, Mail, MessageSquare, Pencil, Plus, Search, X } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Button } from "@/components/ui/Button";
@@ -11,6 +11,7 @@ import { Drawer, Modal } from "@/components/ui/Dialog";
 import { Tabs } from "@/components/ui/Tabs";
 import { FilterBar } from "@/components/patterns/FilterBar";
 import { useToast } from "@/components/ui/Toast";
+import { ClickToCallButton } from "@/components/call-center/DriverCallButton";
 import { cn } from "@/lib/ui/cn";
 import {
   SalesClientManagerFields,
@@ -590,19 +591,13 @@ export function SalesLeadDetailSidebar({
         </div>
 
         <div className="flex flex-wrap gap-1.5">
-          <a
-            href={d.phone ? `tel:${d.phone}` : undefined}
-            aria-disabled={!d.phone}
-            className={cn(
-              quickPill,
-              d.phone
-                ? "border-[var(--so-border-strong)] text-[var(--so-text)] hover:bg-[var(--so-surface-hover)]"
-                : "pointer-events-none border-[var(--so-border)] text-[var(--so-muted-2)]",
-            )}
-          >
-            <Phone className="h-3.5 w-3.5" />
-            {t("quick.call")}
-          </a>
+          <ClickToCallButton
+            phone={d.phone}
+            variant="pill"
+            pillLabel={t("quick.call")}
+            emptyReason="No phone on this lead"
+            stopPropagation={false}
+          />
           <a
             href={d.email ? `mailto:${d.email}` : undefined}
             aria-disabled={!d.email}

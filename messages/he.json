@@ -883,7 +883,7 @@
       "statusSaved": "הסטטוס עודכן",
       "liveError": "שגיאת פיד שיחות",
       "historyTitle": "היסטוריית שיחות",
-      "historyHint": "מתמלא מ־Call Report של 3CX. הקלטות דורשות הקלטה ב־PBX ו־webhook.",
+      "historyHint": "מתמלא מ־Call Report של 3CX (שעון Asia/Jerusalem). הקלטות דורשות הקלטה ב־PBX ו־webhook.",
       "historyEmpty": "אין דוחות שיחה עדיין.",
       "historyLoading": "טוען…",
       "historyRefresh": "רענון",

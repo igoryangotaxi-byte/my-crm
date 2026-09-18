@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { ClickToCallButton } from "@/components/call-center/DriverCallButton";
 import {
   SALES_CONTACT_CHANNELS,
   type CreateSalesContactInput,
@@ -239,16 +240,31 @@ export function SalesLeadContactsSection({ leadId }: { leadId: string }) {
                     {contact.email}
                   </a>
                 ) : null}
-                {contact.mobilePhone ? (
-                  <a href={`tel:${contact.mobilePhone}`} className="block text-sky-700 hover:underline">
-                    {contact.mobilePhone}
-                  </a>
-                ) : null}
-                {contact.officePhone ? (
-                  <a href={`tel:${contact.officePhone}`} className="block text-sky-700 hover:underline">
-                    {contact.officePhone}
-                  </a>
-                ) : null}
+                {contact.mobilePhone || contact.officePhone ? (
+                  <>
+                    {contact.mobilePhone ? (
+                      <ClickToCallButton
+                        phone={contact.mobilePhone}
+                        compact
+                        emptyReason="No mobile phone"
+                      />
+                    ) : null}
+                    {contact.officePhone ? (
+                      <ClickToCallButton
+                        phone={contact.officePhone}
+                        compact
+                        emptyReason="No office phone"
+                      />
+                    ) : null}
+                  </>
+                ) : (
+                  <ClickToCallButton
+                    phone={null}
+                    compact
+                    hideNumber
+                    emptyReason="No phone on this contact"
+                  />
+                )}
                 {contact.preferredChannel ? (
                   <p className="text-muted">
                     {t("contact.preferredChannel")}: {t(`contact.channel.${contact.preferredChannel}`)}

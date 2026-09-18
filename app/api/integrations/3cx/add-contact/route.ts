@@ -1,6 +1,7 @@
 import {
   assertThreeCxWebhookAuthorized,
   createContactFromThreeCx,
+  parseBarOzRequestBody,
   readBarOzString,
 } from "@/lib/call-center/baroz-crm";
 
@@ -9,12 +10,13 @@ export const dynamic = "force-dynamic";
 
 /**
  * Bar Oz Create Contact Record — 3CX POST when agent adds a contact.
+ * Duplicate Phone returns the existing contact (no second lead).
  */
 export async function POST(request: Request) {
   const denied = assertThreeCxWebhookAuthorized(request);
   if (denied) return denied;
 
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const body = await parseBarOzRequestBody(request);
   if (!body) {
     return Response.json({ ok: false, error: "Invalid body." }, { status: 400 });
   }

@@ -707,8 +707,12 @@ export function PreOrdersBoard({
                       <td className="border border-transparent px-3 py-2.5 text-center text-sm text-slate-700">
                         <div className="flex flex-col items-center gap-0.5">
                           <span className="font-medium text-slate-900">{driverName}</span>
-                          {preOrder.driverPhone ? (
-                            <DriverCallButton phone={preOrder.driverPhone} compact />
+                          {assigned ? (
+                            <DriverCallButton
+                              phone={preOrder.driverPhone}
+                              compact
+                              emptyReason="No phone for this driver"
+                            />
                           ) : null}
                           {preOrder.driverId ? (
                             <span className="text-[10px] text-muted">ID {preOrder.driverId}</span>
@@ -831,11 +835,10 @@ export function PreOrdersBoard({
                 </p>
                 <p className="mt-2 text-xs text-muted">Phone</p>
                 <div className="mt-1">
-                  {selectedPreOrder.driverPhone ? (
-                    <DriverCallButton phone={selectedPreOrder.driverPhone} />
-                  ) : (
-                    <span className="font-medium text-slate-900">—</span>
-                  )}
+                  <DriverCallButton
+                    phone={selectedPreOrder.driverPhone}
+                    emptyReason="No phone for this driver"
+                  />
                 </div>
                 <p className="mt-2 text-xs text-muted">Driver ID</p>
                 <p className="mt-1 font-medium text-slate-900">

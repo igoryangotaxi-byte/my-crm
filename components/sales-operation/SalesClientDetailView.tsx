@@ -21,6 +21,7 @@ import {
   type SalesClientManagerDraft,
 } from "@/components/sales-operation/SalesClientManagerFields";
 import { formatSalesDateTime } from "@/lib/sales-operation/display";
+import { ClickToCallButton } from "@/components/call-center/DriverCallButton";
 import { buildSalesOperationB2BClientTripsHref } from "@/lib/sales-operation/b2b-client-trips-href";
 import type { SalesClientMetricsSummary } from "@/lib/sales-operation/client-overview-metrics";
 import type { ClientActivityItem } from "@/lib/sales-operation/client-activity";
@@ -459,7 +460,6 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
                   ["fullName", t("field.fullName")],
                   ["companyName", t("field.company")],
                   ["email", t("field.email")],
-                  ["phone", t("field.phone")],
                 ] as const
               ).map(([key, label]) => (
                 <label key={key} className="block text-sm">
@@ -474,6 +474,25 @@ export function SalesClientDetailView({ clientId }: SalesClientDetailViewProps) 
                   />
                 </label>
               ))}
+              <label className="block text-sm">
+                <span className="crm-label">{t("field.phone")}</span>
+                <span className="mt-1 flex items-center gap-2">
+                  <input
+                    className="crm-input h-9 min-w-0 flex-1 px-2.5 text-sm"
+                    value={profileDraft.phone}
+                    placeholder="…"
+                    onChange={(event) =>
+                      setProfileDraft((prev) => ({ ...prev, phone: event.target.value }))
+                    }
+                  />
+                  <ClickToCallButton
+                    phone={profileDraft.phone}
+                    compact
+                    hideNumber
+                    emptyReason="No phone on this customer"
+                  />
+                </span>
+              </label>
             </div>
 
             <div>
