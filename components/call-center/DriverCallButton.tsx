@@ -37,9 +37,9 @@ export function ClickToCallButton({
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 
-  const openDeviceDialer = () => {
-    if (!trimmed) return;
-    window.location.href = `tel:${trimmed}`;
+  const showHint = (message: string, clearMs = 4000) => {
+    setHint(message);
+    window.setTimeout(() => setHint(null), clearMs);
   };
 
   const onCall = async (event: MouseEvent) => {
@@ -56,26 +56,24 @@ export function ClickToCallButton({
       });
       const json = (await res.json()) as { ok?: boolean; error?: string; code?: string };
 
-      if (res.status === 503 || json.code === "not_linked") {
-        openDeviceDialer();
-        if (json.code === "not_linked") setHint("Link 3CX in Call Center");
+      // Never fall back to tel: — on macOS that opens FaceTime, not 3CX.
+      if (json.code === "not_linked") {
+        setHint("Link 3CX in Call Center");
+        return;
+      }
+
+      if (res.status === 503) {
+        showHint(json.error ?? "3CX is not configured on the server.");
         return;
       }
 
       if (!res.ok || !json.ok) {
-        if (json.code === "not_linked") {
-          setHint("Link 3CX in Call Center");
-        } else {
-          openDeviceDialer();
-          setHint(json.error ?? null);
-          window.setTimeout(() => setHint(null), 3000);
-        }
+        showHint(json.error ?? "Call via 3CX failed.");
         return;
       }
-      setHint("Calling via 3CX…");
-      window.setTimeout(() => setHint(null), 2500);
+      showHint("Calling via 3CX…", 2500);
     } catch {
-      openDeviceDialer();
+      showHint("Call via 3CX failed. Check your connection.");
     } finally {
       setBusy(false);
     }

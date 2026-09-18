@@ -77,6 +77,6 @@ Phones are matched with Israel-aware normalization (`054…` / `+972…` / `972�
 | Call Report | `200` empty body; row in Call history with recording URL if sent |
 | Repeat Call Report | still one history row |
 | Dial with no phone | Dial disabled + tooltip reason |
-| Dial with phone | 3CX makecall (or `tel:` fallback if PBX not linked) |
+| Dial with phone | 3CX makecall only (no `tel:` / FaceTime fallback; link extension in Call Center if not linked) |
 | Inbound screen-pop miss | «No contact» + Create |
 | Call log | time (Asia/Jerusalem), direction, from/to, duration, agent, entity link |
