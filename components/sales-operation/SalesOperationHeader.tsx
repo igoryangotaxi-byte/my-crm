@@ -40,6 +40,7 @@ const salesOperationPageMeta: Record<string, { titleKey: string; subtitleKey: st
   "/sales-operation/price-calculator": { titleKey: "page.priceCalculator.title", subtitleKey: "page.priceCalculator.subtitle" },
   "/sales-operation/api-health-check": { titleKey: "page.apiHealthCheck.title", subtitleKey: "page.apiHealthCheck.subtitle" },
   "/sales-operation/call-center": { titleKey: "page.callCenter.title", subtitleKey: "page.callCenter.subtitle" },
+  "/sales-operation/astradial": { titleKey: "page.astradial.title", subtitleKey: "page.astradial.subtitle" },
   "/sales-operation/office": { titleKey: "page.office.title", subtitleKey: "page.office.subtitle" },
   "/sales-operation/settings": { titleKey: "page.settings.title", subtitleKey: "page.settings.subtitle" },
 };

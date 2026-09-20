@@ -74,6 +74,7 @@
       "leadDiscovery": "Поиск лидов",
       "documentation": "Документация",
       "callCenter": "Колл-центр",
+      "astradial": "Astradial",
       "requestRides": "Заказ такси"
     },
     "documentation": {
@@ -105,6 +106,10 @@
       "callCenter": {
         "title": "Колл-центр",
         "subtitle": "Привяжите внутренний номер 3CX и звоните водителям из CRM"
+      },
+      "astradial": {
+        "title": "Astradial",
+        "subtitle": "Телефония Appli — extension, click-to-call, screen-pop"
       }
     },
     "callCenter": {

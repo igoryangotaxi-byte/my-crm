@@ -50,7 +50,7 @@ describe("sales operation RBAC", () => {
     // salesSettings stays Admin-only even when inheriting the legacy flag.
     assert.equal(merged.salesSettings, false);
     assert.equal(merged.salesDocumentation, true);
-    assert.equal(CURRENT_PERMISSIONS_VERSION, 16);
+    assert.equal(CURRENT_PERMISSIONS_VERSION, 17);
   });
 
   it("does not land User role on SO pipeline (prevents login flicker loop)", () => {

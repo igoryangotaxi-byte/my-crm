@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DriverCallButton } from "@/components/call-center/DriverCallButton";
+import { TelephonyCallHistory } from "@/components/telephony/TelephonyCallHistory";
 import { israelPhonesMatch } from "@/lib/call-center/phone";
 import { DriversMap } from "@/components/drivers-map/DriversMap";
 import type {
@@ -596,8 +597,15 @@ export default function DriversMapPage() {
                               phone={selectedDriver.phone}
                               compact
                               emptyReason="No phone for this driver"
+                              entityId={selectedDriver.id}
                             />
                           </div>
+                          <TelephonyCallHistory
+                            className="mt-3"
+                            phone={selectedDriver.phone}
+                            entityType="driver"
+                            entityId={selectedDriver.id}
+                          />
                         </div>
                         <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${statusDotClass(selectedDriver.status)}`} />
                       </div>

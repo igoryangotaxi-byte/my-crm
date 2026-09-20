@@ -129,6 +129,7 @@
       "priceCalculator": "Price Calculator",
       "apiHealthCheck": "API Healthy Check",
       "callCenter": "Call Center",
+      "astradial": "Astradial",
       "office": "3D Office",
       "settings": "Settings"
     },
@@ -816,6 +817,10 @@
       "callCenter": {
         "title": "Call center",
         "subtitle": "Extension link, operator status, dialer, and live inbound control"
+      },
+      "astradial": {
+        "title": "Astradial",
+        "subtitle": "Native telephony engine — extension link, click-to-call, screen-pop"
       },
       "office": {
         "title": "3D office",

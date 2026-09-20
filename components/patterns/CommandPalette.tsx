@@ -64,6 +64,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/sales-operation/price-calculator", labelKey: "priceCalculator", page: "priceCalculator", icon: Calculator },
   { href: "/sales-operation/api-health-check", labelKey: "apiHealthCheck", page: "notes", icon: ShieldCheck },
   { href: "/sales-operation/call-center", labelKey: "callCenter", page: "salesCallCenter", icon: Phone },
+  { href: "/sales-operation/astradial", labelKey: "astradial", page: "salesAstradial", icon: Phone },
   { href: "/sales-operation/settings", labelKey: "settings", page: "salesSettings", icon: Settings },
 ];
 

@@ -15,6 +15,7 @@ import { SalesDensityProvider, useSalesDensity } from "@/components/sales-operat
 import { CommandPalette } from "@/components/patterns/CommandPalette";
 import { AiPageContextProvider } from "@/components/ai/AiPageContext";
 import { CallCenterRuntime } from "@/components/call-center/CallCenterRuntime";
+import { TelephonyRuntime } from "@/components/telephony/TelephonyRuntime";
 import { Suspense } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/ui/cn";
@@ -86,7 +87,9 @@ export function SalesOperationAppShell({ children }: { children: React.ReactNode
                 <Suspense fallback={null}>
                   <AiPageContextProvider>
                     <CallCenterRuntime>
-                      <ShellInner>{children}</ShellInner>
+                      <TelephonyRuntime>
+                        <ShellInner>{children}</ShellInner>
+                      </TelephonyRuntime>
                     </CallCenterRuntime>
                   </AiPageContextProvider>
                 </Suspense>

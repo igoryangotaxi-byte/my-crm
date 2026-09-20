@@ -59,6 +59,7 @@ async function main() {
     "supabase_ai_assistant.sql",
     "supabase_sales_documentation.sql",
     "supabase_call_center.sql",
+    "supabase_telephony_astradial.sql",
     "supabase_telegram_support_sessions.sql",
     "supabase_yango_token_registry.sql",
   ];

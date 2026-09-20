@@ -21,7 +21,14 @@ export type ClickToCallButtonProps = {
    */
   variant?: "dial" | "dialPrimary" | "pill";
   label?: string;
+  entityType?: string;
+  entityId?: string;
 };
+
+function isTelephonyUiEnabled(): boolean {
+  const raw = process.env.NEXT_PUBLIC_TELEPHONY_ENABLED?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+}
 
 export function ClickToCallButton({
   phone,
@@ -31,15 +38,68 @@ export function ClickToCallButton({
   emptyReason = "No phone number",
   variant = "dial",
   label = "Dial",
+  entityType,
+  entityId,
 }: ClickToCallButtonProps) {
   const trimmed = typeof phone === "string" ? phone.trim() : "";
   const canDial = Boolean(trimmed);
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
+  const telephonyOn = isTelephonyUiEnabled();
 
   const showHint = (message: string, clearMs = 4000) => {
     setHint(message);
     window.setTimeout(() => setHint(null), clearMs);
+  };
+
+  const dialViaThreeCx = async () => {
+    const res = await fetch("/api/sales-operation/call-center/makecall", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: trimmed }),
+    });
+    const json = (await res.json()) as { ok?: boolean; error?: string; code?: string };
+
+    if (json.code === "not_linked") {
+      setHint("Link 3CX in Call Center");
+      return;
+    }
+    if (res.status === 503) {
+      showHint(json.error ?? "3CX is not configured on the server.");
+      return;
+    }
+    if (!res.ok || !json.ok) {
+      showHint(json.error ?? "Call via 3CX failed.");
+      return;
+    }
+    showHint("Calling via 3CX…", 2500);
+  };
+
+  const dialViaAstradial = async () => {
+    const res = await fetch("/api/telephony/calls", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        phone: trimmed,
+        entityType: entityType ?? undefined,
+        entityId: entityId ?? undefined,
+      }),
+    });
+    const json = (await res.json()) as { ok?: boolean; error?: string; code?: string };
+
+    if (json.code === "telephony_disabled" || json.code === "provider_unavailable") {
+      await dialViaThreeCx();
+      return;
+    }
+    if (json.code === "not_linked") {
+      setHint("Link Astradial extension");
+      return;
+    }
+    if (!res.ok || !json.ok) {
+      showHint(json.error ?? "Call via Astradial failed.");
+      return;
+    }
+    showHint("Calling via Astradial…", 2500);
   };
 
   const onCall = async (event: MouseEvent) => {
@@ -49,37 +109,22 @@ export function ClickToCallButton({
     setBusy(true);
     setHint(null);
     try {
-      const res = await fetch("/api/sales-operation/call-center/makecall", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: trimmed }),
-      });
-      const json = (await res.json()) as { ok?: boolean; error?: string; code?: string };
-
-      // Never fall back to tel: — on macOS that opens FaceTime, not 3CX.
-      if (json.code === "not_linked") {
-        setHint("Link 3CX in Call Center");
-        return;
+      // Never fall back to tel: — on macOS that opens FaceTime.
+      if (telephonyOn) {
+        await dialViaAstradial();
+      } else {
+        await dialViaThreeCx();
       }
-
-      if (res.status === 503) {
-        showHint(json.error ?? "3CX is not configured on the server.");
-        return;
-      }
-
-      if (!res.ok || !json.ok) {
-        showHint(json.error ?? "Call via 3CX failed.");
-        return;
-      }
-      showHint("Calling via 3CX…", 2500);
     } catch {
-      showHint("Call via 3CX failed. Check your connection.");
+      showHint("Call failed. Check your connection.");
     } finally {
       setBusy(false);
     }
   };
 
-  const tooltip = !canDial ? emptyReason : hint || "Call via 3CX";
+  const tooltip = !canDial
+    ? emptyReason
+    : hint || (telephonyOn ? "Call via Astradial" : "Call via 3CX");
   const primary = variant === "dialPrimary";
   const btnClass = primary
     ? cn(
@@ -93,6 +138,12 @@ export function ClickToCallButton({
           ? "border-[var(--so-border-strong)] bg-[var(--so-surface)] text-[var(--so-text)] hover:bg-[var(--so-surface-hover)]"
           : "border-[var(--so-border)] bg-[var(--so-surface)] text-[var(--so-muted-2)]",
       );
+
+  const linkHint = hint?.includes("Astradial")
+    ? { href: "/sales-operation/astradial", label: hint }
+    : hint?.includes("Call Center")
+      ? { href: "/sales-operation/call-center", label: hint }
+      : null;
 
   return (
     <span
@@ -113,10 +164,10 @@ export function ClickToCallButton({
           </button>
         </span>
       </Tooltip>
-      {hint?.includes("Call Center") ? (
+      {linkHint ? (
         <span className="max-w-[16rem] text-[10px] text-[var(--so-muted)]">
-          {hint}{" "}
-          <Link href="/sales-operation/call-center" className="text-[var(--so-text)] underline">
+          {linkHint.label}{" "}
+          <Link href={linkHint.href} className="text-[var(--so-text)] underline">
             Open
           </Link>
         </span>
@@ -129,5 +180,12 @@ export function ClickToCallButton({
 
 /** Assigned-driver click-to-call. Empty phone stays visible and disabled. */
 export function DriverCallButton(props: ClickToCallButtonProps) {
-  return <ClickToCallButton emptyReason="No phone for this driver" variant="dial" {...props} />;
+  return (
+    <ClickToCallButton
+      emptyReason="No phone for this driver"
+      variant="dial"
+      entityType="driver"
+      {...props}
+    />
+  );
 }

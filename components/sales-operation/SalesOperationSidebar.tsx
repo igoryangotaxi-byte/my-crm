@@ -31,6 +31,7 @@ import {
   Network,
   Phone,
   Route,
+  Headphones,
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useRouteLoading } from "@/components/layout/RouteLoadingContext";
@@ -139,6 +140,12 @@ export function SalesOperationSidebar() {
           { href: "/sales-operation/price-calculator", labelKey: "priceCalculator", page: "priceCalculator", icon: Calculator },
           { href: "/sales-operation/api-health-check", labelKey: "apiHealthCheck", page: "notes", icon: ShieldCheck },
           { href: "/sales-operation/call-center", labelKey: "callCenter", page: "salesCallCenter", icon: Phone },
+          {
+            href: "/sales-operation/astradial",
+            labelKey: "astradial",
+            page: "salesAstradial",
+            icon: Headphones,
+          },
         ],
       },
       { kind: "leaf", href: "/sales-operation/settings", labelKey: "settings", page: "salesSettings", icon: Settings },
@@ -156,7 +163,14 @@ export function SalesOperationSidebar() {
             }
             return canAccess(node.page) ? node : null;
           }
-          const children = node.children.filter((c) => canAccess(c.page));
+          const children = node.children.filter((c) => {
+            if (c.page === "salesAstradial") {
+              const raw = process.env.NEXT_PUBLIC_TELEPHONY_ENABLED?.trim().toLowerCase();
+              const on = raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+              return on && canAccess(c.page);
+            }
+            return canAccess(c.page);
+          });
           return children.length ? { ...node, children } : null;
         })
         .filter(Boolean) as NavNode[],

@@ -31,12 +31,13 @@ export const SALES_OPERATION_PAGE_KEYS = [
   "salesLeadDiscovery",
   "salesAiAssistant",
   "salesCallCenter",
+  "salesAstradial",
   "preOrders",
 ] as const satisfies readonly AppPageKey[];
 
 export type SalesOperationPageKey = (typeof SALES_OPERATION_PAGE_KEYS)[number];
 
-export const CURRENT_PERMISSIONS_VERSION = 16;
+export const CURRENT_PERMISSIONS_VERSION = 17;
 
 export function isAppRole(value: unknown): value is AppRole {
   return typeof value === "string" && (APP_ROLES as readonly string[]).includes(value);
@@ -158,9 +159,11 @@ export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: AppPageK
   { prefix: "/sales-operation/api-health-check", page: "notes" },
   { prefix: "/sales-operation/settings", page: "salesSettings" },
   { prefix: "/sales-operation/call-center", page: "salesCallCenter" },
+  { prefix: "/sales-operation/astradial", page: "salesAstradial" },
 ];
 
 export function resolveSalesOperationPageKey(pathname: string): AppPageKey {
+  if (pathname.startsWith("/sales-operation/astradial")) return "salesAstradial";
   if (pathname.startsWith("/sales-operation/call-center")) return "salesCallCenter";
   if (pathname.startsWith("/sales-operation/lead-discovery")) return "salesLeadDiscovery";
   if (pathname.startsWith("/sales-operation/office")) return "salesPipeline";

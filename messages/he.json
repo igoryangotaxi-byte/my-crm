@@ -129,6 +129,7 @@
       "priceCalculator": "מחשבון מחיר",
       "apiHealthCheck": "בדיקת תקינות API",
       "callCenter": "מוקד שיחות",
+      "astradial": "Astradial",
       "office": "משרד תלת־ממד",
       "settings": "הגדרות"
     },
@@ -816,6 +817,10 @@
       "callCenter": {
         "title": "מוקד שיחות",
         "subtitle": "חברו את שלוחת 3CX והתקשרו לנהגים מה־CRM"
+      },
+      "astradial": {
+        "title": "Astradial",
+        "subtitle": "מנוע טלפוניה של Appli — שלוחה, חיוג ו-screen-pop"
       },
       "clientDetail": {
         "title": "פרופיל לקוח",
