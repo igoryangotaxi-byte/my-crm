@@ -159,9 +159,9 @@ export function AstradialSettingsView() {
         ) : null}
         {!status?.astradialConfigured ? (
           <p className="text-sm text-[var(--so-muted)]">
-            Astradial PBX is not connected yet (`ASTRADIAL_API_URL` missing). Dial on drivers still
-            uses 3CX Call Center until the PBX URL is set. You can still link an extension for when
-            Astradial comes online.
+            Astradial PBX is not connected yet (`ASTRADIAL_API_URL` missing). 3CX Call Center stays
+            independent — use Dial / 3CX on cards for Bar Oz. This page dials Astradial only once the
+            PBX URL is set.
           </p>
         ) : null}
       </section>

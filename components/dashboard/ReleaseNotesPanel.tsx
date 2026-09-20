@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-09-20",
+    title: "3CX and Astradial Dial independent (0.2.72)",
+    notes:
+      "App version 0.2.72. 3CX and Astradial dial independently — no cross-fallback. With NEXT_PUBLIC_TELEPHONY_ENABLED, driver cards show both 3CX and Astradial buttons for A/B. Astradial page dials Astradial only; Call Center / default Dial stays on 3CX. Nav: Astradial via salesAstradial or salesCallCenter (permissions v18).",
+  },
+  {
+    date: "2026-09-20",
     title: "Astradial telephony engine (0.2.70)",
     notes:
       "App version 0.2.70. Astradial as Appli telephony engine behind TELEPHONY_ENABLED (3CX Call Center unchanged). HUB → Astradial: link SIP extension, dial any number, recent calls, HMAC webhook ingest, inbound screen-pop, recording auth proxy, Whisper→LLM summarize. Driver Dial prefers Astradial when NEXT_PUBLIC_TELEPHONY_ENABLED. RBAC salesAstradial (permissions v17). Env on Vercel: TELEPHONY_ENABLED, NEXT_PUBLIC_TELEPHONY_ENABLED, TELEPHONY_PROVIDER, ASTRADIAL_API_KEY, ASTRADIAL_WEBHOOK_SECRET — still need ASTRADIAL_API_URL to a live PBX/SIP trunk (not on Vercel). SQL: scripts/sql/supabase_telephony_astradial.sql (applied). Webhook: /api/telephony/webhooks/astradial. Deck: Yango-Sales-Operations-Astradial-Telephony-0-2-70.pptx. (3cd01118)",

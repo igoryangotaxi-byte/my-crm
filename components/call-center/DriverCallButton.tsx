@@ -6,6 +6,8 @@ import { Phone } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
 
+export type ClickToCallProvider = "threecx" | "astradial";
+
 export type ClickToCallButtonProps = {
   phone: string | null | undefined;
   /** compact = denser table/map layout */
@@ -23,9 +25,14 @@ export type ClickToCallButtonProps = {
   label?: string;
   entityType?: string;
   entityId?: string;
+  /**
+   * Independent engines — no cross-fallback.
+   * Default `threecx` keeps Call Center Dial unchanged while Astradial is tested.
+   */
+  provider?: ClickToCallProvider;
 };
 
-function isTelephonyUiEnabled(): boolean {
+function isAstradialUiEnabled(): boolean {
   const raw = process.env.NEXT_PUBLIC_TELEPHONY_ENABLED?.trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
@@ -37,15 +44,17 @@ export function ClickToCallButton({
   stopPropagation = true,
   emptyReason = "No phone number",
   variant = "dial",
-  label = "Dial",
+  label,
   entityType,
   entityId,
+  provider = "threecx",
 }: ClickToCallButtonProps) {
   const trimmed = typeof phone === "string" ? phone.trim() : "";
   const canDial = Boolean(trimmed);
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
-  const telephonyOn = isTelephonyUiEnabled();
+  const viaAstradial = provider === "astradial";
+  const resolvedLabel = label ?? (viaAstradial ? "Astradial" : "Dial");
 
   const showHint = (message: string, clearMs = 4000) => {
     setHint(message);
@@ -87,18 +96,16 @@ export function ClickToCallButton({
     });
     const json = (await res.json()) as { ok?: boolean; error?: string; code?: string };
 
-    // Astradial is optional until PBX + extension are ready — always fall back to 3CX.
-    if (
-      json.code === "telephony_disabled" ||
-      json.code === "provider_unavailable" ||
-      json.code === "not_linked" ||
-      res.status === 503 ||
-      res.status === 401 ||
-      res.status === 403 ||
-      !res.ok ||
-      !json.ok
-    ) {
-      await dialViaThreeCx();
+    if (json.code === "telephony_disabled" || json.code === "provider_unavailable") {
+      showHint(json.error ?? "Astradial is not configured.");
+      return;
+    }
+    if (json.code === "not_linked") {
+      setHint("Link Astradial extension");
+      return;
+    }
+    if (!res.ok || !json.ok) {
+      showHint(json.error ?? "Call via Astradial failed.");
       return;
     }
     showHint("Calling via Astradial…", 2500);
@@ -112,7 +119,8 @@ export function ClickToCallButton({
     setHint(null);
     try {
       // Never fall back to tel: — on macOS that opens FaceTime.
-      if (telephonyOn) {
+      // Engines stay independent: no 3CX ↔ Astradial fallback.
+      if (viaAstradial) {
         await dialViaAstradial();
       } else {
         await dialViaThreeCx();
@@ -126,7 +134,7 @@ export function ClickToCallButton({
 
   const tooltip = !canDial
     ? emptyReason
-    : hint || (telephonyOn ? "Call via Astradial" : "Call via 3CX");
+    : hint || (viaAstradial ? "Call via Astradial" : "Call via 3CX");
   const primary = variant === "dialPrimary";
   const btnClass = primary
     ? cn(
@@ -143,7 +151,7 @@ export function ClickToCallButton({
 
   const linkHint = hint?.includes("Astradial")
     ? { href: "/sales-operation/astradial", label: hint }
-    : hint?.includes("Call Center")
+    : hint?.includes("Call Center") || hint?.includes("3CX")
       ? { href: "/sales-operation/call-center", label: hint }
       : null;
 
@@ -158,11 +166,11 @@ export function ClickToCallButton({
             type="button"
             onClick={(e) => void onCall(e)}
             disabled={busy || !canDial}
-            aria-label={canDial ? label : emptyReason}
+            aria-label={canDial ? resolvedLabel : emptyReason}
             className={btnClass}
           >
             <Phone className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
-            {label}
+            {resolvedLabel}
           </button>
         </span>
       </Tooltip>
@@ -182,12 +190,40 @@ export function ClickToCallButton({
 
 /** Assigned-driver click-to-call. Empty phone stays visible and disabled. */
 export function DriverCallButton(props: ClickToCallButtonProps) {
+  const astradialOn = isAstradialUiEnabled();
+  const { className, ...rest } = props;
+
+  if (!astradialOn) {
+    return (
+      <ClickToCallButton
+        emptyReason="No phone for this driver"
+        variant="dial"
+        entityType="driver"
+        provider="threecx"
+        {...props}
+      />
+    );
+  }
+
+  // Side-by-side for A/B: 3CX Dial + Astradial — no cross-fallback.
   return (
-    <ClickToCallButton
-      emptyReason="No phone for this driver"
-      variant="dial"
-      entityType="driver"
-      {...props}
-    />
+    <span className={cn("inline-flex flex-wrap items-start gap-1.5", className)}>
+      <ClickToCallButton
+        emptyReason="No phone for this driver"
+        variant="dial"
+        entityType="driver"
+        provider="threecx"
+        label="3CX"
+        {...rest}
+      />
+      <ClickToCallButton
+        emptyReason="No phone for this driver"
+        variant="dial"
+        entityType="driver"
+        provider="astradial"
+        label="Astradial"
+        {...rest}
+      />
+    </span>
   );
 }
