@@ -37,7 +37,7 @@ export const SALES_OPERATION_PAGE_KEYS = [
 
 export type SalesOperationPageKey = (typeof SALES_OPERATION_PAGE_KEYS)[number];
 
-export const CURRENT_PERMISSIONS_VERSION = 17;
+export const CURRENT_PERMISSIONS_VERSION = 18;
 
 export function isAppRole(value: unknown): value is AppRole {
   return typeof value === "string" && (APP_ROLES as readonly string[]).includes(value);
@@ -202,6 +202,9 @@ export function canAccessSalesOperationPath(
   if (!canAccess("salesOperation")) return false;
   if (pathname.startsWith("/sales-operation/settings")) {
     return canAccess("salesSettings") || canAccess("accesses");
+  }
+  if (pathname.startsWith("/sales-operation/astradial")) {
+    return canAccess("salesAstradial") || canAccess("salesCallCenter");
   }
   return canAccess(resolveSalesOperationPageKey(pathname));
 }

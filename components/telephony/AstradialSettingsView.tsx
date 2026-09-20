@@ -159,7 +159,9 @@ export function AstradialSettingsView() {
         ) : null}
         {!status?.astradialConfigured ? (
           <p className="text-sm text-[var(--so-muted)]">
-            Set `ASTRADIAL_API_URL` and `ASTRADIAL_API_KEY` on the server to enable dial.
+            Astradial PBX is not connected yet (`ASTRADIAL_API_URL` missing). Dial on drivers still
+            uses 3CX Call Center until the PBX URL is set. You can still link an extension for when
+            Astradial comes online.
           </p>
         ) : null}
       </section>

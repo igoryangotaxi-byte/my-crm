@@ -27,7 +27,7 @@ describe("sales operation documentation", () => {
 
   it("exposes salesDocumentation page key and defaults", () => {
     assert.ok((SALES_OPERATION_PAGE_KEYS as readonly string[]).includes("salesDocumentation"));
-    assert.equal(CURRENT_PERMISSIONS_VERSION, 17);
+    assert.equal(CURRENT_PERMISSIONS_VERSION, 18);
     assert.equal(defaultRolePermissions.Admin.salesDocumentation, true);
     assert.equal(defaultRolePermissions["Account Manager"].salesDocumentation, true);
     assert.equal(defaultRolePermissions["Sales Manager"].salesDocumentation, true);

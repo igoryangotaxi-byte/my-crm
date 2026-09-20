@@ -58,7 +58,10 @@ export async function requireTelephonyPage(request: Request): Promise<
 
   const store = await loadAuthStore();
   const permissions = store.rolePermissions[auth.user.role];
-  if (!permissions?.salesOperation || !permissions?.salesAstradial) {
+  const pageOk =
+    Boolean(permissions?.salesOperation) &&
+    (Boolean(permissions?.salesAstradial) || Boolean(permissions?.salesCallCenter));
+  if (!pageOk) {
     return {
       ok: false,
       response: Response.json({ ok: false, error: "Forbidden." }, { status: 403 }),

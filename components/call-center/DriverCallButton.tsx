@@ -87,16 +87,18 @@ export function ClickToCallButton({
     });
     const json = (await res.json()) as { ok?: boolean; error?: string; code?: string };
 
-    if (json.code === "telephony_disabled" || json.code === "provider_unavailable") {
+    // Astradial is optional until PBX + extension are ready — always fall back to 3CX.
+    if (
+      json.code === "telephony_disabled" ||
+      json.code === "provider_unavailable" ||
+      json.code === "not_linked" ||
+      res.status === 503 ||
+      res.status === 401 ||
+      res.status === 403 ||
+      !res.ok ||
+      !json.ok
+    ) {
       await dialViaThreeCx();
-      return;
-    }
-    if (json.code === "not_linked") {
-      setHint("Link Astradial extension");
-      return;
-    }
-    if (!res.ok || !json.ok) {
-      showHint(json.error ?? "Call via Astradial failed.");
       return;
     }
     showHint("Calling via Astradial…", 2500);

@@ -165,9 +165,9 @@ export function SalesOperationSidebar() {
           }
           const children = node.children.filter((c) => {
             if (c.page === "salesAstradial") {
-              const raw = process.env.NEXT_PUBLIC_TELEPHONY_ENABLED?.trim().toLowerCase();
-              const on = raw === "1" || raw === "true" || raw === "yes" || raw === "on";
-              return on && canAccess(c.page);
+              // Show when RBAC allows; page itself explains missing PBX/env.
+              // Prefer salesAstradial, but keep visible if Call Center is on (v18 migrate).
+              return canAccess(c.page) || canAccess("salesCallCenter");
             }
             return canAccess(c.page);
           });
