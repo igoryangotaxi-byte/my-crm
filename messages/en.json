@@ -881,7 +881,7 @@
       "calling": "Calling…",
       "callStarted": "Call requested — answer on your 3CX device",
       "callFailed": "Call failed",
-      "click2CallOpened": "Opening 3CX dialer… Install “3CX Click2Call” (Chrome/Edge) if FaceTime opens instead.",
+      "click2CallOpened": "Opening 3CX Web Client / app (not FaceTime). Stay logged into 3CX in the browser.",
       "actionFailed": "Action failed",
       "loadError": "Could not load Call Center status.",
       "saveError": "Could not save settings.",

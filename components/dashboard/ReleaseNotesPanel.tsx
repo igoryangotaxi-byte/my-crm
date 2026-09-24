@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-09-24",
+    title: "3CX Dial without FaceTime (0.2.74)",
+    notes:
+      "App version 0.2.74. Dial no longer uses tel: (macOS FaceTime). Opens 3CX Web Client #/call?phone=… plus tcxcallto: for the desktop app. Requires NEXT_PUBLIC_THREECX_WEBCLIENT_URL.",
+  },
+  {
+    date: "2026-09-24",
     title: "3CX Dial via Click2Call (0.2.73)",
     notes:
       "App version 0.2.73. Bar Oz confirmed outbound Dial uses the 3CX Click2Call Chrome/Edge extension (or desktop app), not Call Control CLIENT_ID/SECRET. CRM Dial now opens tel:+E.164 when Call Control is absent, with a FaceTime hint. CRM webhooks (lookup / call-report) verified live on applitaxi.space.",

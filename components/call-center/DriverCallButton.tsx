@@ -38,6 +38,40 @@ function isAstradialUiEnabled(): boolean {
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
 
+function threeCxWebClientOrigin(): string | null {
+  const raw = process.env.NEXT_PUBLIC_THREECX_WEBCLIENT_URL?.trim() || process.env.NEXT_PUBLIC_THREECX_BASE_URL?.trim() || "";
+  if (!raw) return null;
+  try {
+    const u = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    return u.origin;
+  } catch {
+    return null;
+  }
+}
+
+function openThreeCxClick2Call(destinationDigits: string): void {
+  const e164 = `+${destinationDigits}`;
+
+  // 1) 3CX Web Client deep link (works with browser session; no FaceTime).
+  const origin = threeCxWebClientOrigin();
+  if (origin) {
+    const url = `${origin}/#/call?phone=${encodeURIComponent(e164)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  // 2) Desktop / Click2Call protocol (FaceTime does not own tcxcallto:).
+  for (const href of [`tcxcallto:${e164}`, `tcxcallto://${destinationDigits}`, `callto:${e164}`]) {
+    const a = document.createElement("a");
+    a.href = href;
+    a.rel = "noopener";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    break;
+  }
+}
+
 export function ClickToCallButton({
   phone,
   compact = false,
@@ -68,12 +102,11 @@ export function ClickToCallButton({
       showHint("Invalid phone number.");
       return;
     }
-    // Bar Oz: outbound Dial uses the 3CX Click2Call Chrome/Edge extension (or desktop app),
-    // not Call Control CLIENT_ID/SECRET. tel: is intercepted by that extension.
-    window.location.href = `tel:+${destination}`;
+    // Bar Oz: use 3CX Click2Call / desktop protocol — never tel: (FaceTime on Mac).
+    openThreeCxClick2Call(destination);
     showHint(
-      "Opening 3CX dialer… Install “3CX Click2Call” (Chrome/Edge) if FaceTime opens instead.",
-      6000,
+      "Opening 3CX… If nothing happens, open the 3CX app and allow tcxcallto links. Do not use tel:/FaceTime.",
+      7000,
     );
   };
 
@@ -85,18 +118,13 @@ export function ClickToCallButton({
     });
     const json = (await res.json()) as { ok?: boolean; error?: string; code?: string };
 
-    if (json.code === "not_linked") {
-      // Extension mapping is only for Call Control API; Click2Call does not need it.
-      dialViaThreeCxClick2Call();
-      return;
-    }
-    if (res.status === 503) {
-      // No THREECX_CLIENT_ID/SECRET on server — use Bar Oz Click2Call path.
+    if (json.code === "not_linked" || res.status === 503) {
       dialViaThreeCxClick2Call();
       return;
     }
     if (!res.ok || !json.ok) {
-      showHint(json.error ?? "Call via 3CX failed.");
+      // API path failed — still try Click2Call rather than FaceTime.
+      dialViaThreeCxClick2Call();
       return;
     }
     showHint("Calling via 3CX…", 2500);

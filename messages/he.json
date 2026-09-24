@@ -881,7 +881,7 @@
       "calling": "מתקשר…",
       "callStarted": "הבקשה נשלחה — ענו במכשיר 3CX",
       "callFailed": "השיחה נכשלה",
-      "click2CallOpened": "פותחים את חייגן 3CX… אם נפתח FaceTime — התקינו את התוסף 3CX Click2Call (Chrome/Edge).",
+      "click2CallOpened": "פותחים את 3CX Web Client / האפליקציה (לא FaceTime). הישארו מחוברים ל-3CX בדפדפן.",
       "actionFailed": "הפעולה נכשלה",
       "loadError": "לא ניתן לטעון את סטטוס מוקד השיחות.",
       "saveError": "לא ניתן לשמור הגדרות.",

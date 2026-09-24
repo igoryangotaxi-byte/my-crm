@@ -205,7 +205,26 @@ export function CallCenterView() {
           setError(t("callFailed"));
           return false;
         }
-        window.location.href = `tel:+${destination}`;
+        const e164 = `+${destination}`;
+        const origin =
+          process.env.NEXT_PUBLIC_THREECX_WEBCLIENT_URL?.trim() ||
+          process.env.NEXT_PUBLIC_THREECX_BASE_URL?.trim() ||
+          "";
+        if (origin) {
+          try {
+            const base = new URL(origin.startsWith("http") ? origin : `https://${origin}`).origin;
+            window.open(`${base}/#/call?phone=${encodeURIComponent(e164)}`, "_blank", "noopener,noreferrer");
+          } catch {
+            // ignore bad env
+          }
+        }
+        const a = document.createElement("a");
+        a.href = `tcxcallto:${e164}`;
+        a.rel = "noopener";
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
         setMessage(t("click2CallOpened"));
         return true;
       };

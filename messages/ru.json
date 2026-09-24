@@ -162,7 +162,7 @@
       "calling": "Звоним…",
       "callStarted": "Запрос отправлен — ответьте на устройстве 3CX",
       "callFailed": "Звонок не удался",
-      "click2CallOpened": "Открываем набор 3CX… Если открылся FaceTime — поставьте расширение «3CX Click2Call» (Chrome/Edge).",
+      "click2CallOpened": "Открываем 3CX Web Client / приложение (не FaceTime). Оставайтесь залогинены в 3CX в браузере.",
       "actionFailed": "Действие не удалось",
       "loadError": "Не удалось загрузить статус колл-центра.",
       "saveError": "Не удалось сохранить настройки.",
