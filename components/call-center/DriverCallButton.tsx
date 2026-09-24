@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Phone } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { normalizeDestinationForThreeCx } from "@/lib/call-center/phone";
 
 export type ClickToCallProvider = "threecx" | "astradial";
 
@@ -61,6 +62,21 @@ export function ClickToCallButton({
     window.setTimeout(() => setHint(null), clearMs);
   };
 
+  const dialViaThreeCxClick2Call = () => {
+    const destination = normalizeDestinationForThreeCx(trimmed);
+    if (!destination) {
+      showHint("Invalid phone number.");
+      return;
+    }
+    // Bar Oz: outbound Dial uses the 3CX Click2Call Chrome/Edge extension (or desktop app),
+    // not Call Control CLIENT_ID/SECRET. tel: is intercepted by that extension.
+    window.location.href = `tel:+${destination}`;
+    showHint(
+      "Opening 3CX dialer… Install “3CX Click2Call” (Chrome/Edge) if FaceTime opens instead.",
+      6000,
+    );
+  };
+
   const dialViaThreeCx = async () => {
     const res = await fetch("/api/sales-operation/call-center/makecall", {
       method: "POST",
@@ -70,11 +86,13 @@ export function ClickToCallButton({
     const json = (await res.json()) as { ok?: boolean; error?: string; code?: string };
 
     if (json.code === "not_linked") {
-      setHint("Link 3CX in Call Center");
+      // Extension mapping is only for Call Control API; Click2Call does not need it.
+      dialViaThreeCxClick2Call();
       return;
     }
     if (res.status === 503) {
-      showHint(json.error ?? "3CX is not configured on the server.");
+      // No THREECX_CLIENT_ID/SECRET on server — use Bar Oz Click2Call path.
+      dialViaThreeCxClick2Call();
       return;
     }
     if (!res.ok || !json.ok) {

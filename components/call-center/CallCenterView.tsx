@@ -8,6 +8,7 @@ import { useCallCenterLiveOptional } from "@/components/call-center/CallCenterLi
 import { CallCenterHistoryTable } from "@/components/call-center/CallCenterHistoryTable";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { cn } from "@/lib/ui/cn";
+import { normalizeDestinationForThreeCx } from "@/lib/call-center/phone";
 import type { CallCenterCallRecord } from "@/lib/call-center/calls-repository";
 
 type StatusPayload = {
@@ -198,6 +199,23 @@ export function CallCenterView() {
     setError(null);
     setMessage(null);
     try {
+      const openClick2Call = () => {
+        const destination = normalizeDestinationForThreeCx(dialPhone.trim());
+        if (!destination) {
+          setError(t("callFailed"));
+          return false;
+        }
+        window.location.href = `tel:+${destination}`;
+        setMessage(t("click2CallOpened"));
+        return true;
+      };
+
+      // Bar Oz Click2Call path when Call Control CLIENT_ID/SECRET are absent.
+      if (!status?.companyConfigured) {
+        openClick2Call();
+        return;
+      }
+
       const result = live
         ? await live.makecall(dialPhone.trim())
         : await (async () => {
@@ -207,9 +225,13 @@ export function CallCenterView() {
               body: JSON.stringify({ phone: dialPhone.trim() }),
             });
             const json = (await res.json()) as { ok?: boolean; error?: string };
-            return { ok: Boolean(res.ok && json.ok), error: json.error };
+            return { ok: Boolean(res.ok && json.ok), error: json.error, status: res.status };
           })();
       if (!result.ok) {
+        if ("status" in result && result.status === 503) {
+          openClick2Call();
+          return;
+        }
         setError(result.error ?? t("callFailed"));
         return;
       }
@@ -413,7 +435,7 @@ export function CallCenterView() {
             type="button"
             size="sm"
             onClick={() => void dial()}
-            disabled={calling || !dialPhone.trim() || !status?.linked || !status?.companyConfigured}
+            disabled={calling || !dialPhone.trim()}
             leftIcon={<Phone className="h-3.5 w-3.5" />}
           >
             {calling ? t("calling") : t("testCall")}
