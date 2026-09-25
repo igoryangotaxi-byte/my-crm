@@ -259,14 +259,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchState]);
 
   useEffect(() => {
-    const pollId = window.setInterval(() => {
+    const POLL_MS = 60_000;
+    let pollId: number | null = null;
+
+    const tick = () => {
       void fetchState().catch(() => {
         // Ignore transient polling failures; interactive actions surface their own errors.
       });
-    }, 10000);
+    };
+
+    const startPoll = () => {
+      if (pollId !== null) return;
+      pollId = window.setInterval(tick, POLL_MS);
+    };
+
+    const stopPoll = () => {
+      if (pollId === null) return;
+      window.clearInterval(pollId);
+      pollId = null;
+    };
+
+    tick();
+    startPoll();
+
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        stopPoll();
+        return;
+      }
+      tick();
+      startPoll();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
-      window.clearInterval(pollId);
+      stopPoll();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [fetchState]);
 

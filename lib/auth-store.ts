@@ -304,15 +304,11 @@ function canUseKv() {
 async function loadLegacyAuthStore(): Promise<AuthStoreData> {
   if (canUseKv()) {
     try {
-      const raw = await kv.get<AuthStoreData>(AUTH_STORE_KEY);
-      const normalized = normalizeStore(raw);
-      const prevVersion = raw?.storeMeta?.permissionsVersion ?? 0;
-      if (!raw || prevVersion < CURRENT_PERMISSIONS_VERSION) {
-        await kv.set(AUTH_STORE_KEY, normalized);
-      }
-      return normalized;
+      const { fetchAuthKvSnapshotCached } = await import("@/lib/auth-kv-cache.server");
+      const raw = await fetchAuthKvSnapshotCached(() => kv.get<AuthStoreData>(AUTH_STORE_KEY));
+      return normalizeStore(raw);
     } catch {
-      // Fall through to memory store for resilience.
+      // Fall through to memory store for resilience (unchanged operator behavior).
     }
   }
 
@@ -324,26 +320,48 @@ async function loadLegacyAuthStore(): Promise<AuthStoreData> {
   return fallbackMemoryStore;
 }
 
-async function saveLegacyAuthStore(data: AuthStoreData): Promise<void> {
+async function saveLegacyAuthStore(
+  data: AuthStoreData,
+  options?: { strictFreshKv?: boolean },
+): Promise<void> {
   const normalized = normalizeStore(data);
+  const strict = options?.strictFreshKv ?? false;
+  const { PermissionStoreUnavailableError } = await import("@/lib/permission-store-unavailable");
 
-  if (canUseKv()) {
-    try {
-      await kv.set(AUTH_STORE_KEY, normalized);
-      return;
-    } catch {
-      // Fall through to memory store for resilience.
+  if (!canUseKv()) {
+    if (strict) {
+      throw new PermissionStoreUnavailableError(
+        "Auth permission store (Upstash KV) is unavailable. Changes were not saved.",
+      );
     }
+    console.warn("[auth] KV not configured; persisting auth store to in-memory fallback only.");
+    fallbackMemoryStore = normalized;
+    return;
   }
 
-  fallbackMemoryStore = normalized;
+  try {
+    await kv.set(AUTH_STORE_KEY, normalized);
+    const { seedAuthKvSnapshotCacheAfterSave } = await import("@/lib/auth-kv-cache.server");
+    seedAuthKvSnapshotCacheAfterSave(normalized);
+  } catch (error) {
+    if (strict) {
+      const detail = error instanceof Error ? error.message : "unknown error";
+      throw new PermissionStoreUnavailableError(
+        `Auth permission store (Upstash KV) is unavailable. Changes were not saved. (${detail})`,
+      );
+    }
+    console.warn(
+      `[auth] KV set failed; keeping in-memory snapshot only (${error instanceof Error ? error.message : "unknown"})`,
+    );
+    fallbackMemoryStore = normalized;
+  }
 }
 
 function shouldTrySupabase() {
   return isSupabaseConfigured();
 }
 
-export async function loadAuthStore(): Promise<AuthStoreData> {
+async function loadAuthStoreInner(): Promise<AuthStoreData> {
   if (shouldTrySupabase()) {
     try {
       return await loadSupabaseAuthStore();
@@ -354,22 +372,40 @@ export async function loadAuthStore(): Promise<AuthStoreData> {
   return loadLegacyAuthStore();
 }
 
-export async function saveAuthStore(data: AuthStoreData): Promise<void> {
+export async function loadAuthStore(): Promise<AuthStoreData> {
+  return loadAuthStoreInner();
+}
+
+export type SaveAuthStoreOptions = {
+  /** Admin `/api/auth` saves: fresh uncached KV read required before any Auth/KV mutation. */
+  strictFreshKv?: boolean;
+};
+
+export async function saveAuthStore(data: AuthStoreData, options?: SaveAuthStoreOptions): Promise<void> {
+  const strictFreshKv = options?.strictFreshKv ?? false;
   if (shouldTrySupabase()) {
     try {
       await saveAuthStoreToSupabase(data);
+      const { seedAuthKvSnapshotCacheAfterSave } = await import("@/lib/auth-kv-cache.server");
+      seedAuthKvSnapshotCacheAfterSave(data);
       return;
     } catch {
       try {
-        await saveAuthUsersToSupabaseAuthFallback(data);
-      } catch {
-        // Continue to legacy save for resilience.
+        await saveAuthUsersToSupabaseAuthFallback(data, { strictFreshKv });
+      } catch (error) {
+        const { isPermissionStoreUnavailableError } = await import(
+          "@/lib/permission-store-unavailable"
+        );
+        if (strictFreshKv && isPermissionStoreUnavailableError(error)) {
+          throw error;
+        }
+        // Non-strict: match main — best-effort Auth sync, do not fail callers (SSO, request-rides, etc.).
       }
-      await saveLegacyAuthStore(data);
+      await saveLegacyAuthStore(data, { strictFreshKv });
       return;
     }
   }
-  await saveLegacyAuthStore(data);
+  await saveLegacyAuthStore(data, { strictFreshKv });
 }
 
 export async function findUserByPublicId(userId: string): Promise<AuthUser | null> {
