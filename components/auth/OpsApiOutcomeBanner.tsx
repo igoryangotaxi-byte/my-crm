@@ -28,6 +28,7 @@ export function OpsApiOutcomeBanner({
   const pathname = usePathname();
   const { currentUser } = useAuth();
   const tForbidden = useTranslations("access.forbiddenBanner");
+  const tStoreUnavailable = useTranslations("access.storeUnavailableBanner");
   const tUnknown = useTranslations("access.unknownErrorBanner");
   const tPerm = useTranslations("permissions");
   const [copied, setCopied] = useState(false);
@@ -51,7 +52,20 @@ export function OpsApiOutcomeBanner({
     }
   }, [currentUser, pathname, permission, permissionLabel]);
 
-  if (kind === "forbidden" || kind === "store_unavailable") {
+  if (kind === "store_unavailable") {
+    return (
+      <div
+        role="alert"
+        className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] px-4 py-3 text-sm text-[var(--so-text)]"
+      >
+        <p className="font-semibold">{tStoreUnavailable("title")}</p>
+        <p className="mt-1">{tStoreUnavailable("nothingSent")}</p>
+        <p className="mt-1 text-[var(--so-text-muted)]">{tStoreUnavailable("temporaryFailure")}</p>
+      </div>
+    );
+  }
+
+  if (kind === "forbidden") {
     return (
       <div
         role="alert"

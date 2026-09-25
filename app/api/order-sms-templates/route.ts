@@ -80,7 +80,9 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
-  const denied = await guardOpsApiPagePermission(auth.user, request, "communications");
+  const denied = await guardOpsApiPagePermission(auth.user, request, "communications", {
+    store: auth.authStore,
+  });
   if (denied) return denied;
 
   const body = (await request.json().catch(() => null)) as

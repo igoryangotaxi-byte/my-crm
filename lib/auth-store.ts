@@ -344,9 +344,28 @@ function shouldTrySupabase() {
   return isSupabaseConfigured();
 }
 
+const authStoreLoadByRequest = new WeakMap<Request, Promise<AuthStoreData>>();
+
+/**
+ * One auth-store load per HTTP request (shared with `getRequestUser` / ops API guards).
+ * Avoids a second Supabase/KV round-trip after `requireApprovedUser`.
+ */
+export function loadAuthStoreForRequest(request: Request): Promise<AuthStoreData> {
+  const existing = authStoreLoadByRequest.get(request);
+  if (existing) return existing;
+  const pending = loadAuthStore();
+  authStoreLoadByRequest.set(request, pending);
+  return pending;
+}
+
 /**
  * Authoritative permission read for ops API guards. Does not fall back to in-memory defaults
  * when Supabase and KV are both unavailable (throws {@link PermissionStoreUnavailableError}).
+ *
+ * Not used by default in ops guards today: prod `loadSupabaseAuthStore()` falls back to
+ * `loadLegacyAuthStoreForFallback`, which swallows KV errors and returns code defaults, so
+ * this path’s 503 branch does not fire until `cursor/auth-fail-closed-c8b4` wires a
+ * fail-closed loader via {@link setOpsApiPermissionStoreLoader}.
  */
 export async function loadAuthStoreForPermissionCheck(): Promise<AuthStoreData> {
   if (shouldTrySupabase()) {

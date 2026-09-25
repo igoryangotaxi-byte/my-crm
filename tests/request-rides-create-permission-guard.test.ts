@@ -25,10 +25,12 @@ describe("request-rides-create permission guard integration", () => {
     __setPermissionStoreLoaderForTests(null);
   });
 
-  it("503 PERMISSION_STORE_UNAVAILABLE is returned before route side effects", async () => {
+  it("503 PERMISSION_STORE_UNAVAILABLE when enforce on (before route side effects)", async () => {
     __setPermissionStoreLoaderForTests(async () => {
       throw new PermissionStoreUnavailableError();
     });
+    const prev = process.env.ENFORCE_OPS_API_PERMISSIONS;
+    process.env.ENFORCE_OPS_API_PERMISSIONS = "true";
 
     const response = await guardOpsApiPagePermission(
       testUser,
@@ -45,6 +47,9 @@ describe("request-rides-create permission guard integration", () => {
       }),
       "requestRides",
     );
+
+    if (prev === undefined) delete process.env.ENFORCE_OPS_API_PERMISSIONS;
+    else process.env.ENFORCE_OPS_API_PERMISSIONS = prev;
 
     assert.ok(response);
     assert.equal(response!.status, 503);

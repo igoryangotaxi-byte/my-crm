@@ -2,7 +2,7 @@ import {
   CURRENT_PERMISSIONS_VERSION,
   mergeRolePermissions,
 } from "@/lib/role-permissions";
-import { loadAuthStoreForPermissionCheck } from "@/lib/auth-store";
+import { loadAuthStoreForRequest } from "@/lib/auth-store";
 import {
   PermissionStoreUnavailableError,
   permissionDeniedResponse,
@@ -31,17 +31,45 @@ function jerusalemLogTime(): string {
   });
 }
 
-type PermissionStoreLoader = () => Promise<AuthStoreData>;
+export type OpsApiPermissionStoreLoader = (
+  request: Request,
+  options?: { store?: AuthStoreData },
+) => Promise<AuthStoreData>;
 
-let permissionStoreLoader: PermissionStoreLoader = loadAuthStoreForPermissionCheck;
+let permissionStoreLoader: OpsApiPermissionStoreLoader = async (request, options) => {
+  if (options?.store) return options.store;
+  return loadAuthStoreForRequest(request);
+};
 
-/** Test hook: simulate permission store outage. */
-export function __setPermissionStoreLoaderForTests(loader: PermissionStoreLoader | null): void {
-  permissionStoreLoader = loader ?? loadAuthStoreForPermissionCheck;
+/**
+ * Switch the store loader used by ops API guards (e.g. fail-closed loader from
+ * `cursor/auth-fail-closed-c8b4`). Pass `null` to restore the default request-scoped cache.
+ */
+export function setOpsApiPermissionStoreLoader(loader: OpsApiPermissionStoreLoader | null): void {
+  permissionStoreLoader =
+    loader ??
+    (async (request, options) => {
+      if (options?.store) return options.store;
+      return loadAuthStoreForRequest(request);
+    });
 }
 
-async function loadPermissionStore(): Promise<AuthStoreData> {
-  return permissionStoreLoader();
+/** Test hook: simulate permission store outage or fixed store data. */
+export function __setPermissionStoreLoaderForTests(
+  loader: ((request: Request) => Promise<AuthStoreData>) | null,
+): void {
+  if (loader === null) {
+    setOpsApiPermissionStoreLoader(null);
+    return;
+  }
+  setOpsApiPermissionStoreLoader(async (request) => loader(request));
+}
+
+async function loadPermissionStore(
+  request: Request,
+  options?: { store?: AuthStoreData },
+): Promise<AuthStoreData> {
+  return permissionStoreLoader(request, options);
 }
 
 function staffRoleAllows(store: AuthStoreData, user: AuthUser, page: AppPageKey): boolean {
@@ -79,8 +107,12 @@ function userHasOpsPagePermissionFromStore(
 export async function userHasOpsPagePermission(
   user: AuthUser,
   required: AppPageKey | AppPageKey[],
+  request?: Request,
+  options?: { store?: AuthStoreData },
 ): Promise<boolean> {
-  const store = await loadPermissionStore();
+  const store = request
+    ? await loadPermissionStore(request, options)
+    : await loadPermissionStore(new Request("http://localhost"), options);
   return userHasOpsPagePermissionFromStore(store, user, required);
 }
 
@@ -88,21 +120,29 @@ function firstMissingKey(required: AppPageKey[]): AppPageKey {
   return required[0];
 }
 
+export type GuardOpsApiPagePermissionOptions = {
+  /** Reuse the store already loaded in `requireApprovedUser` for this request. */
+  store?: AuthStoreData;
+};
+
 /**
  * Run immediately after `requireApprovedUser` and **before** reading body / side effects.
- * LOG-ONLY by default (`ENFORCE_OPS_API_PERMISSIONS` off): logs would-be denial, request continues.
+ * LOG-ONLY by default (`ENFORCE_OPS_API_PERMISSIONS` off): logs would-be denial or store
+ * outage, request continues. When enforce is on: 403 on missing permission, 503 when the
+ * configured loader throws {@link PermissionStoreUnavailableError}.
  */
 export async function guardOpsApiPagePermission(
   user: AuthUser,
   request: Request,
   required: AppPageKey | AppPageKey[],
+  options?: GuardOpsApiPagePermissionOptions,
 ): Promise<Response | null> {
   const keys = Array.isArray(required) ? required : [required];
   const route = new URL(request.url).pathname;
 
   let store: AuthStoreData;
   try {
-    store = await loadPermissionStore();
+    store = await loadPermissionStore(request, options);
   } catch (error) {
     if (error instanceof PermissionStoreUnavailableError) {
       console.warn(
@@ -112,8 +152,12 @@ export async function guardOpsApiPagePermission(
           userId: user.id,
           role: user.role,
           route,
+          enforce: isEnforceOpsApiPermissions(),
         }),
       );
+      if (!isEnforceOpsApiPermissions()) {
+        return null;
+      }
       return permissionStoreUnavailableResponse();
     }
     throw error;

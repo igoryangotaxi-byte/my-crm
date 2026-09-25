@@ -15,7 +15,9 @@ function normalizeString(input: unknown): string {
 export async function POST(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
-  const denied = await guardOpsApiPagePermission(auth.user, request, ["preOrders", "orders"]);
+  const denied = await guardOpsApiPagePermission(auth.user, request, ["preOrders", "orders"], {
+    store: auth.authStore,
+  });
   if (denied) return denied;
   const scope = getClientScope(auth.user);
 

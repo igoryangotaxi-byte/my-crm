@@ -65,7 +65,9 @@ async function geocodeAddress(
 export async function POST(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
-  const denied = await guardOpsApiPagePermission(auth.user, request, "requestRides");
+  const denied = await guardOpsApiPagePermission(auth.user, request, "requestRides", {
+    store: auth.authStore,
+  });
   if (denied) return denied;
   const scope = getClientScope(auth.user);
   const body = (await request.json().catch(() => null)) as Partial<RequestRidePayload> | null;

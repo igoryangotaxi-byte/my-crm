@@ -1537,6 +1537,11 @@
       "nothingSentYango": "Nothing was sent to Yango and no SMS was sent.",
       "copyAccessRequest": "Copy access request"
     },
+    "storeUnavailableBanner": {
+      "title": "Ride not created",
+      "nothingSent": "Nothing was sent to Yango and no SMS was sent.",
+      "temporaryFailure": "Permissions could not be checked due to a temporary system failure. Try again shortly — this is not a missing-access issue."
+    },
     "unknownErrorBanner": {
       "message": "We don't know if the ride was created, check Orders before retrying",
       "openOrders": "Open Orders",

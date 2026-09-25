@@ -1,11 +1,11 @@
-import { loadAuthStore } from "@/lib/auth-store";
+import { loadAuthStore, loadAuthStoreForRequest } from "@/lib/auth-store";
 import { getSessionUserIdFromRequest } from "@/lib/server-session";
 import type { AuthUser, ClientRoleDefinition } from "@/types/auth";
 
 export async function getRequestUser(request: Request): Promise<AuthUser | null> {
   const sessionUserId = getSessionUserIdFromRequest(request);
   if (!sessionUserId) return null;
-  const store = await loadAuthStore();
+  const store = await loadAuthStoreForRequest(request);
   const user = store.users.find((item) => item.id === sessionUserId) ?? null;
   if (!user || user.status !== "approved") return null;
   return user;
@@ -19,7 +19,8 @@ export async function requireApprovedUser(request: Request) {
       response: Response.json({ ok: false, error: "Unauthorized" }, { status: 401 }),
     };
   }
-  return { ok: true as const, user };
+  const authStore = await loadAuthStoreForRequest(request);
+  return { ok: true as const, user, authStore };
 }
 
 export async function requireAdminUser(request: Request) {

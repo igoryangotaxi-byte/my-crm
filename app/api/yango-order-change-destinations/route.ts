@@ -84,7 +84,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
-  const denied = await guardOpsApiPagePermission(auth.user, request, "preOrders");
+  const denied = await guardOpsApiPagePermission(auth.user, request, "preOrders", {
+    store: auth.authStore,
+  });
   if (denied) return denied;
 
   const body = (await request.json().catch(() => null)) as

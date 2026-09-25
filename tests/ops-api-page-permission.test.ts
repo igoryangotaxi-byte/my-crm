@@ -76,15 +76,35 @@ describe("ops API page permissions", () => {
     assert.equal(body.error.code, PERMISSION_DENIED_CODE);
   });
 
-  it("returns 503 when permission store is unavailable", async () => {
+  it("log-only continues when permission store is unavailable", async () => {
     __setPermissionStoreLoaderForTests(async () => {
       throw new PermissionStoreUnavailableError();
     });
+    const prev = process.env.ENFORCE_OPS_API_PERMISSIONS;
+    process.env.ENFORCE_OPS_API_PERMISSIONS = "false";
     const res = await guardOpsApiPagePermission(
       baseUser,
       new Request("http://localhost/api/request-rides-create", { method: "POST" }),
       "requestRides",
     );
+    if (prev === undefined) delete process.env.ENFORCE_OPS_API_PERMISSIONS;
+    else process.env.ENFORCE_OPS_API_PERMISSIONS = prev;
+    assert.equal(res, null);
+  });
+
+  it("returns 503 when permission store is unavailable and enforce is on", async () => {
+    __setPermissionStoreLoaderForTests(async () => {
+      throw new PermissionStoreUnavailableError();
+    });
+    const prev = process.env.ENFORCE_OPS_API_PERMISSIONS;
+    process.env.ENFORCE_OPS_API_PERMISSIONS = "true";
+    const res = await guardOpsApiPagePermission(
+      baseUser,
+      new Request("http://localhost/api/request-rides-create", { method: "POST" }),
+      "requestRides",
+    );
+    if (prev === undefined) delete process.env.ENFORCE_OPS_API_PERMISSIONS;
+    else process.env.ENFORCE_OPS_API_PERMISSIONS = prev;
     assert.ok(res);
     assert.equal(res!.status, 503);
     const body = await res!.json();
