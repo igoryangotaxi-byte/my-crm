@@ -41,13 +41,20 @@ type TelephonyLiveState = {
   enrichment: TelephonyEnrichmentMatch[];
   enrichmentMulti: boolean;
   providerError: string | null;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<void | LivePollTier>;
   hangup: (callIdOrChannel: string) => Promise<{ ok: boolean; error?: string }>;
   dismissIncoming: () => void;
   dismissedRingKey: string | null;
 };
 
 const TelephonyLiveContext = createContext<TelephonyLiveState | null>(null);
+
+let telephonyLiveRefreshAfterAgentLink: (() => void) | null = null;
+
+/** Called after PUT /api/telephony/agent links an extension (starts fast live poll immediately). */
+export function refreshTelephonyLiveAfterAgentLink(): void {
+  telephonyLiveRefreshAfterAgentLink?.();
+}
 
 function isTelephonyUiEnabled(): boolean {
   const raw = process.env.NEXT_PUBLIC_TELEPHONY_ENABLED?.trim().toLowerCase();
@@ -117,6 +124,15 @@ export function TelephonyLiveProvider({ children }: { children: ReactNode }) {
   }, [enabled]);
 
   useLinkedOperatorLivePoll(refresh, enabled ? pollTier : "idle");
+
+  useEffect(() => {
+    telephonyLiveRefreshAfterAgentLink = () => {
+      void refresh();
+    };
+    return () => {
+      telephonyLiveRefreshAfterAgentLink = null;
+    };
+  }, [refresh]);
 
   const hangup = useCallback(async (callIdOrChannel: string) => {
     const res = await fetch(`/api/telephony/calls/${encodeURIComponent(callIdOrChannel)}/hangup`, {

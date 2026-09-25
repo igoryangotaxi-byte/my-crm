@@ -4,11 +4,7 @@ import {
   AUTH_KV_SNAPSHOT_TTL_MS,
   fetchAuthKvSnapshotCached,
   resetAuthKvSnapshotCacheForTests,
-} from "@/lib/auth-kv-cache";
-import {
-  resetAuthKvRequestContextForTests,
-  runWithAuthKvRequestContextAsync,
-} from "@/lib/auth-kv-request-context";
+} from "@/lib/auth-kv-cache.server";
 import type { AuthStoreData } from "@/types/auth";
 
 function minimalStore(label: string): AuthStoreData {
@@ -77,13 +73,4 @@ describe("auth KV snapshot cache (read reduction PR A)", () => {
     }
   });
 
-  it("marks KV read succeeded in request context on cache hit", async () => {
-    resetAuthKvSnapshotCacheForTests();
-    await runWithAuthKvRequestContextAsync(async () => {
-      resetAuthKvRequestContextForTests();
-      await fetchAuthKvSnapshotCached(async () => minimalStore("x"));
-      const { getAuthKvReadSucceededInRequest } = await import("@/lib/auth-kv-request-context");
-      assert.equal(getAuthKvReadSucceededInRequest(), true);
-    });
-  });
 });

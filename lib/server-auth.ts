@@ -1,5 +1,4 @@
 import { loadAuthStore } from "@/lib/auth-store";
-import { runWithAuthKvRequestContextAsync } from "@/lib/auth-kv-request-context";
 import { getSessionUserIdFromRequest } from "@/lib/server-session";
 import type { AuthStoreData, AuthUser, ClientRoleDefinition } from "@/types/auth";
 
@@ -25,33 +24,31 @@ export async function loadAuthStoreForRequest(request: Request): Promise<
   | { ok: true; store: AuthStoreData; user: AuthUser }
   | { ok: false; response: Response }
 > {
-  return runWithAuthKvRequestContextAsync(async () => {
-    let store: AuthStoreData;
-    try {
-      store = await loadAuthStore();
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? `Supabase auth/profile store is unavailable: ${error.message}`
-          : "Supabase auth/profile store is unavailable.";
-      return {
-        ok: false,
-        response: Response.json({ ok: false, error: message }, {
-          status: 503,
-          headers: { "Cache-Control": "no-store" },
-        }),
-      };
-    }
+  let store: AuthStoreData;
+  try {
+    store = await loadAuthStore();
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? `Supabase auth/profile store is unavailable: ${error.message}`
+        : "Supabase auth/profile store is unavailable.";
+    return {
+      ok: false,
+      response: Response.json({ ok: false, error: message }, {
+        status: 503,
+        headers: { "Cache-Control": "no-store" },
+      }),
+    };
+  }
 
-    const user = resolveSessionUserFromStore(request, store);
-    if (!user) {
-      return {
-        ok: false,
-        response: Response.json({ ok: false, error: "Unauthorized" }, { status: 401 }),
-      };
-    }
-    return { ok: true, store, user };
-  });
+  const user = resolveSessionUserFromStore(request, store);
+  if (!user) {
+    return {
+      ok: false,
+      response: Response.json({ ok: false, error: "Unauthorized" }, { status: 401 }),
+    };
+  }
+  return { ok: true, store, user };
 }
 
 export async function requireApprovedUser(request: Request) {

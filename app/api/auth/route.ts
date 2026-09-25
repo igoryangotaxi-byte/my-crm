@@ -78,7 +78,7 @@ function authStoreJsonResponse(body: unknown, init?: ResponseInit) {
 
 async function persistAuthStore(nextStore: AuthStoreData): Promise<NextResponse | null> {
   try {
-    await saveAuthStore(nextStore);
+    await saveAuthStore(nextStore, { strictFreshKv: true });
   } catch (error) {
     if (isPermissionStoreUnavailableError(error)) {
       return authStoreUnavailableResponse(error);
@@ -312,10 +312,7 @@ export async function GET(request: Request) {
   }
   const user = resolveSessionUserFromStore(request, data);
   if (!user) {
-    return authStoreJsonResponse<AuthActionResponse>(
-      { ok: false, message: "Unauthorized" },
-      { status: 401 },
-    );
+    return authStoreJsonResponse({ ok: false, message: "Unauthorized" }, { status: 401 });
   }
   return authStoreJsonResponse({ ...sanitizeStore(data), currentUserId: user.id });
 }

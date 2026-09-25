@@ -1,5 +1,4 @@
 import type { AuthStoreData } from "@/types/auth";
-import { markAuthKvReadSucceededInRequest } from "@/lib/auth-kv-request-context";
 
 /** In-process TTL for coalescing successful KV snapshot reads (global object only). */
 export const AUTH_KV_SNAPSHOT_TTL_MS = 30_000;
@@ -28,12 +27,15 @@ export async function fetchAuthKvSnapshotCached(
 ): Promise<AuthStoreData | null> {
   const now = Date.now();
   if (snapshotCache && snapshotCache.expiresAt > now) {
-    markAuthKvReadSucceededInRequest();
     return snapshotCache.raw;
   }
 
   const raw = await fetchRawFromKv();
   snapshotCache = { expiresAt: now + AUTH_KV_SNAPSHOT_TTL_MS, raw };
-  markAuthKvReadSucceededInRequest();
   return raw;
+}
+
+/** After a successful KV write, refresh the read cache with the snapshot we just persisted. */
+export function seedAuthKvSnapshotCacheAfterSave(raw: AuthStoreData | null): void {
+  snapshotCache = { expiresAt: Date.now() + AUTH_KV_SNAPSHOT_TTL_MS, raw };
 }
