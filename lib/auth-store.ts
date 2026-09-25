@@ -22,6 +22,7 @@ import {
   mergeAllRolePermissions,
 } from "@/lib/role-permissions";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { PermissionStoreUnavailableError } from "@/lib/permission-store-errors";
 import {
   createAuthBackedUser as createSupabaseAuthBackedUser,
   deleteAuthBackedUser as deleteSupabaseAuthBackedUser,
@@ -341,6 +342,29 @@ async function saveLegacyAuthStore(data: AuthStoreData): Promise<void> {
 
 function shouldTrySupabase() {
   return isSupabaseConfigured();
+}
+
+/**
+ * Authoritative permission read for ops API guards. Does not fall back to in-memory defaults
+ * when Supabase and KV are both unavailable (throws {@link PermissionStoreUnavailableError}).
+ */
+export async function loadAuthStoreForPermissionCheck(): Promise<AuthStoreData> {
+  if (shouldTrySupabase()) {
+    try {
+      return await loadSupabaseAuthStore();
+    } catch {
+      // Try KV snapshot when Supabase read fails.
+    }
+  }
+  if (canUseKv()) {
+    try {
+      const raw = await kv.get<AuthStoreData>(AUTH_STORE_KEY);
+      return normalizeStore(raw);
+    } catch {
+      throw new PermissionStoreUnavailableError();
+    }
+  }
+  throw new PermissionStoreUnavailableError();
 }
 
 export async function loadAuthStore(): Promise<AuthStoreData> {

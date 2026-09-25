@@ -1,13 +1,20 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
 import {
+  PERMISSION_DENIED_CODE,
+  PERMISSION_STORE_UNAVAILABLE_CODE,
+  PermissionStoreUnavailableError,
+} from "@/lib/permission-store-errors";
+import {
+  __setPermissionStoreLoaderForTests,
   guardOpsApiPagePermission,
   isEnforceOpsApiPermissions,
   userHasOpsPagePermission,
 } from "@/lib/ops-api-page-permission";
-import { defaultRolePermissions, type AuthUser } from "@/types/auth";
+import { makeOpsApiPermissionTestStore } from "@/tests/ops-api-permission-test-store";
+import { type AuthUser } from "@/types/auth";
 
 const baseUser: AuthUser = {
   id: "user-test-1",
@@ -21,57 +28,68 @@ const baseUser: AuthUser = {
 };
 
 describe("ops API page permissions", () => {
+  afterEach(() => {
+    __setPermissionStoreLoaderForTests(null);
+  });
+
   it("defaults to log-only (enforce off)", () => {
     assert.equal(isEnforceOpsApiPermissions(), false);
   });
 
   it("User role has requestRides by default", async () => {
+    __setPermissionStoreLoaderForTests(async () => makeOpsApiPermissionTestStore());
     assert.equal(await userHasOpsPagePermission(baseUser, "requestRides"), true);
   });
 
   it("guard passes through when enforce off even if permission missing", async () => {
     const prev = process.env.ENFORCE_OPS_API_PERMISSIONS;
     process.env.ENFORCE_OPS_API_PERMISSIONS = "false";
-    const noAccessUser = { ...baseUser, role: "User" as const };
-    const storeRole = {
-      ...defaultRolePermissions.User,
-      requestRides: false,
-    };
-    // userHasOpsPagePermission reads KV — for unit test use guard with Admin stripped via mock impossible without KV
-    // Instead verify enforce flag behavior with User default (has permission) returns null
+    __setPermissionStoreLoaderForTests(async () =>
+      makeOpsApiPermissionTestStore({ User: { requestRides: false } }),
+    );
     const res = await guardOpsApiPagePermission(
-      noAccessUser,
+      baseUser,
       new Request("http://localhost/api/request-rides-create", { method: "POST" }),
       "requestRides",
     );
     if (prev === undefined) delete process.env.ENFORCE_OPS_API_PERMISSIONS;
     else process.env.ENFORCE_OPS_API_PERMISSIONS = prev;
-    // With live store, User may still have requestRides; assert shape only when null
     assert.equal(res, null);
   });
 
   it("guard returns 403 when enforce on and permission denied", async () => {
     const prev = process.env.ENFORCE_OPS_API_PERMISSIONS;
     process.env.ENFORCE_OPS_API_PERMISSIONS = "true";
-    const user: AuthUser = {
-      ...baseUser,
-      role: "User",
-    };
-    // Override via temporary mock is not available; use role with all ops false in defaults except we need one without requestRides
-    const customUser: AuthUser = { ...user, role: "Team Lead" };
-    const merged = { ...defaultRolePermissions["Team Lead"], requestRides: false };
-    assert.equal(merged.requestRides, false);
+    __setPermissionStoreLoaderForTests(async () =>
+      makeOpsApiPermissionTestStore({ User: { requestRides: false } }),
+    );
     const res = await guardOpsApiPagePermission(
-      customUser,
+      baseUser,
       new Request("http://localhost/api/request-rides-create", { method: "POST" }),
       "requestRides",
     );
     if (prev === undefined) delete process.env.ENFORCE_OPS_API_PERMISSIONS;
     else process.env.ENFORCE_OPS_API_PERMISSIONS = prev;
-    // Team Lead default has requestRides true — test may pass null. Skip strict deny unless store overrides.
-    if (res) {
-      assert.equal(res.status, 403);
-    }
+    assert.ok(res);
+    assert.equal(res!.status, 403);
+    const body = await res!.json();
+    assert.equal(body.error.code, PERMISSION_DENIED_CODE);
+  });
+
+  it("returns 503 when permission store is unavailable", async () => {
+    __setPermissionStoreLoaderForTests(async () => {
+      throw new PermissionStoreUnavailableError();
+    });
+    const res = await guardOpsApiPagePermission(
+      baseUser,
+      new Request("http://localhost/api/request-rides-create", { method: "POST" }),
+      "requestRides",
+    );
+    assert.ok(res);
+    assert.equal(res!.status, 503);
+    const body = await res!.json();
+    assert.equal(body.error.code, PERMISSION_STORE_UNAVAILABLE_CODE);
+    assert.equal(body.error.nothingSent, true);
   });
 
   it("request-rides-create runs permission guard before body parse", () => {

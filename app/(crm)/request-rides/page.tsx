@@ -28,6 +28,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import {
   OpsApiOutcomeBanner,
   classifyOpsApiResponse,
+  type OpsApiOutcomeKind,
 } from "@/components/auth/OpsApiOutcomeBanner";
 import { ClickToCallButton } from "@/components/call-center/DriverCallButton";
 import { OrderRouteEditor } from "@/components/pre-orders/PreOrderRouteEditor";
@@ -520,7 +521,7 @@ export default function RequestRidesPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [opsOutcome, setOpsOutcome] = useState<"forbidden" | "unknown" | null>(null);
+  const [opsOutcome, setOpsOutcome] = useState<OpsApiOutcomeKind | null>(null);
   const [phoneChecking, setPhoneChecking] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [showPhoneSuggestions, setShowPhoneSuggestions] = useState(false);
@@ -1414,10 +1415,12 @@ export default function RequestRidesPage() {
           scheduleAtIso,
         }),
       });
-      const outcomeKind = await classifyOpsApiResponse(response);
-      const data = (await response.json()) as CreateResponse;
-      if (outcomeKind === "forbidden") {
-        setOpsOutcome("forbidden");
+      const data = (await response.json()) as CreateResponse & {
+        error?: { code?: string; nothingSent?: boolean };
+      };
+      const outcomeKind = classifyOpsApiResponse(response.status, data);
+      if (outcomeKind === "forbidden" || outcomeKind === "store_unavailable") {
+        setOpsOutcome(outcomeKind);
         return;
       }
       if (outcomeKind === "unknown") {

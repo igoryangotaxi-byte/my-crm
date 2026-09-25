@@ -6,11 +6,14 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { buildAccessRequestText } from "@/lib/copy-access-request";
+import { classifyOpsApiPayload } from "@/lib/permission-store-errors";
 import { permissionI18nKey } from "@/lib/permission-display";
 import type { AppPageKey } from "@/types/auth";
 
+export type OpsApiOutcomeKind = "forbidden" | "store_unavailable" | "unknown";
+
 type OpsApiOutcomeBannerProps = {
-  kind: "forbidden" | "unknown";
+  kind: OpsApiOutcomeKind;
   permission?: AppPageKey;
   onTryAgain?: () => void;
   ordersHref?: string;
@@ -48,7 +51,7 @@ export function OpsApiOutcomeBanner({
     }
   }, [currentUser, pathname, permission, permissionLabel]);
 
-  if (kind === "forbidden") {
+  if (kind === "forbidden" || kind === "store_unavailable") {
     return (
       <div
         role="alert"
@@ -96,12 +99,10 @@ export function OpsApiOutcomeBanner({
   );
 }
 
-/** Parse fetch Response for ops permission / unknown errors. */
-export async function classifyOpsApiResponse(
-  response: Response,
-): Promise<"forbidden" | "unknown" | null> {
-  if (response.status === 403) return "forbidden";
-  if (response.status >= 500 || response.status === 408 || response.status === 504) return "unknown";
-  if (!response.ok && response.status !== 401 && response.status !== 400) return "unknown";
-  return null;
+/** Classify ops API error responses (403 permission / 503 store / unknown). */
+export function classifyOpsApiResponse(
+  status: number,
+  body: unknown,
+): OpsApiOutcomeKind | null {
+  return classifyOpsApiPayload(status, body);
 }
