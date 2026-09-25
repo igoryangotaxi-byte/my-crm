@@ -25,6 +25,10 @@ import { publicErrorMessage } from "@/lib/public-error-message";
 import { downloadBulkUploadSampleXlsx } from "@/lib/xlsx-bulk-upload-sample";
 import { parseXlsxRidesFile } from "@/lib/xlsx-rides-parser";
 import { useAuth } from "@/components/auth/AuthProvider";
+import {
+  OpsApiOutcomeBanner,
+  classifyOpsApiResponse,
+} from "@/components/auth/OpsApiOutcomeBanner";
 import { ClickToCallButton } from "@/components/call-center/DriverCallButton";
 import { OrderRouteEditor } from "@/components/pre-orders/PreOrderRouteEditor";
 import type {
@@ -516,6 +520,7 @@ export default function RequestRidesPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [opsOutcome, setOpsOutcome] = useState<"forbidden" | "unknown" | null>(null);
   const [phoneChecking, setPhoneChecking] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [showPhoneSuggestions, setShowPhoneSuggestions] = useState(false);
@@ -1369,6 +1374,7 @@ export default function RequestRidesPage() {
     }
     setSubmitting(true);
     setFormError(null);
+    setOpsOutcome(null);
     setStatusError(null);
     setSmsWarning(null);
     setCreateResult(null);
@@ -1408,7 +1414,16 @@ export default function RequestRidesPage() {
           scheduleAtIso,
         }),
       });
+      const outcomeKind = await classifyOpsApiResponse(response);
       const data = (await response.json()) as CreateResponse;
+      if (outcomeKind === "forbidden") {
+        setOpsOutcome("forbidden");
+        return;
+      }
+      if (outcomeKind === "unknown") {
+        setOpsOutcome("unknown");
+        return;
+      }
       if (!response.ok || !data.ok || !data.result) {
         const base = data.error ?? "Failed to create ride.";
         setFormError(
@@ -1475,8 +1490,8 @@ export default function RequestRidesPage() {
         }
       }
       await requestStatus(createdRide, { withRetry: true });
-    } catch (error) {
-      setFormError(publicErrorMessage(error, "Couldn’t create the ride. Try again later."));
+    } catch {
+      setOpsOutcome("unknown");
     } finally {
       setSubmitting(false);
     }
@@ -2840,6 +2855,20 @@ export default function RequestRidesPage() {
                     </p>
                   ) : null}
                   {clientsError ? <p className="text-sm text-rose-700">{clientsError}</p> : null}
+                  {opsOutcome ? (
+                    <OpsApiOutcomeBanner
+                      kind={opsOutcome}
+                      permission="requestRides"
+                      ordersHref={
+                        pathname.startsWith("/sales-operation")
+                          ? "/sales-operation/orders"
+                          : "/orders"
+                      }
+                      onTryAgain={
+                        opsOutcome === "unknown" ? () => setOpsOutcome(null) : undefined
+                      }
+                    />
+                  ) : null}
                   {formError ? <p className="text-sm text-rose-700">{formError}</p> : null}
                   {rideListError ? <p className="text-sm text-rose-700">{rideListError}</p> : null}
                   {smsWarning ? <p className="text-sm text-amber-700">{smsWarning}</p> : null}

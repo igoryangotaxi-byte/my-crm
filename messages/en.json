@@ -1527,5 +1527,48 @@
     "route": "Route",
     "openFull": "Open full details",
     "close": "Close"
+  },
+  "access": {
+    "permissionHint": {
+      "lockedTooltip": "You need {permission} permission for this action"
+    },
+    "forbiddenBanner": {
+      "rideNotCreated": "Ride not created: {permission} permission needed",
+      "nothingSentYango": "Nothing was sent to Yango and no SMS was sent.",
+      "copyAccessRequest": "Copy access request"
+    },
+    "unknownErrorBanner": {
+      "message": "We don't know if the ride was created, check Orders before retrying",
+      "openOrders": "Open Orders",
+      "tryAgain": "Try again"
+    }
+  },
+  "permissions": {
+    "dashboard": "Dashboard",
+    "clients": "Clients",
+    "orders": "Orders",
+    "preOrders": "Pre-orders",
+    "requestRides": "Request rides",
+    "communications": "Communications",
+    "financialCenter": "Business center",
+    "driversMap": "Drivers on the map",
+    "heatMap": "Demand heat map",
+    "priceCalculator": "Price calculator",
+    "salesOperation": "Appli Taxi CRM",
+    "salesPipeline": "Pipeline",
+    "salesSignedClients": "Portfolio",
+    "salesB2BClients": "B2B clients",
+    "salesAnalytics": "Analytics",
+    "salesManagerAnalytics": "Manager analytics",
+    "salesAutomation": "Automation",
+    "salesSettings": "Settings",
+    "salesTracker": "Tracker",
+    "salesDocumentation": "Documentation",
+    "salesLeadDiscovery": "Lead discovery",
+    "salesAiAssistant": "Appli Assistant",
+    "salesCallCenter": "Call center",
+    "salesAstradial": "Astradial",
+    "accesses": "Access management",
+    "notes": "API health check"
   }
 }

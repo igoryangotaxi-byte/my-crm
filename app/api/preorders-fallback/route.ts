@@ -1,3 +1,4 @@
+import { guardOpsApiPagePermission } from "@/lib/ops-api-page-permission";
 import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 import { runPreOrderFallbackSweep } from "@/lib/yango-api";
 import type { PreOrder } from "@/types/crm";
@@ -36,6 +37,8 @@ type SweepPayload = {
 export async function POST(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
+  const denied = await guardOpsApiPagePermission(auth.user, request, "preOrders");
+  if (denied) return denied;
 
   const scope = getClientScope(auth.user);
   const payload = (await request.json().catch(() => null)) as SweepPayload | null;

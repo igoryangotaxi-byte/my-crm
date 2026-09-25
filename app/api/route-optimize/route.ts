@@ -1,4 +1,5 @@
 import { relabelGoogleVendorForDisplay } from "@/lib/public-error-message";
+import { guardOpsApiPagePermission } from "@/lib/ops-api-page-permission";
 import { requireApprovedUser } from "@/lib/server-auth";
 import {
   decodeGooglePolyline,
@@ -167,6 +168,8 @@ function sumOriginalDistance(
 export async function POST(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
+  const denied = await guardOpsApiPagePermission(auth.user, request, ["preOrders", "orders"]);
+  if (denied) return denied;
 
   const apiKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
   if (!apiKey) {

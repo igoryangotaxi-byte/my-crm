@@ -13,6 +13,7 @@ import {
 import { searchAddressSuggestions } from "@/lib/geocoding";
 import { saveRequestRideAddressSnapshot } from "@/lib/request-rides-address-store";
 import { normalizeYangoClientIdKey } from "@/lib/request-rides-user-map";
+import { guardOpsApiPagePermission } from "@/lib/ops-api-page-permission";
 import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 import type { RequestRidePayload } from "@/types/crm";
 
@@ -64,6 +65,8 @@ async function geocodeAddress(
 export async function POST(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
+  const denied = await guardOpsApiPagePermission(auth.user, request, "requestRides");
+  if (denied) return denied;
   const scope = getClientScope(auth.user);
   const body = (await request.json().catch(() => null)) as Partial<RequestRidePayload> | null;
   const payload: RequestRidePayload = {
