@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { resolveAuthenticatedLandingPath } from "@/lib/login-redirect";
-import { hasAnyAllowedPage } from "@/lib/role-permissions";
 
 type LoginErrorCode = "domain" | "oauth" | "config" | "rejected" | "consent" | "noaccess";
 
@@ -82,21 +81,13 @@ export default function LoginPage() {
     if (loading) return;
     if (currentUser?.status !== "approved") return;
 
-    if (!hasAnyAllowedPage(canAccess)) {
-      setErrorCode((prev) => prev ?? "noaccess");
-      return;
-    }
-
-    const landing = resolveAuthenticatedLandingPath({
-      accountType: currentUser.accountType,
-      canAccess,
-      returnPath,
-    });
-    if (landing) {
-      router.replace(landing);
-      return;
-    }
-    setErrorCode((prev) => prev ?? "noaccess");
+    router.replace(
+      resolveAuthenticatedLandingPath({
+        accountType: currentUser.accountType,
+        canAccess,
+        returnPath,
+      }),
+    );
   }, [loading, currentUser, canAccess, router, returnPath]);
 
   const errorMessage =

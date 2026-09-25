@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
+import { resolveRootLandingPath } from "@/lib/server-staff-landing";
 
-export default function HomePage() {
-  redirect("/sales-operation/tasks");
+export default async function HomePage() {
+  redirect(await resolveRootLandingPath());
 }

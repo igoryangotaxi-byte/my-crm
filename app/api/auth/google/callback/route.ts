@@ -110,7 +110,7 @@ export async function GET(request: Request) {
           accountType: provisioned.user.accountType,
           canAccess,
           returnPath,
-        }) ?? "/login?error=noaccess";
+        });
     } catch (error) {
       console.error("Failed to resolve post-login path:", error);
       landing = "/login";

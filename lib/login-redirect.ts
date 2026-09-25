@@ -4,6 +4,7 @@ import {
   canAccessSalesOperationPath,
   LEGACY_CRM_ROUTE_PAGES,
   resolvePostLoginPath,
+  STAFF_NO_ACCESS_PATH,
 } from "@/lib/role-permissions";
 
 export function buildLoginHref(returnPath: string): string {
@@ -46,7 +47,7 @@ export function resolveAuthenticatedLandingPath(input: {
   accountType?: string | null;
   canAccess: (page: AppPageKey) => boolean;
   returnPath?: string | null;
-}): string | null {
+}): string {
   const safeReturn = sanitizeSameOriginReturnPath(input.returnPath);
   if (safeReturn) {
     if (safeReturn.startsWith("/client")) {
@@ -64,8 +65,11 @@ export function resolveAuthenticatedLandingPath(input: {
       }
     }
   }
-  return resolvePostLoginPath({
+  const landing = resolvePostLoginPath({
     accountType: input.accountType,
     canAccess: input.canAccess,
   });
+  if (landing) return landing;
+  if (input.accountType === "client") return "/client/request-rides";
+  return STAFF_NO_ACCESS_PATH;
 }

@@ -8,6 +8,7 @@ import {
   type RoleDashboardBlockAccess,
   type RolePermissions,
 } from "@/types/auth";
+import { SALES_OPERATION_SIDEBAR_ROUTE_ORDER } from "@/lib/sales-operation/sidebar-nav-order";
 
 export const APP_ROLES: AppRole[] = [
   "Admin",
@@ -18,6 +19,7 @@ export const APP_ROLES: AppRole[] = [
 ];
 
 export const STAFF_MY_SPACE_PATH = "/sales-operation/tasks";
+export const STAFF_NO_ACCESS_PATH = "/no-access";
 
 export const SALES_OPERATION_PAGE_KEYS = [
   "salesOperation",
@@ -243,13 +245,17 @@ export function firstAllowedSalesOperationPath(
   canAccess: (page: AppPageKey) => boolean,
 ): string | null {
   if (!canAccess("salesOperation")) return null;
-  for (const route of SALES_OPERATION_ROUTE_PAGES) {
+  for (const route of SALES_OPERATION_SIDEBAR_ROUTE_ORDER) {
     if (route.prefix === "/sales-operation/tasks" || route.prefix === "/sales-operation/calendar") {
       if (canAccessMySpace(canAccess)) return route.prefix;
       continue;
     }
     if (route.prefix === "/sales-operation/settings") {
       if (canAccess("salesSettings") || canAccess("accesses")) return route.prefix;
+      continue;
+    }
+    if (route.prefix === "/sales-operation/astradial") {
+      if (canAccess("salesAstradial") || canAccess("salesCallCenter")) return route.prefix;
       continue;
     }
     if (canAccess(route.page)) return route.prefix;
