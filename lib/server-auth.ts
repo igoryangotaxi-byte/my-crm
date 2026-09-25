@@ -31,6 +31,12 @@ export async function loadAuthStoreForRequest(request: Request): Promise<
     try {
       store = await loadAuthStore();
     } catch (error) {
+      if (isPermissionStoreUnavailableError(error)) {
+        const { permissionStoreUnavailableResponse } = await import(
+          "@/lib/permission-store-unavailable"
+        );
+        return { ok: false, response: permissionStoreUnavailableResponse() };
+      }
       const message =
         error instanceof Error
           ? `Supabase auth/profile store is unavailable: ${error.message}`
@@ -105,8 +111,27 @@ export async function requireClientScopedUser(request: Request) {
       response: Response.json({ ok: false, error: "Client scope is not configured." }, { status: 403 }),
     };
   }
-  const role: ClientRoleDefinition | undefined = store.tenantRoles?.[scope.tenantId]?.find(
-    (item) => item.id === scope.clientRoleId,
-  );
-  return { ok: true as const, user, scope, clientRole: role ?? null };
+  const rolesForTenant = store.tenantRoles?.[scope.tenantId] ?? [];
+  if (rolesForTenant.length === 0) {
+    return {
+      ok: false as const,
+      response: Response.json(
+        { ok: false, code: "PERMISSION_DENIED", error: "Forbidden." },
+        { status: 403 },
+      ),
+    };
+  }
+  const role: ClientRoleDefinition | undefined = scope.clientRoleId
+    ? rolesForTenant.find((item) => item.id === scope.clientRoleId)
+    : undefined;
+  if (!role) {
+    return {
+      ok: false as const,
+      response: Response.json(
+        { ok: false, code: "PERMISSION_DENIED", error: "Forbidden." },
+        { status: 403 },
+      ),
+    };
+  }
+  return { ok: true as const, user, scope, clientRole: role };
 }
