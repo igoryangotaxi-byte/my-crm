@@ -742,58 +742,94 @@ async function loadAuthStoreFromSupabaseAuthFallback(
   });
 }
 
-async function ensureDefaultSettings(supabase: SupabaseAdminClient) {
-  const rolePermissionRows = Object.entries(defaultRolePermissions).map(([role, permissions]) => ({
-    role,
-    permissions,
-    updated_at: new Date().toISOString(),
-  }));
-  const roleAreaRows = Object.entries(defaultRoleAreaAccess).map(([role, areaAccess]) => ({
-    role,
-    area_access: areaAccess,
-    updated_at: new Date().toISOString(),
-  }));
-  const roleDashboardRows = Object.entries(defaultRoleDashboardBlockAccess).map(([role, access]) => ({
-    role,
-    dashboard_block_access: access,
-    updated_at: new Date().toISOString(),
-  }));
-  const { error: rolePermsError } = await supabase
-    .from("crm_role_permissions")
-    .upsert(rolePermissionRows, { onConflict: "role" });
-  if (rolePermsError) {
-    throw new Error(`Failed to seed role permissions: ${rolePermsError.message}`);
+async function listExistingRoles(
+  supabase: SupabaseAdminClient,
+  table: "crm_role_permissions" | "crm_role_area_access" | "crm_role_dashboard_block_access",
+): Promise<Set<string>> {
+  const { data, error } = await supabase.from(table).select("role");
+  if (error) {
+    throw new Error(`Failed to inspect ${table}: ${error.message}`);
   }
-  const { error: roleAreaError } = await supabase
-    .from("crm_role_area_access")
-    .upsert(roleAreaRows, { onConflict: "role" });
-  if (roleAreaError) {
-    throw new Error(`Failed to seed role area access: ${roleAreaError.message}`);
+  return new Set(
+    ((data ?? []) as Array<{ role: string }>)
+      .map((row) => row.role)
+      .filter((role) => typeof role === "string" && role.length > 0),
+  );
+}
+
+/**
+ * One-off bootstrap: insert missing default rows only. Never overwrites existing DB values.
+ * Not called from loadAuthStoreFromSupabase (read path must stay select-only).
+ */
+export async function seedSupabaseAuthDefaultsIfMissing(
+  supabase: SupabaseAdminClient,
+): Promise<void> {
+  const now = new Date().toISOString();
+
+  const existingPermissionRoles = await listExistingRoles(supabase, "crm_role_permissions");
+  const missingPermissionRows = Object.entries(defaultRolePermissions)
+    .filter(([role]) => !existingPermissionRoles.has(role))
+    .map(([role, permissions]) => ({ role, permissions, updated_at: now }));
+  if (missingPermissionRows.length > 0) {
+    const { error } = await supabase.from("crm_role_permissions").insert(missingPermissionRows);
+    if (error) {
+      throw new Error(`Failed to seed missing role permissions: ${error.message}`);
+    }
   }
-  const { error: roleDashboardError } = await supabase
-    .from("crm_role_dashboard_block_access")
-    .upsert(roleDashboardRows, { onConflict: "role" });
-  if (roleDashboardError) {
-    throw new Error(`Failed to seed role dashboard block access: ${roleDashboardError.message}`);
+
+  const existingAreaRoles = await listExistingRoles(supabase, "crm_role_area_access");
+  const missingAreaRows = Object.entries(defaultRoleAreaAccess)
+    .filter(([role]) => !existingAreaRoles.has(role))
+    .map(([role, area_access]) => ({ role, area_access, updated_at: now }));
+  if (missingAreaRows.length > 0) {
+    const { error } = await supabase.from("crm_role_area_access").insert(missingAreaRows);
+    if (error) {
+      throw new Error(`Failed to seed missing role area access: ${error.message}`);
+    }
   }
-  const { error: globalSettingsError } = await supabase.from("crm_global_b2c_settings").upsert(
-    {
+
+  const existingDashboardRoles = await listExistingRoles(
+    supabase,
+    "crm_role_dashboard_block_access",
+  );
+  const missingDashboardRows = Object.entries(defaultRoleDashboardBlockAccess)
+    .filter(([role]) => !existingDashboardRoles.has(role))
+    .map(([role, dashboard_block_access]) => ({ role, dashboard_block_access, updated_at: now }));
+  if (missingDashboardRows.length > 0) {
+    const { error } = await supabase
+      .from("crm_role_dashboard_block_access")
+      .insert(missingDashboardRows);
+    if (error) {
+      throw new Error(`Failed to seed missing dashboard block access: ${error.message}`);
+    }
+  }
+
+  const { data: globalRow, error: globalSelectError } = await supabase
+    .from("crm_global_b2c_settings")
+    .select("id")
+    .eq("id", 1)
+    .maybeSingle();
+  if (globalSelectError) {
+    throw new Error(`Failed to inspect global B2C settings: ${globalSelectError.message}`);
+  }
+  if (!globalRow) {
+    const { error: globalInsertError } = await supabase.from("crm_global_b2c_settings").insert({
       id: 1,
       enabled: false,
       token: null,
       client_id: null,
       ride_class: "comfortplus",
       create_endpoint: null,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "id" },
-  );
-  if (globalSettingsError) {
-    throw new Error(`Failed to seed global B2C settings: ${globalSettingsError.message}`);
+      updated_at: now,
+    });
+    if (globalInsertError) {
+      throw new Error(`Failed to seed global B2C settings: ${globalInsertError.message}`);
+    }
   }
 }
 
-async function ensureDefaultAdminSeeded(supabase: SupabaseAdminClient) {
+/** Explicit bootstrap when CRM has zero profiles (not invoked on auth store load). */
+export async function seedDefaultAdminProfileIfEmpty(supabase: SupabaseAdminClient) {
   const { count, error } = await supabase
     .from("crm_user_profiles")
     .select("*", { count: "exact", head: true });
@@ -877,11 +913,6 @@ async function ensureDefaultAdminAuthFallbackSeeded(supabase: SupabaseAdminClien
   if (error) {
     throw new Error(`Failed to refresh default admin auth user: ${error.message}`);
   }
-}
-
-async function ensureSupabaseAuthStoreInitialized(supabase: SupabaseAdminClient) {
-  await ensureDefaultSettings(supabase);
-  await ensureDefaultAdminSeeded(supabase);
 }
 
 function toTenantAccountRows(tenantAccounts: TenantAccount[]) {
@@ -970,7 +1001,6 @@ async function deleteRemovedProfiles(
 export async function loadAuthStoreFromSupabase(): Promise<AuthStoreData> {
   const supabase = getSupabaseAdminClient();
   try {
-    await ensureSupabaseAuthStoreInitialized(supabase);
     const [
       users,
       rolePermissions,
@@ -1001,7 +1031,6 @@ export async function loadAuthStoreFromSupabase(): Promise<AuthStoreData> {
     if (!isMissingSupabaseAuthSchemaError(error)) {
       throw error;
     }
-    await ensureDefaultAdminAuthFallbackSeeded(supabase);
     return loadAuthStoreFromSupabaseAuthFallback(supabase);
   }
 }
