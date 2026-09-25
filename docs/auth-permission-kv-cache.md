@@ -18,6 +18,6 @@ Assumptions: one warm Node instance, `AUTH_KV_SNAPSHOT_TTL_MS` = 30s, single `lo
 ## Fail-closed (PR B)
 
 - **Canonical store** on production fallback: Supabase Auth user metadata + global KV snapshot `appli:auth:store:v1`.
-- **In-process cache TTL:** `AUTH_KV_SNAPSHOT_TTL_MS` (30 seconds). **`MAX_STALE_MS`** (10 minutes) for last-good snapshot after KV read failure — no `createDefaultStore()` on KV error.
+- **In-process cache TTL:** `AUTH_KV_SNAPSHOT_TTL_MS` (30 seconds). **`AUTH_STORE_MAX_STALE_MS`** (env, default **0**) — extra last-good snapshot window after KV read failure; **0** = 30s cache only, then fail closed. Longer windows (e.g. 10 min) pending owner approval — not enabled in prod by default.
 - **`/api/auth` responses:** `Cache-Control: no-store`. **503 `PERMISSION_STORE_UNAVAILABLE`** vs **403 `PERMISSION_DENIED`**; client banner / `PermissionStoreUnavailableState`, no logout on 503, single retry.
 - **Saves:** managed Supabase Auth user **deletions** skipped unless KV loaded successfully in the request (PR A guard).

@@ -1,7 +1,7 @@
 import type { AuthStoreData } from "@/types/auth";
 import { markAuthKvReadSucceededInRequest } from "@/lib/auth-kv-request-context";
 import {
-  MAX_STALE_MS,
+  getAuthStoreMaxStaleMs,
   PermissionStoreUnavailableError,
 } from "@/lib/permission-store-unavailable";
 
@@ -36,7 +36,7 @@ export function getLastGoodSnapshotForTests(): LastGoodEntry | null {
 
 /**
  * Load the global KV auth snapshot for read paths (fail-closed). Never writes to KV.
- * On KV failure: serve last-good snapshot if younger than MAX_STALE_MS, else throw.
+ * On KV failure: serve last-good snapshot if younger than `AUTH_STORE_MAX_STALE_MS`, else throw.
  */
 export async function loadPermissionKvSnapshot(
   fetchRawFromKv: () => Promise<AuthStoreData | null>,
@@ -58,8 +58,11 @@ export async function loadPermissionKvSnapshot(
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.warn(`[auth] KV snapshot read failed: ${detail}`);
-    if (lastGoodSnapshot && now - lastGoodSnapshot.fetchedAt <= MAX_STALE_MS) {
-      console.warn("[auth] serving stale permission KV snapshot (within MAX_STALE_MS)");
+    const maxStaleMs = getAuthStoreMaxStaleMs();
+    if (maxStaleMs > 0 && lastGoodSnapshot && now - lastGoodSnapshot.fetchedAt <= maxStaleMs) {
+      console.warn(
+        `[auth] serving stale permission KV snapshot (within AUTH_STORE_MAX_STALE_MS=${maxStaleMs})`,
+      );
       markAuthKvReadSucceededInRequest();
       return lastGoodSnapshot.store;
     }
