@@ -1,5 +1,6 @@
 import type { AppPageKey } from "@/types/auth";
 
+/** next-intl keys under `permissions.*` for human-readable permission names. */
 export const PERMISSION_I18N_KEY: Record<AppPageKey, string> = {
   dashboard: "dashboard",
   clients: "clients",
@@ -12,6 +13,7 @@ export const PERMISSION_I18N_KEY: Record<AppPageKey, string> = {
   heatMap: "heatMap",
   priceCalculator: "priceCalculator",
   salesOperation: "salesOperation",
+  salesMySpace: "salesMySpace",
   salesPipeline: "salesPipeline",
   salesSignedClients: "salesSignedClients",
   salesB2BClients: "salesB2BClients",

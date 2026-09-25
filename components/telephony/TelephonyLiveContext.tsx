@@ -9,6 +9,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import {
+  type LivePollTier,
+  useLinkedOperatorLivePoll,
+} from "@/lib/client/use-linked-operator-live-poll";
 import type { TelephonyCallRow } from "@/lib/telephony/calls-repository";
 import type { LiveCallSnapshot } from "@/lib/telephony/types";
 import type { TelephonyEnrichmentMatch } from "@/lib/telephony/enrich";
@@ -37,14 +41,20 @@ type TelephonyLiveState = {
   enrichment: TelephonyEnrichmentMatch[];
   enrichmentMulti: boolean;
   providerError: string | null;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<void | LivePollTier>;
   hangup: (callIdOrChannel: string) => Promise<{ ok: boolean; error?: string }>;
   dismissIncoming: () => void;
   dismissedRingKey: string | null;
 };
 
 const TelephonyLiveContext = createContext<TelephonyLiveState | null>(null);
-const POLL_MS = 2000;
+
+let telephonyLiveRefreshAfterAgentLink: (() => void) | null = null;
+
+/** Called after PUT /api/telephony/agent links an extension (starts fast live poll immediately). */
+export function refreshTelephonyLiveAfterAgentLink(): void {
+  telephonyLiveRefreshAfterAgentLink?.();
+}
 
 function isTelephonyUiEnabled(): boolean {
   const raw = process.env.NEXT_PUBLIC_TELEPHONY_ENABLED?.trim().toLowerCase();
@@ -63,17 +73,25 @@ export function TelephonyLiveProvider({ children }: { children: ReactNode }) {
   const [enrichmentMulti, setEnrichmentMulti] = useState(false);
   const [providerError, setProviderError] = useState<string | null>(null);
   const [dismissedRingKey, setDismissedRingKey] = useState<string | null>(null);
+  const [pollTier, setPollTier] = useState<LivePollTier>("idle");
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<LivePollTier | void> => {
     if (!enabled) return;
     try {
       const res = await fetch("/api/telephony/live", { cache: "no-store" });
       const json = (await res.json()) as LivePayload;
+      if (res.status === 401 || res.status === 403) {
+        setLinked(false);
+        setPollTier("idle");
+        return "idle";
+      }
       if (!res.ok || !json.ok) {
         setProviderError(json.error ?? json.providerError ?? "Telephony poll failed");
         return;
       }
-      setLinked(Boolean(json.linked));
+      const isLinked = Boolean(json.linked);
+      setLinked(isLinked);
+      setPollTier(isLinked ? "fast" : "idle");
       setExtension(json.extension ?? null);
       setAgentStatus(json.status ?? "offline");
       setRinging(json.ringing ?? null);
@@ -99,17 +117,22 @@ export function TelephonyLiveProvider({ children }: { children: ReactNode }) {
         setEnrichment([]);
         setEnrichmentMulti(false);
       }
+      return isLinked ? "fast" : "idle";
     } catch {
       setProviderError("Telephony unavailable");
     }
   }, [enabled]);
 
+  useLinkedOperatorLivePoll(refresh, enabled ? pollTier : "idle");
+
   useEffect(() => {
-    if (!enabled) return;
-    void refresh();
-    const id = window.setInterval(() => void refresh(), POLL_MS);
-    return () => window.clearInterval(id);
-  }, [enabled, refresh]);
+    telephonyLiveRefreshAfterAgentLink = () => {
+      void refresh();
+    };
+    return () => {
+      telephonyLiveRefreshAfterAgentLink = null;
+    };
+  }, [refresh]);
 
   const hangup = useCallback(async (callIdOrChannel: string) => {
     const res = await fetch(`/api/telephony/calls/${encodeURIComponent(callIdOrChannel)}/hangup`, {

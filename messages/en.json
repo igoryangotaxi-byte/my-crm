@@ -1528,22 +1528,47 @@
     "openFull": "Open full details",
     "close": "Close"
   },
+  "auth": {
+    "permissionStoreUnavailable": {
+      "title": "Could not verify access permissions",
+      "description": "This is a temporary system issue, not a change to your access. Try again later or contact support.",
+      "retry": "Retry",
+      "pollBanner": "Permission store is temporarily unavailable. Your session is still active; showing the last loaded permissions.",
+      "adminBanner": "Permission store is unavailable. Role values are hidden; changes cannot be saved right now.",
+      "adminSaveDisabledTooltip": "Permission store is unavailable. Try again when KV is restored."
+    }
+  },
   "access": {
+    "noAccess": {
+      "titleSection": "No access to {section}",
+      "titleNoPages": "No access",
+      "descriptionNoPages": "No pages are enabled for this account. Contact your administrator.",
+      "descriptionForbidden": "You do not have permission for this page. Contact your administrator.",
+      "signedInAs": "Signed in as",
+      "permission": "Permission",
+      "page": "Page",
+      "goToMySpace": "Go to My Space",
+      "copyAccessRequest": "Copy access request",
+      "copied": "Copied",
+      "permissionMissing": "Missing permission: {name} ({key})"
+    },
     "permissionHint": {
       "lockedTooltip": "You need {permission} permission for this action"
     },
     "forbiddenBanner": {
-      "message": "You don't have permission to create rides. Nothing was sent to Yango and no SMS was sent.",
-      "copyAccessRequest": "Copy access request"
-    },
-    "storeUnavailableBanner": {
-      "message": "Temporary failure checking permissions. Nothing was sent to Yango and no SMS was sent.",
-      "retry": "Try again"
+      "rideNotCreated": "Ride not created: {permission} permission needed",
+      "nothingSentYango": "Nothing was sent to Yango and no SMS was sent.",
+      "copyAccessRequest": "Copy access request",
+      "message": "You don't have permission to create rides. Nothing was sent to Yango and no SMS was sent."
     },
     "unknownErrorBanner": {
       "message": "We don't know if the ride was created, check Orders before retrying",
       "openOrders": "Open Orders",
       "tryAgain": "Try again"
+    },
+    "storeUnavailableBanner": {
+      "message": "Temporary failure checking permissions. Nothing was sent to Yango and no SMS was sent.",
+      "retry": "Try again"
     }
   },
   "permissions": {
@@ -1558,6 +1583,7 @@
     "heatMap": "Demand heat map",
     "priceCalculator": "Price calculator",
     "salesOperation": "Appli Taxi CRM",
+    "salesMySpace": "My Space",
     "salesPipeline": "Pipeline",
     "salesSignedClients": "Portfolio",
     "salesB2BClients": "B2B clients",

@@ -175,14 +175,16 @@ async function saveToStorage(store: YangoTokenRegistryStore): Promise<boolean> {
   }
 }
 
-async function loadFromKv(): Promise<YangoTokenRegistryStore | null> {
-  if (!canUseKv()) return null;
+type KvLoadResult = { store: YangoTokenRegistryStore | null; errored: boolean };
+
+async function loadFromKv(): Promise<KvLoadResult> {
+  if (!canUseKv()) return { store: null, errored: false };
   try {
     const raw = await kv.get<YangoTokenRegistryStore>(YANGO_TOKEN_REGISTRY_KEY);
-    if (!raw) return null;
-    return normalizeStore(raw);
+    if (!raw) return { store: null, errored: false };
+    return { store: normalizeStore(raw), errored: false };
   } catch {
-    return null;
+    return { store: null, errored: true };
   }
 }
 
@@ -204,7 +206,7 @@ async function loadStore(): Promise<YangoTokenRegistryStore> {
     return memoryCache.store;
   }
 
-  const [tableStore, storageStore, kvStore] = await Promise.all([
+  const [tableStore, storageStore, kvLoad] = await Promise.all([
     loadFromSupabaseTable(),
     loadFromStorage(),
     loadFromKv(),
@@ -214,14 +216,18 @@ async function loadStore(): Promise<YangoTokenRegistryStore> {
     fallbackMemoryStore,
     tableStore ?? { entries: [] },
     storageStore ?? { entries: [] },
-    kvStore ?? { entries: [] },
+    kvLoad.store ?? { entries: [] },
   );
 
   fallbackMemoryStore = merged;
   memoryCache = { at: Date.now(), store: merged };
 
-  // If KV is empty/unavailable but we have durable data, try to heal KV once.
-  if (merged.entries.length > 0 && (!kvStore || kvStore.entries.length === 0)) {
+  // Heal KV only when read succeeded but KV key is empty — never write on KV error/outage.
+  if (
+    merged.entries.length > 0 &&
+    !kvLoad.errored &&
+    (!kvLoad.store || kvLoad.store.entries.length === 0)
+  ) {
     void saveToKvBestEffort(merged);
   }
 

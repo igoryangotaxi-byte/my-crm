@@ -4,21 +4,31 @@ import {
   CURRENT_PERMISSIONS_VERSION,
   mergeRolePermissions,
   resolvePostLoginPath,
+  STAFF_MY_SPACE_PATH,
   SALES_OPERATION_PAGE_KEYS,
 } from "@/lib/role-permissions";
 import { resolvePostLoginPathForUser } from "@/lib/sso/post-login-path";
 import { defaultRolePermissions, type AuthStoreData } from "@/types/auth";
 
 describe("sales operation RBAC", () => {
-  it("defaults sales operation off for User and Team Lead", () => {
+  it("code defaults: User and Team Lead have SO off until KV grant (My Space inherits SO)", () => {
     for (const role of ["User", "Team Lead"] as const) {
       const permissions = defaultRolePermissions[role];
-      for (const key of SALES_OPERATION_PAGE_KEYS) {
-        // preOrders is also a primary CRM page (on for User / Team Lead).
-        if (key === "preOrders") continue;
-        assert.equal(permissions[key], false, `${role} should not access ${key} by default`);
-      }
+      assert.equal(permissions.salesOperation, false, `${role} SO shell off in code defaults`);
+      assert.equal(permissions.salesMySpace, false, `${role} My Space off in code defaults`);
+      assert.equal(permissions.salesPipeline, false, `${role} pipeline off`);
     }
+  });
+
+  it("salesMySpace inherits salesOperation when absent in stored KV", () => {
+    const withSo = mergeRolePermissions("User", { salesOperation: true }, 18);
+    assert.equal(withSo.salesOperation, true);
+    assert.equal(withSo.salesMySpace, true);
+    assert.equal(withSo.salesPipeline, false);
+
+    const withoutSo = mergeRolePermissions("User", {}, 18);
+    assert.equal(withoutSo.salesOperation, false);
+    assert.equal(withoutSo.salesMySpace, false);
   });
 
   it("defaults sales operation on for Account Manager and Sales Manager (except Admin-only settings)", () => {
@@ -47,36 +57,48 @@ describe("sales operation RBAC", () => {
     assert.equal(merged.salesPipeline, true);
     assert.equal(merged.salesManagerAnalytics, true);
     assert.equal(merged.salesAutomation, true);
-    // salesSettings stays Admin-only even when inheriting the legacy flag.
     assert.equal(merged.salesSettings, false);
     assert.equal(merged.salesDocumentation, true);
     assert.equal(CURRENT_PERMISSIONS_VERSION, 18);
   });
 
-  it("does not land User role on SO pipeline (prevents login flicker loop)", () => {
-    const canAccess = (page: string) =>
-      Boolean(defaultRolePermissions.User[page as keyof (typeof defaultRolePermissions)["User"]]);
-    const path = resolvePostLoginPath({ accountType: "internal", canAccess });
-    assert.ok(path);
-    assert.equal(path?.startsWith("/sales-operation"), false);
-    assert.equal(path, "/dashboard");
-  });
+  it("lands internal staff on My Space when SO + My Space are granted in store", () => {
+    const canAccessUser = (page: string) => {
+      const merged = mergeRolePermissions(
+        "User",
+        { salesOperation: true, salesMySpace: true },
+        18,
+      );
+      return Boolean(merged[page as keyof typeof merged]);
+    };
+    assert.equal(
+      resolvePostLoginPath({ accountType: "internal", canAccess: canAccessUser }),
+      STAFF_MY_SPACE_PATH,
+    );
 
-  it("lands Account Manager on an SO page", () => {
-    const canAccess = (page: string) =>
+    const canAccessAm = (page: string) =>
       Boolean(
         defaultRolePermissions["Account Manager"][
           page as keyof (typeof defaultRolePermissions)["Account Manager"]
         ],
       );
-    const path = resolvePostLoginPath({ accountType: "internal", canAccess });
-    assert.equal(path, "/sales-operation/pipeline");
+    assert.equal(
+      resolvePostLoginPath({ accountType: "internal", canAccess: canAccessAm }),
+      STAFF_MY_SPACE_PATH,
+    );
   });
 
-  it("resolvePostLoginPathForUser matches role defaults for User", () => {
+  it("resolvePostLoginPathForUser matches My Space when KV grants SO for User", () => {
     const store = {
       users: [],
-      rolePermissions: defaultRolePermissions,
+      rolePermissions: {
+        ...defaultRolePermissions,
+        User: {
+          ...defaultRolePermissions.User,
+          salesOperation: true,
+          salesMySpace: true,
+        },
+      },
       roleAreaAccess: {} as AuthStoreData["roleAreaAccess"],
       roleDashboardBlockAccess: {} as AuthStoreData["roleDashboardBlockAccess"],
       storeMeta: { permissionsVersion: CURRENT_PERMISSIONS_VERSION },
@@ -86,6 +108,6 @@ describe("sales operation RBAC", () => {
       accountType: "internal",
       status: "approved",
     });
-    assert.equal(path, "/dashboard");
+    assert.equal(path, STAFF_MY_SPACE_PATH);
   });
 });

@@ -7,13 +7,17 @@ import {
 } from "@/lib/sso/google";
 import { persistGoogleWorkspaceTokens } from "@/lib/google/persist-workspace-tokens";
 import { findOrProvisionSsoUser } from "@/lib/sso/provision";
-import { resolvePostLoginPathForUser } from "@/lib/sso/post-login-path";
+import { mergeAllRolePermissions, CURRENT_PERMISSIONS_VERSION } from "@/lib/role-permissions";
+import { resolveAuthenticatedLandingPath } from "@/lib/login-redirect";
 import { loadAuthStore } from "@/lib/auth-store";
 import { buildSessionSetCookie } from "@/lib/server-session";
+import { sanitizeSameOriginReturnPath } from "@/lib/safe-return-url";
+import type { AppPageKey, AppRole } from "@/types/auth";
 
 export const dynamic = "force-dynamic";
 
 const STATE_COOKIE_NAME = "google_oauth_state";
+const RETURN_COOKIE_NAME = "google_oauth_next";
 
 function loginRedirect(origin: string, error: string) {
   const response = NextResponse.redirect(new URL(`/login?error=${error}`, origin));
@@ -84,11 +88,29 @@ export async function GET(request: Request) {
 
     // Land on a page the user can actually open. Hardcoding /sales-operation/pipeline
     // caused a login ↔ pipeline flicker for roles without Appli Taxi CRM access (e.g. User).
+    const returnCookie = cookieHeader
+      .split(";")
+      .map((chunk) => chunk.trim())
+      .find((chunk) => chunk.startsWith(`${RETURN_COOKIE_NAME}=`))
+      ?.slice(RETURN_COOKIE_NAME.length + 1);
+    const returnPath = sanitizeSameOriginReturnPath(returnCookie ?? null);
+
     let landing = "/login";
     try {
       const store = await loadAuthStore();
+      const rolePermissions = mergeAllRolePermissions(
+        store.rolePermissions,
+        store.storeMeta?.permissionsVersion ?? CURRENT_PERMISSIONS_VERSION,
+      );
+      const role = provisioned.user.role as AppRole;
+      const pages = rolePermissions[role];
+      const canAccess = (page: AppPageKey) => Boolean(pages?.[page]);
       landing =
-        resolvePostLoginPathForUser(store, provisioned.user) ?? "/login?error=noaccess";
+        resolveAuthenticatedLandingPath({
+          accountType: provisioned.user.accountType,
+          canAccess,
+          returnPath,
+        });
     } catch (error) {
       console.error("Failed to resolve post-login path:", error);
       landing = "/login";
@@ -98,6 +120,15 @@ export async function GET(request: Request) {
     response.cookies.set(buildSessionSetCookie(provisioned.user.id));
     response.cookies.set({
       name: STATE_COOKIE_NAME,
+      value: "",
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    });
+    response.cookies.set({
+      name: RETURN_COOKIE_NAME,
       value: "",
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

@@ -429,21 +429,47 @@
       "notifError": "Не удалось отметить уведомление прочитанным."
     }
   },
+  "auth": {
+    "permissionStoreUnavailable": {
+      "title": "Не удалось проверить права доступа",
+      "description": "Это временный сбой системы, а не ваши права. Попробуйте позже или сообщите в поддержку.",
+      "retry": "Повторить",
+      "pollBanner": "Хранилище прав временно недоступно. Сессия активна; показаны последние загруженные права.",
+      "adminBanner": "Хранилище прав недоступно. Значения ролей скрыты; изменения сейчас не сохранятся.",
+      "adminSaveDisabledTooltip": "Хранилище прав недоступно. Повторите, когда KV восстановится."
+    }
+  },
   "access": {
+    "noAccess": {
+      "titleSection": "Нет доступа: {section}",
+      "titleNoPages": "Нет доступа",
+      "descriptionNoPages": "Для этой учётной записи не включены страницы. Обратитесь к администратору.",
+      "descriptionForbidden": "У вас нет прав на эту страницу. Обратитесь к администратору.",
+      "signedInAs": "Вход",
+      "permission": "Право",
+      "page": "Страница",
+      "goToMySpace": "В My Space",
+      "copyAccessRequest": "Скопировать запрос доступа",
+      "copied": "Скопировано",
+      "permissionMissing": "Не хватает права: {name} ({key})"
+    },
     "permissionHint": {
       "lockedTooltip": "Для этого действия нужно право {permission}"
     },
     "forbiddenBanner": {
-      "message": "Нет права создавать поездки. Ничего не отправлено в Yango, SMS не ушло",
-      "copyAccessRequest": "Скопировать запрос доступа"
+      "rideNotCreated": "Поездка не создана: нужно право {permission}",
+      "nothingSentYango": "В Yango ничего не отправлялось, SMS не отправлялись.",
+      "copyAccessRequest": "Скопировать запрос доступа",
+      "message": "Нет права создавать поездки. Ничего не отправлено в Yango, SMS не ушло"
+    },
+    "unknownErrorBanner": {
+      "message": "Не знаем, создана ли поездка",
+      "openOrders": "Открыть Orders",
+      "tryAgain": "Повторить"
     },
     "storeUnavailableBanner": {
       "message": "Временный сбой проверки прав. Ничего не отправлено в Yango, SMS не ушло",
       "retry": "Повторить"
-    },
-    "unknownErrorBanner": {
-      "message": "Не знаем, создана ли поездка",
-      "openOrders": "Открыть Orders"
     }
   },
   "permissions": {
@@ -458,6 +484,7 @@
     "heatMap": "Heat map",
     "priceCalculator": "Калькулятор",
     "salesOperation": "Appli Taxi CRM",
+    "salesMySpace": "My Space",
     "salesPipeline": "Pipeline",
     "salesSignedClients": "Portfolio",
     "salesB2BClients": "B2B clients",

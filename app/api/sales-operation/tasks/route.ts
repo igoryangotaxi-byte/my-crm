@@ -1,5 +1,6 @@
 import { isSupabaseConfigured } from "@/lib/supabase";
-import { requireSalesOperationPage } from "@/lib/sales-operation/require-sales-access";
+import { requireMySpacePage } from "@/lib/sales-operation/require-sales-access";
+import { resolveSalesTasksListScope } from "@/lib/sales-operation/my-space-data-scope";
 import { listSalesTasksWithLead } from "@/lib/sales-operation/tasks";
 import { SALES_TASK_STATUSES, type SalesTaskStatus } from "@/lib/sales-operation/types";
 
@@ -7,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const auth = await requireSalesOperationPage(request, "salesPipeline");
+  const auth = await requireMySpacePage(request);
   if (!auth.ok) return auth.response;
   if (!isSupabaseConfigured()) {
     return Response.json({ ok: false, error: "Supabase is not configured." }, { status: 500 });
@@ -15,8 +16,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const scopeParam = url.searchParams.get("scope");
-  const scope =
-    scopeParam === "all" || scopeParam === "created" ? scopeParam : "mine";
+  const scope = resolveSalesTasksListScope(auth.user.role, scopeParam);
   const statusParam = url.searchParams.get("status") ?? "open";
 
   let statuses: SalesTaskStatus[];

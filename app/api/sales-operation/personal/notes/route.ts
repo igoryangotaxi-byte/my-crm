@@ -1,5 +1,5 @@
 import { isSupabaseConfigured } from "@/lib/supabase";
-import { requireSalesOperationPage } from "@/lib/sales-operation/require-sales-access";
+import { requireMySpacePage } from "@/lib/sales-operation/require-sales-access";
 import { createPersonalNote, listPersonalNotes } from "@/lib/sales-operation/personal-space";
 import type { CreatePersonalNoteInput } from "@/lib/sales-operation/types";
 
@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const auth = await requireSalesOperationPage(request, "salesPipeline");
+  const auth = await requireMySpacePage(request);
   if (!auth.ok) return auth.response;
   if (!isSupabaseConfigured()) {
     return Response.json({ ok: false, error: "Supabase is not configured." }, { status: 500 });
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireSalesOperationPage(request, "salesPipeline");
+  const auth = await requireMySpacePage(request);
   if (!auth.ok) return auth.response;
   if (!isSupabaseConfigured()) {
     return Response.json({ ok: false, error: "Supabase is not configured." }, { status: 500 });
