@@ -133,7 +133,7 @@ let lastFleetFetchAtMs = 0;
 let diskSnapshotLoaded = false;
 const FLEET_SNAPSHOT_FILE = path.join(process.cwd(), ".cache", "fleet-drivers-snapshot.json");
 const FLEET_SNAPSHOT_KV_KEY = "appli:fleet:drivers-snapshot:v1";
-const FLEET_KV_PERSIST_THROTTLE_MS = 5 * 60 * 1000;
+const FLEET_KV_PERSIST_THROTTLE_MS = 4000;
 let lastFleetKvPersistAtMs = 0;
 
 function canUseFleetKv(): boolean {

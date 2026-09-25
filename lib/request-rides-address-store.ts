@@ -86,14 +86,13 @@ export async function loadRequestRideAddressSnapshotsBatch(input: {
   const out: Record<string, RequestRideAddressSnapshot> = {};
   if (canUseKv()) {
     try {
-      const keys = orderIds.map((orderId) =>
-        storageKey(input.tokenLabel, input.clientId, orderId),
+      await Promise.all(
+        orderIds.map(async (orderId) => {
+          const key = storageKey(input.tokenLabel, input.clientId, orderId);
+          const doc = normalizeSnapshot(await kv.get<unknown>(key));
+          if (doc) out[orderId] = doc;
+        }),
       );
-      const values = await kv.mget<(unknown | null)[]>(...keys);
-      orderIds.forEach((orderId, index) => {
-        const doc = normalizeSnapshot(values[index]);
-        if (doc) out[orderId] = doc;
-      });
       return out;
     } catch {
       // fall through to memory

@@ -2,7 +2,7 @@
 
 ## Idle Sales Operation tab — auth-store `kv.get` budget (prod fallback)
 
-Each API call that invokes `loadAuthStore()` may read KV once (30s in-process coalescing per instance). Estimates below count **KV GET equivalents** from auth-store loads, not Yango token registry or address keys.
+Each API call that invokes `loadAuthStore()` may read KV once (30s in-process coalescing per instance). Estimates below count **KV GET equivalents** from auth-store loads only — not Yango token registry, fleet/drivers-map snapshot KV, request-rides address keys, or pre-orders poll traffic (those stay as on `main` in PR A; fleet + address KV reductions are PR C).
 
 Assumptions: one warm Node instance, `AUTH_KV_SNAPSHOT_TTL_MS` = 30s, single `loadAuthStore()` per access check after this branch.
 
