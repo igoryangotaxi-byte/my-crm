@@ -89,4 +89,9 @@ npm run migrate:drivers-sheet
 - `Registered` → Registered  
 - empty Status → New  
 - other Status → Rejected + substatus  
-- no-license tab → New (`taxi_license: no`)
+- no-license tab → **Rejected** + substatus `No license`
+- Form answer `לא` / no-license → same (webhook)
+
+```bash
+npx tsx scripts/dedupe-driver-leads-by-phone.ts --apply
+```

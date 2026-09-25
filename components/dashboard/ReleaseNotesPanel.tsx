@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-09-25",
+    title: "Drivers no-license → Rejected (0.2.77)",
+    notes:
+      "App version 0.2.77. Sheet tab בלי רישיון מונית and form taxi-license=לא map to Rejected with substatus No license. Elementor form regained taxi license select; Form Bridge sends taxiLicense. Historical no_license imports updated (497).",
+  },
+  {
+    date: "2026-09-25",
     title: "Drivers Pipeline from appli.taxi (0.2.76)",
     notes:
       "App version 0.2.76. New Sales Operation board Drivers Pipeline (New / In Progress / Registered / Rejected+substatus) with dial on phone. Elementor form 3684f71 → POST /api/sales-operation/webhooks/drivers (secret DRIVERS_PIPELINE_WEBHOOK_SECRET). WP Form Bridge v1.2; Google Sheets action removed. Sheet history migrated (~2298 leads). RBAC salesDriversPipeline (permissions v19). SQL: supabase_driver_leads.sql (applied). (a4973382)",

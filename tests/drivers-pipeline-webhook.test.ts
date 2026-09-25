@@ -12,13 +12,27 @@ describe("drivers pipeline webhook mapper", () => {
       phone: "0501234567",
       formId: "3684f71",
       submissionId: "elementor-drivers-test-1",
+      taxiLicense: "כן",
     });
     assert.equal(input.fullName, "Test Driver");
     assert.equal(input.status, "new");
+    assert.equal(input.rejectedSubstatus, null);
     assert.equal(input.source, "wordpress");
     assert.equal(input.formId, "3684f71");
     assert.equal(submissionId, "elementor-drivers-test-1");
     assert.equal(input.customFields?.submission_id, "elementor-drivers-test-1");
+  });
+
+  it("rejects no-taxi-license answers with No license substatus", () => {
+    const { input } = mapDriversWebhookPayloadToLeadInput({
+      fullName: "No License Driver",
+      phone: "0509998877",
+      taxiLicense: "לא",
+      submissionId: "elementor-drivers-nolics-1",
+    });
+    assert.equal(input.status, "rejected");
+    assert.equal(input.rejectedSubstatus, "No license");
+    assert.equal(input.customFields?.taxi_license_normalized, "no");
   });
 
   it("requires fullName", () => {

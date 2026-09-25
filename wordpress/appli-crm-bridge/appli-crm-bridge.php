@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Appli CRM Form Bridge
  * Description: Sends Elementor form submissions from appli.taxi to Sales Operation CRM (B2B + Drivers Pipeline).
- * Version: 1.2.0
+ * Version: 1.2.1
  */
 
 if (!defined('ABSPATH')) {
@@ -73,6 +73,13 @@ add_action('elementor_pro/forms/new_record', function ($record, $handler) {
     $full_name = $get(['name', 'fullName', 'full_name']);
     $email = $get(['email']);
     $phone = $get(['phone', 'tel', 'phonenumber', 'field_845eff1']);
+    $taxi_license = $get([
+        'taxi_license',
+        'taxiLicense',
+        'field_taxi_license',
+        'license',
+        'רישיון',
+    ]);
 
     if ($full_name === '') {
         return;
@@ -117,12 +124,14 @@ add_action('elementor_pro/forms/new_record', function ($record, $handler) {
             'fullName' => $full_name,
             'email' => $email !== '' ? $email : null,
             'phone' => $phone !== '' ? $phone : null,
+            'taxiLicense' => $taxi_license !== '' ? $taxi_license : null,
             'formId' => $stable_form,
             'submissionId' => $submission_id,
             'campaignName' => 'appli.taxi-drivers',
             'customFields' => array_filter([
                 'elementor_form_name' => $form_name !== '' ? $form_name : null,
                 'elementor_form_id' => $form_id !== '' ? $form_id : null,
+                'taxi_license' => $taxi_license !== '' ? $taxi_license : null,
             ]),
         ]);
         return;

@@ -1,4 +1,8 @@
 import type { CreateDriverLeadInput } from "@/lib/drivers-pipeline/types";
+import {
+  classifyTaxiLicenseAnswer,
+  NO_TAXI_LICENSE_SUBSTATUS,
+} from "@/lib/drivers-pipeline/taxi-license";
 
 function normalizeKey(key: string): string {
   return key.trim().toLowerCase().replace(/[\s-]+/g, "_");
@@ -135,14 +139,30 @@ export function mapDriversWebhookPayloadToLeadInput(body: Record<string, unknown
   const utmMedium = pickString(merged, ["medium", "utm_medium"]);
   if (utmSource) customFields.utm_source = utmSource;
   if (utmMedium) customFields.utm_medium = utmMedium;
-  const taxiLicense = pickString(merged, ["taxi_license", "taxiLicense", "taxi license?"]);
+  const taxiLicense = pickString(merged, [
+    "taxi_license",
+    "taxiLicense",
+    "taxi license?",
+    "taxi license",
+    "field_taxi_license",
+    "license",
+    "רישיון",
+  ]);
   if (taxiLicense) customFields.taxi_license = taxiLicense;
+
+  const licenseClass = classifyTaxiLicenseAnswer(taxiLicense);
+  if (licenseClass === "no") {
+    customFields.taxi_license_normalized = "no";
+  } else if (licenseClass === "yes") {
+    customFields.taxi_license_normalized = "yes";
+  }
 
   const input: CreateDriverLeadInput = {
     fullName,
     email,
     phone,
-    status: "new",
+    status: licenseClass === "no" ? "rejected" : "new",
+    rejectedSubstatus: licenseClass === "no" ? NO_TAXI_LICENSE_SUBSTATUS : null,
     source: "wordpress",
     formId,
     campaignName,

@@ -2,10 +2,11 @@
  * One-shot: migrate AppliTaxi Drivers Leads Google Sheet → driver_leads.
  *
  * Sources (public CSV):
- * - gid=178449912  עם רישיון למונית (Status mapping)
- * - gid=819928561  בלי רישיון מונית → all New
+ * - gid=178449912  עם רישיון למונית (Status mapping) — imported first
+ * - gid=819928561  בלי רישיון מונית → rejected + "No license"
+ *   (skipped if phone already exists on licensed tab)
  *
- * Mapping:
+ * Mapping (licensed tab Status):
  * - Status === "Registered" → registered
  * - empty Status → new
  * - any other Status → rejected + rejected_substatus = Status
@@ -13,15 +14,20 @@
  * Usage:
  *   npx tsx scripts/migrate-drivers-sheet.ts
  *   npx tsx scripts/migrate-drivers-sheet.ts --dry-run
+ *
+ * After a bad dual-tab import, also run:
+ *   npx tsx scripts/dedupe-driver-leads-by-phone.ts --apply
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
+import { israelPhoneKey } from "../lib/call-center/phone";
 import { getSupabaseAdminClient, isSupabaseConfigured } from "../lib/supabase";
 import {
   createDriverLead,
   findDriverLeadBySheetRowKey,
 } from "../lib/drivers-pipeline/repository";
+import { NO_TAXI_LICENSE_SUBSTATUS } from "../lib/drivers-pipeline/taxi-license";
 import type { CreateDriverLeadInput, DriverLeadStatus } from "../lib/drivers-pipeline/types";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -142,9 +148,37 @@ function sheetRowKey(parts: {
     .join("|");
 }
 
+async function phoneAlreadyImported(
+  phone: string | null,
+  knownKeys: Set<string>,
+): Promise<boolean> {
+  const key = israelPhoneKey(phone);
+  if (!key) return false;
+  if (knownKeys.has(key)) return true;
+  const supabase = getSupabaseAdminClient();
+  // Match common Israel formats stored as raw sheet digits
+  const variants = [key, `0${key}`, `972${key}`, `+972${key}`];
+  const { data, error } = await supabase
+    .from("driver_leads")
+    .select("id,phone")
+    .in("phone", variants)
+    .limit(20);
+  if (error) throw new Error(error.message);
+  const hit = (data ?? []).some((row) => israelPhoneKey(row.phone as string) === key);
+  if (hit) knownKeys.add(key);
+  return hit;
+}
+
 async function importRows(
   rows: SheetRow[],
-  options: { tab: string; taxiLicense: boolean | null; dryRun: boolean },
+  options: {
+    tab: string;
+    taxiLicense: boolean | null;
+    dryRun: boolean;
+    /** Skip create when this phone already has any lead (no_license after licensed). */
+    skipIfPhoneExists: boolean;
+    knownPhoneKeys: Set<string>;
+  },
 ): Promise<{ created: number; skipped: number; errors: number }> {
   let created = 0;
   let skipped = 0;
@@ -166,7 +200,10 @@ async function importRows(
 
     const mapped =
       options.taxiLicense === false
-        ? { status: "new" as const, rejectedSubstatus: null }
+        ? {
+            status: "rejected" as const,
+            rejectedSubstatus: NO_TAXI_LICENSE_SUBSTATUS,
+          }
         : mapLicensedStatus(statusRaw);
 
     const key = sheetRowKey({
@@ -182,6 +219,16 @@ async function importRows(
       if (existing) {
         skipped++;
         continue;
+      }
+
+      if (options.skipIfPhoneExists) {
+        const dup = options.dryRun
+          ? options.knownPhoneKeys.has(israelPhoneKey(phone))
+          : await phoneAlreadyImported(phone, options.knownPhoneKeys);
+        if (dup) {
+          skipped++;
+          continue;
+        }
       }
 
       const input: CreateDriverLeadInput = {
@@ -205,10 +252,14 @@ async function importRows(
       };
 
       if (options.dryRun) {
+        const phoneKey = israelPhoneKey(phone);
+        if (phoneKey) options.knownPhoneKeys.add(phoneKey);
         created++;
         continue;
       }
       await createDriverLead(input, ACTOR);
+      const phoneKey = israelPhoneKey(phone);
+      if (phoneKey) options.knownPhoneKeys.add(phoneKey);
       created++;
     } catch (error) {
       errors++;
@@ -229,12 +280,16 @@ async function main() {
 
   console.log(dryRun ? "DRY RUN — no writes" : "Importing driver leads from Google Sheet…");
 
+  const knownPhoneKeys = new Set<string>();
+
   const licensed = await fetchSheetCsv(LICENSED_GID);
   console.log(`Licensed tab rows: ${licensed.length}`);
   const licensedResult = await importRows(licensed, {
     tab: "licensed",
     taxiLicense: true,
     dryRun,
+    skipIfPhoneExists: false,
+    knownPhoneKeys,
   });
   console.log("Licensed:", licensedResult);
 
@@ -244,6 +299,9 @@ async function main() {
     tab: "no_license",
     taxiLicense: false,
     dryRun,
+    // Same phone often already Registered/Rejected on licensed tab — do not also create New.
+    skipIfPhoneExists: true,
+    knownPhoneKeys,
   });
   console.log("No-license:", noLicenseResult);
 
