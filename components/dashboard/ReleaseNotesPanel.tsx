@@ -9,7 +9,7 @@ const releaseItems: ReleaseItem[] = [
     date: "2026-09-25",
     title: "Drivers no-license → Rejected (0.2.77)",
     notes:
-      "App version 0.2.77. Sheet tab בלי רישיון מונית and form taxi-license=לא map to Rejected with substatus No license. Elementor form regained taxi license select; Form Bridge sends taxiLicense. Historical no_license imports updated (497).",
+      "App version 0.2.77. Sheet tab בלי רישיון מונית and form taxi-license=לא map to Rejected with substatus No license. Elementor form regained taxi license select; Form Bridge sends taxiLicense. Historical no_license imports updated (497). (3832e331)",
   },
   {
     date: "2026-09-25",
