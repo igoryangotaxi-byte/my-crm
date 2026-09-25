@@ -1653,11 +1653,20 @@ export function B2BPreOrdersPanel({
 
   useEffect(() => {
     if (view !== "orders" || !ordersRemote) return;
-    void refreshOrdersLive();
-    const timer = window.setInterval(() => {
+    const tick = () => {
+      if (document.hidden) return;
       void refreshOrdersLive();
-    }, 15_000);
-    return () => window.clearInterval(timer);
+    };
+    tick();
+    const timer = window.setInterval(tick, 15_000);
+    const onVisibilityChange = () => {
+      if (!document.hidden) tick();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, [view, ordersRemote, fromDate, toDate, refreshOrdersLive]);
 
   const ordersSummary = useMemo(() => {

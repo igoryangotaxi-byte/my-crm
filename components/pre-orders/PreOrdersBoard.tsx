@@ -208,11 +208,20 @@ export function PreOrdersBoard({
 
   useEffect(() => {
     if (!controllerMode) return;
-    void refreshLive();
-    const timer = window.setInterval(() => {
+    const tick = () => {
+      if (document.hidden) return;
       void refreshLive();
-    }, LIVE_POLL_MS);
-    return () => window.clearInterval(timer);
+    };
+    tick();
+    const timer = window.setInterval(tick, LIVE_POLL_MS);
+    const onVisibilityChange = () => {
+      if (!document.hidden) tick();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, [controllerMode, refreshLive]);
 
   useEffect(() => {

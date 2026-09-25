@@ -304,15 +304,11 @@ function canUseKv() {
 async function loadLegacyAuthStore(): Promise<AuthStoreData> {
   if (canUseKv()) {
     try {
-      const raw = await kv.get<AuthStoreData>(AUTH_STORE_KEY);
-      const normalized = normalizeStore(raw);
-      const prevVersion = raw?.storeMeta?.permissionsVersion ?? 0;
-      if (!raw || prevVersion < CURRENT_PERMISSIONS_VERSION) {
-        await kv.set(AUTH_STORE_KEY, normalized);
-      }
-      return normalized;
+      const { fetchAuthKvSnapshotCached } = await import("@/lib/auth-kv-cache");
+      const raw = await fetchAuthKvSnapshotCached(() => kv.get<AuthStoreData>(AUTH_STORE_KEY));
+      return normalizeStore(raw);
     } catch {
-      // Fall through to memory store for resilience.
+      // Fall through to memory store for resilience (unchanged operator behavior).
     }
   }
 
@@ -326,24 +322,31 @@ async function loadLegacyAuthStore(): Promise<AuthStoreData> {
 
 async function saveLegacyAuthStore(data: AuthStoreData): Promise<void> {
   const normalized = normalizeStore(data);
+  const { PermissionStoreUnavailableError } = await import("@/lib/permission-store-unavailable");
 
-  if (canUseKv()) {
-    try {
-      await kv.set(AUTH_STORE_KEY, normalized);
-      return;
-    } catch {
-      // Fall through to memory store for resilience.
-    }
+  if (!canUseKv()) {
+    throw new PermissionStoreUnavailableError(
+      "Auth permission store (Upstash KV) is unavailable. Changes were not saved.",
+    );
   }
 
-  fallbackMemoryStore = normalized;
+  try {
+    await kv.set(AUTH_STORE_KEY, normalized);
+    const { invalidateAuthKvSnapshotCache } = await import("@/lib/auth-kv-cache");
+    invalidateAuthKvSnapshotCache();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "unknown error";
+    throw new PermissionStoreUnavailableError(
+      `Auth permission store (Upstash KV) is unavailable. Changes were not saved. (${detail})`,
+    );
+  }
 }
 
 function shouldTrySupabase() {
   return isSupabaseConfigured();
 }
 
-export async function loadAuthStore(): Promise<AuthStoreData> {
+async function loadAuthStoreInner(): Promise<AuthStoreData> {
   if (shouldTrySupabase()) {
     try {
       return await loadSupabaseAuthStore();
@@ -354,16 +357,34 @@ export async function loadAuthStore(): Promise<AuthStoreData> {
   return loadLegacyAuthStore();
 }
 
+export async function loadAuthStore(): Promise<AuthStoreData> {
+  const { isInAuthKvRequestContext, runWithAuthKvRequestContextAsync } = await import(
+    "@/lib/auth-kv-request-context"
+  );
+  if (isInAuthKvRequestContext()) {
+    return loadAuthStoreInner();
+  }
+  return runWithAuthKvRequestContextAsync(() => loadAuthStoreInner());
+}
+
 export async function saveAuthStore(data: AuthStoreData): Promise<void> {
   if (shouldTrySupabase()) {
     try {
       await saveAuthStoreToSupabase(data);
+      const { invalidateAuthKvSnapshotCache } = await import("@/lib/auth-kv-cache");
+      invalidateAuthKvSnapshotCache();
       return;
     } catch {
       try {
         await saveAuthUsersToSupabaseAuthFallback(data);
-      } catch {
-        // Continue to legacy save for resilience.
+      } catch (error) {
+        const { isPermissionStoreUnavailableError } = await import(
+          "@/lib/permission-store-unavailable"
+        );
+        if (isPermissionStoreUnavailableError(error)) {
+          throw error;
+        }
+        // Auth metadata sync best-effort; KV snapshot is required for full store saves.
       }
       await saveLegacyAuthStore(data);
       return;

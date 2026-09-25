@@ -451,7 +451,8 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
 async function loadLegacyStoreForFallback(): Promise<AuthStoreData> {
   if (canUseKv()) {
     try {
-      const raw = await kv.get<AuthStoreData>(AUTH_STORE_KEY);
+      const { fetchAuthKvSnapshotCached } = await import("@/lib/auth-kv-cache");
+      const raw = await fetchAuthKvSnapshotCached(() => kv.get<AuthStoreData>(AUTH_STORE_KEY));
       return normalizeStore(raw);
     } catch {
       // Fall back to in-memory/default store below.
@@ -1209,6 +1210,9 @@ export async function saveAuthUsersToSupabaseAuthFallback(data: AuthStoreData): 
       throw new Error(`Failed to create auth user ${user.email}: ${error?.message ?? "unknown"}`);
     }
   }
+
+  const { guardManagedUserDeletionsRequireKvRead } = await import("@/lib/auth-kv-save-guard");
+  guardManagedUserDeletionsRequireKvRead();
 
   const wantedIds = new Set(normalized.users.map((user) => user.id));
   const managedToDelete = existingUsers.filter(

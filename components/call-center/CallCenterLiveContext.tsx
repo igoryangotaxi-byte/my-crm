@@ -6,10 +6,13 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
+import {
+  type LivePollTier,
+  useLinkedOperatorLivePoll,
+} from "@/lib/client/use-linked-operator-live-poll";
 
 export type CallCenterParticipant = {
   id: number;
@@ -56,8 +59,6 @@ type CallCenterLiveState = {
 
 const CallCenterLiveContext = createContext<CallCenterLiveState | null>(null);
 
-const POLL_MS = 2000;
-
 function isRinging(status: string): boolean {
   const s = status.toLowerCase();
   return s.includes("ring") || s === "dialing" || s === "trying";
@@ -84,9 +85,9 @@ export function CallCenterLiveProvider({ children }: { children: ReactNode }) {
   const [participants, setParticipants] = useState<CallCenterParticipant[]>([]);
   const [screenPopRequest, setScreenPopRequest] = useState<CallCenterScreenPopRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const enabledRef = useRef(true);
+  const [pollTier, setPollTier] = useState<LivePollTier>("idle");
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<LivePollTier | void> => {
     try {
       const res = await fetch("/api/sales-operation/call-center/participants", {
         cache: "no-store",
@@ -105,12 +106,14 @@ export function CallCenterLiveProvider({ children }: { children: ReactNode }) {
         setExtension(null);
         setParticipants([]);
         setError(null);
-        return;
+        setPollTier("idle");
+        return "idle";
       }
       if (!res.ok || !json.ok) {
         if (res.status === 403 || res.status === 401) {
           setLinked(false);
-          return;
+          setPollTier("idle");
+          return "idle";
         }
         setError(json.error ?? "Call Center poll failed");
         return;
@@ -121,22 +124,14 @@ export function CallCenterLiveProvider({ children }: { children: ReactNode }) {
       setNotificationsMutedState(Boolean(json.notificationsMuted));
       setParticipants(json.participants ?? []);
       setError(null);
+      setPollTier("fast");
+      return "fast";
     } catch {
       // Ignore transient network errors during poll.
     }
   }, []);
 
-  useEffect(() => {
-    enabledRef.current = true;
-    void refresh();
-    const timer = window.setInterval(() => {
-      if (enabledRef.current) void refresh();
-    }, POLL_MS);
-    return () => {
-      enabledRef.current = false;
-      window.clearInterval(timer);
-    };
-  }, [refresh]);
+  useLinkedOperatorLivePoll(refresh, pollTier);
 
   const setOperatorStatus = useCallback(
     async (status: string) => {
