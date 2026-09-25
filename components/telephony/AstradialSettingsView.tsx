@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { refreshTelephonyLiveAfterAgentLink } from "@/components/telephony/TelephonyLiveContext";
 import { AstradialDialer } from "@/components/telephony/AstradialDialer";
 import { AstradialRecentCalls } from "@/components/telephony/AstradialRecentCalls";
 import { cn } from "@/lib/ui/cn";
@@ -77,6 +78,7 @@ export function AstradialSettingsView() {
         return;
       }
       setMessage("Extension linked.");
+      refreshTelephonyLiveAfterAgentLink();
       await load();
     } finally {
       setSaving(false);

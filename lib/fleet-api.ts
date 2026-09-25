@@ -11,7 +11,7 @@ import { kv } from "@vercel/kv";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-const FLEET_BASE_URL = process.env.FLEET_API_BASE_URL?.trim() || "https://fleet-api.yango.tech";
+const FLEET_BASE_URL = process.env.FLEET_API_BASE_URL?.trim() || "https://fleet-api.taxi.yandex.net";
 const FLEET_API_KEY = process.env.FLEET_API_KEY?.trim() || "";
 const FLEET_CLIENT_ID = process.env.FLEET_CLIENT_ID?.trim() || "";
 const FLEET_PARK_ID = process.env.FLEET_PARK_ID?.trim() || "";
@@ -133,7 +133,7 @@ let lastFleetFetchAtMs = 0;
 let diskSnapshotLoaded = false;
 const FLEET_SNAPSHOT_FILE = path.join(process.cwd(), ".cache", "fleet-drivers-snapshot.json");
 const FLEET_SNAPSHOT_KV_KEY = "appli:fleet:drivers-snapshot:v1";
-const FLEET_KV_PERSIST_THROTTLE_MS = 4000;
+const FLEET_KV_PERSIST_THROTTLE_MS = 5 * 60 * 1000;
 let lastFleetKvPersistAtMs = 0;
 
 function canUseFleetKv(): boolean {

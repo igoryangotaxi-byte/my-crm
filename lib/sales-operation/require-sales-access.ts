@@ -1,7 +1,21 @@
-import type { AppPageKey } from "@/types/auth";
-import { loadAuthStore } from "@/lib/auth-store";
-import { requireApprovedUser } from "@/lib/server-auth";
+import type { AppPageKey, AuthStoreData, AuthUser } from "@/types/auth";
+import { loadAuthStoreForRequest } from "@/lib/server-auth";
 import type { SalesOperationPageKey } from "@/lib/role-permissions";
+
+function isPageAllowed(
+  store: AuthStoreData,
+  user: AuthUser,
+  pageKey: SalesOperationPageKey | "salesOperation",
+): boolean {
+  const permissions = store.rolePermissions[user.role];
+  if (!permissions) {
+    return false;
+  }
+  const shellAllowed = permissions.salesOperation;
+  const pageAllowed =
+    pageKey === "salesOperation" ? shellAllowed : permissions[pageKey as AppPageKey];
+  return Boolean(shellAllowed && pageAllowed);
+}
 
 /** My Space (tasks, calendar, personal items) — salesMySpace or legacy salesPipeline. */
 export async function requireMySpacePage(request: Request) {
@@ -12,47 +26,39 @@ export async function requireSalesOperationPage(
   request: Request,
   pageKey: SalesOperationPageKey | "salesOperation" = "salesOperation",
 ) {
-  const auth = await requireApprovedUser(request);
-  if (!auth.ok) {
-    return auth;
+  const session = await loadAuthStoreForRequest(request);
+  if (!session.ok) {
+    return session;
   }
 
-  const store = await loadAuthStore();
-  const permissions = store.rolePermissions[auth.user.role];
-  if (!permissions) {
+  if (!isPageAllowed(session.store, session.user, pageKey)) {
     return {
       ok: false as const,
       response: Response.json({ ok: false, error: "Forbidden." }, { status: 403 }),
     };
   }
 
-  const shellAllowed = permissions.salesOperation;
-  const pageAllowed =
-    pageKey === "salesOperation" ? shellAllowed : permissions[pageKey as AppPageKey];
-
-  if (!shellAllowed || !pageAllowed) {
-    return {
-      ok: false as const,
-      response: Response.json({ ok: false, error: "Forbidden." }, { status: 403 }),
-    };
-  }
-
-  return { ok: true as const, user: auth.user };
+  return { ok: true as const, user: session.user };
 }
 
 export async function requireAnySalesOperationPage(
   request: Request,
   pageKeys: Array<SalesOperationPageKey | "salesOperation">,
 ) {
-  if (pageKeys.length === 0) {
-    return requireSalesOperationPage(request, "salesOperation");
+  const keys = pageKeys.length > 0 ? pageKeys : (["salesOperation"] as const);
+  const session = await loadAuthStoreForRequest(request);
+  if (!session.ok) {
+    return session;
   }
-  const first = await requireSalesOperationPage(request, pageKeys[0]);
-  if (first.ok) return first;
-  if (first.response.status === 401) return first;
-  for (const pageKey of pageKeys.slice(1)) {
-    const next = await requireSalesOperationPage(request, pageKey);
-    if (next.ok) return next;
+
+  for (const pageKey of keys) {
+    if (isPageAllowed(session.store, session.user, pageKey)) {
+      return { ok: true as const, user: session.user };
+    }
   }
-  return first;
+
+  return {
+    ok: false as const,
+    response: Response.json({ ok: false, error: "Forbidden." }, { status: 403 }),
+  };
 }

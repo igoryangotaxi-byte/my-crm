@@ -1,16 +1,14 @@
-import { loadAuthStore } from "@/lib/auth-store";
-import { requireApprovedUser } from "@/lib/server-auth";
+import { loadAuthStoreForRequest } from "@/lib/server-auth";
 import { getCallCenterUserSettings, type CallCenterUserSettings } from "@/lib/call-center/repository";
 
 export async function requireCallCenterOperatorAccess(request: Request): Promise<
   | { ok: true; user: { id: string } }
   | { ok: false; response: Response }
 > {
-  const auth = await requireApprovedUser(request);
-  if (!auth.ok) return auth;
+  const session = await loadAuthStoreForRequest(request);
+  if (!session.ok) return session;
 
-  const store = await loadAuthStore();
-  const permissions = store.rolePermissions[auth.user.role];
+  const permissions = session.store.rolePermissions[session.user.role];
   const allowed =
     Boolean(permissions?.salesOperation) ||
     Boolean(permissions?.salesCallCenter) ||
@@ -23,7 +21,7 @@ export async function requireCallCenterOperatorAccess(request: Request): Promise
       response: Response.json({ ok: false, error: "Forbidden." }, { status: 403 }),
     };
   }
-  return { ok: true, user: auth.user };
+  return { ok: true, user: session.user };
 }
 
 export async function requireCallCenterDialAccess(request: Request): Promise<

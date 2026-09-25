@@ -3,6 +3,8 @@ import {
   createAuthBackedUser,
   deleteAuthBackedUser,
   loadAuthStore,
+  patchRolePagePermissionsTargeted,
+  patchUserRoleTargeted,
   saveAuthStore,
   updateAuthUserPassword,
 } from "@/lib/auth-store";
@@ -12,7 +14,11 @@ import {
 } from "@/lib/tenant-yango-bootstrap";
 import { ensureRequestRideUserByPhone, listYangoClientUsers } from "@/lib/yango-api";
 import { removeMappedUserId, upsertMappedUserId } from "@/lib/request-rides-user-map";
-import { getRequestUser } from "@/lib/server-auth";
+import {
+  isPermissionStoreUnavailableError,
+  permissionStoreUnavailableResponse,
+} from "@/lib/permission-store-unavailable";
+import { resolveSessionUserFromStore } from "@/lib/server-auth";
 import { buildSessionClearCookie, buildSessionSetCookie } from "@/lib/server-session";
 import { buildAllPageAccess } from "@/lib/role-permissions";
 import {
@@ -28,7 +34,16 @@ type AuthActionResponse = {
   message?: string;
   userId?: string;
   data?: AuthStoreData;
+  updatedUser?: AuthUser;
+  updatedRolePermissions?: {
+    role: AuthUser["role"];
+    permissions: AuthStoreData["rolePermissions"][AuthUser["role"]];
+  };
 };
+
+function sanitizeUser(user: AuthUser): AuthUser {
+  return { ...user, password: "" };
+}
 
 function sanitizeStore(data: AuthStoreData): AuthStoreData {
   return {
@@ -37,11 +52,11 @@ function sanitizeStore(data: AuthStoreData): AuthStoreData {
   };
 }
 
-function isInternalAdmin(user: Awaited<ReturnType<typeof getRequestUser>>) {
+function isInternalAdmin(user: AuthUser | null) {
   return Boolean(user && user.accountType !== "client" && user.role === "Admin");
 }
 
-function hasTenantEmployeesPermission(user: Awaited<ReturnType<typeof getRequestUser>>, store: AuthStoreData) {
+function hasTenantEmployeesPermission(user: AuthUser | null, store: AuthStoreData) {
   if (!user || user.accountType !== "client" || !user.tenantId || !user.clientRoleId) return false;
   const roles = store.tenantRoles?.[user.tenantId] ?? [];
   const role = roles.find((item) => item.id === user.clientRoleId);
@@ -53,11 +68,35 @@ function clearSessionCookie(response: NextResponse) {
 }
 
 function authStoreUnavailableResponse(error: unknown) {
+  if (isPermissionStoreUnavailableError(error)) {
+    return permissionStoreUnavailableResponse();
+  }
   const message =
     error instanceof Error
       ? `Supabase auth/profile store is unavailable: ${error.message}`
       : "Supabase auth/profile store is unavailable.";
-  return NextResponse.json<AuthActionResponse>({ ok: false, message }, { status: 503 });
+  return NextResponse.json<AuthActionResponse>(
+    { ok: false, message },
+    { status: 503, headers: { "Cache-Control": "no-store" } },
+  );
+}
+
+function authStoreJsonResponse(body: unknown, init?: ResponseInit) {
+  const headers = new Headers(init?.headers);
+  headers.set("Cache-Control", "no-store");
+  return NextResponse.json(body, { ...init, headers });
+}
+
+async function persistAuthStore(nextStore: AuthStoreData): Promise<NextResponse | null> {
+  try {
+    await saveAuthStore(nextStore, { strictFreshKv: true });
+  } catch (error) {
+    if (isPermissionStoreUnavailableError(error)) {
+      return authStoreUnavailableResponse(error);
+    }
+    throw error;
+  }
+  return null;
 }
 
 async function resolveTenantCostCenterId(
@@ -276,25 +315,17 @@ async function syncTenantEmployeesFromYango(params: {
 }
 
 export async function GET(request: Request) {
-  let user: Awaited<ReturnType<typeof getRequestUser>>;
-  try {
-    user = await getRequestUser(request);
-  } catch (error) {
-    return authStoreUnavailableResponse(error);
-  }
-  if (!user) {
-    return NextResponse.json<AuthActionResponse>(
-      { ok: false, message: "Unauthorized" },
-      { status: 401 },
-    );
-  }
   let data: AuthStoreData;
   try {
     data = await loadAuthStore();
   } catch (error) {
     return authStoreUnavailableResponse(error);
   }
-  return NextResponse.json({ ...sanitizeStore(data), currentUserId: user.id });
+  const user = resolveSessionUserFromStore(request, data);
+  if (!user) {
+    return authStoreJsonResponse({ ok: false, message: "Unauthorized" }, { status: 401 });
+  }
+  return authStoreJsonResponse({ ...sanitizeStore(data), currentUserId: user.id });
 }
 
 export async function POST(request: Request) {
@@ -307,10 +338,10 @@ export async function POST(request: Request) {
   }
 
   let store: AuthStoreData;
-  let sessionUser: Awaited<ReturnType<typeof getRequestUser>>;
+  let sessionUser: AuthUser | null;
   try {
     store = await loadAuthStore();
-    sessionUser = await getRequestUser(request);
+    sessionUser = resolveSessionUserFromStore(request, store);
   } catch (error) {
     return authStoreUnavailableResponse(error);
   }
@@ -360,7 +391,8 @@ export async function POST(request: Request) {
         ...store,
         users: [...store.users, nextUser],
       };
-      await saveAuthStore(nextStore);
+      const __persistErr = await persistAuthStore(nextStore);
+      if (__persistErr) return __persistErr;
       return NextResponse.json<AuthActionResponse>({
         ok: true,
         message: "Internal user created.",
@@ -394,7 +426,8 @@ export async function POST(request: Request) {
           user.id === sessionUser.id ? { ...user, language: payload.language } : user,
         ),
       };
-      await saveAuthStore(nextStore);
+      const __persistErr = await persistAuthStore(nextStore);
+      if (__persistErr) return __persistErr;
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
     case "updateUserStatus": {
@@ -410,7 +443,8 @@ export async function POST(request: Request) {
           user.id === payload.userId ? { ...user, status: payload.status } : user,
         ),
       };
-      await saveAuthStore(nextStore);
+      const __persistErr = await persistAuthStore(nextStore);
+      if (__persistErr) return __persistErr;
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
     case "updateUserRole": {
@@ -420,14 +454,29 @@ export async function POST(request: Request) {
           { status: 403 },
         );
       }
-      const nextStore: AuthStoreData = {
-        ...store,
-        users: store.users.map((user) =>
-          user.id === payload.userId ? { ...user, role: payload.role } : user,
-        ),
-      };
-      await saveAuthStore(nextStore);
-      return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
+      const target = store.users.find((user) => user.id === payload.userId);
+      if (!target) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "User not found" },
+          { status: 404 },
+        );
+      }
+      const previousRole = target.role;
+      const updatedUser: AuthUser = { ...target, role: payload.role };
+      try {
+        await patchUserRoleTargeted(updatedUser, previousRole);
+      } catch (error) {
+        if (isPermissionStoreUnavailableError(error)) {
+          return permissionStoreUnavailableResponse();
+        }
+        const message =
+          error instanceof Error ? error.message : "Failed to update user role.";
+        return NextResponse.json<AuthActionResponse>({ ok: false, message }, { status: 500 });
+      }
+      return NextResponse.json<AuthActionResponse>({
+        ok: true,
+        updatedUser: sanitizeUser(updatedUser),
+      });
     }
     case "toggleRolePageAccess": {
       if (!sessionUser || sessionUser.role !== "Admin") {
@@ -436,18 +485,27 @@ export async function POST(request: Request) {
           { status: 403 },
         );
       }
-      const nextStore: AuthStoreData = {
-        ...store,
-        rolePermissions: {
-          ...store.rolePermissions,
-          [payload.role]: {
-            ...store.rolePermissions[payload.role],
-            [payload.page]: !store.rolePermissions[payload.role][payload.page],
-          },
-        },
+      const nextPermissions = {
+        ...store.rolePermissions[payload.role],
+        [payload.page]: !store.rolePermissions[payload.role][payload.page],
       };
-      await saveAuthStore(nextStore);
-      return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
+      try {
+        await patchRolePagePermissionsTargeted(payload.role, nextPermissions);
+      } catch (error) {
+        if (isPermissionStoreUnavailableError(error)) {
+          return permissionStoreUnavailableResponse();
+        }
+        const message =
+          error instanceof Error ? error.message : "Failed to update role permissions.";
+        return NextResponse.json<AuthActionResponse>({ ok: false, message }, { status: 500 });
+      }
+      return NextResponse.json<AuthActionResponse>({
+        ok: true,
+        updatedRolePermissions: {
+          role: payload.role,
+          permissions: nextPermissions,
+        },
+      });
     }
     case "toggleRoleAreaAccess": {
       if (!sessionUser || sessionUser.role !== "Admin") {
@@ -466,7 +524,8 @@ export async function POST(request: Request) {
           },
         },
       };
-      await saveAuthStore(nextStore);
+      const __persistErr = await persistAuthStore(nextStore);
+      if (__persistErr) return __persistErr;
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
     case "toggleRoleDashboardBlockAccess": {
@@ -486,7 +545,8 @@ export async function POST(request: Request) {
           },
         },
       };
-      await saveAuthStore(nextStore);
+      const __persistErr = await persistAuthStore(nextStore);
+      if (__persistErr) return __persistErr;
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
     case "setAllRoleAccess": {
@@ -511,7 +571,8 @@ export async function POST(request: Request) {
           },
         },
       };
-      await saveAuthStore(nextStore);
+      const __persistErr = await persistAuthStore(nextStore);
+      if (__persistErr) return __persistErr;
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
     case "deleteUser": {
@@ -558,7 +619,8 @@ export async function POST(request: Request) {
       };
 
       try {
-        await saveAuthStore(nextStore);
+        const __persistErr = await persistAuthStore(nextStore);
+        if (__persistErr) return __persistErr;
       } catch (error) {
         // Auth/profile row is already removed; confirm the user is gone on reload.
         try {
@@ -700,7 +762,8 @@ export async function POST(request: Request) {
         ),
         tenantRoles,
       };
-      await saveAuthStore(nextStore);
+      const __persistErr = await persistAuthStore(nextStore);
+      if (__persistErr) return __persistErr;
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
     case "upsertTenantRole": {
@@ -729,7 +792,8 @@ export async function POST(request: Request) {
       else roles.push(nextRole);
       tenantRoles[tenantId] = roles;
       const nextStore: AuthStoreData = { ...store, tenantRoles };
-      await saveAuthStore(nextStore);
+      const __persistErr = await persistAuthStore(nextStore);
+      if (__persistErr) return __persistErr;
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
     case "updateTenantB2CSettings": {
@@ -759,7 +823,8 @@ export async function POST(request: Request) {
         ...store,
         tenantAccounts: nextAccounts,
       };
-      await saveAuthStore(nextStore);
+      const __persistErr = await persistAuthStore(nextStore);
+      if (__persistErr) return __persistErr;
       return NextResponse.json<AuthActionResponse>({
         ok: true,
         message: "B2C fallback settings saved.",
@@ -784,7 +849,8 @@ export async function POST(request: Request) {
           createEndpoint: (payload.createEndpoint ?? "").trim() || null,
         },
       };
-      await saveAuthStore(nextStore);
+      const __persistErr = await persistAuthStore(nextStore);
+      if (__persistErr) return __persistErr;
       return NextResponse.json<AuthActionResponse>({
         ok: true,
         message: "Global B2C fallback settings saved.",
@@ -812,7 +878,8 @@ export async function POST(request: Request) {
         ...store,
         tenantAccounts: nextAccounts,
       };
-      await saveAuthStore(nextStore);
+      const __persistErr = await persistAuthStore(nextStore);
+      if (__persistErr) return __persistErr;
       return NextResponse.json<AuthActionResponse>({
         ok: true,
         message: "Client portal sections updated.",
@@ -919,7 +986,8 @@ export async function POST(request: Request) {
                 : item,
             ),
           };
-          await saveAuthStore(workingStore);
+          const __persistErr = await persistAuthStore(workingStore);
+          if (__persistErr) return __persistErr;
           ensure = await ensureRequestRideUserByPhone({
             tokenLabel: tenant.tokenLabel,
             clientId: tenant.apiClientId,
@@ -971,7 +1039,8 @@ export async function POST(request: Request) {
           ),
         };
       }
-      await saveAuthStore(nextStore);
+      const __persistErr = await persistAuthStore(nextStore);
+      if (__persistErr) return __persistErr;
       return NextResponse.json<AuthActionResponse>({
         ok: true,
         message: existingByEmail ? "Employee updated in this cabinet." : "Employee created.",
@@ -1080,7 +1149,8 @@ export async function POST(request: Request) {
             : user,
         ),
       };
-      await saveAuthStore(nextStore);
+      const __persistErr = await persistAuthStore(nextStore);
+      if (__persistErr) return __persistErr;
       return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
     }
     case "deleteTenantAccount": {
@@ -1114,7 +1184,8 @@ export async function POST(request: Request) {
           (user) => !(user.accountType === "client" && user.tenantId === tenantId),
         ),
       };
-      await saveAuthStore(nextStore);
+      const __persistErr = await persistAuthStore(nextStore);
+      if (__persistErr) return __persistErr;
       return NextResponse.json<AuthActionResponse>({
         ok: true,
         message: "Client cabinet removed.",
@@ -1153,7 +1224,8 @@ export async function POST(request: Request) {
             : item,
         ),
       };
-      await saveAuthStore(nextStore);
+      const __persistErr = await persistAuthStore(nextStore);
+      if (__persistErr) return __persistErr;
       return NextResponse.json<AuthActionResponse>({
         ok: true,
         message: `Synced ${synced.added} new and ${synced.updated} existing employee(s) from Yango.`,
