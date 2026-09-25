@@ -1527,5 +1527,15 @@
     "route": "Route",
     "openFull": "Open full details",
     "close": "Close"
+  },
+  "auth": {
+    "permissionStoreUnavailable": {
+      "title": "Could not verify access permissions",
+      "description": "This is a temporary system issue, not a change to your access. Try again later or contact support.",
+      "retry": "Retry",
+      "pollBanner": "Permission store is temporarily unavailable. Your session is still active; showing the last loaded permissions.",
+      "adminBanner": "Permission store is unavailable. Role values are hidden; changes cannot be saved right now.",
+      "adminSaveDisabledTooltip": "Permission store is unavailable. Try again when KV is restored."
+    }
   }
 }

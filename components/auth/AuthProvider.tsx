@@ -84,6 +84,11 @@ type AuthContextValue = {
   lastLoginEmail: string;
   language: AppLanguage;
   updateUserLanguage: (language: AppLanguage) => Promise<void>;
+  /**
+   * When true, Access Management hides role values and blocks saves.
+   * Real wiring lands in fail-closed PR B; stub false here so P0-7 UI compiles on PR A.
+   */
+  permissionStoreAdminBlocked: boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -311,6 +316,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             message?: string;
             userId?: string;
             data?: AuthStoreData;
+            updatedUser?: AuthUser;
+            updatedRolePermissions?: {
+              role: AppRole;
+              permissions: RolePermissions[AppRole];
+            };
           }
         | null;
 
@@ -323,6 +333,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
+      if (result.updatedUser) {
+        const updated = { ...result.updatedUser, password: "" };
+        setUsers((prev) => prev.map((user) => (user.id === updated.id ? updated : user)));
+      }
+      if (result.updatedRolePermissions) {
+        const { role, permissions } = result.updatedRolePermissions;
+        setRolePermissions((prev) => ({ ...prev, [role]: permissions }));
+      }
       if (result.data) {
         applyStoreData(result.data);
       }
@@ -378,14 +396,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateUserRole = useCallback(
     async (userId: string, role: AppRole) => {
-      await runAction({ action: "updateUserRole", userId, role });
+      const result = await runAction({ action: "updateUserRole", userId, role });
+      if (!result.ok) {
+        throw new Error(result.message ?? "Failed to update user role");
+      }
     },
     [runAction],
   );
 
   const toggleRolePageAccess = useCallback(
     async (role: AppRole, page: AppPageKey) => {
-      await runAction({ action: "toggleRolePageAccess", role, page });
+      const result = await runAction({ action: "toggleRolePageAccess", role, page });
+      if (!result.ok) {
+        throw new Error(result.message ?? "Failed to update role permissions");
+      }
     },
     [runAction],
   );
@@ -499,6 +523,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       lastLoginEmail,
       language,
       updateUserLanguage,
+      permissionStoreAdminBlocked: false,
     }),
     [
       loading,
