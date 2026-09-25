@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { resolvePostLoginPath } from "@/lib/role-permissions";
+import { resolveAuthenticatedLandingPath } from "@/lib/login-redirect";
+import { hasAnyAllowedPage } from "@/lib/role-permissions";
 
 type LoginErrorCode = "domain" | "oauth" | "config" | "rejected" | "consent" | "noaccess";
 
@@ -11,6 +12,7 @@ export default function LoginPage() {
   const router = useRouter();
   const { loading, currentUser, language, canAccess } = useAuth();
   const [errorCode, setErrorCode] = useState<LoginErrorCode | null>(null);
+  const [returnPath, setReturnPath] = useState<string | null>(null);
 
   const copy =
     language === "he"
@@ -72,23 +74,30 @@ export default function LoginPage() {
     ) {
       setErrorCode(raw);
     }
+    const next = params.get("next");
+    if (next) setReturnPath(next);
   }, []);
 
   useEffect(() => {
     if (loading) return;
     if (currentUser?.status !== "approved") return;
 
-    const landing = resolvePostLoginPath({
+    if (!hasAnyAllowedPage(canAccess)) {
+      setErrorCode((prev) => prev ?? "noaccess");
+      return;
+    }
+
+    const landing = resolveAuthenticatedLandingPath({
       accountType: currentUser.accountType,
       canAccess,
+      returnPath,
     });
     if (landing) {
       router.replace(landing);
       return;
     }
-    // Approved but no pages — stay on login and show a clear message (do not bounce to pipeline).
     setErrorCode((prev) => prev ?? "noaccess");
-  }, [loading, currentUser, canAccess, router]);
+  }, [loading, currentUser, canAccess, router, returnPath]);
 
   const errorMessage =
     errorCode === "domain"
@@ -129,7 +138,11 @@ export default function LoginPage() {
         ) : null}
 
         <a
-          href="/api/auth/google/start"
+          href={
+            returnPath
+              ? `/api/auth/google/start?next=${encodeURIComponent(returnPath)}`
+              : "/api/auth/google/start"
+          }
           className="so-focus-ring flex h-11 w-full items-center justify-center gap-3 rounded-[8px] border border-[var(--so-border-strong)] bg-white text-sm font-medium text-[var(--so-text)] shadow-[var(--so-shadow-xs)] transition hover:bg-[var(--so-surface-hover)]"
         >
           <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18">

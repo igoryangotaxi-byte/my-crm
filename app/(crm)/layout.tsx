@@ -3,8 +3,10 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { NoAccessState } from "@/components/auth/NoAccessState";
 import { AppShell } from "@/components/layout/AppShell";
-import { firstAllowedSalesOperationPath } from "@/lib/role-permissions";
+import { buildLoginHref } from "@/lib/login-redirect";
+import { firstAllowedSalesOperationPath, hasAnyAllowedPage } from "@/lib/role-permissions";
 import type { AppPageKey } from "@/types/auth";
 
 function resolvePageKey(pathname: string): AppPageKey {
@@ -37,7 +39,11 @@ export default function CrmLayout({
     }
 
     if (!currentUser) {
-      router.replace("/login");
+      const returnPath =
+        typeof window !== "undefined"
+          ? `${window.location.pathname}${window.location.search}`
+          : pathname;
+      router.replace(buildLoginHref(returnPath));
       return;
     }
 
@@ -50,11 +56,16 @@ export default function CrmLayout({
       return;
     }
 
-    // Staff landing: prefer Appli Taxi CRM over legacy Main CRM pages.
+    if (!hasAnyAllowedPage(canAccess)) {
+      return;
+    }
+
+    if (pathname.startsWith("/clients")) {
+      return;
+    }
+
     const soPath = firstAllowedSalesOperationPath(canAccess);
     if (soPath && canAccess("salesOperation")) {
-      // Old CRM URLs that moved into Appli Taxi CRM redirect at page level;
-      // other legacy pages remain reachable by direct URL when permitted.
       const pageKey = resolvePageKey(pathname);
       if (!canAccess(pageKey)) {
         router.replace(soPath);
@@ -64,7 +75,7 @@ export default function CrmLayout({
 
     const pageKey = resolvePageKey(pathname);
     if (!canAccess(pageKey)) {
-      router.replace(soPath ?? "/login?error=noaccess");
+      router.replace(soPath ?? buildLoginHref(pathname));
     }
   }, [loading, currentUser, canAccess, pathname, router]);
 
@@ -76,6 +87,18 @@ export default function CrmLayout({
     );
   }
   if (currentUser.accountType === "client") {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted">
+        Redirecting...
+      </div>
+    );
+  }
+
+  if (!hasAnyAllowedPage(canAccess)) {
+    return <NoAccessState permission={null} />;
+  }
+
+  if (pathname.startsWith("/clients")) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted">
         Redirecting...

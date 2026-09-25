@@ -17,8 +17,11 @@ export const APP_ROLES: AppRole[] = [
   "Sales Manager",
 ];
 
+export const STAFF_MY_SPACE_PATH = "/sales-operation/tasks";
+
 export const SALES_OPERATION_PAGE_KEYS = [
   "salesOperation",
+  "salesMySpace",
   "salesPipeline",
   "salesSignedClients",
   "salesB2BClients",
@@ -37,7 +40,7 @@ export const SALES_OPERATION_PAGE_KEYS = [
 
 export type SalesOperationPageKey = (typeof SALES_OPERATION_PAGE_KEYS)[number];
 
-export const CURRENT_PERMISSIONS_VERSION = 18;
+export const CURRENT_PERMISSIONS_VERSION = 19;
 
 export function isAppRole(value: unknown): value is AppRole {
   return typeof value === "string" && (APP_ROLES as readonly string[]).includes(value);
@@ -96,7 +99,30 @@ export function mergeRolePermissions(
     }
   }
 
-  return migrateSalesSubPages(merged, storedVersion, stored);
+  const migrated = migrateSalesSubPages(merged, storedVersion, stored);
+  if (storedVersion >= 18 && storedVersion < 19 && (role === "User" || role === "Team Lead")) {
+    if (stored?.salesOperation === undefined) migrated.salesOperation = true;
+    if (stored?.salesMySpace === undefined) migrated.salesMySpace = true;
+    // v18 migrateSalesSubPages inherited the whole SO tree from salesOperation; v19 keeps My Space only.
+    for (const key of SALES_OPERATION_PAGE_KEYS) {
+      if (key === "salesOperation" || key === "salesMySpace") continue;
+      if (stored?.[key] === undefined) {
+        migrated[key] = defaultRolePermissions[role][key];
+      }
+    }
+  }
+  return migrated;
+}
+
+export function canAccessMySpace(canAccess: (page: AppPageKey) => boolean): boolean {
+  return canAccess("salesMySpace") || canAccess("salesPipeline");
+}
+
+export function hasAnyAllowedPage(canAccess: (page: AppPageKey) => boolean): boolean {
+  return (
+    firstAllowedSalesOperationPath(canAccess) !== null ||
+    firstAllowedLegacyCrmPath(canAccess) !== null
+  );
 }
 
 export function mergeAllRolePermissions(
@@ -138,6 +164,8 @@ export function mergeAllRoleDashboardBlockAccess(
 
 /** Routes rendered inside the Appli Taxi CRM shell (may use non-sales page keys). */
 export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: AppPageKey }> = [
+  { prefix: "/sales-operation/tasks", page: "salesMySpace" },
+  { prefix: "/sales-operation/calendar", page: "salesMySpace" },
   { prefix: "/sales-operation/pipeline", page: "salesPipeline" },
   { prefix: "/sales-operation/office", page: "salesPipeline" },
   { prefix: "/sales-operation/corp-register", page: "salesPipeline" },
@@ -163,6 +191,8 @@ export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: AppPageK
 ];
 
 export function resolveSalesOperationPageKey(pathname: string): AppPageKey {
+  if (pathname.startsWith("/sales-operation/tasks")) return "salesMySpace";
+  if (pathname.startsWith("/sales-operation/calendar")) return "salesMySpace";
   if (pathname.startsWith("/sales-operation/astradial")) return "salesAstradial";
   if (pathname.startsWith("/sales-operation/call-center")) return "salesCallCenter";
   if (pathname.startsWith("/sales-operation/lead-discovery")) return "salesLeadDiscovery";
@@ -200,6 +230,12 @@ export function canAccessSalesOperationPath(
   canAccess: (page: AppPageKey) => boolean,
 ): boolean {
   if (!canAccess("salesOperation")) return false;
+  if (
+    pathname.startsWith("/sales-operation/tasks") ||
+    pathname.startsWith("/sales-operation/calendar")
+  ) {
+    return canAccessMySpace(canAccess);
+  }
   if (pathname.startsWith("/sales-operation/settings")) {
     return canAccess("salesSettings") || canAccess("accesses");
   }
@@ -214,6 +250,10 @@ export function firstAllowedSalesOperationPath(
 ): string | null {
   if (!canAccess("salesOperation")) return null;
   for (const route of SALES_OPERATION_ROUTE_PAGES) {
+    if (route.prefix === "/sales-operation/tasks" || route.prefix === "/sales-operation/calendar") {
+      if (canAccessMySpace(canAccess)) return route.prefix;
+      continue;
+    }
     if (route.prefix === "/sales-operation/settings") {
       if (canAccess("salesSettings") || canAccess("accesses")) return route.prefix;
       continue;
@@ -257,6 +297,9 @@ export function resolvePostLoginPath(input: {
   canAccess: (page: AppPageKey) => boolean;
 }): string | null {
   if (input.accountType === "client") return "/client/request-rides";
+  if (input.canAccess("salesOperation") && canAccessMySpace(input.canAccess)) {
+    return STAFF_MY_SPACE_PATH;
+  }
   return (
     firstAllowedSalesOperationPath(input.canAccess) ??
     firstAllowedLegacyCrmPath(input.canAccess)

@@ -4,11 +4,15 @@ import "./sales-operation.css";
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { NoAccessState } from "@/components/auth/NoAccessState";
 import { SalesOperationAppShell } from "@/components/sales-operation/SalesOperationAppShell";
+import { buildLoginHref } from "@/lib/login-redirect";
 import {
   canAccessSalesOperationPath,
   firstAllowedLegacyCrmPath,
   firstAllowedSalesOperationPath,
+  hasAnyAllowedPage,
+  STAFF_MY_SPACE_PATH,
 } from "@/lib/role-permissions";
 
 export default function SalesOperationLayout({
@@ -24,7 +28,11 @@ export default function SalesOperationLayout({
     if (loading) return;
 
     if (!currentUser || currentUser.status !== "approved") {
-      router.replace("/login");
+      const returnPath =
+        typeof window !== "undefined"
+          ? `${window.location.pathname}${window.location.search}`
+          : pathname;
+      router.replace(buildLoginHref(returnPath));
       return;
     }
 
@@ -33,10 +41,13 @@ export default function SalesOperationLayout({
       return;
     }
 
+    if (!hasAnyAllowedPage(canAccess)) {
+      return;
+    }
+
     if (!canAccess("salesOperation")) {
-      // Do not bounce approved legacy-CRM users through /login (that re-sent them to pipeline).
       const legacy = firstAllowedLegacyCrmPath(canAccess);
-      router.replace(legacy ?? "/login?error=noaccess");
+      router.replace(legacy ?? buildLoginHref(pathname));
       return;
     }
 
@@ -44,7 +55,7 @@ export default function SalesOperationLayout({
       const fallback =
         firstAllowedSalesOperationPath(canAccess) ??
         firstAllowedLegacyCrmPath(canAccess) ??
-        "/login?error=noaccess";
+        STAFF_MY_SPACE_PATH;
       router.replace(fallback);
     }
   }, [loading, currentUser, canAccess, pathname, router]);
@@ -57,7 +68,19 @@ export default function SalesOperationLayout({
     );
   }
 
-  if (currentUser.accountType === "client" || !canAccess("salesOperation")) {
+  if (currentUser.accountType === "client") {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted">
+        Redirecting...
+      </div>
+    );
+  }
+
+  if (!hasAnyAllowedPage(canAccess)) {
+    return <NoAccessState permission={null} />;
+  }
+
+  if (!canAccess("salesOperation")) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted">
         Redirecting...

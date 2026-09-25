@@ -37,6 +37,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { useRouteLoading } from "@/components/layout/RouteLoadingContext";
 import { useTranslations } from "next-intl";
 import type { AppPageKey } from "@/types/auth";
+import { canAccessMySpace } from "@/lib/role-permissions";
 import { cn } from "@/lib/ui/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useSalesSidebar } from "@/components/sales-operation/SalesSidebarContext";
@@ -95,14 +96,14 @@ export function SalesOperationSidebar() {
           {
             href: "/sales-operation/tasks",
             labelKey: "mySpaceTasks",
-            page: "salesPipeline",
+            page: "salesMySpace",
             icon: LayoutGrid,
             badge: taskCount ?? undefined,
           },
           {
             href: "/sales-operation/calendar",
             labelKey: "calendar",
-            page: "salesPipeline",
+            page: "salesMySpace",
             icon: CalendarClock,
           },
         ],
@@ -164,6 +165,9 @@ export function SalesOperationSidebar() {
             return canAccess(node.page) ? node : null;
           }
           const children = node.children.filter((c) => {
+            if (c.page === "salesMySpace") {
+              return canAccessMySpace(canAccess);
+            }
             if (c.page === "salesAstradial") {
               // Show when RBAC allows; page itself explains missing PBX/env.
               // Prefer salesAstradial, but keep visible if Call Center is on (v18 migrate).

@@ -1526,5 +1526,61 @@
     "route": "מסלול",
     "openFull": "פתח פרטים מלאים",
     "close": "סגור"
+  },
+  "access": {
+    "noAccess": {
+      "titleSection": "אין גישה ל{section}",
+      "titleNoPages": "אין גישה",
+      "descriptionNoPages": "לא הוגדרו הרשאות לדפים בחשבון זה. פנו למנהל המערכת.",
+      "signedInAs": "מחובר/ת כ",
+      "permission": "הרשאה",
+      "page": "דף",
+      "goToMySpace": "ל-My Space",
+      "copyAccessRequest": "העתק בקשת גישה",
+      "copied": "הועתק",
+      "permissionMissing": "חסרה הרשאה: {name} ({key})"
+    },
+    "permissionHint": {
+      "lockedTooltip": "נדרשת הרשאת {permission} לפעולה זו"
+    },
+    "forbiddenBanner": {
+      "rideNotCreated": "הנסיעה לא נוצרה: נדרשת הרשאת {permission}",
+      "nothingSentYango": "לא נשלח דבר ל-Yango ולא נשלח SMS.",
+      "copyAccessRequest": "העתק בקשת גישה"
+    },
+    "unknownErrorBanner": {
+      "message": "לא יודעים אם הנסיעה נוצרה — בדקו בהזמנות לפני ניסיון חוזר",
+      "openOrders": "פתח הזמנות",
+      "tryAgain": "נסה שוב"
+    }
+  },
+  "permissions": {
+    "dashboard": "לוח בקרה",
+    "clients": "לקוחות",
+    "orders": "הזמנות",
+    "preOrders": "הזמנות מוקדמות",
+    "requestRides": "הזמנת נסיעות",
+    "communications": "תקשורת",
+    "financialCenter": "מרכז עסקי",
+    "driversMap": "נהגים על המפה",
+    "heatMap": "מפת ביקוש",
+    "priceCalculator": "מחשבון מחיר",
+    "salesOperation": "Appli Taxi CRM",
+    "salesMySpace": "My Space",
+    "salesPipeline": "Pipeline",
+    "salesSignedClients": "Portfolio",
+    "salesB2BClients": "לקוחות B2B",
+    "salesAnalytics": "אנליטיקה",
+    "salesManagerAnalytics": "אנליטיקת מנהלים",
+    "salesAutomation": "אוטומציה",
+    "salesSettings": "הגדרות",
+    "salesTracker": "Tracker",
+    "salesDocumentation": "תיעוד",
+    "salesLeadDiscovery": "גילוי לידים",
+    "salesAiAssistant": "Appli Assistant",
+    "salesCallCenter": "מרכז שיחות",
+    "salesAstradial": "Astradial",
+    "accesses": "ניהול הרשאות",
+    "notes": "בדיקת API"
   }
 }
