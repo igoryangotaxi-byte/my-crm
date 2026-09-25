@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
+import { Lock } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -15,14 +16,14 @@ export type OpsApiOutcomeKind = "forbidden" | "store_unavailable" | "unknown";
 type OpsApiOutcomeBannerProps = {
   kind: OpsApiOutcomeKind;
   permission?: AppPageKey;
-  onTryAgain?: () => void;
+  onRetry?: () => void;
   ordersHref?: string;
 };
 
 export function OpsApiOutcomeBanner({
   kind,
   permission = "requestRides",
-  onTryAgain,
+  onRetry,
   ordersHref = "/sales-operation/orders",
 }: OpsApiOutcomeBannerProps) {
   const pathname = usePathname();
@@ -58,9 +59,16 @@ export function OpsApiOutcomeBanner({
         role="alert"
         className="rounded-[12px] border border-[var(--so-border)] bg-[var(--so-surface-2)] px-4 py-3 text-sm text-[var(--so-text)]"
       >
-        <p className="font-semibold">{tStoreUnavailable("title")}</p>
-        <p className="mt-1">{tStoreUnavailable("nothingSent")}</p>
-        <p className="mt-1 text-[var(--so-text-muted)]">{tStoreUnavailable("temporaryFailure")}</p>
+        <p>{tStoreUnavailable("message")}</p>
+        {onRetry ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="so-focus-ring mt-3 inline-flex h-9 items-center rounded-[8px] border border-[var(--so-border-strong)] bg-white px-3 text-sm font-medium"
+          >
+            {tStoreUnavailable("retry")}
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -69,16 +77,16 @@ export function OpsApiOutcomeBanner({
     return (
       <div
         role="alert"
-        className="rounded-[12px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900"
+        className="rounded-[12px] border border-rose-200/90 bg-rose-50/90 px-4 py-3 text-sm text-rose-900"
       >
-        <p className="font-semibold">
-          {tForbidden("rideNotCreated", { permission: permissionLabel })}
-        </p>
-        <p className="mt-1 text-rose-800">{tForbidden("nothingSentYango")}</p>
+        <div className="flex gap-2">
+          <Lock className="mt-0.5 h-4 w-4 shrink-0 text-rose-700" aria-hidden />
+          <p>{tForbidden("message")}</p>
+        </div>
         <button
           type="button"
           onClick={() => void copyRequest()}
-          className="so-focus-ring mt-2 text-sm font-semibold text-rose-700 underline-offset-2 hover:underline"
+          className="so-focus-ring mt-3 inline-flex h-9 items-center rounded-[8px] border border-rose-200 bg-white/90 px-3 text-sm font-medium text-rose-800"
         >
           {copied ? "…" : tForbidden("copyAccessRequest")}
         </button>
@@ -99,15 +107,6 @@ export function OpsApiOutcomeBanner({
         >
           {tUnknown("openOrders")}
         </Link>
-        {onTryAgain ? (
-          <button
-            type="button"
-            onClick={onTryAgain}
-            className="so-focus-ring inline-flex h-9 items-center rounded-[8px] border border-[var(--so-border-strong)] bg-white px-3 text-sm font-medium"
-          >
-            {tUnknown("tryAgain")}
-          </button>
-        ) : null}
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import {
   mergeRolePermissions,
 } from "@/lib/role-permissions";
 import { loadAuthStoreForRequest } from "@/lib/auth-store";
+import { stringifyOpsApiPermissionLog } from "@/lib/ops-api-audit-log";
 import {
   PermissionStoreUnavailableError,
   permissionDeniedResponse,
@@ -146,7 +147,7 @@ export async function guardOpsApiPagePermission(
   } catch (error) {
     if (error instanceof PermissionStoreUnavailableError) {
       console.warn(
-        JSON.stringify({
+        stringifyOpsApiPermissionLog({
           kind: "ops_api_permission_store_unavailable",
           at: jerusalemLogTime(),
           userId: user.id,
@@ -168,7 +169,7 @@ export async function guardOpsApiPagePermission(
 
   const missing = firstMissingKey(keys);
   console.warn(
-    JSON.stringify({
+    stringifyOpsApiPermissionLog({
       kind: "ops_api_permission_would_deny",
       at: jerusalemLogTime(),
       userId: user.id,

@@ -1358,8 +1358,7 @@ export default function RequestRidesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid resetting interval every render
   }, [requestedRides]);
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const submitRequestRide = async () => {
     const riderPhoneNormalized = normalizePhoneLookupKey(phoneNumber);
     if (!selectedClient) {
       setFormError("Select a client first.");
@@ -1498,6 +1497,11 @@ export default function RequestRidesPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void submitRequestRide();
   };
 
   const ensureRiderEmployeeInYango = async () => {
@@ -2867,8 +2871,13 @@ export default function RequestRidesPage() {
                           ? "/sales-operation/orders"
                           : "/orders"
                       }
-                      onTryAgain={
-                        opsOutcome === "unknown" ? () => setOpsOutcome(null) : undefined
+                      onRetry={
+                        opsOutcome === "store_unavailable"
+                          ? () => {
+                              setOpsOutcome(null);
+                              void submitRequestRide();
+                            }
+                          : undefined
                       }
                     />
                   ) : null}

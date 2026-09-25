@@ -1532,14 +1532,12 @@
       "lockedTooltip": "נדרשת הרשאת {permission} לפעולה זו"
     },
     "forbiddenBanner": {
-      "rideNotCreated": "הנסיעה לא נוצרה: נדרשת הרשאת {permission}",
-      "nothingSentYango": "לא נשלח דבר ל-Yango ולא נשלח SMS.",
+      "message": "אין הרשאה ליצור נסיעות. לא נשלח דבר ל-Yango ולא נשלח SMS.",
       "copyAccessRequest": "העתק בקשת גישה"
     },
     "storeUnavailableBanner": {
-      "title": "הנסיעה לא נוצרה",
-      "nothingSent": "לא נשלח דבר ל-Yango ולא נשלח SMS.",
-      "temporaryFailure": "לא ניתן לבדוק הרשאות בגלל תקלה זמנית במערכת. נסו שוב בקרוב — זו לא בעיית הרשאות."
+      "message": "תקלה זמנית בבדיקת הרשאות. לא נשלח דבר ל-Yango ולא נשלח SMS.",
+      "retry": "נסה שוב"
     },
     "unknownErrorBanner": {
       "message": "לא יודעים אם הנסיעה נוצרה — בדקו בהזמנות לפני ניסיון חוזר",

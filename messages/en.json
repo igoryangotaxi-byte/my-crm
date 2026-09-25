@@ -1533,14 +1533,12 @@
       "lockedTooltip": "You need {permission} permission for this action"
     },
     "forbiddenBanner": {
-      "rideNotCreated": "Ride not created: {permission} permission needed",
-      "nothingSentYango": "Nothing was sent to Yango and no SMS was sent.",
+      "message": "You don't have permission to create rides. Nothing was sent to Yango and no SMS was sent.",
       "copyAccessRequest": "Copy access request"
     },
     "storeUnavailableBanner": {
-      "title": "Ride not created",
-      "nothingSent": "Nothing was sent to Yango and no SMS was sent.",
-      "temporaryFailure": "Permissions could not be checked due to a temporary system failure. Try again shortly — this is not a missing-access issue."
+      "message": "Temporary failure checking permissions. Nothing was sent to Yango and no SMS was sent.",
+      "retry": "Try again"
     },
     "unknownErrorBanner": {
       "message": "We don't know if the ride was created, check Orders before retrying",
