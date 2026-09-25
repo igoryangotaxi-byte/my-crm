@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { applyAuthClientPatch } from "@/lib/auth-client-patch";
+import {
+  getSupabaseAuthPersistenceMode,
+  resetSupabaseAuthPersistenceModeForTests,
+} from "@/lib/supabase-auth-store";
 import { resolveSessionUserFromStore } from "@/lib/server-auth";
 import { buildSessionSetCookie } from "@/lib/server-session";
 import {
@@ -81,6 +85,11 @@ describe("auth partial save helpers", () => {
     });
     assert.equal(merged.users.find((u) => u.id === "user-op-1")?.role, "Team Lead");
     assert.equal(merged.rolePermissions.User.orders, false);
+  });
+
+  it("tracks Supabase auth persistence mode for targeted save routing", () => {
+    resetSupabaseAuthPersistenceModeForTests();
+    assert.equal(getSupabaseAuthPersistenceMode(), null);
   });
 });
 

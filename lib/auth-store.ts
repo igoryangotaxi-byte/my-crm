@@ -408,49 +408,49 @@ export async function saveAuthStore(data: AuthStoreData, options?: SaveAuthStore
   await saveLegacyAuthStore(data, { strictFreshKv });
 }
 
-async function patchLegacyStoreUserRole(user: AuthUser): Promise<void> {
-  let store: AuthStoreData;
-  if (canUseKv()) {
-    try {
-      const raw = await kv.get<AuthStoreData>(AUTH_STORE_KEY);
-      store = normalizeStore(raw);
-    } catch {
-      store = normalizeStore(fallbackMemoryStore);
-    }
-  } else if (fallbackMemoryStore) {
-    store = normalizeStore(fallbackMemoryStore);
-  } else {
-    store = createDefaultStore();
+const KV_AUTH_STORE_UNAVAILABLE =
+  "Auth permission store (Upstash KV) is unavailable. Changes were not saved. Check KV quota and credentials.";
+
+async function readKvAuthSnapshotForWrite(): Promise<AuthStoreData> {
+  if (!canUseKv()) {
+    throw new Error(KV_AUTH_STORE_UNAVAILABLE);
   }
+  try {
+    const raw = await kv.get<AuthStoreData>(AUTH_STORE_KEY);
+    return normalizeStore(raw);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "unknown error";
+    throw new Error(`${KV_AUTH_STORE_UNAVAILABLE} (${detail})`);
+  }
+}
+
+async function writeKvAuthSnapshot(data: AuthStoreData): Promise<void> {
+  const normalized = normalizeStore(data);
+  if (!canUseKv()) {
+    throw new Error(KV_AUTH_STORE_UNAVAILABLE);
+  }
+  try {
+    await kv.set(AUTH_STORE_KEY, normalized);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "unknown error";
+    throw new Error(`${KV_AUTH_STORE_UNAVAILABLE} (${detail})`);
+  }
+}
+
+async function patchLegacyStoreUserRole(user: AuthUser): Promise<void> {
+  const store = await readKvAuthSnapshotForWrite();
   const nextStore: AuthStoreData = {
     ...store,
     users: store.users.map((item) => (item.id === user.id ? user : item)),
   };
-  const normalized = normalizeStore(nextStore);
-  if (canUseKv()) {
-    await kv.set(AUTH_STORE_KEY, normalized);
-    return;
-  }
-  fallbackMemoryStore = normalized;
+  await writeKvAuthSnapshot(nextStore);
 }
 
 async function patchLegacyStoreRolePermissions(
-  role: AuthUser["role"],
+  role: AppRole,
   permissions: AuthStoreData["rolePermissions"][AppRole],
 ): Promise<void> {
-  let store: AuthStoreData;
-  if (canUseKv()) {
-    try {
-      const raw = await kv.get<AuthStoreData>(AUTH_STORE_KEY);
-      store = normalizeStore(raw);
-    } catch {
-      store = normalizeStore(fallbackMemoryStore);
-    }
-  } else if (fallbackMemoryStore) {
-    store = normalizeStore(fallbackMemoryStore);
-  } else {
-    store = createDefaultStore();
-  }
+  const store = await readKvAuthSnapshotForWrite();
   const nextStore: AuthStoreData = {
     ...store,
     rolePermissions: {
@@ -458,39 +458,67 @@ async function patchLegacyStoreRolePermissions(
       [role]: permissions,
     },
   };
-  const normalized = normalizeStore(nextStore);
-  if (canUseKv()) {
-    await kv.set(AUTH_STORE_KEY, normalized);
-    return;
-  }
-  fallbackMemoryStore = normalized;
+  await writeKvAuthSnapshot(nextStore);
 }
 
 /**
- * Fast path for updateUserRole: no full-store save, no KV mirror when Supabase is primary.
+ * Fast path for updateUserRole: CRM profile+metadata when crm_* tables exist; Auth metadata only on prod fallback.
  */
 export async function patchUserRoleTargeted(user: AuthUser, previousRole: AppRole): Promise<void> {
-  if (shouldTrySupabase()) {
-    const { patchCrmUserRole } = await import("@/lib/supabase-auth-store");
-    await patchCrmUserRole(user, previousRole);
+  if (!shouldTrySupabase()) {
+    await patchLegacyStoreUserRole(user);
     return;
   }
-  await patchLegacyStoreUserRole(user);
+  const {
+    getSupabaseAuthPersistenceMode,
+    isMissingSupabaseAuthSchemaError,
+    patchAuthUserRoleMetadata,
+    patchCrmUserRole,
+  } = await import("@/lib/supabase-auth-store");
+  if (getSupabaseAuthPersistenceMode() === "auth_metadata_kv") {
+    await patchAuthUserRoleMetadata(user, previousRole);
+    return;
+  }
+  try {
+    await patchCrmUserRole(user, previousRole);
+  } catch (error) {
+    if (isMissingSupabaseAuthSchemaError(error)) {
+      await patchAuthUserRoleMetadata(user, previousRole);
+      return;
+    }
+    throw error;
+  }
 }
 
 /**
- * Fast path for toggleRolePageAccess: one crm_role_permissions row (or KV patch when no Supabase).
+ * Fast path for toggleRolePageAccess: crm_role_permissions row when tables exist; KV read-modify-write on prod fallback.
  */
 export async function patchRolePagePermissionsTargeted(
   role: AppRole,
   permissions: AuthStoreData["rolePermissions"][AppRole],
 ): Promise<void> {
-  if (shouldTrySupabase()) {
-    const { patchCrmRolePagePermissions } = await import("@/lib/supabase-auth-store");
-    await patchCrmRolePagePermissions(role, permissions);
+  if (!shouldTrySupabase()) {
+    await patchLegacyStoreRolePermissions(role, permissions);
     return;
   }
-  await patchLegacyStoreRolePermissions(role, permissions);
+  const {
+    getSupabaseAuthPersistenceMode,
+    isMissingSupabaseAuthSchemaError,
+    patchCrmRolePagePermissions,
+  } = await import("@/lib/supabase-auth-store");
+  if (getSupabaseAuthPersistenceMode() === "auth_metadata_kv") {
+    await patchLegacyStoreRolePermissions(role, permissions);
+    return;
+  }
+  try {
+    await patchCrmRolePagePermissions(role, permissions);
+  } catch (error) {
+    if (isMissingSupabaseAuthSchemaError(error)) {
+      await patchLegacyStoreRolePermissions(role, permissions);
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function findUserByPublicId(userId: string): Promise<AuthUser | null> {

@@ -208,8 +208,21 @@ function isMissingSupabaseAuthSchemaMessage(message: string) {
   );
 }
 
-function isMissingSupabaseAuthSchemaError(error: unknown) {
+export function isMissingSupabaseAuthSchemaError(error: unknown) {
   return error instanceof Error && isMissingSupabaseAuthSchemaMessage(error.message);
+}
+
+export type SupabaseAuthPersistenceMode = "crm_tables" | "auth_metadata_kv";
+
+let supabaseAuthPersistenceMode: SupabaseAuthPersistenceMode | null = null;
+
+/** Set after a successful Supabase auth load (CRM tables vs Auth+KV fallback). */
+export function getSupabaseAuthPersistenceMode(): SupabaseAuthPersistenceMode | null {
+  return supabaseAuthPersistenceMode;
+}
+
+export function resetSupabaseAuthPersistenceModeForTests() {
+  supabaseAuthPersistenceMode = null;
 }
 
 function buildSupabaseAuthMetadata(input: {
@@ -1017,6 +1030,7 @@ export async function loadAuthStoreFromSupabase(): Promise<AuthStoreData> {
       loadGlobalB2CSettings(supabase),
     ]);
     const tenantRoles = await loadTenantRoles(supabase, tenantAccounts);
+    supabaseAuthPersistenceMode = "crm_tables";
     return normalizeStore({
       users,
       rolePermissions,
@@ -1031,6 +1045,7 @@ export async function loadAuthStoreFromSupabase(): Promise<AuthStoreData> {
     if (!isMissingSupabaseAuthSchemaError(error)) {
       throw error;
     }
+    supabaseAuthPersistenceMode = "auth_metadata_kv";
     return loadAuthStoreFromSupabaseAuthFallback(supabase);
   }
 }
@@ -1653,27 +1668,15 @@ export async function upsertExistingAuthUserProfile(input: AuthUser): Promise<vo
 }
 
 /**
- * Targeted role change: one profile row + Supabase Auth metadata (SSO reads crmRole).
- * On metadata failure, reverts the profile row to previousRole. No tenant/KV sync.
+ * Production fallback path (no crm_* tables): update crmRole in Supabase Auth user_metadata only.
  */
-export async function patchCrmUserRole(user: AuthUser, previousRole: AppRole): Promise<void> {
-  const supabase = getSupabaseAdminClient();
-  const rows = toProfileRows([user]);
-  const { error: profileError } = await supabase
-    .from("crm_user_profiles")
-    .upsert(rows, { onConflict: "id" });
-  if (profileError) {
-    throw new Error(`Failed to save CRM user profile: ${profileError.message}`);
-  }
-
+export async function patchAuthUserRoleMetadata(user: AuthUser, _previousRole: AppRole): Promise<void> {
   if (!user.authUserId) {
-    return;
+    throw new Error(`Cannot update role for ${user.email}: missing authUserId.`);
   }
-
+  const supabase = getSupabaseAdminClient();
   const { data: authData, error: getError } = await supabase.auth.admin.getUserById(user.authUserId);
   if (getError || !authData.user) {
-    const revertUser = { ...user, role: previousRole };
-    await supabase.from("crm_user_profiles").upsert(toProfileRows([revertUser]), { onConflict: "id" });
     throw new Error(
       getError?.message ?? `Failed to load auth user ${user.email} for metadata sync.`,
     );
@@ -1690,9 +1693,29 @@ export async function patchCrmUserRole(user: AuthUser, previousRole: AppRole): P
     },
   });
   if (metaError) {
+    throw new Error(`Failed to sync auth metadata for ${user.email}: ${metaError.message}`);
+  }
+}
+
+/**
+ * Targeted role change when crm_user_profiles exists: profile row + Auth metadata (SSO reads crmRole).
+ */
+export async function patchCrmUserRole(user: AuthUser, previousRole: AppRole): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  const rows = toProfileRows([user]);
+  const { error: profileError } = await supabase
+    .from("crm_user_profiles")
+    .upsert(rows, { onConflict: "id" });
+  if (profileError) {
+    throw new Error(`Failed to save CRM user profile: ${profileError.message}`);
+  }
+
+  try {
+    await patchAuthUserRoleMetadata(user, previousRole);
+  } catch (error) {
     const revertUser = { ...user, role: previousRole };
     await supabase.from("crm_user_profiles").upsert(toProfileRows([revertUser]), { onConflict: "id" });
-    throw new Error(`Failed to sync auth metadata for ${user.email}: ${metaError.message}`);
+    throw error;
   }
 }
 
