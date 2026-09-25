@@ -11,17 +11,24 @@ import { resolvePostLoginPathForUser } from "@/lib/sso/post-login-path";
 import { defaultRolePermissions, type AuthStoreData } from "@/types/auth";
 
 describe("sales operation RBAC", () => {
-  it("defaults User and Team Lead to SO shell + My Space only (not full pipeline)", () => {
+  it("code defaults: User and Team Lead have SO off until KV grant (My Space inherits SO)", () => {
     for (const role of ["User", "Team Lead"] as const) {
       const permissions = defaultRolePermissions[role];
-      assert.equal(permissions.salesOperation, true, `${role} SO shell`);
-      assert.equal(permissions.salesMySpace, true, `${role} My Space`);
+      assert.equal(permissions.salesOperation, false, `${role} SO shell off in code defaults`);
+      assert.equal(permissions.salesMySpace, false, `${role} My Space off in code defaults`);
       assert.equal(permissions.salesPipeline, false, `${role} pipeline off`);
-      for (const key of SALES_OPERATION_PAGE_KEYS) {
-        if (key === "salesOperation" || key === "salesMySpace" || key === "preOrders") continue;
-        assert.equal(permissions[key], false, `${role} should not access ${key} by default`);
-      }
     }
+  });
+
+  it("salesMySpace inherits salesOperation when absent in stored KV", () => {
+    const withSo = mergeRolePermissions("User", { salesOperation: true }, 18);
+    assert.equal(withSo.salesOperation, true);
+    assert.equal(withSo.salesMySpace, true);
+    assert.equal(withSo.salesPipeline, false);
+
+    const withoutSo = mergeRolePermissions("User", {}, 18);
+    assert.equal(withoutSo.salesOperation, false);
+    assert.equal(withoutSo.salesMySpace, false);
   });
 
   it("defaults sales operation on for Account Manager and Sales Manager (except Admin-only settings)", () => {
@@ -52,19 +59,18 @@ describe("sales operation RBAC", () => {
     assert.equal(merged.salesAutomation, true);
     assert.equal(merged.salesSettings, false);
     assert.equal(merged.salesDocumentation, true);
-    assert.equal(CURRENT_PERMISSIONS_VERSION, 19);
+    assert.equal(CURRENT_PERMISSIONS_VERSION, 18);
   });
 
-  it("migrates v18 User to SO + My Space when store had legacy defaults", () => {
-    const merged = mergeRolePermissions("User", {}, 18);
-    assert.equal(merged.salesOperation, true);
-    assert.equal(merged.salesMySpace, true);
-    assert.equal(merged.salesPipeline, false);
-  });
-
-  it("lands internal staff on My Space by default", () => {
-    const canAccessUser = (page: string) =>
-      Boolean(defaultRolePermissions.User[page as keyof (typeof defaultRolePermissions)["User"]]);
+  it("lands internal staff on My Space when SO + My Space are granted in store", () => {
+    const canAccessUser = (page: string) => {
+      const merged = mergeRolePermissions(
+        "User",
+        { salesOperation: true, salesMySpace: true },
+        18,
+      );
+      return Boolean(merged[page as keyof typeof merged]);
+    };
     assert.equal(
       resolvePostLoginPath({ accountType: "internal", canAccess: canAccessUser }),
       STAFF_MY_SPACE_PATH,
@@ -82,10 +88,17 @@ describe("sales operation RBAC", () => {
     );
   });
 
-  it("resolvePostLoginPathForUser matches My Space for User", () => {
+  it("resolvePostLoginPathForUser matches My Space when KV grants SO for User", () => {
     const store = {
       users: [],
-      rolePermissions: defaultRolePermissions,
+      rolePermissions: {
+        ...defaultRolePermissions,
+        User: {
+          ...defaultRolePermissions.User,
+          salesOperation: true,
+          salesMySpace: true,
+        },
+      },
       roleAreaAccess: {} as AuthStoreData["roleAreaAccess"],
       roleDashboardBlockAccess: {} as AuthStoreData["roleDashboardBlockAccess"],
       storeMeta: { permissionsVersion: CURRENT_PERMISSIONS_VERSION },

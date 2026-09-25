@@ -40,7 +40,7 @@ export const SALES_OPERATION_PAGE_KEYS = [
 
 export type SalesOperationPageKey = (typeof SALES_OPERATION_PAGE_KEYS)[number];
 
-export const CURRENT_PERMISSIONS_VERSION = 19;
+export const CURRENT_PERMISSIONS_VERSION = 18;
 
 export function isAppRole(value: unknown): value is AppRole {
   return typeof value === "string" && (APP_ROLES as readonly string[]).includes(value);
@@ -67,6 +67,8 @@ function migrateSalesSubPages(
   const legacySales = merged.salesOperation ?? false;
   for (const key of SALES_OPERATION_PAGE_KEYS) {
     if (key === "salesOperation") continue;
+    // salesMySpace inherits from salesOperation when absent in stored KV (see mergeRolePermissions).
+    if (key === "salesMySpace") continue;
     // salesSettings is Admin-only by default; keep the role default instead of
     // inheriting the broad salesOperation flag.
     if (key === "salesSettings") continue;
@@ -100,16 +102,8 @@ export function mergeRolePermissions(
   }
 
   const migrated = migrateSalesSubPages(merged, storedVersion, stored);
-  if (storedVersion >= 18 && storedVersion < 19 && (role === "User" || role === "Team Lead")) {
-    if (stored?.salesOperation === undefined) migrated.salesOperation = true;
-    if (stored?.salesMySpace === undefined) migrated.salesMySpace = true;
-    // v18 migrateSalesSubPages inherited the whole SO tree from salesOperation; v19 keeps My Space only.
-    for (const key of SALES_OPERATION_PAGE_KEYS) {
-      if (key === "salesOperation" || key === "salesMySpace") continue;
-      if (stored?.[key] === undefined) {
-        migrated[key] = defaultRolePermissions[role][key];
-      }
-    }
+  if (stored?.salesMySpace === undefined) {
+    migrated.salesMySpace = Boolean(migrated.salesOperation);
   }
   return migrated;
 }
