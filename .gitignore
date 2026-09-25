@@ -53,3 +53,4 @@ next-env.d.ts
 
 # Local tooling (Supabase CLI binary, scripts)
 .tools/
+.tmp-appli-crm-bridge-live.php

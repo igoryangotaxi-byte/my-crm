@@ -62,6 +62,7 @@ async function main() {
     "supabase_telephony_astradial.sql",
     "supabase_telegram_support_sessions.sql",
     "supabase_yango_token_registry.sql",
+    "supabase_driver_leads.sql",
   ];
   const client = new Client({
     connectionString: resolveDatabaseUrl(),

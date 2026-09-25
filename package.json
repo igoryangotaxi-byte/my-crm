@@ -1,6 +1,6 @@
 {
   "name": "my-crm",
-  "version": "0.2.75",
+  "version": "0.2.76",
   "private": true,
   "engines": {
     "node": ">=20.9.0"
@@ -35,6 +35,7 @@
     "sync:datagrip:taxi-orders": "node scripts/datagrip-sync-taxi-orders.js",
     "db:apply:driver-price-comparison": "node scripts/apply-driver-price-comparison-schema.js",
     "db:apply:sales-operation": "node scripts/apply-sales-operation-schema.js",
+    "migrate:drivers-sheet": "tsx scripts/migrate-drivers-sheet.ts",
     "telegram:set-webhook": "node scripts/telegram-set-webhook.mjs",
     "telegram:set-assistant-webhook": "node scripts/telegram-set-assistant-webhook.mjs",
     "telegram:set-support-webhook": "node scripts/telegram-set-support-webhook.mjs",

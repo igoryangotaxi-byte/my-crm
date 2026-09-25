@@ -52,7 +52,7 @@ function sampleStore(): AuthStoreData {
       rideClass: "comfortplus",
       createEndpoint: null,
     },
-    storeMeta: { permissionsVersion: 18 },
+    storeMeta: { permissionsVersion: 19 },
   };
 }
 

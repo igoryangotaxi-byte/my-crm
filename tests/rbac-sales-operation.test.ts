@@ -18,25 +18,36 @@ describe("sales operation RBAC", () => {
       assert.equal(permissions.salesOperation, true, `${role} SO shell on`);
       assert.equal(permissions.salesMySpace, true, `${role} My Space on`);
       assert.equal(permissions.salesPipeline, false, `${role} pipeline off`);
+      assert.equal(permissions.salesDriversPipeline, false, `${role} drivers pipeline off`);
       assert.equal(permissions.salesSettings, false, `${role} settings off`);
       assert.equal(permissions.accesses, false, `${role} accesses off`);
     }
   });
 
   it("salesMySpace inherits salesOperation when absent in stored KV", () => {
-    const withSoOnly = mergeRolePermissions("User", { salesOperation: true }, 18);
+    const withSoOnly = mergeRolePermissions(
+      "User",
+      { salesOperation: true },
+      CURRENT_PERMISSIONS_VERSION,
+    );
     assert.equal(withSoOnly.salesOperation, true);
     assert.equal(withSoOnly.salesMySpace, true);
     assert.equal(withSoOnly.salesPipeline, false);
+    assert.equal(withSoOnly.salesDriversPipeline, false);
 
-    const forcedOff = mergeRolePermissions("User", { salesOperation: false }, 18);
+    const forcedOff = mergeRolePermissions(
+      "User",
+      { salesOperation: false },
+      CURRENT_PERMISSIONS_VERSION,
+    );
     assert.equal(forcedOff.salesOperation, false);
     assert.equal(forcedOff.salesMySpace, false);
 
-    const fromDefaults = mergeRolePermissions("User", {}, 18);
+    const fromDefaults = mergeRolePermissions("User", {}, CURRENT_PERMISSIONS_VERSION);
     assert.equal(fromDefaults.salesOperation, true);
     assert.equal(fromDefaults.salesMySpace, true);
     assert.equal(fromDefaults.salesPipeline, false);
+    assert.equal(fromDefaults.salesDriversPipeline, false);
   });
 
   it("defaults sales operation on for Account Manager and Sales Manager (except Admin-only settings)", () => {
@@ -67,7 +78,8 @@ describe("sales operation RBAC", () => {
     assert.equal(merged.salesAutomation, true);
     assert.equal(merged.salesSettings, false);
     assert.equal(merged.salesDocumentation, true);
-    assert.equal(CURRENT_PERMISSIONS_VERSION, 18);
+    assert.equal(merged.salesDriversPipeline, true);
+    assert.equal(CURRENT_PERMISSIONS_VERSION, 19);
   });
 
   it("lands internal staff on My Space when SO + My Space are granted in store", () => {
@@ -75,7 +87,7 @@ describe("sales operation RBAC", () => {
       const merged = mergeRolePermissions(
         "User",
         { salesOperation: true, salesMySpace: true },
-        18,
+        CURRENT_PERMISSIONS_VERSION,
       );
       return Boolean(merged[page as keyof typeof merged]);
     };
@@ -86,7 +98,7 @@ describe("sales operation RBAC", () => {
 
     const canAccessAm = (page: string) =>
       Boolean(
-        mergeRolePermissions("Account Manager", undefined, 18)[
+        mergeRolePermissions("Account Manager", undefined, CURRENT_PERMISSIONS_VERSION)[
           page as keyof ReturnType<typeof mergeRolePermissions>
         ],
       );

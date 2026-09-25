@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-09-25",
+    title: "Drivers Pipeline from appli.taxi (0.2.76)",
+    notes:
+      "App version 0.2.76. New Sales Operation board Drivers Pipeline (New / In Progress / Registered / Rejected+substatus) with dial on phone. Elementor form 3684f71 → POST /api/sales-operation/webhooks/drivers (secret DRIVERS_PIPELINE_WEBHOOK_SECRET). WP Form Bridge v1.2; Google Sheets action removed. Sheet history migrated (~2298 leads). RBAC salesDriversPipeline (permissions v19). SQL: supabase_driver_leads.sql (applied).",
+  },
+  {
+    date: "2026-09-25",
     title: "Settings Access tabs + per-user stacks (0.2.75)",
     notes:
       "App version 0.2.75. Sales Operation Settings split into Access / Business segments / Others (?tab=). Per-user CRM access stacks with My Space only / Grant all; Admin always full. User & Team Lead code defaults = My Space only. Active/Disabled + Last login (SSO writes crm_user_profiles.last_login_at). SQL: supabase_user_page_overrides.sql + supabase_user_last_login.sql (applied). (eac2d6e7)",

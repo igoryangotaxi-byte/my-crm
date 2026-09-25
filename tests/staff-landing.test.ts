@@ -60,7 +60,7 @@ describe("staff landing with My Space code defaults", () => {
       rolePermissions: defaultRolePermissions,
       roleAreaAccess: {} as AuthStoreData["roleAreaAccess"],
       roleDashboardBlockAccess: {} as AuthStoreData["roleDashboardBlockAccess"],
-      storeMeta: { permissionsVersion: 18 },
+      storeMeta: { permissionsVersion: 19 },
     } as AuthStoreData;
     assert.equal(
       resolvePostLoginPathForUser(store, {
@@ -78,7 +78,7 @@ describe("staff landing with My Space code defaults", () => {
       rolePermissions: defaultRolePermissions,
       roleAreaAccess: {} as AuthStoreData["roleAreaAccess"],
       roleDashboardBlockAccess: {} as AuthStoreData["roleDashboardBlockAccess"],
-      storeMeta: { permissionsVersion: 18 },
+      storeMeta: { permissionsVersion: 19 },
     } as AuthStoreData;
     assert.equal(
       resolvePostLoginPathForUser(store, {

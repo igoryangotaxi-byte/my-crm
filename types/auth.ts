@@ -19,6 +19,7 @@ export type AppPageKey =
   | "salesOperation"
   | "salesMySpace"
   | "salesPipeline"
+  | "salesDriversPipeline"
   | "salesSignedClients"
   | "salesB2BClients"
   | "salesAnalytics"
@@ -124,6 +125,7 @@ const salesPagesAllTrue = {
   salesOperation: true,
   salesMySpace: true,
   salesPipeline: true,
+  salesDriversPipeline: true,
   salesSignedClients: true,
   salesB2BClients: true,
   salesAnalytics: true,
@@ -143,6 +145,7 @@ const salesPagesAllFalse = {
   salesOperation: false,
   salesMySpace: false,
   salesPipeline: false,
+  salesDriversPipeline: false,
   salesSignedClients: false,
   salesB2BClients: false,
   salesAnalytics: false,

@@ -15,6 +15,7 @@ export const PERMISSION_I18N_KEY: Record<AppPageKey, string> = {
   salesOperation: "salesOperation",
   salesMySpace: "salesMySpace",
   salesPipeline: "salesPipeline",
+  salesDriversPipeline: "salesDriversPipeline",
   salesSignedClients: "salesSignedClients",
   salesB2BClients: "salesB2BClients",
   salesAnalytics: "salesAnalytics",

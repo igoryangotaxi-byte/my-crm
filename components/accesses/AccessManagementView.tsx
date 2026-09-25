@@ -57,6 +57,7 @@ const accessSections: AccessSection[] = [
       { type: "page", key: "salesOperation", label: "Appli Taxi CRM (shell)" },
       { type: "page", key: "salesMySpace", label: "My Space" },
       { type: "page", key: "salesPipeline", label: "Pipeline" },
+      { type: "page", key: "salesDriversPipeline", label: "Drivers Pipeline" },
       { type: "page", key: "salesTracker", label: "Tracker" },
       { type: "page", key: "salesDocumentation", label: "Documentation" },
       { type: "page", key: "salesLeadDiscovery", label: "Lead Discovery" },

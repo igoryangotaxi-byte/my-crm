@@ -109,6 +109,13 @@ export function SalesOperationSidebar() {
         ],
       },
       { kind: "leaf", href: "/sales-operation/pipeline", labelKey: "pipeline", page: "salesPipeline", icon: Columns3 },
+      {
+        kind: "leaf",
+        href: "/sales-operation/drivers-pipeline",
+        labelKey: "driversPipeline",
+        page: "salesDriversPipeline",
+        icon: Car,
+      },
       { kind: "leaf", href: "/sales-operation/office", labelKey: "office", page: "salesPipeline", icon: Box },
       { kind: "leaf", href: "/sales-operation/lead-discovery", labelKey: "leadDiscovery", page: "salesLeadDiscovery", icon: Search },
       { kind: "leaf", href: "/sales-operation/tracker", labelKey: "tracker", page: "salesTracker", icon: LayoutDashboard },

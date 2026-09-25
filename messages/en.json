@@ -106,6 +106,7 @@
     },
     "tab": {
       "pipeline": "Pipeline",
+      "driversPipeline": "Drivers Pipeline",
       "leadDiscovery": "Lead Discovery",
       "tracker": "Tracker",
       "documentation": "Documentation",
@@ -737,6 +738,10 @@
       "pipeline": {
         "title": "Pipeline",
         "subtitle": "Lead kanban — New, In Progress, Proposal Sent, Signed, Rejected"
+      },
+      "driversPipeline": {
+        "title": "Drivers Pipeline",
+        "subtitle": "Driver recruitment — New, In Progress, Registered, Rejected"
       },
       "leadDiscovery": {
         "title": "Lead discovery",
@@ -1585,6 +1590,7 @@
     "salesOperation": "Appli Taxi CRM",
     "salesMySpace": "My Space",
     "salesPipeline": "Pipeline",
+    "salesDriversPipeline": "Drivers Pipeline",
     "salesSignedClients": "Portfolio",
     "salesB2BClients": "B2B clients",
     "salesAnalytics": "Analytics",

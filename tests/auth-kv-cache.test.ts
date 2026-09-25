@@ -24,7 +24,7 @@ function minimalStore(label: string): AuthStoreData {
       rideClass: "comfortplus",
       createEndpoint: null,
     },
-    storeMeta: { permissionsVersion: 18 },
+    storeMeta: { permissionsVersion: 19 },
     ...({ __label: label } as unknown as Record<string, string>),
   };
 }

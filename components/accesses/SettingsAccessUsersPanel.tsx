@@ -16,6 +16,7 @@ const CRM_STACK_PAGES: Array<{ key: AppPageKey; label: string }> = [
   { key: "salesOperation", label: "CRM shell" },
   { key: "salesMySpace", label: "My Space" },
   { key: "salesPipeline", label: "Pipeline" },
+  { key: "salesDriversPipeline", label: "Drivers Pipeline" },
   { key: "salesTracker", label: "Tracker" },
   { key: "salesDocumentation", label: "Documentation" },
   { key: "salesLeadDiscovery", label: "Lead Discovery" },

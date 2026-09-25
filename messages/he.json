@@ -106,6 +106,7 @@
     },
     "tab": {
       "pipeline": "צינור",
+      "driversPipeline": "Drivers Pipeline",
       "leadDiscovery": "גילוי לידים",
       "tracker": "טראקר",
       "documentation": "תיעוד",
@@ -1584,6 +1585,7 @@
     "salesOperation": "Appli Taxi CRM",
     "salesMySpace": "My Space",
     "salesPipeline": "Pipeline",
+    "salesDriversPipeline": "Drivers Pipeline",
     "salesSignedClients": "Portfolio",
     "salesB2BClients": "לקוחות B2B",
     "salesAnalytics": "אנליטיקה",

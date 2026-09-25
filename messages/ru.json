@@ -71,6 +71,8 @@
       "openAppli": "Открыть Appli"
     },
     "tab": {
+      "pipeline": "Pipeline",
+      "driversPipeline": "Drivers Pipeline",
       "leadDiscovery": "Поиск лидов",
       "documentation": "Документация",
       "callCenter": "Колл-центр",
@@ -486,6 +488,7 @@
     "salesOperation": "Appli Taxi CRM",
     "salesMySpace": "My Space",
     "salesPipeline": "Pipeline",
+    "salesDriversPipeline": "Drivers Pipeline",
     "salesSignedClients": "Portfolio",
     "salesB2BClients": "B2B clients",
     "salesAnalytics": "Аналитика",

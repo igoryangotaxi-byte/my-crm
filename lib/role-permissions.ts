@@ -26,6 +26,7 @@ export const SALES_OPERATION_PAGE_KEYS = [
   "salesOperation",
   "salesMySpace",
   "salesPipeline",
+  "salesDriversPipeline",
   "salesSignedClients",
   "salesB2BClients",
   "salesAnalytics",
@@ -43,7 +44,7 @@ export const SALES_OPERATION_PAGE_KEYS = [
 
 export type SalesOperationPageKey = (typeof SALES_OPERATION_PAGE_KEYS)[number];
 
-export const CURRENT_PERMISSIONS_VERSION = 18;
+export const CURRENT_PERMISSIONS_VERSION = 19;
 
 export function isAppRole(value: unknown): value is AppRole {
   return typeof value === "string" && (APP_ROLES as readonly string[]).includes(value);
@@ -75,6 +76,14 @@ function migrateSalesSubPages(
     // salesSettings is Admin-only by default; keep the role default instead of
     // inheriting the broad salesOperation flag.
     if (key === "salesSettings") continue;
+    // Drivers Pipeline follows salesPipeline defaults, not the shell flag
+    // (User/Team Lead stay My-Space-only until granted).
+    if (key === "salesDriversPipeline") {
+      if (stored?.[key] === undefined) {
+        merged[key] = Boolean(merged.salesPipeline);
+      }
+      continue;
+    }
     if (storedVersion < CURRENT_PERMISSIONS_VERSION && stored?.[key] === undefined) {
       merged[key] = legacySales;
     } else if (merged[key] === undefined) {
@@ -204,6 +213,7 @@ export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: AppPageK
   { prefix: "/sales-operation/tasks", page: "salesMySpace" },
   { prefix: "/sales-operation/calendar", page: "salesMySpace" },
   { prefix: "/sales-operation/pipeline", page: "salesPipeline" },
+  { prefix: "/sales-operation/drivers-pipeline", page: "salesDriversPipeline" },
   { prefix: "/sales-operation/office", page: "salesPipeline" },
   { prefix: "/sales-operation/corp-register", page: "salesPipeline" },
   { prefix: "/sales-operation/lead-discovery", page: "salesLeadDiscovery" },
@@ -235,6 +245,7 @@ export function resolveSalesOperationPageKey(pathname: string): AppPageKey {
   if (pathname.startsWith("/sales-operation/lead-discovery")) return "salesLeadDiscovery";
   if (pathname.startsWith("/sales-operation/office")) return "salesPipeline";
   if (pathname.startsWith("/sales-operation/corp-register")) return "salesPipeline";
+  if (pathname.startsWith("/sales-operation/drivers-pipeline")) return "salesDriversPipeline";
   if (pathname.startsWith("/sales-operation/pipeline")) return "salesPipeline";
   if (pathname.startsWith("/sales-operation/tracker")) return "salesTracker";
   if (pathname.startsWith("/sales-operation/documentation")) return "salesDocumentation";
