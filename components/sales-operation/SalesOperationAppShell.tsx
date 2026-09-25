@@ -27,6 +27,10 @@ function ShellInner({ children }: { children: React.ReactNode }) {
   const { density } = useSalesDensity();
   const rtl = language === "he";
   const mapFullBleed = pathname.startsWith("/sales-operation/request-rides");
+  const driversBoardFill =
+    pathname.startsWith("/sales-operation/drivers-leads/pipeline") ||
+    pathname.startsWith("/sales-operation/drivers-pipeline");
+  const fillViewport = mapFullBleed || driversBoardFill;
   const offset = rtl
     ? collapsed
       ? "lg:pr-[72px]"
@@ -41,7 +45,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       data-density={density}
       className={cn(
         "relative flex overflow-x-hidden bg-[var(--so-bg)]",
-        mapFullBleed ? "h-dvh min-h-0" : "min-h-screen",
+        fillViewport ? "h-dvh min-h-0" : "min-h-screen",
       )}
     >
       <CommandPalette />
@@ -49,7 +53,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
       <div
         className={cn(
           "relative z-[1] flex min-w-0 flex-1 flex-col",
-          mapFullBleed ? "h-dvh min-h-0 p-2 sm:p-2.5" : "min-h-screen p-2 sm:p-2.5",
+          fillViewport ? "h-dvh min-h-0 p-2 sm:p-2.5" : "min-h-screen p-2 sm:p-2.5",
           offset,
         )}
       >
@@ -62,7 +66,7 @@ function ShellInner({ children }: { children: React.ReactNode }) {
           <main
             className={cn(
               "make-shell-main min-h-0 min-w-0 flex-1",
-              mapFullBleed
+              fillViewport
                 ? "relative flex flex-col overflow-hidden p-0"
                 : "overflow-auto px-4 py-4 sm:px-5 lg:px-6",
             )}

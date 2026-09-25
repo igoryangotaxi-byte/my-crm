@@ -5,6 +5,7 @@ export const SALES_OPERATION_SIDEBAR_ROUTE_ORDER: Array<{ prefix: string; page: 
   { prefix: "/sales-operation/tasks", page: "salesMySpace" },
   { prefix: "/sales-operation/calendar", page: "salesMySpace" },
   { prefix: "/sales-operation/pipeline", page: "salesPipeline" },
+  { prefix: "/sales-operation/drivers-leads", page: "salesDriversPipeline" },
   { prefix: "/sales-operation/drivers-pipeline", page: "salesDriversPipeline" },
   { prefix: "/sales-operation/office", page: "salesPipeline" },
   { prefix: "/sales-operation/lead-discovery", page: "salesLeadDiscovery" },

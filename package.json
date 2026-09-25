@@ -1,6 +1,6 @@
 {
   "name": "my-crm",
-  "version": "0.2.77",
+  "version": "0.2.78",
   "private": true,
   "engines": {
     "node": ">=20.9.0"

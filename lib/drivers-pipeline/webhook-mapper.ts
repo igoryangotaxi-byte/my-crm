@@ -145,6 +145,7 @@ export function mapDriversWebhookPayloadToLeadInput(body: Record<string, unknown
     "taxi license?",
     "taxi license",
     "field_taxi_license",
+    "field_6f4c523",
     "license",
     "רישיון",
   ]);

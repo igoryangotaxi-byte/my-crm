@@ -72,7 +72,10 @@
     },
     "tab": {
       "pipeline": "Pipeline",
-      "driversPipeline": "Drivers Pipeline",
+      "driversLeads": "Drivers Leads",
+      "driversPipeline": "Pipeline",
+      "driversDashboard": "Dashboard",
+      "driversLicense": "Taxi license",
       "leadDiscovery": "Поиск лидов",
       "documentation": "Документация",
       "callCenter": "Колл-центр",
@@ -93,6 +96,18 @@
       "deleteConfirm": "Удалить документ? Он исчезнет из списка."
     },
     "page": {
+      "driversPipeline": {
+        "title": "Drivers Pipeline",
+        "subtitle": "Рекрутинг водителей — New, In Progress, Registered, Rejected"
+      },
+      "driversDashboard": {
+        "title": "Drivers Dashboard",
+        "subtitle": "Статусы, assignees, причины reject и эффективность (без No license)"
+      },
+      "driversLicense": {
+        "title": "Taxi license",
+        "subtitle": "With / Without license — отдельно от основной аналитики"
+      },
       "leadDiscovery": {
         "title": "Lead Discovery",
         "subtitle": "Автопоиск и квалификация B2B-лидов такси в Израиле"

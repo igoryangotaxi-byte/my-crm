@@ -213,6 +213,7 @@ export const SALES_OPERATION_ROUTE_PAGES: Array<{ prefix: string; page: AppPageK
   { prefix: "/sales-operation/tasks", page: "salesMySpace" },
   { prefix: "/sales-operation/calendar", page: "salesMySpace" },
   { prefix: "/sales-operation/pipeline", page: "salesPipeline" },
+  { prefix: "/sales-operation/drivers-leads", page: "salesDriversPipeline" },
   { prefix: "/sales-operation/drivers-pipeline", page: "salesDriversPipeline" },
   { prefix: "/sales-operation/office", page: "salesPipeline" },
   { prefix: "/sales-operation/corp-register", page: "salesPipeline" },
@@ -245,6 +246,7 @@ export function resolveSalesOperationPageKey(pathname: string): AppPageKey {
   if (pathname.startsWith("/sales-operation/lead-discovery")) return "salesLeadDiscovery";
   if (pathname.startsWith("/sales-operation/office")) return "salesPipeline";
   if (pathname.startsWith("/sales-operation/corp-register")) return "salesPipeline";
+  if (pathname.startsWith("/sales-operation/drivers-leads")) return "salesDriversPipeline";
   if (pathname.startsWith("/sales-operation/drivers-pipeline")) return "salesDriversPipeline";
   if (pathname.startsWith("/sales-operation/pipeline")) return "salesPipeline";
   if (pathname.startsWith("/sales-operation/tracker")) return "salesTracker";

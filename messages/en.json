@@ -106,7 +106,10 @@
     },
     "tab": {
       "pipeline": "Pipeline",
-      "driversPipeline": "Drivers Pipeline",
+      "driversLeads": "Drivers Leads",
+      "driversPipeline": "Pipeline",
+      "driversDashboard": "Dashboard",
+      "driversLicense": "Taxi license",
       "leadDiscovery": "Lead Discovery",
       "tracker": "Tracker",
       "documentation": "Documentation",
@@ -742,6 +745,14 @@
       "driversPipeline": {
         "title": "Drivers Pipeline",
         "subtitle": "Driver recruitment — New, In Progress, Registered, Rejected"
+      },
+      "driversDashboard": {
+        "title": "Drivers Dashboard",
+        "subtitle": "Status, assignee, reject reasons, and conversion efficiency (excludes No license)"
+      },
+      "driversLicense": {
+        "title": "Taxi license",
+        "subtitle": "With vs without taxi license — separate from pipeline analytics"
       },
       "leadDiscovery": {
         "title": "Lead discovery",

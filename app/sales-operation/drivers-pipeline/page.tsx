@@ -1,10 +1,5 @@
-import { Suspense } from "react";
-import { DriversPipelineBoard } from "@/components/drivers-pipeline/DriversPipelineBoard";
+import { redirect } from "next/navigation";
 
-export default function DriversPipelinePage() {
-  return (
-    <Suspense fallback={<div className="p-4 text-sm text-[var(--so-muted)]">Loading…</div>}>
-      <DriversPipelineBoard />
-    </Suspense>
-  );
+export default function DriversPipelineRedirectPage() {
+  redirect("/sales-operation/drivers-leads/pipeline");
 }

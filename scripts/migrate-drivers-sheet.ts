@@ -28,6 +28,7 @@ import {
   findDriverLeadBySheetRowKey,
 } from "../lib/drivers-pipeline/repository";
 import { NO_TAXI_LICENSE_SUBSTATUS } from "../lib/drivers-pipeline/taxi-license";
+import { resolveDriverHubExpert } from "../lib/drivers-pipeline/hub-experts";
 import type { CreateDriverLeadInput, DriverLeadStatus } from "../lib/drivers-pipeline/types";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -231,6 +232,13 @@ async function importRows(
         }
       }
 
+      const hubResolved = await resolveDriverHubExpert(hubExpert);
+      const hubName =
+        hubResolved?.name ??
+        (hubExpert && hubExpert.trim().toLowerCase() !== "unassigned"
+          ? hubExpert.trim()
+          : null);
+
       const input: CreateDriverLeadInput = {
         fullName: name,
         email,
@@ -239,7 +247,8 @@ async function importRows(
         rejectedSubstatus: mapped.rejectedSubstatus,
         source: "import",
         campaignName: campaign || null,
-        assignedManagerName: hubExpert || null,
+        assignedManagerUserId: hubResolved?.userId ?? null,
+        assignedManagerName: hubName,
         generalNotes: comment || null,
         customFields: {
           sheet_row_key: key,

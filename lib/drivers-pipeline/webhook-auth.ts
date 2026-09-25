@@ -13,5 +13,16 @@ export function isDriversPipelineWebhookAuthorized(request: Request): boolean {
   const authorization = request.headers.get("authorization")?.trim();
   if (authorization === `Bearer ${secret}`) return true;
 
+  // Elementor native webhook cannot set custom headers; allow ?secret= / ?webhook_secret=
+  try {
+    const url = new URL(request.url);
+    const querySecret =
+      url.searchParams.get("secret")?.trim() ||
+      url.searchParams.get("webhook_secret")?.trim();
+    if (querySecret && querySecret === secret) return true;
+  } catch {
+    // ignore invalid URL
+  }
+
   return false;
 }

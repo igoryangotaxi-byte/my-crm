@@ -106,7 +106,10 @@
     },
     "tab": {
       "pipeline": "צינור",
-      "driversPipeline": "Drivers Pipeline",
+      "driversLeads": "Drivers Leads",
+      "driversPipeline": "Pipeline",
+      "driversDashboard": "Dashboard",
+      "driversLicense": "Taxi license",
       "leadDiscovery": "גילוי לידים",
       "tracker": "טראקר",
       "documentation": "תיעוד",
@@ -738,6 +741,18 @@
       "pipeline": {
         "title": "צינור",
         "subtitle": "קנבן לידים — חדש, בטיפול, הצעה נשלחה, חתום, נדחה"
+      },
+      "driversPipeline": {
+        "title": "Drivers Pipeline",
+        "subtitle": "גיוס נהגים — New, In Progress, Registered, Rejected"
+      },
+      "driversDashboard": {
+        "title": "Drivers Dashboard",
+        "subtitle": "סטטוסים, assignees, סיבות דחייה ויעילות (ללא No license)"
+      },
+      "driversLicense": {
+        "title": "Taxi license",
+        "subtitle": "With / Without license — נפרד מאנליטיקת הפייפליין"
       },
       "leadDiscovery": {
         "title": "גילוי לידים",

@@ -21,6 +21,22 @@ import {
 
 const salesOperationPageMeta: Record<string, { titleKey: string; subtitleKey: string }> = {
   "/sales-operation/pipeline": { titleKey: "page.pipeline.title", subtitleKey: "page.pipeline.subtitle" },
+  "/sales-operation/drivers-leads/pipeline": {
+    titleKey: "page.driversPipeline.title",
+    subtitleKey: "page.driversPipeline.subtitle",
+  },
+  "/sales-operation/drivers-leads/dashboard": {
+    titleKey: "page.driversDashboard.title",
+    subtitleKey: "page.driversDashboard.subtitle",
+  },
+  "/sales-operation/drivers-leads/license": {
+    titleKey: "page.driversLicense.title",
+    subtitleKey: "page.driversLicense.subtitle",
+  },
+  "/sales-operation/drivers-pipeline": {
+    titleKey: "page.driversPipeline.title",
+    subtitleKey: "page.driversPipeline.subtitle",
+  },
   "/sales-operation/lead-discovery": { titleKey: "page.leadDiscovery.title", subtitleKey: "page.leadDiscovery.subtitle" },
   "/sales-operation/tracker": { titleKey: "page.tracker.title", subtitleKey: "page.tracker.subtitle" },
   "/sales-operation/documentation": { titleKey: "page.documentation.title", subtitleKey: "page.documentation.subtitle" },

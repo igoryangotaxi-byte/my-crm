@@ -3,6 +3,10 @@ import {
   assertValidDriverStatusTransition,
   isDriverLeadStatus,
 } from "@/lib/drivers-pipeline/status-transitions";
+import {
+  classifyTaxiLicenseAnswer,
+  NO_TAXI_LICENSE_SUBSTATUS,
+} from "@/lib/drivers-pipeline/taxi-license";
 import type {
   CreateDriverLeadInput,
   DriverLead,
@@ -71,12 +75,21 @@ function mapNoteRow(row: Record<string, unknown>): DriverLeadNote {
 
 export async function listDriverLeads(): Promise<DriverLead[]> {
   const supabase = getSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("driver_leads")
-    .select("*")
-    .order("status_entered_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => mapLeadRow(row as Record<string, unknown>));
+  const pageSize = 1000;
+  const rows: Record<string, unknown>[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase
+      .from("driver_leads")
+      .select("*")
+      .order("status_entered_at", { ascending: false })
+      .range(from, to);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as Record<string, unknown>[];
+    rows.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return rows.map((row) => mapLeadRow(row));
 }
 
 export async function getDriverLeadById(id: string): Promise<DriverLead | null> {
@@ -125,9 +138,22 @@ export async function createDriverLead(
 
   const supabase = getSupabaseAdminClient();
   const now = new Date().toISOString();
-  const status = input.status ? normalizeStatus(input.status) : "new";
-  const rejectedSubstatus =
+  const customFields: Record<string, unknown> = { ...(input.customFields ?? {}) };
+  const licenseRaw =
+    typeof customFields.taxi_license === "string"
+      ? customFields.taxi_license
+      : typeof customFields.taxi_license_normalized === "string"
+        ? customFields.taxi_license_normalized
+        : null;
+  const noLicense = classifyTaxiLicenseAnswer(licenseRaw) === "no";
+  let status = input.status ? normalizeStatus(input.status) : "new";
+  let rejectedSubstatus =
     status === "rejected" ? input.rejectedSubstatus?.trim() || null : null;
+  if (noLicense) {
+    status = "rejected";
+    rejectedSubstatus = NO_TAXI_LICENSE_SUBSTATUS;
+    customFields.taxi_license_normalized = "no";
+  }
 
   const payload: Record<string, unknown> = {
     status,
@@ -138,7 +164,7 @@ export async function createDriverLead(
     rejected_substatus: rejectedSubstatus,
     campaign_name: input.campaignName?.trim() || null,
     form_id: input.formId?.trim() || null,
-    custom_fields: input.customFields ?? {},
+    custom_fields: customFields,
     general_notes: input.generalNotes?.trim() || null,
     status_entered_at: now,
     created_by_user_id: actor.userId,
@@ -277,6 +303,129 @@ export async function deleteDriverLead(id: string): Promise<void> {
   if (!existing) throw new Error("Lead not found.");
   const { error } = await supabase.from("driver_leads").delete().eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+function uniqueIds(ids: string[]): string[] {
+  return [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+}
+
+async function chunkedInQuery<T>(
+  ids: string[],
+  run: (chunk: string[]) => Promise<T>,
+): Promise<T[]> {
+  const chunkSize = 200;
+  const results: T[] = [];
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    results.push(await run(ids.slice(i, i + chunkSize)));
+  }
+  return results;
+}
+
+export async function bulkDeleteDriverLeads(ids: string[]): Promise<number> {
+  const unique = uniqueIds(ids);
+  if (unique.length === 0) return 0;
+  const supabase = getSupabaseAdminClient();
+  await chunkedInQuery(unique, async (chunk) => {
+    const { error } = await supabase.from("driver_leads").delete().in("id", chunk);
+    if (error) throw new Error(error.message);
+  });
+  return unique.length;
+}
+
+export async function bulkAssignDriverLeads(
+  ids: string[],
+  assignee: { userId: string | null; name: string | null },
+): Promise<number> {
+  const unique = uniqueIds(ids);
+  if (unique.length === 0) return 0;
+  const supabase = getSupabaseAdminClient();
+  const now = new Date().toISOString();
+  const userId = assignee.userId?.trim() || null;
+  const name = userId
+    ? assignee.name?.trim() || userId
+    : null;
+  await chunkedInQuery(unique, async (chunk) => {
+    const { error } = await supabase
+      .from("driver_leads")
+      .update({
+        assigned_manager_user_id: userId,
+        assigned_manager_name: name,
+        updated_at: now,
+      })
+      .in("id", chunk);
+    if (error) throw new Error(error.message);
+  });
+  return unique.length;
+}
+
+export async function bulkTransitionDriverLeads(
+  ids: string[],
+  toStatus: DriverLeadStatus,
+  actor: { userId: string | null; name: string },
+  options?: { rejectedSubstatus?: string | null },
+): Promise<number> {
+  const unique = uniqueIds(ids);
+  if (unique.length === 0) return 0;
+  if (!isDriverLeadStatus(toStatus)) {
+    throw new Error(`Invalid status: ${String(toStatus)}`);
+  }
+  if (toStatus === "rejected" && !options?.rejectedSubstatus?.trim()) {
+    throw new Error("Reject reason is required.");
+  }
+
+  const supabase = getSupabaseAdminClient();
+  const now = new Date().toISOString();
+  const rejectedSubstatus =
+    toStatus === "rejected" ? options?.rejectedSubstatus?.trim() || null : null;
+
+  const existingRows: Array<{ id: string; status: string }> = [];
+  await chunkedInQuery(unique, async (chunk) => {
+    const { data, error } = await supabase
+      .from("driver_leads")
+      .select("id, status")
+      .in("id", chunk);
+    if (error) throw new Error(error.message);
+    for (const row of data ?? []) {
+      existingRows.push({ id: String(row.id), status: String(row.status) });
+    }
+  });
+
+  await chunkedInQuery(unique, async (chunk) => {
+    const { error } = await supabase
+      .from("driver_leads")
+      .update({
+        status: toStatus,
+        rejected_substatus: rejectedSubstatus,
+        status_entered_at: now,
+        updated_at: now,
+      })
+      .in("id", chunk);
+    if (error) throw new Error(error.message);
+  });
+
+  const events = existingRows
+    .filter((row) => row.status !== toStatus)
+    .map((row) => ({
+      lead_id: row.id,
+      from_status: row.status,
+      to_status: toStatus,
+      changed_by_user_id: actor.userId,
+      changed_by_name: actor.name,
+      created_at: now,
+    }));
+
+  if (events.length > 0) {
+    await chunkedInQuery(
+      events.map((e) => e.lead_id),
+      async (chunkIds) => {
+        const batch = events.filter((e) => chunkIds.includes(e.lead_id));
+        const { error } = await supabase.from("driver_lead_status_events").insert(batch);
+        if (error) throw new Error(error.message);
+      },
+    );
+  }
+
+  return unique.length;
 }
 
 export async function listDriverLeadNotes(leadId: string): Promise<DriverLeadNote[]> {

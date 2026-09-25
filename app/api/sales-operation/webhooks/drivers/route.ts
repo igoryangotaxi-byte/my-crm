@@ -52,7 +52,11 @@ export async function POST(request: Request) {
     }
 
     const lead = await createDriverLead(input, WP_ACTOR);
-    return Response.json({ ok: true, lead, duplicate: false }, { status: 201 });
+    // Elementor Form webhook action treats only HTTP 200 as success (201 fails the form UI).
+    return Response.json(
+      { ok: true, lead, duplicate: false },
+      { status: 200, headers: { "Cache-Control": "no-store" } },
+    );
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to create driver lead from webhook.";
