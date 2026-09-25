@@ -1,5 +1,4 @@
 import type { AuthStoreData } from "@/types/auth";
-import { markAuthKvReadSucceededInRequest } from "@/lib/auth-kv-request-context";
 import {
   getAuthStoreMaxStaleMs,
   PermissionStoreUnavailableError,
@@ -44,7 +43,6 @@ export async function loadPermissionKvSnapshot(
 ): Promise<AuthStoreData> {
   const now = Date.now();
   if (snapshotCache && snapshotCache.expiresAt > now) {
-    markAuthKvReadSucceededInRequest();
     return normalize(snapshotCache.raw);
   }
 
@@ -53,7 +51,6 @@ export async function loadPermissionKvSnapshot(
     const store = normalize(raw);
     snapshotCache = { expiresAt: now + AUTH_KV_SNAPSHOT_TTL_MS, raw };
     lastGoodSnapshot = { fetchedAt: now, store };
-    markAuthKvReadSucceededInRequest();
     return store;
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -63,7 +60,6 @@ export async function loadPermissionKvSnapshot(
       console.warn(
         `[auth] serving stale permission KV snapshot (within AUTH_STORE_MAX_STALE_MS=${maxStaleMs})`,
       );
-      markAuthKvReadSucceededInRequest();
       return lastGoodSnapshot.store;
     }
     throw new PermissionStoreUnavailableError(
@@ -73,19 +69,25 @@ export async function loadPermissionKvSnapshot(
 }
 
 /**
- * PR A read path when fail-open is required: caches successful reads only; throws on KV error.
+ * Legacy helper: caches successful reads only; throws on KV error (no stale window).
  */
 export async function fetchAuthKvSnapshotCached(
   fetchRawFromKv: () => Promise<AuthStoreData | null>,
 ): Promise<AuthStoreData | null> {
   const now = Date.now();
   if (snapshotCache && snapshotCache.expiresAt > now) {
-    markAuthKvReadSucceededInRequest();
     return snapshotCache.raw;
   }
 
   const raw = await fetchRawFromKv();
   snapshotCache = { expiresAt: now + AUTH_KV_SNAPSHOT_TTL_MS, raw };
-  markAuthKvReadSucceededInRequest();
   return raw;
+}
+
+/** After a successful KV write, refresh the read cache with the snapshot we just persisted. */
+export function seedAuthKvSnapshotCacheAfterSave(raw: AuthStoreData | null): void {
+  snapshotCache = { expiresAt: Date.now() + AUTH_KV_SNAPSHOT_TTL_MS, raw };
+  if (raw) {
+    lastGoodSnapshot = { fetchedAt: Date.now(), store: raw };
+  }
 }

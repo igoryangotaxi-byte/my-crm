@@ -1,5 +1,4 @@
 import { loadAuthStore } from "@/lib/auth-store";
-import { runWithAuthKvRequestContextAsync } from "@/lib/auth-kv-request-context";
 import { isPermissionStoreUnavailableError } from "@/lib/permission-store-unavailable";
 import { getSessionUserIdFromRequest } from "@/lib/server-session";
 import type { AuthStoreData, AuthUser, ClientRoleDefinition } from "@/types/auth";
@@ -26,39 +25,37 @@ export async function loadAuthStoreForRequest(request: Request): Promise<
   | { ok: true; store: AuthStoreData; user: AuthUser }
   | { ok: false; response: Response }
 > {
-  return runWithAuthKvRequestContextAsync(async () => {
-    let store: AuthStoreData;
-    try {
-      store = await loadAuthStore();
-    } catch (error) {
-      if (isPermissionStoreUnavailableError(error)) {
-        const { permissionStoreUnavailableResponse } = await import(
-          "@/lib/permission-store-unavailable"
-        );
-        return { ok: false, response: permissionStoreUnavailableResponse() };
-      }
-      const message =
-        error instanceof Error
-          ? `Supabase auth/profile store is unavailable: ${error.message}`
-          : "Supabase auth/profile store is unavailable.";
-      return {
-        ok: false,
-        response: Response.json({ ok: false, error: message }, {
-          status: 503,
-          headers: { "Cache-Control": "no-store" },
-        }),
-      };
+  let store: AuthStoreData;
+  try {
+    store = await loadAuthStore();
+  } catch (error) {
+    if (isPermissionStoreUnavailableError(error)) {
+      const { permissionStoreUnavailableResponse } = await import(
+        "@/lib/permission-store-unavailable"
+      );
+      return { ok: false, response: permissionStoreUnavailableResponse() };
     }
+    const message =
+      error instanceof Error
+        ? `Supabase auth/profile store is unavailable: ${error.message}`
+        : "Supabase auth/profile store is unavailable.";
+    return {
+      ok: false,
+      response: Response.json({ ok: false, error: message }, {
+        status: 503,
+        headers: { "Cache-Control": "no-store" },
+      }),
+    };
+  }
 
-    const user = resolveSessionUserFromStore(request, store);
-    if (!user) {
-      return {
-        ok: false,
-        response: Response.json({ ok: false, error: "Unauthorized" }, { status: 401 }),
-      };
-    }
-    return { ok: true, store, user };
-  });
+  const user = resolveSessionUserFromStore(request, store);
+  if (!user) {
+    return {
+      ok: false,
+      response: Response.json({ ok: false, error: "Unauthorized" }, { status: 401 }),
+    };
+  }
+  return { ok: true, store, user };
 }
 
 export async function requireApprovedUser(request: Request) {
@@ -111,27 +108,8 @@ export async function requireClientScopedUser(request: Request) {
       response: Response.json({ ok: false, error: "Client scope is not configured." }, { status: 403 }),
     };
   }
-  const rolesForTenant = store.tenantRoles?.[scope.tenantId] ?? [];
-  if (rolesForTenant.length === 0) {
-    return {
-      ok: false as const,
-      response: Response.json(
-        { ok: false, code: "PERMISSION_DENIED", error: "Forbidden." },
-        { status: 403 },
-      ),
-    };
-  }
-  const role: ClientRoleDefinition | undefined = scope.clientRoleId
-    ? rolesForTenant.find((item) => item.id === scope.clientRoleId)
-    : undefined;
-  if (!role) {
-    return {
-      ok: false as const,
-      response: Response.json(
-        { ok: false, code: "PERMISSION_DENIED", error: "Forbidden." },
-        { status: 403 },
-      ),
-    };
-  }
-  return { ok: true as const, user, scope, clientRole: role };
+  const role: ClientRoleDefinition | undefined = store.tenantRoles?.[scope.tenantId]?.find(
+    (item) => item.id === scope.clientRoleId,
+  );
+  return { ok: true as const, user, scope, clientRole: role ?? null };
 }

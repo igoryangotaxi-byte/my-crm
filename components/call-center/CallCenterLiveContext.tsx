@@ -44,7 +44,7 @@ type CallCenterLiveState = {
   active: CallCenterParticipant | null;
   screenPopRequest: CallCenterScreenPopRequest | null;
   error: string | null;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<void | LivePollTier>;
   setOperatorStatus: (status: string) => Promise<void>;
   setNotificationsMuted: (muted: boolean) => Promise<void>;
   openScreenPop: (request: CallCenterScreenPopRequest) => void;

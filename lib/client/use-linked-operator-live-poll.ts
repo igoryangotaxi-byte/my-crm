@@ -34,9 +34,7 @@ export function useLinkedOperatorLivePoll(
     }
 
     const tick = () => {
-      if (!document.hidden) {
-        void refreshRef.current();
-      }
+      void refreshRef.current();
     };
 
     tick();

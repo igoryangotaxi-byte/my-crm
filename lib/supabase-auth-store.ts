@@ -453,7 +453,7 @@ async function loadLegacyStoreForFallback(): Promise<AuthStoreData> {
     const { PermissionStoreUnavailableError } = await import("@/lib/permission-store-unavailable");
     throw new PermissionStoreUnavailableError("KV is not configured for auth store reads.");
   }
-  const { loadPermissionKvSnapshot } = await import("@/lib/auth-kv-cache");
+  const { loadPermissionKvSnapshot } = await import("@/lib/auth-kv-cache.server");
   return loadPermissionKvSnapshot(
     () => kv.get<AuthStoreData>(AUTH_STORE_KEY),
     (raw) => normalizeStore(raw),
@@ -1137,7 +1137,25 @@ export async function saveAuthStoreToSupabase(data: AuthStoreData): Promise<void
   }
 }
 
-export async function saveAuthUsersToSupabaseAuthFallback(data: AuthStoreData): Promise<void> {
+export async function saveAuthUsersToSupabaseAuthFallback(
+  data: AuthStoreData,
+  options?: { strictFreshKv?: boolean },
+): Promise<void> {
+  const strictFreshKv = options?.strictFreshKv ?? false;
+  const { readAuthKvSnapshotFreshForSave, assertFreshKvReadableForStrictSave } = await import(
+    "@/lib/auth-kv-save-guard.server"
+  );
+  const freshKv = await readAuthKvSnapshotFreshForSave();
+  if (!freshKv.ok) {
+    if (strictFreshKv) {
+      assertFreshKvReadableForStrictSave(freshKv);
+    }
+    console.warn(
+      "[auth] Skipping Supabase Auth fallback sync: fresh KV read failed at save time (no Auth users modified).",
+    );
+    return;
+  }
+
   const supabase = getSupabaseAdminClient();
   const normalized = normalizeStore(data);
   const existingUsers = await listAllAuthUsersDetailed(supabase);
@@ -1204,9 +1222,6 @@ export async function saveAuthUsersToSupabaseAuthFallback(data: AuthStoreData): 
       throw new Error(`Failed to create auth user ${user.email}: ${error?.message ?? "unknown"}`);
     }
   }
-
-  const { guardManagedUserDeletionsRequireKvRead } = await import("@/lib/auth-kv-save-guard");
-  guardManagedUserDeletionsRequireKvRead();
 
   const wantedIds = new Set(normalized.users.map((user) => user.id));
   const managedToDelete = existingUsers.filter(

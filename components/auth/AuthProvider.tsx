@@ -314,7 +314,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const POLL_MS = 60_000;
-    let pollId: ReturnType<typeof setInterval> | null = null;
+    let pollId: number | null = null;
 
     const tick = () => {
       void fetchState().catch(() => {

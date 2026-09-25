@@ -5,11 +5,7 @@ import {
   fetchAuthKvSnapshotCached,
   loadPermissionKvSnapshot,
   resetAuthKvSnapshotCacheForTests,
-} from "@/lib/auth-kv-cache";
-import {
-  resetAuthKvRequestContextForTests,
-  runWithAuthKvRequestContextAsync,
-} from "@/lib/auth-kv-request-context";
+} from "@/lib/auth-kv-cache.server";
 import { PermissionStoreUnavailableError } from "@/lib/permission-store-unavailable";
 import type { AuthStoreData } from "@/types/auth";
 
@@ -29,7 +25,7 @@ function minimalStore(label: string): AuthStoreData {
       createEndpoint: null,
     },
     storeMeta: { permissionsVersion: 18 },
-    ...( { __label: label } as unknown as Record<string, string> ),
+    ...({ __label: label } as unknown as Record<string, string>),
   };
 }
 
@@ -140,15 +136,5 @@ describe("auth KV snapshot cache", () => {
       if (prev === undefined) delete process.env.AUTH_STORE_MAX_STALE_MS;
       else process.env.AUTH_STORE_MAX_STALE_MS = prev;
     }
-  });
-
-  it("marks KV read succeeded in request context on cache hit", async () => {
-    resetAuthKvSnapshotCacheForTests();
-    await runWithAuthKvRequestContextAsync(async () => {
-      resetAuthKvRequestContextForTests();
-      await fetchAuthKvSnapshotCached(async () => minimalStore("x"));
-      const { getAuthKvReadSucceededInRequest } = await import("@/lib/auth-kv-request-context");
-      assert.equal(getAuthKvReadSucceededInRequest(), true);
-    });
   });
 });
