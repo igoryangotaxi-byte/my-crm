@@ -6,6 +6,12 @@ type ReleaseItem = {
 
 const releaseItems: ReleaseItem[] = [
   {
+    date: "2026-09-25",
+    title: "Settings Access tabs + per-user stacks (0.2.75)",
+    notes:
+      "App version 0.2.75. Sales Operation Settings split into Access / Business segments / Others (?tab=). Per-user CRM access stacks with My Space only / Grant all; Admin always full. User & Team Lead code defaults = My Space only. Active/Disabled + Last login (SSO writes crm_user_profiles.last_login_at). SQL: supabase_user_page_overrides.sql + supabase_user_last_login.sql (applied). (eac2d6e7)",
+  },
+  {
     date: "2026-09-24",
     title: "3CX Dial without FaceTime (0.2.74)",
     notes:
