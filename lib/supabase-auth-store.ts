@@ -462,15 +462,23 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
 }
 
 async function loadLegacyStoreForFallback(): Promise<AuthStoreData> {
-  if (!canUseKv()) {
-    const { PermissionStoreUnavailableError } = await import("@/lib/permission-store-unavailable");
-    throw new PermissionStoreUnavailableError("KV is not configured for auth store reads.");
+  // Match auth-store operator-safe behavior: never 503 the whole CRM on KV outage.
+  if (canUseKv()) {
+    try {
+      const { fetchAuthKvSnapshotCached } = await import("@/lib/auth-kv-cache.server");
+      const raw = await fetchAuthKvSnapshotCached(() => kv.get<AuthStoreData>(AUTH_STORE_KEY));
+      return normalizeStore(raw);
+    } catch (error) {
+      console.warn(
+        `[auth] KV fallback snapshot read failed; using in-memory store (${error instanceof Error ? error.message : "unknown"})`,
+      );
+    }
   }
-  const { loadPermissionKvSnapshot } = await import("@/lib/auth-kv-cache.server");
-  return loadPermissionKvSnapshot(
-    () => kv.get<AuthStoreData>(AUTH_STORE_KEY),
-    (raw) => normalizeStore(raw),
-  );
+  if (!fallbackMemoryStore) {
+    fallbackMemoryStore = createDefaultStore();
+  }
+  fallbackMemoryStore = normalizeStore(fallbackMemoryStore);
+  return fallbackMemoryStore;
 }
 
 function mergeUsersByIdOrEmail(primaryUsers: AuthUser[], fallbackUsers: AuthUser[]) {

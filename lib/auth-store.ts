@@ -302,15 +302,25 @@ function canUseKv() {
 }
 
 async function loadLegacyAuthStore(): Promise<AuthStoreData> {
-  if (!canUseKv()) {
-    const { PermissionStoreUnavailableError } = await import("@/lib/permission-store-unavailable");
-    throw new PermissionStoreUnavailableError("KV is not configured for auth store reads.");
+  // Operator-safe: never fail-closed on KV read outages in production traffic.
+  // Prefer cached KV snapshot when available; otherwise fall back to in-memory defaults.
+  if (canUseKv()) {
+    try {
+      const { fetchAuthKvSnapshotCached } = await import("@/lib/auth-kv-cache.server");
+      const raw = await fetchAuthKvSnapshotCached(() => kv.get<AuthStoreData>(AUTH_STORE_KEY));
+      return normalizeStore(raw);
+    } catch (error) {
+      console.warn(
+        `[auth] KV snapshot read failed; using in-memory fallback (${error instanceof Error ? error.message : "unknown"})`,
+      );
+    }
   }
-  const { loadPermissionKvSnapshot } = await import("@/lib/auth-kv-cache.server");
-  return loadPermissionKvSnapshot(
-    () => kv.get<AuthStoreData>(AUTH_STORE_KEY),
-    (raw) => normalizeStore(raw),
-  );
+
+  if (!fallbackMemoryStore) {
+    fallbackMemoryStore = createDefaultStore();
+  }
+  fallbackMemoryStore = normalizeStore(fallbackMemoryStore);
+  return fallbackMemoryStore;
 }
 
 async function saveLegacyAuthStore(
