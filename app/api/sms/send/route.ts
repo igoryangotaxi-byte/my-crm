@@ -37,9 +37,7 @@ function isInforuSmsSendEnabled(): boolean {
 export async function POST(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
-  const denied = await guardOpsApiPagePermission(auth.user, request, "communications", {
-    store: auth.authStore,
-  });
+  const denied = await guardOpsApiPagePermission(auth.user, request, "communications");
   if (denied) return denied;
 
   const body = (await request.json().catch(() => null)) as

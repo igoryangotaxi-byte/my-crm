@@ -11,9 +11,7 @@ export const maxDuration = 120;
 export async function POST(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
-  const denied = await guardOpsApiPagePermission(auth.user, request, "orders", {
-    store: auth.authStore,
-  });
+  const denied = await guardOpsApiPagePermission(auth.user, request, "orders");
   if (denied) return denied;
   if (!isSupabaseConfigured()) {
     return Response.json({ ok: false, error: "Supabase is not configured." }, { status: 500 });

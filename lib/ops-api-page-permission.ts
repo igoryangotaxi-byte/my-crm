@@ -2,7 +2,7 @@ import {
   CURRENT_PERMISSIONS_VERSION,
   mergeRolePermissions,
 } from "@/lib/role-permissions";
-import { loadAuthStoreForRequest } from "@/lib/auth-store";
+import { loadAuthStoreForRequest } from "@/lib/server-auth";
 import { stringifyOpsApiPermissionLog } from "@/lib/ops-api-audit-log";
 import {
   PermissionStoreUnavailableError,
@@ -39,7 +39,13 @@ export type OpsApiPermissionStoreLoader = (
 
 let permissionStoreLoader: OpsApiPermissionStoreLoader = async (request, options) => {
   if (options?.store) return options.store;
-  return loadAuthStoreForRequest(request);
+  const session = await loadAuthStoreForRequest(request);
+  if (!session.ok) {
+    throw new PermissionStoreUnavailableError(
+      "Permission store unavailable while resolving ops API page access.",
+    );
+  }
+  return session.store;
 };
 
 /**
@@ -51,7 +57,13 @@ export function setOpsApiPermissionStoreLoader(loader: OpsApiPermissionStoreLoad
     loader ??
     (async (request, options) => {
       if (options?.store) return options.store;
-      return loadAuthStoreForRequest(request);
+      const session = await loadAuthStoreForRequest(request);
+      if (!session.ok) {
+        throw new PermissionStoreUnavailableError(
+          "Permission store unavailable while resolving ops API page access.",
+        );
+      }
+      return session.store;
     });
 }
 
