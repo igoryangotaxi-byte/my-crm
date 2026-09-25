@@ -7,6 +7,12 @@ type ReleaseItem = {
 const releaseItems: ReleaseItem[] = [
   {
     date: "2026-09-25",
+    title: "Drivers Leads dashboards + premium pipeline (0.2.78)",
+    notes:
+      "App version 0.2.78. Nav group Drivers Leads: Pipeline, Dashboard (status/assignee/reject/efficiency; no-license excluded from main mix), Taxi license (dedicated no-license report + radial mix). Virtualized premium board cards/filters (CRM tokens). Received-at DD/MM ambiguity fix for future dates. Bulk leads API; hub-expert remap helpers. (a20d20de)",
+  },
+  {
+    date: "2026-09-25",
     title: "Drivers no-license → Rejected (0.2.77)",
     notes:
       "App version 0.2.77. Sheet tab בלי רישיון מונית and form taxi-license=לא map to Rejected with substatus No license. Elementor form regained taxi license select; Form Bridge sends taxiLicense. Historical no_license imports updated (497). (3832e331)",
