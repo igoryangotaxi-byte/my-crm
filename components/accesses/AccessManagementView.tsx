@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { APP_ROLES } from "@/lib/role-permissions";
 import type {
@@ -116,6 +117,8 @@ function AccessBlockChevron() {
 }
 
 export function AccessManagementView() {
+  const tSettings = useTranslations("salesOperation.settings");
+  const tStore = useTranslations("auth.permissionStoreUnavailable");
   const {
     currentUser,
     pendingUsers,
@@ -131,9 +134,48 @@ export function AccessManagementView() {
     toggleRolePageAccess,
     toggleRoleAreaAccess,
     toggleRoleDashboardBlockAccess,
+    permissionStoreAdminBlocked,
   } = useAuth();
 
   const isAdmin = currentUser?.role === "Admin";
+  const [savingUserRoleId, setSavingUserRoleId] = useState<string | null>(null);
+  const [savingPermissionKey, setSavingPermissionKey] = useState<string | null>(null);
+  const [accessSaveFeedback, setAccessSaveFeedback] = useState<"success" | "error" | null>(null);
+
+  const permissionSaveKey = (role: AppRole, page: AppPageKey) => `${role}:${page}`;
+
+  const handleUserRoleChange = useCallback(
+    async (userId: string, role: AppRole) => {
+      setAccessSaveFeedback(null);
+      setSavingUserRoleId(userId);
+      try {
+        await updateUserRole(userId, role);
+        setAccessSaveFeedback("success");
+      } catch {
+        setAccessSaveFeedback("error");
+      } finally {
+        setSavingUserRoleId(null);
+      }
+    },
+    [updateUserRole],
+  );
+
+  const handleTogglePageAccess = useCallback(
+    async (role: AppRole, page: AppPageKey) => {
+      const key = permissionSaveKey(role, page);
+      setAccessSaveFeedback(null);
+      setSavingPermissionKey(key);
+      try {
+        await toggleRolePageAccess(role, page);
+        setAccessSaveFeedback("success");
+      } catch {
+        setAccessSaveFeedback("error");
+      } finally {
+        setSavingPermissionKey(null);
+      }
+    },
+    [toggleRolePageAccess],
+  );
   const canRemoveCabinet = isAdmin && currentUser?.accountType !== "client";
   const [selectedRole, setSelectedRole] = useState<AppRole>("Admin");
   const [onboardingMessage, setOnboardingMessage] = useState<string | null>(null);
@@ -447,38 +489,72 @@ export function AccessManagementView() {
 
           <div className="p-4">
             <p className="crm-label mb-3">Allowed actions</p>
+            {permissionStoreAdminBlocked ? (
+              <p
+                className="mb-3 rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-700"
+                role="status"
+              >
+                {tStore("adminBanner")}
+              </p>
+            ) : null}
+            {accessSaveFeedback === "success" ? (
+              <p className="mb-2 text-sm text-emerald-800" role="status">
+                {tSettings("saved")}
+              </p>
+            ) : null}
+            {accessSaveFeedback === "error" ? (
+              <p className="mb-2 text-sm text-rose-800" role="alert">
+                {tSettings("saveError")}
+              </p>
+            ) : null}
+            {savingPermissionKey || savingUserRoleId ? (
+              <p className="mb-2 text-sm text-muted">{tSettings("saving")}</p>
+            ) : null}
             <div className="space-y-2">
               {selectedSection.actions.map((action) => {
-                const checked =
-                  action.type === "page"
+                const checked = permissionStoreAdminBlocked
+                  ? false
+                  : action.type === "page"
                     ? rolePermissions[selectedRole][action.key]
                     : action.type === "area"
                       ? roleAreaAccess[selectedRole][action.key]
                       : roleDashboardBlockAccess[selectedRole][action.key];
+                const pagePermissionBusy =
+                  action.type === "page" &&
+                  savingPermissionKey === permissionSaveKey(selectedRole, action.key);
+                const accessBusy = Boolean(savingPermissionKey || savingUserRoleId);
+                const saveDisabled = !isAdmin || accessBusy || permissionStoreAdminBlocked;
+                const disabledTitle = permissionStoreAdminBlocked
+                  ? tStore("adminSaveDisabledTooltip")
+                  : undefined;
 
                 return (
                   <label
                     key={`${action.type}-${action.key}`}
                     className="flex items-center gap-3 rounded-[8px] border border-[var(--so-border)] bg-[var(--so-surface)] px-3 py-2.5 text-sm text-[var(--so-text)]"
+                    title={disabledTitle}
                   >
                     <input
                       type="checkbox"
                       checked={checked}
-                      disabled={!isAdmin}
+                      disabled={saveDisabled}
                       onChange={() => {
                         if (action.type === "page") {
-                          toggleRolePageAccess(selectedRole, action.key);
+                          void handleTogglePageAccess(selectedRole, action.key);
                           return;
                         }
                         if (action.type === "area") {
-                          toggleRoleAreaAccess(selectedRole, action.key);
+                          void toggleRoleAreaAccess(selectedRole, action.key);
                           return;
                         }
-                        toggleRoleDashboardBlockAccess(selectedRole, action.key);
+                        void toggleRoleDashboardBlockAccess(selectedRole, action.key);
                       }}
                       className="h-4 w-4 rounded border-border accent-accent disabled:opacity-50"
                     />
-                    <span>{action.label}</span>
+                    <span>
+                      {action.label}
+                      {pagePermissionBusy ? ` (${tSettings("saving")})` : null}
+                    </span>
                   </label>
                 );
               })}
@@ -536,8 +612,13 @@ export function AccessManagementView() {
                 <div className="flex items-center gap-2">
                   <select
                     value={user.role}
-                    onChange={(event) => updateUserRole(user.id, event.target.value as AppRole)}
-                    disabled={!isAdmin}
+                    onChange={(event) =>
+                      void handleUserRoleChange(user.id, event.target.value as AppRole)
+                    }
+                    disabled={!isAdmin || savingUserRoleId === user.id || permissionStoreAdminBlocked}
+                    title={
+                      permissionStoreAdminBlocked ? tStore("adminSaveDisabledTooltip") : undefined
+                    }
                     className="crm-input h-9 px-2 text-sm text-slate-700 disabled:opacity-50"
                   >
                     {roleItems.map((role) => (
@@ -1244,9 +1325,12 @@ export function AccessManagementView() {
                   <td className="px-3 py-2 text-sm text-slate-700">
                     <select
                       value={user.role}
-                      disabled={!isAdmin}
+                      disabled={!isAdmin || savingUserRoleId === user.id || permissionStoreAdminBlocked}
+                    title={
+                      permissionStoreAdminBlocked ? tStore("adminSaveDisabledTooltip") : undefined
+                    }
                       onChange={(event) =>
-                        updateUserRole(user.id, event.target.value as AppRole)
+                        void handleUserRoleChange(user.id, event.target.value as AppRole)
                       }
                       className="crm-input h-8 px-2 text-sm text-slate-700 disabled:opacity-50"
                     >
