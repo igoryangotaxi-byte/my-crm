@@ -84,6 +84,11 @@ type AuthContextValue = {
   lastLoginEmail: string;
   language: AppLanguage;
   updateUserLanguage: (language: AppLanguage) => Promise<void>;
+  /**
+   * When true, Access Management hides role values and blocks saves.
+   * Real wiring lands in fail-closed PR B; stub false here so P0-7 UI compiles on PR A.
+   */
+  permissionStoreAdminBlocked: boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -518,6 +523,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       lastLoginEmail,
       language,
       updateUserLanguage,
+      permissionStoreAdminBlocked: false,
     }),
     [
       loading,

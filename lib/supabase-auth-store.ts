@@ -1014,6 +1014,7 @@ async function deleteRemovedProfiles(
 export async function loadAuthStoreFromSupabase(): Promise<AuthStoreData> {
   const supabase = getSupabaseAdminClient();
   try {
+    // Select-only: never seed/upsert on read (see seedSupabaseAuthDefaultsIfMissing / admin paths).
     const [
       users,
       rolePermissions,
