@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 
 export const PERMISSION_STORE_UNAVAILABLE_CODE = "PERMISSION_STORE_UNAVAILABLE" as const;
 
+/** Max age for serving a last-good in-process KV snapshot after a read failure. */
+export const MAX_STALE_MS = 10 * 60 * 1000;
+
 export class PermissionStoreUnavailableError extends Error {
   readonly code = PERMISSION_STORE_UNAVAILABLE_CODE;
 

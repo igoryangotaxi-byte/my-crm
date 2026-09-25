@@ -6,8 +6,14 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import { isPermissionStoreUnavailable } from "@/lib/permission-store-unavailable-client";
+import {
+  PermissionStorePollBanner,
+  PermissionStoreUnavailableState,
+} from "@/components/auth/PermissionStoreUnavailableState";
 import { NextIntlClientProvider } from "next-intl";
 import {
   type AuthApiActionRequest,
@@ -84,6 +90,11 @@ type AuthContextValue = {
   lastLoginEmail: string;
   language: AppLanguage;
   updateUserLanguage: (language: AppLanguage) => Promise<void>;
+  permissionsHydrated: boolean;
+  permissionStorePollWarning: boolean;
+  permissionStoreAdminBlocked: boolean;
+  retryPermissionsLoad: () => Promise<void>;
+  permissionsRetryInFlight: boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -137,6 +148,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [tenantAccounts, setTenantAccounts] = useState<TenantAccount[]>([]);
   const [languageState, setLanguageState] = useState<AppLanguage>("en");
+  const [permissionsHydrated, setPermissionsHydrated] = useState(false);
+  const [permissionStorePollWarning, setPermissionStorePollWarning] = useState(false);
+  const [permissionStoreAdminBlocked, setPermissionStoreAdminBlocked] = useState(false);
+  const [permissionsRetryInFlight, setPermissionsRetryInFlight] = useState(false);
+  const [storeUnavailableFatal, setStoreUnavailableFatal] = useState(false);
+  const permissionsHydratedRef = useRef(false);
 
   useEffect(() => {
     if (sessionUserId) {
@@ -220,23 +237,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchState = useCallback(async () => {
     const response = await fetch("/api/auth", { cache: "no-store" });
+    const body = (await response.json().catch(() => null)) as
+      | (AuthStoreData & { currentUserId?: string })
+      | null;
+
     if (response.status === 401) {
       setSessionUserId(null);
       return;
     }
+
+    if (isPermissionStoreUnavailable(response, body)) {
+      setPermissionStorePollWarning(true);
+      setPermissionStoreAdminBlocked(true);
+      if (!permissionsHydratedRef.current) {
+        setStoreUnavailableFatal(true);
+      }
+      return;
+    }
+
     if (!response.ok) {
       throw new Error(`Failed to load auth state: HTTP ${response.status}`);
     }
-    const data = (await response.json()) as AuthStoreData & { currentUserId?: string };
-    applyStoreData(data);
-    const serverUserId = data.currentUserId ?? null;
+
+    if (!body || !Array.isArray(body.users)) {
+      throw new Error("Failed to load auth state: invalid payload");
+    }
+
+    setPermissionStorePollWarning(false);
+    setPermissionStoreAdminBlocked(false);
+    setStoreUnavailableFatal(false);
+    permissionsHydratedRef.current = true;
+    setPermissionsHydrated(true);
+    applyStoreData(body);
+    const serverUserId = body.currentUserId ?? null;
     setSessionUserId((prev) => {
-      if (serverUserId && data.users.some((user) => user.id === serverUserId)) {
+      if (serverUserId && body.users.some((user) => user.id === serverUserId)) {
         return serverUserId;
       }
-      return prev && data.users.some((user) => user.id === prev) ? prev : null;
+      return prev && body.users.some((user) => user.id === prev) ? prev : null;
     });
   }, [applyStoreData]);
+
+  const retryPermissionsLoad = useCallback(async () => {
+    if (permissionsRetryInFlight) {
+      return;
+    }
+    setPermissionsRetryInFlight(true);
+    try {
+      await fetchState();
+    } finally {
+      setPermissionsRetryInFlight(false);
+    }
+  }, [fetchState, permissionsRetryInFlight]);
 
   useEffect(() => {
     let cancelled = false;
@@ -245,7 +297,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         await fetchState();
       } catch {
-        // Keep defaults in case API is temporarily unavailable.
+        if (!permissionsHydratedRef.current) {
+          setStoreUnavailableFatal(true);
+        }
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -264,7 +318,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const tick = () => {
       void fetchState().catch(() => {
-        // Ignore transient polling failures; interactive actions surface their own errors.
+        // Non-503 failures only; 503 PERMISSION_STORE_UNAVAILABLE is handled inside fetchState.
       });
     };
 
@@ -314,6 +368,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         | null;
 
+      if (isPermissionStoreUnavailable(response, result)) {
+        setPermissionStorePollWarning(true);
+        setPermissionStoreAdminBlocked(true);
+        return {
+          ok: false,
+          message: "Permission store unavailable",
+          userId: result?.userId,
+          data: result?.data,
+        };
+      }
+
       if (!response.ok || !result?.ok) {
         return {
           ok: false,
@@ -322,6 +387,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           data: result?.data,
         };
       }
+
+      setPermissionStoreAdminBlocked(false);
 
       if (result.data) {
         applyStoreData(result.data);
@@ -434,17 +501,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const canAccessArea = useCallback(
     (area: BusinessArea) => {
-      if (!currentUser || currentUser.status !== "approved") {
+      if (!permissionsHydrated || !currentUser || currentUser.status !== "approved") {
         return false;
       }
       return roleAreaAccess[currentUser.role][area];
     },
-    [currentUser, roleAreaAccess],
+    [currentUser, permissionsHydrated, roleAreaAccess],
   );
 
   const canAccess = useCallback(
     (page: AppPageKey) => {
-      if (!currentUser || currentUser.status !== "approved") {
+      if (!permissionsHydrated || !currentUser || currentUser.status !== "approved") {
         return false;
       }
       if (currentUser.accountType === "client" && currentUser.tenantId) {
@@ -463,12 +530,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const canAccessDashboardBlock = useCallback(
     (block: DashboardBlockKey) => {
-      if (!currentUser || currentUser.status !== "approved") {
+      if (!permissionsHydrated || !currentUser || currentUser.status !== "approved") {
         return false;
       }
       return roleDashboardBlockAccess[currentUser.role][block];
     },
-    [currentUser, roleDashboardBlockAccess],
+    [currentUser, permissionsHydrated, roleDashboardBlockAccess],
   );
 
   const value = useMemo<AuthContextValue>(
@@ -499,6 +566,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       lastLoginEmail,
       language,
       updateUserLanguage,
+      permissionsHydrated,
+      permissionStorePollWarning,
+      permissionStoreAdminBlocked,
+      retryPermissionsLoad,
+      permissionsRetryInFlight,
     }),
     [
       loading,
@@ -527,6 +599,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       lastLoginEmail,
       language,
       updateUserLanguage,
+      permissionsHydrated,
+      permissionStorePollWarning,
+      permissionStoreAdminBlocked,
+      retryPermissionsLoad,
+      permissionsRetryInFlight,
     ],
   );
 
@@ -536,6 +613,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       : language === "ru"
         ? {
             ...enMessages,
+            auth: {
+              ...enMessages.auth,
+              ...(ruMessages.auth ?? {}),
+              permissionStoreUnavailable: {
+                ...enMessages.auth.permissionStoreUnavailable,
+                ...(ruMessages.auth?.permissionStoreUnavailable ?? {}),
+              },
+            },
             salesOperation: {
               ...enMessages.salesOperation,
               ...ruMessages.salesOperation,
@@ -571,7 +656,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={value}>
       <NextIntlClientProvider locale={language} messages={messages}>
-        {children}
+        {!loading && storeUnavailableFatal && !permissionsHydrated ? (
+          <PermissionStoreUnavailableState
+            onRetry={() => void retryPermissionsLoad()}
+            retryInFlight={permissionsRetryInFlight}
+          />
+        ) : (
+          <>
+            {permissionStorePollWarning && permissionsHydrated ? (
+              <PermissionStorePollBanner />
+            ) : null}
+            {children}
+          </>
+        )}
       </NextIntlClientProvider>
     </AuthContext.Provider>
   );

@@ -225,7 +225,7 @@ function normalizeTenantRoles(input: unknown, tenantAccounts: TenantAccount[]) {
             },
           }))
       : [];
-    out[tenant.id] = roles.length > 0 ? roles : defaultTenantRoleSet();
+    out[tenant.id] = roles;
   }
   return out;
 }
@@ -302,22 +302,15 @@ function canUseKv() {
 }
 
 async function loadLegacyAuthStore(): Promise<AuthStoreData> {
-  if (canUseKv()) {
-    try {
-      const { fetchAuthKvSnapshotCached } = await import("@/lib/auth-kv-cache");
-      const raw = await fetchAuthKvSnapshotCached(() => kv.get<AuthStoreData>(AUTH_STORE_KEY));
-      return normalizeStore(raw);
-    } catch {
-      // Fall through to memory store for resilience (unchanged operator behavior).
-    }
+  if (!canUseKv()) {
+    const { PermissionStoreUnavailableError } = await import("@/lib/permission-store-unavailable");
+    throw new PermissionStoreUnavailableError("KV is not configured for auth store reads.");
   }
-
-  if (!fallbackMemoryStore) {
-    fallbackMemoryStore = createDefaultStore();
-  }
-
-  fallbackMemoryStore = normalizeStore(fallbackMemoryStore);
-  return fallbackMemoryStore;
+  const { loadPermissionKvSnapshot } = await import("@/lib/auth-kv-cache");
+  return loadPermissionKvSnapshot(
+    () => kv.get<AuthStoreData>(AUTH_STORE_KEY),
+    (raw) => normalizeStore(raw),
+  );
 }
 
 async function saveLegacyAuthStore(data: AuthStoreData): Promise<void> {
@@ -350,7 +343,13 @@ async function loadAuthStoreInner(): Promise<AuthStoreData> {
   if (shouldTrySupabase()) {
     try {
       return await loadSupabaseAuthStore();
-    } catch {
+    } catch (error) {
+      const { isPermissionStoreUnavailableError } = await import(
+        "@/lib/permission-store-unavailable"
+      );
+      if (isPermissionStoreUnavailableError(error)) {
+        throw error;
+      }
       return loadLegacyAuthStore();
     }
   }

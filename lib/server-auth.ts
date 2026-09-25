@@ -1,5 +1,6 @@
 import { loadAuthStore } from "@/lib/auth-store";
 import { runWithAuthKvRequestContextAsync } from "@/lib/auth-kv-request-context";
+import { isPermissionStoreUnavailableError } from "@/lib/permission-store-unavailable";
 import { getSessionUserIdFromRequest } from "@/lib/server-session";
 import type { AuthStoreData, AuthUser, ClientRoleDefinition } from "@/types/auth";
 

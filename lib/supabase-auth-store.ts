@@ -363,7 +363,7 @@ function normalizeTenantRoles(input: unknown, tenantAccounts: TenantAccount[]) {
             },
           }))
       : [];
-    out[tenant.id] = roles.length > 0 ? roles : defaultTenantRoleSet();
+    out[tenant.id] = roles;
   }
   return out;
 }
@@ -449,19 +449,15 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
 }
 
 async function loadLegacyStoreForFallback(): Promise<AuthStoreData> {
-  if (canUseKv()) {
-    try {
-      const { fetchAuthKvSnapshotCached } = await import("@/lib/auth-kv-cache");
-      const raw = await fetchAuthKvSnapshotCached(() => kv.get<AuthStoreData>(AUTH_STORE_KEY));
-      return normalizeStore(raw);
-    } catch {
-      // Fall back to in-memory/default store below.
-    }
+  if (!canUseKv()) {
+    const { PermissionStoreUnavailableError } = await import("@/lib/permission-store-unavailable");
+    throw new PermissionStoreUnavailableError("KV is not configured for auth store reads.");
   }
-  if (fallbackMemoryStore) {
-    return normalizeStore(fallbackMemoryStore);
-  }
-  return createDefaultStore();
+  const { loadPermissionKvSnapshot } = await import("@/lib/auth-kv-cache");
+  return loadPermissionKvSnapshot(
+    () => kv.get<AuthStoreData>(AUTH_STORE_KEY),
+    (raw) => normalizeStore(raw),
+  );
 }
 
 function mergeUsersByIdOrEmail(primaryUsers: AuthUser[], fallbackUsers: AuthUser[]) {
@@ -970,7 +966,6 @@ async function deleteRemovedProfiles(
 export async function loadAuthStoreFromSupabase(): Promise<AuthStoreData> {
   const supabase = getSupabaseAdminClient();
   try {
-    await ensureSupabaseAuthStoreInitialized(supabase);
     const [
       users,
       rolePermissions,
@@ -1001,7 +996,6 @@ export async function loadAuthStoreFromSupabase(): Promise<AuthStoreData> {
     if (!isMissingSupabaseAuthSchemaError(error)) {
       throw error;
     }
-    await ensureDefaultAdminAuthFallbackSeeded(supabase);
     return loadAuthStoreFromSupabaseAuthFallback(supabase);
   }
 }

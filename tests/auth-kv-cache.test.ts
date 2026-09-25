@@ -3,12 +3,14 @@ import { describe, it } from "node:test";
 import {
   AUTH_KV_SNAPSHOT_TTL_MS,
   fetchAuthKvSnapshotCached,
+  loadPermissionKvSnapshot,
   resetAuthKvSnapshotCacheForTests,
 } from "@/lib/auth-kv-cache";
 import {
   resetAuthKvRequestContextForTests,
   runWithAuthKvRequestContextAsync,
 } from "@/lib/auth-kv-request-context";
+import { MAX_STALE_MS, PermissionStoreUnavailableError } from "@/lib/permission-store-unavailable";
 import type { AuthStoreData } from "@/types/auth";
 
 function minimalStore(label: string): AuthStoreData {
@@ -31,7 +33,7 @@ function minimalStore(label: string): AuthStoreData {
   };
 }
 
-describe("auth KV snapshot cache (read reduction PR A)", () => {
+describe("auth KV snapshot cache", () => {
   it("reuses cached KV fetch within TTL", async () => {
     resetAuthKvSnapshotCacheForTests();
     let loads = 0;
@@ -39,12 +41,12 @@ describe("auth KV snapshot cache (read reduction PR A)", () => {
       loads += 1;
       return minimalStore("a");
     };
-    await fetchAuthKvSnapshotCached(loader);
-    await fetchAuthKvSnapshotCached(loader);
+    await loadPermissionKvSnapshot(loader, (raw) => raw as AuthStoreData);
+    await loadPermissionKvSnapshot(loader, (raw) => raw as AuthStoreData);
     assert.equal(loads, 1);
   });
 
-  it("does not cache failed KV reads", async () => {
+  it("fetchAuthKvSnapshotCached does not cache failed KV reads", async () => {
     resetAuthKvSnapshotCacheForTests();
     let loads = 0;
     const loader = async () => {
@@ -67,10 +69,40 @@ describe("auth KV snapshot cache (read reduction PR A)", () => {
     let fakeNow = 0;
     Date.now = () => fakeNow;
     try {
-      await fetchAuthKvSnapshotCached(loader);
+      await loadPermissionKvSnapshot(loader, (raw) => raw as AuthStoreData);
       fakeNow = AUTH_KV_SNAPSHOT_TTL_MS + 1;
-      await fetchAuthKvSnapshotCached(loader);
+      await loadPermissionKvSnapshot(loader, (raw) => raw as AuthStoreData);
       assert.equal(loads, 2);
+    } finally {
+      Date.now = originalNow;
+      resetAuthKvSnapshotCacheForTests();
+    }
+  });
+
+  it("serves last-good snapshot within MAX_STALE_MS then throws", async () => {
+    resetAuthKvSnapshotCacheForTests();
+    let loads = 0;
+    const loader = async () => {
+      loads += 1;
+      if (loads === 1) {
+        return minimalStore("good");
+      }
+      throw new Error("KV quota exceeded");
+    };
+    const originalNow = Date.now;
+    let fakeNow = 0;
+    Date.now = () => fakeNow;
+    try {
+      const first = await loadPermissionKvSnapshot(loader, (raw) => raw as AuthStoreData);
+      assert.equal((first as AuthStoreData & { __label?: string }).__label, "good");
+      fakeNow = MAX_STALE_MS - 1;
+      const stale = await loadPermissionKvSnapshot(loader, (raw) => raw as AuthStoreData);
+      assert.equal((stale as AuthStoreData & { __label?: string }).__label, "good");
+      fakeNow = MAX_STALE_MS + 1;
+      await assert.rejects(
+        () => loadPermissionKvSnapshot(loader, (raw) => raw as AuthStoreData),
+        PermissionStoreUnavailableError,
+      );
     } finally {
       Date.now = originalNow;
       resetAuthKvSnapshotCacheForTests();
