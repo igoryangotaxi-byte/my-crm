@@ -2,33 +2,41 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   CURRENT_PERMISSIONS_VERSION,
+  effectivePageAccess,
   mergeRolePermissions,
   resolvePostLoginPath,
   STAFF_MY_SPACE_PATH,
   SALES_OPERATION_PAGE_KEYS,
 } from "@/lib/role-permissions";
 import { resolvePostLoginPathForUser } from "@/lib/sso/post-login-path";
-import { defaultRolePermissions, type AuthStoreData } from "@/types/auth";
+import { defaultRolePermissions, type AuthStoreData, type RolePermissions } from "@/types/auth";
 
 describe("sales operation RBAC", () => {
-  it("code defaults: User and Team Lead have SO off until KV grant (My Space inherits SO)", () => {
+  it("code defaults: User and Team Lead get My Space only (SO shell on, other SO off)", () => {
     for (const role of ["User", "Team Lead"] as const) {
       const permissions = defaultRolePermissions[role];
-      assert.equal(permissions.salesOperation, false, `${role} SO shell off in code defaults`);
-      assert.equal(permissions.salesMySpace, false, `${role} My Space off in code defaults`);
+      assert.equal(permissions.salesOperation, true, `${role} SO shell on`);
+      assert.equal(permissions.salesMySpace, true, `${role} My Space on`);
       assert.equal(permissions.salesPipeline, false, `${role} pipeline off`);
+      assert.equal(permissions.salesSettings, false, `${role} settings off`);
+      assert.equal(permissions.accesses, false, `${role} accesses off`);
     }
   });
 
   it("salesMySpace inherits salesOperation when absent in stored KV", () => {
-    const withSo = mergeRolePermissions("User", { salesOperation: true }, 18);
-    assert.equal(withSo.salesOperation, true);
-    assert.equal(withSo.salesMySpace, true);
-    assert.equal(withSo.salesPipeline, false);
+    const withSoOnly = mergeRolePermissions("User", { salesOperation: true }, 18);
+    assert.equal(withSoOnly.salesOperation, true);
+    assert.equal(withSoOnly.salesMySpace, true);
+    assert.equal(withSoOnly.salesPipeline, false);
 
-    const withoutSo = mergeRolePermissions("User", {}, 18);
-    assert.equal(withoutSo.salesOperation, false);
-    assert.equal(withoutSo.salesMySpace, false);
+    const forcedOff = mergeRolePermissions("User", { salesOperation: false }, 18);
+    assert.equal(forcedOff.salesOperation, false);
+    assert.equal(forcedOff.salesMySpace, false);
+
+    const fromDefaults = mergeRolePermissions("User", {}, 18);
+    assert.equal(fromDefaults.salesOperation, true);
+    assert.equal(fromDefaults.salesMySpace, true);
+    assert.equal(fromDefaults.salesPipeline, false);
   });
 
   it("defaults sales operation on for Account Manager and Sales Manager (except Admin-only settings)", () => {
@@ -78,8 +86,8 @@ describe("sales operation RBAC", () => {
 
     const canAccessAm = (page: string) =>
       Boolean(
-        defaultRolePermissions["Account Manager"][
-          page as keyof (typeof defaultRolePermissions)["Account Manager"]
+        mergeRolePermissions("Account Manager", undefined, 18)[
+          page as keyof ReturnType<typeof mergeRolePermissions>
         ],
       );
     assert.equal(
@@ -88,26 +96,59 @@ describe("sales operation RBAC", () => {
     );
   });
 
-  it("resolvePostLoginPathForUser matches My Space when KV grants SO for User", () => {
+  it("resolvePostLoginPathForUser uses store role permissions", () => {
     const store = {
-      users: [],
-      rolePermissions: {
-        ...defaultRolePermissions,
-        User: {
-          ...defaultRolePermissions.User,
-          salesOperation: true,
-          salesMySpace: true,
-        },
-      },
-      roleAreaAccess: {} as AuthStoreData["roleAreaAccess"],
-      roleDashboardBlockAccess: {} as AuthStoreData["roleDashboardBlockAccess"],
+      rolePermissions: defaultRolePermissions,
       storeMeta: { permissionsVersion: CURRENT_PERMISSIONS_VERSION },
     } as AuthStoreData;
     const path = resolvePostLoginPathForUser(store, {
       role: "User",
-      accountType: "internal",
       status: "approved",
+      accountType: "internal",
     });
     assert.equal(path, STAFF_MY_SPACE_PATH);
+  });
+});
+
+describe("effectivePageAccess", () => {
+  const rolePermissions = defaultRolePermissions as RolePermissions;
+
+  it("Admin always gets full access regardless of overrides", () => {
+    const access = effectivePageAccess(
+      {
+        role: "Admin",
+        pageOverrides: { salesPipeline: false, accesses: false },
+      },
+      rolePermissions,
+    );
+    assert.equal(access.salesPipeline, true);
+    assert.equal(access.accesses, true);
+    assert.equal(access.salesSettings, true);
+  });
+
+  it("User defaults to My Space only", () => {
+    const access = effectivePageAccess({ role: "User" }, rolePermissions);
+    assert.equal(access.salesOperation, true);
+    assert.equal(access.salesMySpace, true);
+    assert.equal(access.salesPipeline, false);
+    assert.equal(access.salesSettings, false);
+  });
+
+  it("explicit override true grants a page beyond role default", () => {
+    const access = effectivePageAccess(
+      { role: "User", pageOverrides: { salesPipeline: true } },
+      rolePermissions,
+    );
+    assert.equal(access.salesPipeline, true);
+    assert.equal(access.salesMySpace, true);
+  });
+
+  it("explicit override false revokes a page from role default", () => {
+    const access = effectivePageAccess(
+      { role: "Account Manager", pageOverrides: { salesPipeline: false } },
+      rolePermissions,
+    );
+    assert.equal(access.salesPipeline, false);
+    assert.equal(access.salesMySpace, true);
   });
 });

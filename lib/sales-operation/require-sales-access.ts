@@ -1,20 +1,21 @@
 import type { AppPageKey, AuthStoreData, AuthUser } from "@/types/auth";
 import { loadAuthStoreForRequest } from "@/lib/server-auth";
-import type { SalesOperationPageKey } from "@/lib/role-permissions";
+import {
+  CURRENT_PERMISSIONS_VERSION,
+  effectiveCanAccessPage,
+  type SalesOperationPageKey,
+} from "@/lib/role-permissions";
 
 function isPageAllowed(
   store: AuthStoreData,
   user: AuthUser,
   pageKey: SalesOperationPageKey | "salesOperation",
 ): boolean {
-  const permissions = store.rolePermissions[user.role];
-  if (!permissions) {
-    return false;
-  }
-  const shellAllowed = permissions.salesOperation;
-  const pageAllowed =
-    pageKey === "salesOperation" ? shellAllowed : permissions[pageKey as AppPageKey];
-  return Boolean(shellAllowed && pageAllowed);
+  const version = store.storeMeta?.permissionsVersion ?? CURRENT_PERMISSIONS_VERSION;
+  const shellAllowed = effectiveCanAccessPage(user, "salesOperation", store.rolePermissions, version);
+  if (!shellAllowed) return false;
+  if (pageKey === "salesOperation") return true;
+  return effectiveCanAccessPage(user, pageKey as AppPageKey, store.rolePermissions, version);
 }
 
 /** My Space (tasks, calendar, personal items) — salesMySpace or legacy salesPipeline. */

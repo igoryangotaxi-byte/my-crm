@@ -35,6 +35,7 @@ import {
 } from "@/types/auth";
 import {
   CURRENT_PERMISSIONS_VERSION,
+  effectiveCanAccessPage,
   mergeAllRoleAreaAccess,
   mergeAllRoleDashboardBlockAccess,
   mergeAllRolePermissions,
@@ -76,6 +77,11 @@ type AuthContextValue = {
   logout: () => void;
   updateUserStatus: (userId: string, status: UserStatus) => Promise<void>;
   updateUserRole: (userId: string, role: AppRole) => Promise<void>;
+  setUserPageOverrides: (
+    userId: string,
+    pageOverrides: Partial<Record<AppPageKey, boolean>>,
+  ) => Promise<void>;
+  setUserEnabled: (userId: string, enabled: boolean) => Promise<void>;
   deleteUser: (userId: string) => Promise<void>;
   toggleRolePageAccess: (role: AppRole, page: AppPageKey) => Promise<void>;
   toggleRoleAreaAccess: (role: AppRole, area: BusinessArea) => Promise<void>;
@@ -466,6 +472,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [runAction],
   );
 
+  const setUserPageOverrides = useCallback(
+    async (userId: string, pageOverrides: Partial<Record<AppPageKey, boolean>>) => {
+      const result = await runAction({ action: "setUserPageOverrides", userId, pageOverrides });
+      if (!result.ok) {
+        throw new Error(result.message ?? "Failed to update page overrides");
+      }
+    },
+    [runAction],
+  );
+
+  const setUserEnabled = useCallback(
+    async (userId: string, enabled: boolean) => {
+      const result = await runAction({ action: "setUserEnabled", userId, enabled });
+      if (!result.ok) {
+        throw new Error(result.message ?? "Failed to update user status");
+      }
+    },
+    [runAction],
+  );
+
   const toggleRolePageAccess = useCallback(
     async (role: AppRole, page: AppPageKey) => {
       const result = await runAction({ action: "toggleRolePageAccess", role, page });
@@ -541,10 +567,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (page === "financialCenter" && tenant?.clientPortalFinancialCenterEnabled === false) {
           return false;
         }
+        // Client portal still uses tenant role definitions (not staff pageOverrides).
+        return rolePermissions[currentUser.role]?.[page] ?? false;
       }
-      return rolePermissions[currentUser.role][page];
+      return effectiveCanAccessPage(currentUser, page, rolePermissions);
     },
-    [currentUser, rolePermissions, tenantAccounts],
+    [currentUser, permissionsHydrated, rolePermissions, tenantAccounts],
   );
 
   const canAccessDashboardBlock = useCallback(
@@ -572,6 +600,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       updateUserStatus,
       updateUserRole,
+      setUserPageOverrides,
+      setUserEnabled,
       deleteUser,
       toggleRolePageAccess,
       toggleRoleAreaAccess,
@@ -605,6 +635,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       updateUserStatus,
       updateUserRole,
+      setUserPageOverrides,
+      setUserEnabled,
       deleteUser,
       toggleRolePageAccess,
       toggleRoleAreaAccess,

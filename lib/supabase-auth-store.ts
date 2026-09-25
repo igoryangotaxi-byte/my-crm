@@ -83,6 +83,8 @@ type AuthProfileRow = {
   api_client_id: string | null;
   client_role_id: string | null;
   language: AppLanguage;
+  page_overrides?: Record<string, unknown> | null;
+  last_login_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -139,6 +141,21 @@ function normalizeLanguage(value: unknown): AppLanguage {
 
 function normalizeAccountType(value: unknown): AccountType {
   return value === "client" ? "client" : "internal";
+}
+
+const KNOWN_PAGE_KEYS = new Set<string>(Object.keys(defaultRolePermissions.Admin));
+
+function normalizePageOverrides(
+  value: unknown,
+): Partial<Record<AppPageKey, boolean>> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const result: Partial<Record<AppPageKey, boolean>> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!KNOWN_PAGE_KEYS.has(key)) continue;
+    if (typeof raw !== "boolean") continue;
+    result[key as AppPageKey] = raw;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 
@@ -427,6 +444,9 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
               apiClientId: item.apiClientId ?? null,
               clientRoleId: item.clientRoleId ?? null,
               language: normalizeLanguage(item.language),
+              pageOverrides: normalizePageOverrides(item.pageOverrides),
+              lastLoginAt:
+                typeof item.lastLoginAt === "string" ? item.lastLoginAt : item.lastLoginAt === null ? null : undefined,
             })),
         )
       : base.users;
@@ -561,6 +581,8 @@ function mapProfileRowToUser(row: AuthProfileRow): AuthUser {
     apiClientId: row.api_client_id,
     clientRoleId: row.client_role_id,
     language: row.language,
+    pageOverrides: normalizePageOverrides(row.page_overrides),
+    lastLoginAt: typeof row.last_login_at === "string" ? row.last_login_at : null,
   };
 }
 
@@ -586,6 +608,7 @@ async function listAllAuthUsersDetailed(supabase: SupabaseAdminClient) {
     id: string;
     email: string;
     createdAt: string | null;
+    lastSignInAt: string | null;
     metadata: Record<string, unknown> | null | undefined;
   }> = [];
   let page = 1;
@@ -597,6 +620,12 @@ async function listAllAuthUsersDetailed(supabase: SupabaseAdminClient) {
         id: user.id,
         email: String(user.email ?? "").trim().toLowerCase(),
         createdAt: typeof user.created_at === "string" ? user.created_at : null,
+        lastSignInAt: (() => {
+          const raw = user.last_sign_in_at as unknown;
+          if (typeof raw === "string") return raw;
+          if (raw instanceof Date && !Number.isNaN(raw.getTime())) return raw.toISOString();
+          return null;
+        })(),
         metadata:
           user.user_metadata && typeof user.user_metadata === "object"
             ? (user.user_metadata as Record<string, unknown>)
@@ -617,14 +646,53 @@ async function findAuthUserByEmail(supabase: SupabaseAdminClient, email: string)
 }
 
 async function loadProfiles(supabase: SupabaseAdminClient): Promise<AuthUser[]> {
-  const { data, error } = await supabase
-    .from("crm_user_profiles")
-    .select(
-      "id,auth_user_id,email,name,role,status,account_type,phone_number,cost_center_id,tenant_id,corp_client_id,token_label,api_client_id,client_role_id,language,created_at,updated_at",
-    )
-    .order("created_at", { ascending: true });
-  if (error) throw new Error(`Failed to load CRM user profiles: ${error.message}`);
-  return ((data ?? []) as AuthProfileRow[]).map(mapProfileRowToUser);
+  const selectWithOverrides =
+    "id,auth_user_id,email,name,role,status,account_type,phone_number,cost_center_id,tenant_id,corp_client_id,token_label,api_client_id,client_role_id,language,page_overrides,last_login_at,created_at,updated_at";
+  const selectLegacy =
+    "id,auth_user_id,email,name,role,status,account_type,phone_number,cost_center_id,tenant_id,corp_client_id,token_label,api_client_id,client_role_id,language,created_at,updated_at";
+
+  let data: AuthProfileRow[] | null = null;
+  {
+    const first = await supabase
+      .from("crm_user_profiles")
+      .select(selectWithOverrides)
+      .order("created_at", { ascending: true });
+    if (first.error) {
+      const missingColumn =
+        /page_overrides|last_login_at/i.test(first.error.message) ||
+        /column .* does not exist/i.test(first.error.message);
+      if (!missingColumn) {
+        throw new Error(`Failed to load CRM user profiles: ${first.error.message}`);
+      }
+      const fallback = await supabase
+        .from("crm_user_profiles")
+        .select(selectLegacy)
+        .order("created_at", { ascending: true });
+      if (fallback.error) {
+        throw new Error(`Failed to load CRM user profiles: ${fallback.error.message}`);
+      }
+      data = (fallback.data ?? []) as AuthProfileRow[];
+    } else {
+      data = (first.data ?? []) as AuthProfileRow[];
+    }
+  }
+
+  const profiles = data.map(mapProfileRowToUser);
+
+  // Enrich lastLoginAt: prefer crm_user_profiles.last_login_at, else auth.users.last_sign_in_at.
+  try {
+    const authUsers = await listAllAuthUsersDetailed(supabase);
+    const byId = new Map(authUsers.map((u) => [u.id, u.lastSignInAt]));
+    for (const profile of profiles) {
+      if (profile.lastLoginAt) continue;
+      if (!profile.authUserId) continue;
+      profile.lastLoginAt = byId.get(profile.authUserId) ?? null;
+    }
+  } catch {
+    // ignore — last login stays as profile value / undefined
+  }
+
+  return profiles;
 }
 
 async function loadRolePermissions(supabase: SupabaseAdminClient): Promise<RolePermissions> {
@@ -977,6 +1045,8 @@ function toProfileRows(users: AuthUser[]) {
       api_client_id: user.apiClientId ?? null,
       client_role_id: user.clientRoleId ?? null,
       language: normalizeLanguage(user.language),
+      page_overrides: user.pageOverrides ?? {},
+      last_login_at: user.lastLoginAt ?? null,
       created_at: user.createdAt || now,
       updated_at: now,
     };
@@ -1721,6 +1791,71 @@ export async function patchCrmUserRole(user: AuthUser, previousRole: AppRole): P
     const revertUser = { ...user, role: previousRole };
     await supabase.from("crm_user_profiles").upsert(toProfileRows([revertUser]), { onConflict: "id" });
     throw error;
+  }
+}
+
+/** Targeted persist of page_overrides / status on crm_user_profiles (no full store rewrite). */
+export async function patchCrmUserProfileFields(user: AuthUser): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  const rows = toProfileRows([user]);
+  const { error } = await supabase.from("crm_user_profiles").upsert(rows, { onConflict: "id" });
+  if (error) {
+    // Column may be missing before SQL is applied — surface a clear message.
+    if (/page_overrides/i.test(error.message)) {
+      throw new Error(
+        "page_overrides column missing. Run scripts/sql/supabase_user_page_overrides.sql in Supabase.",
+      );
+    }
+    throw new Error(`Failed to save CRM user profile: ${error.message}`);
+  }
+}
+
+const LAST_LOGIN_TOUCH_MIN_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Record CRM login / active session time on crm_user_profiles.last_login_at.
+ * Google SSO never updates auth.users.last_sign_in_at (custom CRM cookie).
+ * Returns the timestamp written, or null if skipped / failed.
+ */
+export async function recordCrmUserLogin(
+  user: Pick<AuthUser, "id" | "authUserId" | "lastLoginAt">,
+  options?: { force?: boolean },
+): Promise<string | null> {
+  const now = new Date();
+  const nowIso = now.toISOString();
+  if (!options?.force && user.lastLoginAt) {
+    const prev = Date.parse(user.lastLoginAt);
+    if (Number.isFinite(prev) && now.getTime() - prev < LAST_LOGIN_TOUCH_MIN_MS) {
+      return user.lastLoginAt;
+    }
+  }
+
+  if (!isSupabaseConfigured()) {
+    return nowIso;
+  }
+
+  try {
+    const supabase = getSupabaseAdminClient();
+    const { error } = await supabase
+      .from("crm_user_profiles")
+      .update({ last_login_at: nowIso, updated_at: nowIso })
+      .eq("id", user.id);
+    if (error) {
+      // Column may be missing on older schemas — soft-fail.
+      if (/last_login_at/i.test(error.message) || /column .* does not exist/i.test(error.message)) {
+        console.warn("[auth] last_login_at column missing; run scripts/sql/supabase_user_last_login.sql");
+        return null;
+      }
+      console.warn(`[auth] failed to record last login for ${user.id}: ${error.message}`);
+      return null;
+    }
+    return nowIso;
+  } catch (error) {
+    console.warn(
+      `[auth] failed to record last login for ${user.id}:`,
+      error instanceof Error ? error.message : error,
+    );
+    return null;
   }
 }
 

@@ -1,6 +1,10 @@
 /**
  * P0-1: explicitly grant User / Team Lead `salesOperation` + `salesMySpace` in prod KV.
  *
+ * Code defaults (types/auth.ts) already give User / Team Lead My Space only for *new*
+ * empty role permission stores. This script repairs older KV snapshots that still store
+ * salesOperation/salesMySpace as false for those roles.
+ *
  * Dry-run by default — prints before/after for both roles. Writes only with `--apply`.
  * Single read-modify-write of `appli:auth:store:v1`; aborts if KV read fails.
  *

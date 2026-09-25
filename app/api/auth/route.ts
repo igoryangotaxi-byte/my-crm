@@ -4,6 +4,7 @@ import {
   deleteAuthBackedUser,
   loadAuthStore,
   patchRolePagePermissionsTargeted,
+  patchUserProfileFieldsTargeted,
   patchUserRoleTargeted,
   saveAuthStore,
   updateAuthUserPassword,
@@ -22,11 +23,13 @@ import { resolveSessionUserFromStore } from "@/lib/server-auth";
 import { buildSessionClearCookie, buildSessionSetCookie } from "@/lib/server-session";
 import { buildAllPageAccess } from "@/lib/role-permissions";
 import {
+  type AppPageKey,
   type AuthApiActionRequest,
   type AuthStoreData,
   type AuthUser,
   type ClientPortalPageKey,
   defaultClientPortalPermissions,
+  defaultRolePermissions,
 } from "@/types/auth";
 
 type AuthActionResponse = {
@@ -325,6 +328,24 @@ export async function GET(request: Request) {
   if (!user) {
     return authStoreJsonResponse({ ok: false, message: "Unauthorized" }, { status: 401 });
   }
+
+  // Active CRM session: fill last_login_at. Google SSO never sets auth.users.last_sign_in_at.
+  try {
+    const { recordUserLogin } = await import("@/lib/auth-store");
+    const force = !user.lastLoginAt;
+    const touched = await recordUserLogin(user, { force });
+    if (touched) {
+      data = {
+        ...data,
+        users: data.users.map((item) =>
+          item.id === user.id ? { ...item, lastLoginAt: touched } : item,
+        ),
+      };
+    }
+  } catch {
+    // ignore — never block auth hydrate
+  }
+
   return authStoreJsonResponse({ ...sanitizeStore(data), currentUserId: user.id });
 }
 
@@ -471,6 +492,93 @@ export async function POST(request: Request) {
         }
         const message =
           error instanceof Error ? error.message : "Failed to update user role.";
+        return NextResponse.json<AuthActionResponse>({ ok: false, message }, { status: 500 });
+      }
+      return NextResponse.json<AuthActionResponse>({
+        ok: true,
+        updatedUser: sanitizeUser(updatedUser),
+      });
+    }
+    case "setUserPageOverrides": {
+      if (!sessionUser || sessionUser.role !== "Admin") {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Forbidden" },
+          { status: 403 },
+        );
+      }
+      const target = store.users.find((user) => user.id === payload.userId);
+      if (!target) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "User not found" },
+          { status: 404 },
+        );
+      }
+      if (target.role === "Admin") {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Admin always has full CRM access; page overrides are not applied." },
+          { status: 400 },
+        );
+      }
+      const knownKeys = new Set(Object.keys(defaultRolePermissions.Admin));
+      const cleaned: Partial<Record<AppPageKey, boolean>> = {};
+      for (const [key, value] of Object.entries(payload.pageOverrides ?? {})) {
+        if (!knownKeys.has(key) || typeof value !== "boolean") continue;
+        cleaned[key as AppPageKey] = value;
+      }
+      const updatedUser: AuthUser = {
+        ...target,
+        pageOverrides: Object.keys(cleaned).length > 0 ? cleaned : undefined,
+      };
+      try {
+        await patchUserProfileFieldsTargeted(updatedUser);
+      } catch (error) {
+        if (isPermissionStoreUnavailableError(error)) {
+          return permissionStoreUnavailableResponse();
+        }
+        const message =
+          error instanceof Error ? error.message : "Failed to update page overrides.";
+        return NextResponse.json<AuthActionResponse>({ ok: false, message }, { status: 500 });
+      }
+      return NextResponse.json<AuthActionResponse>({
+        ok: true,
+        updatedUser: sanitizeUser(updatedUser),
+      });
+    }
+    case "setUserEnabled": {
+      if (!sessionUser || sessionUser.role !== "Admin") {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "Forbidden" },
+          { status: 403 },
+        );
+      }
+      const target = store.users.find((user) => user.id === payload.userId);
+      if (!target) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "User not found" },
+          { status: 404 },
+        );
+      }
+      if (target.status === "pending") {
+        return NextResponse.json<AuthActionResponse>(
+          {
+            ok: false,
+            message: "Pending registrations must be approved or rejected from the pending list.",
+          },
+          { status: 400 },
+        );
+      }
+      const updatedUser: AuthUser = {
+        ...target,
+        status: payload.enabled ? "approved" : "rejected",
+      };
+      try {
+        await patchUserProfileFieldsTargeted(updatedUser);
+      } catch (error) {
+        if (isPermissionStoreUnavailableError(error)) {
+          return permissionStoreUnavailableResponse();
+        }
+        const message =
+          error instanceof Error ? error.message : "Failed to update user status.";
         return NextResponse.json<AuthActionResponse>({ ok: false, message }, { status: 500 });
       }
       return NextResponse.json<AuthActionResponse>({

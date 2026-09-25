@@ -18,39 +18,28 @@ function canAccessFromStored(
   return (page: string) => Boolean(merged[page as keyof typeof merged]);
 }
 
-describe("staff landing before/after P0-1 KV grant", () => {
-  it("User before grant: legacy dashboard (not My Space no-access trap)", () => {
+describe("staff landing with My Space code defaults", () => {
+  it("User with empty stored overrides of role defaults lands on My Space", () => {
     const canAccess = canAccessFromStored("User", {});
-    assert.equal(
-      resolveAuthenticatedLandingPath({ accountType: "internal", canAccess }),
-      "/dashboard",
-    );
-  });
-
-  it("User after grant: My Space via STAFF_MY_SPACE_PATH", () => {
-    const canAccess = canAccessFromStored("User", {
-      salesOperation: true,
-      salesMySpace: true,
-    });
     assert.equal(
       resolveAuthenticatedLandingPath({ accountType: "internal", canAccess }),
       STAFF_MY_SPACE_PATH,
     );
   });
 
-  it("Team Lead before grant: legacy landing", () => {
-    const canAccess = canAccessFromStored("Team Lead", {});
+  it("User with explicit SO off stays on legacy dashboard", () => {
+    const canAccess = canAccessFromStored("User", {
+      salesOperation: false,
+      salesMySpace: false,
+    });
     assert.equal(
       resolveAuthenticatedLandingPath({ accountType: "internal", canAccess }),
       "/dashboard",
     );
   });
 
-  it("Team Lead after grant: My Space", () => {
-    const canAccess = canAccessFromStored("Team Lead", {
-      salesOperation: true,
-      salesMySpace: true,
-    });
+  it("Team Lead with defaults lands on My Space", () => {
+    const canAccess = canAccessFromStored("Team Lead", {});
     assert.equal(
       resolveAuthenticatedLandingPath({ accountType: "internal", canAccess }),
       STAFF_MY_SPACE_PATH,
@@ -65,8 +54,8 @@ describe("staff landing before/after P0-1 KV grant", () => {
     );
   });
 
-  it("resolvePostLoginPathForUser matches grant state in auth store", () => {
-    const storeBefore = {
+  it("resolvePostLoginPathForUser uses code defaults (My Space for User)", () => {
+    const store = {
       users: [],
       rolePermissions: defaultRolePermissions,
       roleAreaAccess: {} as AuthStoreData["roleAreaAccess"],
@@ -74,30 +63,29 @@ describe("staff landing before/after P0-1 KV grant", () => {
       storeMeta: { permissionsVersion: 18 },
     } as AuthStoreData;
     assert.equal(
-      resolvePostLoginPathForUser(storeBefore, {
+      resolvePostLoginPathForUser(store, {
         role: "User",
         accountType: "internal",
         status: "approved",
       }),
-      "/dashboard",
+      STAFF_MY_SPACE_PATH,
     );
+  });
 
-    const storeAfter = {
-      ...storeBefore,
-      rolePermissions: {
-        ...defaultRolePermissions,
-        User: {
-          ...defaultRolePermissions.User,
-          salesOperation: true,
-          salesMySpace: true,
-        },
-      },
+  it("resolvePostLoginPathForUser honors pageOverrides to grant Pipeline", () => {
+    const store = {
+      users: [],
+      rolePermissions: defaultRolePermissions,
+      roleAreaAccess: {} as AuthStoreData["roleAreaAccess"],
+      roleDashboardBlockAccess: {} as AuthStoreData["roleDashboardBlockAccess"],
+      storeMeta: { permissionsVersion: 18 },
     } as AuthStoreData;
     assert.equal(
-      resolvePostLoginPathForUser(storeAfter, {
+      resolvePostLoginPathForUser(store, {
         role: "User",
         accountType: "internal",
         status: "approved",
+        pageOverrides: { salesPipeline: true },
       }),
       STAFF_MY_SPACE_PATH,
     );

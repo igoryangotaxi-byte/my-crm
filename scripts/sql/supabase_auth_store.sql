@@ -14,6 +14,7 @@ create table if not exists public.crm_user_profiles (
   api_client_id text null,
   client_role_id text null,
   language text not null default 'en' check (language in ('en', 'he')),
+  page_overrides jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

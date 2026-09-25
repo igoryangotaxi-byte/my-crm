@@ -1,6 +1,6 @@
 import {
   CURRENT_PERMISSIONS_VERSION,
-  mergeRolePermissions,
+  effectiveCanAccessPage,
 } from "@/lib/role-permissions";
 import { loadAuthStoreForRequest } from "@/lib/server-auth";
 import { stringifyOpsApiPermissionLog } from "@/lib/ops-api-audit-log";
@@ -86,12 +86,12 @@ async function loadPermissionStore(
 }
 
 function staffRoleAllows(store: AuthStoreData, user: AuthUser, page: AppPageKey): boolean {
-  const merged = mergeRolePermissions(
-    user.role,
-    store.rolePermissions[user.role],
+  return effectiveCanAccessPage(
+    user,
+    page,
+    store.rolePermissions,
     store.storeMeta?.permissionsVersion ?? CURRENT_PERMISSIONS_VERSION,
   );
-  return Boolean(merged[page]);
 }
 
 function clientPortalAllows(store: AuthStoreData, user: AuthUser, page: AppPageKey): boolean {

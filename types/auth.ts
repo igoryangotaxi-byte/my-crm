@@ -52,6 +52,13 @@ export type AuthUser = {
   apiClientId?: string | null;
   clientRoleId?: string | null;
   language?: AppLanguage;
+  /**
+   * Per-user page flags on top of role defaults.
+   * Explicit true/false wins; Admin ignores overrides (always full access).
+   */
+  pageOverrides?: Partial<Record<AppPageKey, boolean>>;
+  /** From crm_user_profiles.last_login_at (SSO) or auth.users.last_sign_in_at fallback. */
+  lastLoginAt?: string | null;
 };
 
 export type ClientPortalPageKey =
@@ -150,6 +157,13 @@ const salesPagesAllFalse = {
   salesSettings: false,
 } as const;
 
+/** User / Team Lead baseline: shell + My Space only; rest granted per-user. */
+const salesPagesMySpaceOnly = {
+  ...salesPagesAllFalse,
+  salesOperation: true,
+  salesMySpace: true,
+} as const;
+
 export const defaultRolePermissions: RolePermissions = {
   Admin: {
     dashboard: true,
@@ -178,7 +192,7 @@ export const defaultRolePermissions: RolePermissions = {
     driversMap: false,
     heatMap: false,
     priceCalculator: true,
-    ...salesPagesAllFalse,
+    ...salesPagesMySpaceOnly,
     accesses: false,
     notes: false,
   },
@@ -193,7 +207,7 @@ export const defaultRolePermissions: RolePermissions = {
     driversMap: false,
     heatMap: false,
     priceCalculator: true,
-    ...salesPagesAllFalse,
+    ...salesPagesMySpaceOnly,
     accesses: false,
     notes: true,
   },
@@ -278,6 +292,16 @@ export type AuthApiActionRequest =
       action: "updateUserRole";
       userId: string;
       role: AppRole;
+    }
+  | {
+      action: "setUserPageOverrides";
+      userId: string;
+      pageOverrides: Partial<Record<AppPageKey, boolean>>;
+    }
+  | {
+      action: "setUserEnabled";
+      userId: string;
+      enabled: boolean;
     }
   | {
       action: "toggleRolePageAccess";

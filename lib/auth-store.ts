@@ -263,6 +263,20 @@ function normalizeStore(data: Partial<AuthStoreData> | null | undefined): AuthSt
               apiClientId: item.apiClientId ?? null,
               clientRoleId: item.clientRoleId ?? null,
               language: normalizeLanguage(item.language),
+              pageOverrides:
+                item.pageOverrides && typeof item.pageOverrides === "object"
+                  ? (Object.fromEntries(
+                      Object.entries(item.pageOverrides).filter(
+                        ([, v]) => typeof v === "boolean",
+                      ),
+                    ) as Partial<Record<import("@/types/auth").AppPageKey, boolean>>)
+                  : undefined,
+              lastLoginAt:
+                typeof item.lastLoginAt === "string"
+                  ? item.lastLoginAt
+                  : item.lastLoginAt === null
+                    ? null
+                    : undefined,
             })),
         )
       : base.users;
@@ -490,6 +504,47 @@ export async function patchUserRoleTargeted(user: AuthUser, previousRole: AppRol
       return;
     }
     throw error;
+  }
+}
+
+/**
+ * Fast path for setUserPageOverrides / setUserEnabled / status fields on a single user.
+ */
+export async function patchUserProfileFieldsTargeted(user: AuthUser): Promise<void> {
+  if (!shouldTrySupabase()) {
+    await patchLegacyStoreUserRole(user);
+    return;
+  }
+  const {
+    getSupabaseAuthPersistenceMode,
+    isMissingSupabaseAuthSchemaError,
+    patchCrmUserProfileFields,
+  } = await import("@/lib/supabase-auth-store");
+  if (getSupabaseAuthPersistenceMode() === "auth_metadata_kv") {
+    await patchLegacyStoreUserRole(user);
+    return;
+  }
+  try {
+    await patchCrmUserProfileFields(user);
+  } catch (error) {
+    if (isMissingSupabaseAuthSchemaError(error)) {
+      await patchLegacyStoreUserRole(user);
+      return;
+    }
+    throw error;
+  }
+}
+
+/** Record last CRM login (SSO / session). Soft-fails; never blocks auth. */
+export async function recordUserLogin(
+  user: AuthUser,
+  options?: { force?: boolean },
+): Promise<string | null> {
+  try {
+    const { recordCrmUserLogin } = await import("@/lib/supabase-auth-store");
+    return await recordCrmUserLogin(user, options);
+  } catch {
+    return null;
   }
 }
 

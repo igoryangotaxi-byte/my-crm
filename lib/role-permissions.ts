@@ -4,6 +4,7 @@ import {
   defaultRolePermissions,
   type AppPageKey,
   type AppRole,
+  type AuthUser,
   type RoleAreaAccess,
   type RoleDashboardBlockAccess,
   type RolePermissions,
@@ -108,6 +109,46 @@ export function mergeRolePermissions(
     migrated.salesMySpace = Boolean(migrated.salesOperation);
   }
   return migrated;
+}
+
+/**
+ * Effective page access for a staff user: role defaults (merged with store) then
+ * per-user pageOverrides. Admin always gets full access (overrides ignored).
+ */
+export function effectivePageAccess(
+  user: Pick<AuthUser, "role" | "pageOverrides">,
+  rolePermissions: RolePermissions,
+  storedVersion: number = CURRENT_PERMISSIONS_VERSION,
+): Record<AppPageKey, boolean> {
+  if (user.role === "Admin") {
+    return buildAllPageAccess(true);
+  }
+  const baseline = mergeRolePermissions(
+    user.role,
+    rolePermissions[user.role],
+    storedVersion,
+  );
+  const overrides = user.pageOverrides;
+  if (!overrides || Object.keys(overrides).length === 0) {
+    return baseline;
+  }
+  const result = { ...baseline };
+  for (const key of Object.keys(overrides) as AppPageKey[]) {
+    const value = overrides[key];
+    if (typeof value === "boolean") {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+export function effectiveCanAccessPage(
+  user: Pick<AuthUser, "role" | "pageOverrides">,
+  page: AppPageKey,
+  rolePermissions: RolePermissions,
+  storedVersion: number = CURRENT_PERMISSIONS_VERSION,
+): boolean {
+  return Boolean(effectivePageAccess(user, rolePermissions, storedVersion)[page]);
 }
 
 export function canAccessMySpace(canAccess: (page: AppPageKey) => boolean): boolean {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { SettingsAccessUsersPanel } from "@/components/accesses/SettingsAccessUsersPanel";
 import { APP_ROLES } from "@/lib/role-permissions";
 import type {
   AppPageKey,
@@ -130,7 +131,6 @@ export function AccessManagementView() {
     updateUserStatus,
     updateUserRole,
     deleteUser,
-    createInternalUser,
     deleteTenantAccount,
     toggleRolePageAccess,
     toggleRoleAreaAccess,
@@ -200,14 +200,6 @@ export function AccessManagementView() {
   const [newUserDrafts, setNewUserDrafts] = useState<
     Record<string, { name: string; email: string; password: string; roleId: string }>
   >({});
-  const [internalUserDraft, setInternalUserDraft] = useState({
-    name: "",
-    email: "",
-    password: "",
-    role: "User" as AppRole,
-  });
-  const [mainUsersMessage, setMainUsersMessage] = useState<string | null>(null);
-  const [creatingInternalUser, setCreatingInternalUser] = useState(false);
   const [selectedSectionKey, setSelectedSectionKey] = useState<string>(
     accessSections[0]?.key ?? "platform",
   );
@@ -322,11 +314,6 @@ export function AccessManagementView() {
     });
   }, [rolePermissions, roleAreaAccess, roleDashboardBlockAccess]);
 
-  const mainCrmUsers = useMemo(
-    () => users.filter((user) => user.accountType !== "client"),
-    [users],
-  );
-
   const tenantUsersById = useMemo(() => {
     const map = new Map<string, typeof users>();
     for (const tenant of tenantAccounts) {
@@ -355,6 +342,17 @@ export function AccessManagementView() {
 
   return (
     <section className="crm-page space-y-4">
+      <div className="so-card mb-4 space-y-3">
+        <div>
+          <h2 className="crm-section-title mb-1">Main CRM users</h2>
+          <p className="text-sm text-[var(--so-muted)]">
+            Per-user CRM access stacks. Admin always has full access. Active / Disabled maps to
+            approved / rejected (pending stays under Pending registrations).
+          </p>
+        </div>
+        <SettingsAccessUsersPanel />
+      </div>
+
       <details className="group so-card mb-4 overflow-hidden rounded-[12px]">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
           <span className="crm-section-title mb-0">Global B2C fallback (main CRM)</span>
@@ -435,7 +433,7 @@ export function AccessManagementView() {
 
       <details className="group so-card mb-4 overflow-hidden rounded-[12px]">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
-          <span className="crm-section-title mb-0">Permissions (role · section · actions)</span>
+          <span className="crm-section-title mb-0">Advanced: role defaults</span>
           <AccessBlockChevron />
         </summary>
         <div className="border-t border-border !p-0">
@@ -1198,184 +1196,6 @@ export function AccessManagementView() {
           </div>
         </div>
       ) : null}
-
-      <details className="group so-card mb-4 overflow-hidden rounded-[12px]">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
-          <span className="crm-section-title mb-0">Main CRM Users ({mainCrmUsers.length})</span>
-          <AccessBlockChevron />
-        </summary>
-        <div className="border-t border-border px-5 pb-5 pt-3">
-        {isAdmin ? (
-          <div className="mb-4 rounded-2xl border border-border bg-white/70 p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-slate-900">Create approved CRM user</p>
-                <p className="text-xs text-slate-500">
-                  New internal users are created in Supabase Auth and become active immediately.
-                </p>
-              </div>
-            </div>
-            <div className="grid gap-3 md:grid-cols-4">
-              <input
-                type="text"
-                value={internalUserDraft.name}
-                onChange={(event) => {
-                  setInternalUserDraft((prev) => ({ ...prev, name: event.target.value }));
-                  setMainUsersMessage(null);
-                }}
-                placeholder="Full name"
-                className="crm-input h-10 px-3 text-sm"
-              />
-              <input
-                type="email"
-                value={internalUserDraft.email}
-                onChange={(event) => {
-                  setInternalUserDraft((prev) => ({ ...prev, email: event.target.value }));
-                  setMainUsersMessage(null);
-                }}
-                placeholder="name@company.com"
-                className="crm-input h-10 px-3 text-sm"
-              />
-              <input
-                type="password"
-                value={internalUserDraft.password}
-                onChange={(event) => {
-                  setInternalUserDraft((prev) => ({ ...prev, password: event.target.value }));
-                  setMainUsersMessage(null);
-                }}
-                placeholder="Password"
-                className="crm-input h-10 px-3 text-sm"
-              />
-              <select
-                value={internalUserDraft.role}
-                onChange={(event) => {
-                  setInternalUserDraft((prev) => ({
-                    ...prev,
-                    role: event.target.value as AppRole,
-                  }));
-                  setMainUsersMessage(null);
-                }}
-                className="crm-input h-10 px-3 text-sm"
-              >
-                {roleItems.map((role) => (
-                  <option key={role} value={role}>
-                    {role}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                disabled={creatingInternalUser}
-                onClick={async () => {
-                  setCreatingInternalUser(true);
-                  try {
-                    const result = await createInternalUser(internalUserDraft);
-                    setMainUsersMessage(
-                      result.message ?? (result.ok ? "CRM user created." : "Failed to create CRM user."),
-                    );
-                    if (result.ok) {
-                      setInternalUserDraft({
-                        name: "",
-                        email: "",
-                        password: "",
-                        role: "User",
-                      });
-                    }
-                  } finally {
-                    setCreatingInternalUser(false);
-                  }
-                }}
-                className="crm-button-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50"
-              >
-                {creatingInternalUser ? "Creating..." : "Create user"}
-              </button>
-              {mainUsersMessage ? (
-                <p className="text-sm text-slate-600">{mainUsersMessage}</p>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-        <div className="overflow-x-auto">
-          <table className="min-w-full">
-            <thead className="bg-white/60">
-              <tr>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                  Name
-                </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                  Email
-                </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                  Role
-                </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                  Status
-                </th>
-                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {mainCrmUsers.map((user) => (
-                <tr key={user.id}>
-                  <td className="px-3 py-2 text-sm text-slate-900">{user.name}</td>
-                  <td className="px-3 py-2 text-sm text-slate-700">{user.email}</td>
-                  <td className="px-3 py-2 text-sm text-slate-700">
-                    <select
-                      value={user.role}
-                      disabled={!isAdmin || savingUserRoleId === user.id || permissionStoreAdminBlocked}
-                    title={
-                      permissionStoreAdminBlocked ? tStore("adminSaveDisabledTooltip") : undefined
-                    }
-                      onChange={(event) =>
-                        void handleUserRoleChange(user.id, event.target.value as AppRole)
-                      }
-                      className="crm-input h-8 px-2 text-sm text-slate-700 disabled:opacity-50"
-                    >
-                      {roleItems.map((role) => (
-                        <option key={role} value={role}>
-                          {role}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-3 py-2 text-sm text-slate-700">{user.status}</td>
-                  <td className="px-3 py-2 text-sm text-slate-700">
-                    <div className="flex items-center gap-2">
-                      <span>{isAdmin ? "Role can be updated" : "Admin only"}</span>
-                      <button
-                        type="button"
-                        aria-label={`Delete ${user.email}`}
-                        disabled={!isAdmin || currentUser?.id === user.id}
-                        onClick={async () => {
-                          setMainUsersMessage(null);
-                          try {
-                            await deleteUser(user.id);
-                            setMainUsersMessage(`Removed platform access for ${user.email}.`);
-                          } catch (error) {
-                            setMainUsersMessage(
-                              error instanceof Error
-                                ? error.message
-                                : "Failed to remove platform access.",
-                            );
-                          }
-                        }}
-                        className="crm-hover-lift inline-flex h-7 w-7 items-center justify-center rounded-md border border-rose-300/80 bg-gradient-to-b from-rose-500 to-red-600 text-white shadow-[0_8px_16px_rgba(225,29,72,0.3)] transition disabled:cursor-not-allowed disabled:opacity-45"
-                      >
-                        <DeleteIcon />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        </div>
-      </details>
     </section>
   );
 }

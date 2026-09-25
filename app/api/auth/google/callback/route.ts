@@ -7,9 +7,9 @@ import {
 } from "@/lib/sso/google";
 import { persistGoogleWorkspaceTokens } from "@/lib/google/persist-workspace-tokens";
 import { findOrProvisionSsoUser } from "@/lib/sso/provision";
+import { loadAuthStore } from "@/lib/auth-store";
 import { mergeAllRolePermissions, CURRENT_PERMISSIONS_VERSION } from "@/lib/role-permissions";
 import { resolveAuthenticatedLandingPath } from "@/lib/login-redirect";
-import { loadAuthStore } from "@/lib/auth-store";
 import { buildSessionSetCookie } from "@/lib/server-session";
 import { sanitizeSameOriginReturnPath } from "@/lib/safe-return-url";
 import type { AppPageKey, AppRole } from "@/types/auth";
@@ -75,6 +75,13 @@ export async function GET(request: Request) {
     });
     if (!provisioned.ok) {
       return loginRedirect(origin, "rejected");
+    }
+
+    try {
+      const { recordUserLogin } = await import("@/lib/auth-store");
+      await recordUserLogin(provisioned.user, { force: true });
+    } catch (error) {
+      console.warn("Failed to record SSO last login:", error);
     }
 
     try {
