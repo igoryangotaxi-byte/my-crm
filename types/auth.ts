@@ -17,6 +17,7 @@ export type AppPageKey =
   | "heatMap"
   | "priceCalculator"
   | "salesOperation"
+  | "salesMySpace"
   | "salesPipeline"
   | "salesSignedClients"
   | "salesB2BClients"
@@ -114,6 +115,7 @@ export type AuthStoreData = {
 
 const salesPagesAllTrue = {
   salesOperation: true,
+  salesMySpace: true,
   salesPipeline: true,
   salesSignedClients: true,
   salesB2BClients: true,
@@ -132,6 +134,7 @@ const salesPagesAllTrue = {
 
 const salesPagesAllFalse = {
   salesOperation: false,
+  salesMySpace: false,
   salesPipeline: false,
   salesSignedClients: false,
   salesB2BClients: false,

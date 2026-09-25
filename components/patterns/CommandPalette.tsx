@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type { AppPageKey } from "@/types/auth";
+import { canAccessMySpace } from "@/lib/role-permissions";
 import type { SearchResult } from "@/lib/sales-operation/search";
 import { Kbd } from "@/components/ui/Kbd";
 
@@ -43,7 +44,7 @@ type NavItem = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/sales-operation/tasks", labelKey: "mySpaceTasks", page: "salesPipeline", icon: LayoutGrid },
+  { href: "/sales-operation/tasks", labelKey: "mySpaceTasks", page: "salesMySpace", icon: LayoutGrid },
   { href: "/sales-operation/calendar", labelKey: "calendar", page: "salesPipeline", icon: CalendarClock },
   { href: "/sales-operation/pipeline", labelKey: "pipeline", page: "salesPipeline", icon: Columns3 },
   { href: "/sales-operation/office", labelKey: "office", page: "salesPipeline", icon: LayoutDashboard },
@@ -126,6 +127,7 @@ export function CommandPalette() {
           return canAccess("salesSettings") || canAccess("accesses");
         }
         if (item.href === "/sales-operation/performance") return canAccess("salesSettings");
+        if (item.page === "salesMySpace") return canAccessMySpace(canAccess);
         return canAccess(item.page);
       }),
     [canAccess],

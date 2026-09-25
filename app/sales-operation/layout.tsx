@@ -4,11 +4,14 @@ import "./sales-operation.css";
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { NoAccessState } from "@/components/auth/NoAccessState";
 import { SalesOperationAppShell } from "@/components/sales-operation/SalesOperationAppShell";
+import { buildLoginHref } from "@/lib/login-redirect";
 import {
   canAccessSalesOperationPath,
   firstAllowedLegacyCrmPath,
-  firstAllowedSalesOperationPath,
+  hasAnyAllowedPage,
+  resolveSalesOperationPageKey,
 } from "@/lib/role-permissions";
 
 export default function SalesOperationLayout({
@@ -20,11 +23,18 @@ export default function SalesOperationLayout({
   const pathname = usePathname();
   const { loading, currentUser, canAccess } = useAuth();
 
+  const pathAllowed =
+    canAccess("salesOperation") && canAccessSalesOperationPath(pathname, canAccess);
+
   useEffect(() => {
     if (loading) return;
 
     if (!currentUser || currentUser.status !== "approved") {
-      router.replace("/login");
+      const returnPath =
+        typeof window !== "undefined"
+          ? `${window.location.pathname}${window.location.search}`
+          : pathname;
+      router.replace(buildLoginHref(returnPath));
       return;
     }
 
@@ -33,19 +43,13 @@ export default function SalesOperationLayout({
       return;
     }
 
-    if (!canAccess("salesOperation")) {
-      // Do not bounce approved legacy-CRM users through /login (that re-sent them to pipeline).
-      const legacy = firstAllowedLegacyCrmPath(canAccess);
-      router.replace(legacy ?? "/login?error=noaccess");
+    if (!hasAnyAllowedPage(canAccess)) {
       return;
     }
 
-    if (!canAccessSalesOperationPath(pathname, canAccess)) {
-      const fallback =
-        firstAllowedSalesOperationPath(canAccess) ??
-        firstAllowedLegacyCrmPath(canAccess) ??
-        "/login?error=noaccess";
-      router.replace(fallback);
+    if (!canAccess("salesOperation")) {
+      const legacy = firstAllowedLegacyCrmPath(canAccess);
+      router.replace(legacy ?? buildLoginHref(pathname));
     }
   }, [loading, currentUser, canAccess, pathname, router]);
 
@@ -57,7 +61,7 @@ export default function SalesOperationLayout({
     );
   }
 
-  if (currentUser.accountType === "client" || !canAccess("salesOperation")) {
+  if (currentUser.accountType === "client") {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted">
         Redirecting...
@@ -65,12 +69,20 @@ export default function SalesOperationLayout({
     );
   }
 
-  if (!canAccessSalesOperationPath(pathname, canAccess)) {
+  if (!hasAnyAllowedPage(canAccess)) {
+    return <NoAccessState permission={null} />;
+  }
+
+  if (!canAccess("salesOperation")) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted">
         Redirecting...
       </div>
     );
+  }
+
+  if (!pathAllowed) {
+    return <NoAccessState permission={resolveSalesOperationPageKey(pathname)} />;
   }
 
   if (pathname.startsWith("/sales-operation/corp-register")) {

@@ -438,5 +438,62 @@
       "adminBanner": "Хранилище прав недоступно. Значения ролей скрыты; изменения сейчас не сохранятся.",
       "adminSaveDisabledTooltip": "Хранилище прав недоступно. Повторите, когда KV восстановится."
     }
+  },
+  "access": {
+    "noAccess": {
+      "titleSection": "Нет доступа: {section}",
+      "titleNoPages": "Нет доступа",
+      "descriptionNoPages": "Для этой учётной записи не включены страницы. Обратитесь к администратору.",
+      "descriptionForbidden": "У вас нет прав на эту страницу. Обратитесь к администратору.",
+      "signedInAs": "Вход",
+      "permission": "Право",
+      "page": "Страница",
+      "goToMySpace": "В My Space",
+      "copyAccessRequest": "Скопировать запрос доступа",
+      "copied": "Скопировано",
+      "permissionMissing": "Не хватает права: {name} ({key})"
+    },
+    "permissionHint": {
+      "lockedTooltip": "Для этого действия нужно право {permission}"
+    },
+    "forbiddenBanner": {
+      "rideNotCreated": "Поездка не создана: нужно право {permission}",
+      "nothingSentYango": "В Yango ничего не отправлялось, SMS не отправлялись.",
+      "copyAccessRequest": "Скопировать запрос доступа"
+    },
+    "unknownErrorBanner": {
+      "message": "Неизвестно, создана ли поездка — проверьте Заказы перед повтором",
+      "openOrders": "Открыть заказы",
+      "tryAgain": "Повторить"
+    }
+  },
+  "permissions": {
+    "dashboard": "Dashboard",
+    "clients": "Клиенты",
+    "orders": "Заказы",
+    "preOrders": "Pre-orders",
+    "requestRides": "Request rides",
+    "communications": "Коммуникации",
+    "financialCenter": "Business center",
+    "driversMap": "Drivers map",
+    "heatMap": "Heat map",
+    "priceCalculator": "Калькулятор",
+    "salesOperation": "Appli Taxi CRM",
+    "salesMySpace": "My Space",
+    "salesPipeline": "Pipeline",
+    "salesSignedClients": "Portfolio",
+    "salesB2BClients": "B2B clients",
+    "salesAnalytics": "Аналитика",
+    "salesManagerAnalytics": "Manager analytics",
+    "salesAutomation": "Automation",
+    "salesSettings": "Settings",
+    "salesTracker": "Tracker",
+    "salesDocumentation": "Documentation",
+    "salesLeadDiscovery": "Lead discovery",
+    "salesAiAssistant": "Appli Assistant",
+    "salesCallCenter": "Call center",
+    "salesAstradial": "Astradial",
+    "accesses": "Access management",
+    "notes": "API health"
   }
 }

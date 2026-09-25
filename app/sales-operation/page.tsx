@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { resolvePostLoginPath } from "@/lib/role-permissions";
+import { resolveAuthenticatedLandingPath } from "@/lib/login-redirect";
 
 /** /sales-operation index — send users to their first allowed page, never hardcode pipeline. */
 export default function SalesOperationIndexPage() {
@@ -16,12 +16,12 @@ export default function SalesOperationIndexPage() {
       router.replace("/login");
       return;
     }
-    const landing =
-      resolvePostLoginPath({
+    router.replace(
+      resolveAuthenticatedLandingPath({
         accountType: currentUser.accountType,
         canAccess,
-      }) ?? "/login?error=noaccess";
-    router.replace(landing);
+      }),
+    );
   }, [loading, currentUser, canAccess, router]);
 
   return (

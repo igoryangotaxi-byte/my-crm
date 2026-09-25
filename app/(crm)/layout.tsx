@@ -3,8 +3,10 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { NoAccessState } from "@/components/auth/NoAccessState";
 import { AppShell } from "@/components/layout/AppShell";
-import { firstAllowedSalesOperationPath } from "@/lib/role-permissions";
+import { buildLoginHref } from "@/lib/login-redirect";
+import { hasAnyAllowedPage } from "@/lib/role-permissions";
 import type { AppPageKey } from "@/types/auth";
 
 function resolvePageKey(pathname: string): AppPageKey {
@@ -37,7 +39,11 @@ export default function CrmLayout({
     }
 
     if (!currentUser) {
-      router.replace("/login");
+      const returnPath =
+        typeof window !== "undefined"
+          ? `${window.location.pathname}${window.location.search}`
+          : pathname;
+      router.replace(buildLoginHref(returnPath));
       return;
     }
 
@@ -49,24 +55,7 @@ export default function CrmLayout({
       router.replace("/client/request-rides");
       return;
     }
-
-    // Staff landing: prefer Appli Taxi CRM over legacy Main CRM pages.
-    const soPath = firstAllowedSalesOperationPath(canAccess);
-    if (soPath && canAccess("salesOperation")) {
-      // Old CRM URLs that moved into Appli Taxi CRM redirect at page level;
-      // other legacy pages remain reachable by direct URL when permitted.
-      const pageKey = resolvePageKey(pathname);
-      if (!canAccess(pageKey)) {
-        router.replace(soPath);
-      }
-      return;
-    }
-
-    const pageKey = resolvePageKey(pathname);
-    if (!canAccess(pageKey)) {
-      router.replace(soPath ?? "/login?error=noaccess");
-    }
-  }, [loading, currentUser, canAccess, pathname, router]);
+  }, [loading, currentUser, pathname, router]);
 
   if (loading || !currentUser || currentUser.status !== "approved") {
     return (
@@ -83,12 +72,20 @@ export default function CrmLayout({
     );
   }
 
-  if (!canAccess(resolvePageKey(pathname))) {
+  if (!hasAnyAllowedPage(canAccess)) {
+    return <NoAccessState permission={null} />;
+  }
+
+  if (pathname.startsWith("/clients")) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted">
         Redirecting...
       </div>
     );
+  }
+
+  if (!canAccess(resolvePageKey(pathname))) {
+    return <NoAccessState permission={resolvePageKey(pathname)} />;
   }
 
   return <AppShell>{children}</AppShell>;

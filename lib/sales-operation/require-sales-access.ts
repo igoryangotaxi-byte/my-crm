@@ -17,6 +17,11 @@ function isPageAllowed(
   return Boolean(shellAllowed && pageAllowed);
 }
 
+/** My Space (tasks, calendar, personal items) — salesMySpace or legacy salesPipeline. */
+export async function requireMySpacePage(request: Request) {
+  return requireAnySalesOperationPage(request, ["salesMySpace", "salesPipeline"]);
+}
+
 export async function requireSalesOperationPage(
   request: Request,
   pageKey: SalesOperationPageKey | "salesOperation" = "salesOperation",

@@ -1,5 +1,5 @@
 import { isSupabaseConfigured } from "@/lib/supabase";
-import { requireSalesOperationPage } from "@/lib/sales-operation/require-sales-access";
+import { requireMySpacePage } from "@/lib/sales-operation/require-sales-access";
 import { deletePersonalNote, updatePersonalNote } from "@/lib/sales-operation/personal-space";
 import type { UpdatePersonalNoteInput } from "@/lib/sales-operation/types";
 
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const auth = await requireSalesOperationPage(request, "salesPipeline");
+  const auth = await requireMySpacePage(request);
   if (!auth.ok) return auth.response;
   if (!isSupabaseConfigured()) {
     return Response.json({ ok: false, error: "Supabase is not configured." }, { status: 500 });
@@ -36,7 +36,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-  const auth = await requireSalesOperationPage(request, "salesPipeline");
+  const auth = await requireMySpacePage(request);
   if (!auth.ok) return auth.response;
   if (!isSupabaseConfigured()) {
     return Response.json({ ok: false, error: "Supabase is not configured." }, { status: 500 });

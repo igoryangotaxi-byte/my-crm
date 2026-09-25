@@ -1,5 +1,8 @@
 import { isSupabaseConfigured } from "@/lib/supabase";
-import { requireSalesOperationPage } from "@/lib/sales-operation/require-sales-access";
+import {
+  requireAnySalesOperationPage,
+  requireSalesOperationPage,
+} from "@/lib/sales-operation/require-sales-access";
 import { listMyTrackerTickets } from "@/lib/sales-operation/tracker";
 
 export const runtime = "nodejs";
@@ -9,7 +12,10 @@ export async function GET(request: Request) {
   const auth = await requireSalesOperationPage(request, "salesTracker");
   if (!auth.ok) {
     // My Space users with pipeline but without tracker page: still allow if they have pipeline
-    const pipelineAuth = await requireSalesOperationPage(request, "salesPipeline");
+    const pipelineAuth = await requireAnySalesOperationPage(request, [
+      "salesMySpace",
+      "salesPipeline",
+    ]);
     if (!pipelineAuth.ok) return pipelineAuth.response;
     if (!isSupabaseConfigured()) {
       return Response.json({ ok: false, error: "Supabase is not configured." }, { status: 500 });
