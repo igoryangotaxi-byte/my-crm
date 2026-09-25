@@ -1,4 +1,5 @@
 import { loadAuthStore } from "@/lib/auth-store";
+import { isPermissionStoreUnavailableError } from "@/lib/permission-store-unavailable";
 import { getSessionUserIdFromRequest } from "@/lib/server-session";
 import type { AuthStoreData, AuthUser, ClientRoleDefinition } from "@/types/auth";
 
@@ -28,6 +29,12 @@ export async function loadAuthStoreForRequest(request: Request): Promise<
   try {
     store = await loadAuthStore();
   } catch (error) {
+    if (isPermissionStoreUnavailableError(error)) {
+      const { permissionStoreUnavailableResponse } = await import(
+        "@/lib/permission-store-unavailable"
+      );
+      return { ok: false, response: permissionStoreUnavailableResponse() };
+    }
     const message =
       error instanceof Error
         ? `Supabase auth/profile store is unavailable: ${error.message}`
