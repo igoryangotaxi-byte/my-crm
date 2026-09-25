@@ -459,12 +459,17 @@
     "forbiddenBanner": {
       "rideNotCreated": "Поездка не создана: нужно право {permission}",
       "nothingSentYango": "В Yango ничего не отправлялось, SMS не отправлялись.",
-      "copyAccessRequest": "Скопировать запрос доступа"
+      "copyAccessRequest": "Скопировать запрос доступа",
+      "message": "Нет права создавать поездки. Ничего не отправлено в Yango, SMS не ушло"
     },
     "unknownErrorBanner": {
-      "message": "Неизвестно, создана ли поездка — проверьте Заказы перед повтором",
-      "openOrders": "Открыть заказы",
+      "message": "Не знаем, создана ли поездка",
+      "openOrders": "Открыть Orders",
       "tryAgain": "Повторить"
+    },
+    "storeUnavailableBanner": {
+      "message": "Временный сбой проверки прав. Ничего не отправлено в Yango, SMS не ушло",
+      "retry": "Повторить"
     }
   },
   "permissions": {

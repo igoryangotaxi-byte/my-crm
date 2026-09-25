@@ -1,4 +1,5 @@
 import { ensureRequestRideUserByPhone } from "@/lib/yango-api";
+import { guardOpsApiPagePermission } from "@/lib/ops-api-page-permission";
 import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
@@ -20,6 +21,10 @@ function normalizeString(input: unknown): string {
 export async function POST(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
+  const denied = await guardOpsApiPagePermission(auth.user, request, "requestRides", {
+    store: auth.authStore,
+  });
+  if (denied) return denied;
 
   const body = (await request.json().catch(() => null)) as EnsurePayload | null;
   const scope = getClientScope(auth.user);

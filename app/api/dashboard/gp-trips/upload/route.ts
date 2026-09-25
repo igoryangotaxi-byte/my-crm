@@ -1,5 +1,6 @@
 import { importGpTripsFromCsvBuffer } from "@/lib/gp-trips-import";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { guardOpsApiPagePermission } from "@/lib/ops-api-page-permission";
 import { requireApprovedUser } from "@/lib/server-auth";
 import { clearYangoSupabaseMetricsCache } from "@/lib/yango-supabase";
 
@@ -10,6 +11,10 @@ export const maxDuration = 120;
 export async function POST(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
+  const denied = await guardOpsApiPagePermission(auth.user, request, "orders", {
+    store: auth.authStore,
+  });
+  if (denied) return denied;
   if (!isSupabaseConfigured()) {
     return Response.json({ ok: false, error: "Supabase is not configured." }, { status: 500 });
   }

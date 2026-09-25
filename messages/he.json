@@ -1557,12 +1557,17 @@
     "forbiddenBanner": {
       "rideNotCreated": "הנסיעה לא נוצרה: נדרשת הרשאת {permission}",
       "nothingSentYango": "לא נשלח דבר ל-Yango ולא נשלח SMS.",
-      "copyAccessRequest": "העתק בקשת גישה"
+      "copyAccessRequest": "העתק בקשת גישה",
+      "message": "אין הרשאה ליצור נסיעות. לא נשלח דבר ל-Yango ולא נשלח SMS."
     },
     "unknownErrorBanner": {
       "message": "לא יודעים אם הנסיעה נוצרה — בדקו בהזמנות לפני ניסיון חוזר",
       "openOrders": "פתח הזמנות",
       "tryAgain": "נסה שוב"
+    },
+    "storeUnavailableBanner": {
+      "message": "תקלה זמנית בבדיקת הרשאות. לא נשלח דבר ל-Yango ולא נשלח SMS.",
+      "retry": "נסה שוב"
     }
   },
   "permissions": {

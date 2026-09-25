@@ -25,6 +25,11 @@ import { publicErrorMessage } from "@/lib/public-error-message";
 import { downloadBulkUploadSampleXlsx } from "@/lib/xlsx-bulk-upload-sample";
 import { parseXlsxRidesFile } from "@/lib/xlsx-rides-parser";
 import { useAuth } from "@/components/auth/AuthProvider";
+import {
+  OpsApiOutcomeBanner,
+  classifyOpsApiResponse,
+  type OpsApiOutcomeKind,
+} from "@/components/auth/OpsApiOutcomeBanner";
 import { ClickToCallButton } from "@/components/call-center/DriverCallButton";
 import { OrderRouteEditor } from "@/components/pre-orders/PreOrderRouteEditor";
 import type {
@@ -516,6 +521,7 @@ export default function RequestRidesPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [opsOutcome, setOpsOutcome] = useState<OpsApiOutcomeKind | null>(null);
   const [phoneChecking, setPhoneChecking] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [showPhoneSuggestions, setShowPhoneSuggestions] = useState(false);
@@ -1352,8 +1358,7 @@ export default function RequestRidesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid resetting interval every render
   }, [requestedRides]);
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const submitRequestRide = async () => {
     const riderPhoneNormalized = normalizePhoneLookupKey(phoneNumber);
     if (!selectedClient) {
       setFormError("Select a client first.");
@@ -1369,6 +1374,7 @@ export default function RequestRidesPage() {
     }
     setSubmitting(true);
     setFormError(null);
+    setOpsOutcome(null);
     setStatusError(null);
     setSmsWarning(null);
     setCreateResult(null);
@@ -1408,7 +1414,18 @@ export default function RequestRidesPage() {
           scheduleAtIso,
         }),
       });
-      const data = (await response.json()) as CreateResponse;
+      const data = (await response.json()) as CreateResponse & {
+        error?: { code?: string; nothingSent?: boolean };
+      };
+      const outcomeKind = classifyOpsApiResponse(response.status, data);
+      if (outcomeKind === "forbidden" || outcomeKind === "store_unavailable") {
+        setOpsOutcome(outcomeKind);
+        return;
+      }
+      if (outcomeKind === "unknown") {
+        setOpsOutcome("unknown");
+        return;
+      }
       if (!response.ok || !data.ok || !data.result) {
         const base = data.error ?? "Failed to create ride.";
         setFormError(
@@ -1475,11 +1492,16 @@ export default function RequestRidesPage() {
         }
       }
       await requestStatus(createdRide, { withRetry: true });
-    } catch (error) {
-      setFormError(publicErrorMessage(error, "Couldn’t create the ride. Try again later."));
+    } catch {
+      setOpsOutcome("unknown");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void submitRequestRide();
   };
 
   const ensureRiderEmployeeInYango = async () => {
@@ -2840,6 +2862,25 @@ export default function RequestRidesPage() {
                     </p>
                   ) : null}
                   {clientsError ? <p className="text-sm text-rose-700">{clientsError}</p> : null}
+                  {opsOutcome ? (
+                    <OpsApiOutcomeBanner
+                      kind={opsOutcome}
+                      permission="requestRides"
+                      ordersHref={
+                        pathname.startsWith("/sales-operation")
+                          ? "/sales-operation/orders"
+                          : "/orders"
+                      }
+                      onRetry={
+                        opsOutcome === "store_unavailable"
+                          ? () => {
+                              setOpsOutcome(null);
+                              void submitRequestRide();
+                            }
+                          : undefined
+                      }
+                    />
+                  ) : null}
                   {formError ? <p className="text-sm text-rose-700">{formError}</p> : null}
                   {rideListError ? <p className="text-sm text-rose-700">{rideListError}</p> : null}
                   {smsWarning ? <p className="text-sm text-amber-700">{smsWarning}</p> : null}

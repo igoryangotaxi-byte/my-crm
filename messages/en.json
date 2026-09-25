@@ -1558,12 +1558,17 @@
     "forbiddenBanner": {
       "rideNotCreated": "Ride not created: {permission} permission needed",
       "nothingSentYango": "Nothing was sent to Yango and no SMS was sent.",
-      "copyAccessRequest": "Copy access request"
+      "copyAccessRequest": "Copy access request",
+      "message": "You don't have permission to create rides. Nothing was sent to Yango and no SMS was sent."
     },
     "unknownErrorBanner": {
       "message": "We don't know if the ride was created, check Orders before retrying",
       "openOrders": "Open Orders",
       "tryAgain": "Try again"
+    },
+    "storeUnavailableBanner": {
+      "message": "Temporary failure checking permissions. Nothing was sent to Yango and no SMS was sent.",
+      "retry": "Try again"
     }
   },
   "permissions": {
