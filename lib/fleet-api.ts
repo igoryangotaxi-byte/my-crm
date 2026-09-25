@@ -11,7 +11,7 @@ import { kv } from "@vercel/kv";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-const FLEET_BASE_URL = process.env.FLEET_API_BASE_URL?.trim() || "https://fleet-api.yango.tech";
+const FLEET_BASE_URL = process.env.FLEET_API_BASE_URL?.trim() || "https://fleet-api.taxi.yandex.net";
 const FLEET_API_KEY = process.env.FLEET_API_KEY?.trim() || "";
 const FLEET_CLIENT_ID = process.env.FLEET_CLIENT_ID?.trim() || "";
 const FLEET_PARK_ID = process.env.FLEET_PARK_ID?.trim() || "";
