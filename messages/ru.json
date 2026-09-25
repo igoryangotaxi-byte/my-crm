@@ -434,6 +434,7 @@
       "titleSection": "Нет доступа: {section}",
       "titleNoPages": "Нет доступа",
       "descriptionNoPages": "Для этой учётной записи не включены страницы. Обратитесь к администратору.",
+      "descriptionForbidden": "У вас нет прав на эту страницу. Обратитесь к администратору.",
       "signedInAs": "Вход",
       "permission": "Право",
       "page": "Страница",

@@ -12,6 +12,36 @@ export function buildLoginHref(returnPath: string): string {
   return `/login?next=${encodeURIComponent(safe)}`;
 }
 
+function isStaffReturnPathAllowed(
+  path: string,
+  canAccess: (page: AppPageKey) => boolean,
+): boolean {
+  if (path.startsWith("/sales-operation")) {
+    return canAccessSalesOperationPath(path, canAccess);
+  }
+  for (const route of LEGACY_CRM_ROUTE_PAGES) {
+    if (path.startsWith(route.path) && canAccess(route.page)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** True when path is a valid staff deep link but RBAC denies it (show no-access, not redirect loop). */
+export function isForbiddenStaffReturnPath(input: {
+  accountType?: string | null;
+  canAccess: (page: AppPageKey) => boolean;
+  returnPath?: string | null;
+}): boolean {
+  const safeReturn = sanitizeSameOriginReturnPath(input.returnPath);
+  if (!safeReturn || input.accountType === "client") return false;
+  if (safeReturn.startsWith("/client")) return false;
+  if (!safeReturn.startsWith("/sales-operation") && !LEGACY_CRM_ROUTE_PAGES.some((r) => safeReturn.startsWith(r.path))) {
+    return false;
+  }
+  return !isStaffReturnPathAllowed(safeReturn, input.canAccess);
+}
+
 export function resolveAuthenticatedLandingPath(input: {
   accountType?: string | null;
   canAccess: (page: AppPageKey) => boolean;
@@ -19,19 +49,18 @@ export function resolveAuthenticatedLandingPath(input: {
 }): string | null {
   const safeReturn = sanitizeSameOriginReturnPath(input.returnPath);
   if (safeReturn) {
-    if (safeReturn.startsWith("/sales-operation")) {
-      if (canAccessSalesOperationPath(safeReturn, input.canAccess)) {
+    if (safeReturn.startsWith("/client")) {
+      if (input.accountType === "client") return safeReturn;
+    } else if (input.accountType !== "client") {
+      if (isStaffReturnPathAllowed(safeReturn, input.canAccess)) {
         return safeReturn;
       }
-    } else if (safeReturn.startsWith("/client")) {
-      if (input.accountType === "client") {
+      // Valid same-origin staff path but missing permission: land on URL; layout shows no-access.
+      if (
+        safeReturn.startsWith("/sales-operation") ||
+        LEGACY_CRM_ROUTE_PAGES.some((route) => safeReturn.startsWith(route.path))
+      ) {
         return safeReturn;
-      }
-    } else {
-      for (const route of LEGACY_CRM_ROUTE_PAGES) {
-        if (safeReturn.startsWith(route.path) && input.canAccess(route.page)) {
-          return safeReturn;
-        }
       }
     }
   }

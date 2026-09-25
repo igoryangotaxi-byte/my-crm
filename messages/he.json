@@ -1532,6 +1532,7 @@
       "titleSection": "אין גישה ל{section}",
       "titleNoPages": "אין גישה",
       "descriptionNoPages": "לא הוגדרו הרשאות לדפים בחשבון זה. פנו למנהל המערכת.",
+      "descriptionForbidden": "אין לך הרשאה לדף זה. פנו למנהל המערכת.",
       "signedInAs": "מחובר/ת כ",
       "permission": "הרשאה",
       "page": "דף",

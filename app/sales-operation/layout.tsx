@@ -10,9 +10,8 @@ import { buildLoginHref } from "@/lib/login-redirect";
 import {
   canAccessSalesOperationPath,
   firstAllowedLegacyCrmPath,
-  firstAllowedSalesOperationPath,
   hasAnyAllowedPage,
-  STAFF_MY_SPACE_PATH,
+  resolveSalesOperationPageKey,
 } from "@/lib/role-permissions";
 
 export default function SalesOperationLayout({
@@ -23,6 +22,9 @@ export default function SalesOperationLayout({
   const router = useRouter();
   const pathname = usePathname();
   const { loading, currentUser, canAccess } = useAuth();
+
+  const pathAllowed =
+    canAccess("salesOperation") && canAccessSalesOperationPath(pathname, canAccess);
 
   useEffect(() => {
     if (loading) return;
@@ -48,15 +50,6 @@ export default function SalesOperationLayout({
     if (!canAccess("salesOperation")) {
       const legacy = firstAllowedLegacyCrmPath(canAccess);
       router.replace(legacy ?? buildLoginHref(pathname));
-      return;
-    }
-
-    if (!canAccessSalesOperationPath(pathname, canAccess)) {
-      const fallback =
-        firstAllowedSalesOperationPath(canAccess) ??
-        firstAllowedLegacyCrmPath(canAccess) ??
-        STAFF_MY_SPACE_PATH;
-      router.replace(fallback);
     }
   }, [loading, currentUser, canAccess, pathname, router]);
 
@@ -88,12 +81,8 @@ export default function SalesOperationLayout({
     );
   }
 
-  if (!canAccessSalesOperationPath(pathname, canAccess)) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-muted">
-        Redirecting...
-      </div>
-    );
+  if (!pathAllowed) {
+    return <NoAccessState permission={resolveSalesOperationPageKey(pathname)} />;
   }
 
   if (pathname.startsWith("/sales-operation/corp-register")) {

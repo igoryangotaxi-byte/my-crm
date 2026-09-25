@@ -1533,6 +1533,7 @@
       "titleSection": "No access to {section}",
       "titleNoPages": "No access",
       "descriptionNoPages": "No pages are enabled for this account. Contact your administrator.",
+      "descriptionForbidden": "You do not have permission for this page. Contact your administrator.",
       "signedInAs": "Signed in as",
       "permission": "Permission",
       "page": "Page",
