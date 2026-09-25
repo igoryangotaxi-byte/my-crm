@@ -408,6 +408,91 @@ export async function saveAuthStore(data: AuthStoreData, options?: SaveAuthStore
   await saveLegacyAuthStore(data, { strictFreshKv });
 }
 
+async function patchLegacyStoreUserRole(user: AuthUser): Promise<void> {
+  let store: AuthStoreData;
+  if (canUseKv()) {
+    try {
+      const raw = await kv.get<AuthStoreData>(AUTH_STORE_KEY);
+      store = normalizeStore(raw);
+    } catch {
+      store = normalizeStore(fallbackMemoryStore);
+    }
+  } else if (fallbackMemoryStore) {
+    store = normalizeStore(fallbackMemoryStore);
+  } else {
+    store = createDefaultStore();
+  }
+  const nextStore: AuthStoreData = {
+    ...store,
+    users: store.users.map((item) => (item.id === user.id ? user : item)),
+  };
+  const normalized = normalizeStore(nextStore);
+  if (canUseKv()) {
+    await kv.set(AUTH_STORE_KEY, normalized);
+    return;
+  }
+  fallbackMemoryStore = normalized;
+}
+
+async function patchLegacyStoreRolePermissions(
+  role: AuthUser["role"],
+  permissions: AuthStoreData["rolePermissions"][AppRole],
+): Promise<void> {
+  let store: AuthStoreData;
+  if (canUseKv()) {
+    try {
+      const raw = await kv.get<AuthStoreData>(AUTH_STORE_KEY);
+      store = normalizeStore(raw);
+    } catch {
+      store = normalizeStore(fallbackMemoryStore);
+    }
+  } else if (fallbackMemoryStore) {
+    store = normalizeStore(fallbackMemoryStore);
+  } else {
+    store = createDefaultStore();
+  }
+  const nextStore: AuthStoreData = {
+    ...store,
+    rolePermissions: {
+      ...store.rolePermissions,
+      [role]: permissions,
+    },
+  };
+  const normalized = normalizeStore(nextStore);
+  if (canUseKv()) {
+    await kv.set(AUTH_STORE_KEY, normalized);
+    return;
+  }
+  fallbackMemoryStore = normalized;
+}
+
+/**
+ * Fast path for updateUserRole: no full-store save, no KV mirror when Supabase is primary.
+ */
+export async function patchUserRoleTargeted(user: AuthUser, previousRole: AppRole): Promise<void> {
+  if (shouldTrySupabase()) {
+    const { patchCrmUserRole } = await import("@/lib/supabase-auth-store");
+    await patchCrmUserRole(user, previousRole);
+    return;
+  }
+  await patchLegacyStoreUserRole(user);
+}
+
+/**
+ * Fast path for toggleRolePageAccess: one crm_role_permissions row (or KV patch when no Supabase).
+ */
+export async function patchRolePagePermissionsTargeted(
+  role: AppRole,
+  permissions: AuthStoreData["rolePermissions"][AppRole],
+): Promise<void> {
+  if (shouldTrySupabase()) {
+    const { patchCrmRolePagePermissions } = await import("@/lib/supabase-auth-store");
+    await patchCrmRolePagePermissions(role, permissions);
+    return;
+  }
+  await patchLegacyStoreRolePermissions(role, permissions);
+}
+
 export async function findUserByPublicId(userId: string): Promise<AuthUser | null> {
   const store = await loadAuthStore();
   return store.users.find((user) => user.id === userId) ?? null;

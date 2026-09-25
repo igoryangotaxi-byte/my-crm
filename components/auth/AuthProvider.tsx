@@ -311,6 +311,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             message?: string;
             userId?: string;
             data?: AuthStoreData;
+            updatedUser?: AuthUser;
+            updatedRolePermissions?: {
+              role: AppRole;
+              permissions: RolePermissions[AppRole];
+            };
           }
         | null;
 
@@ -323,6 +328,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
+      if (result.updatedUser) {
+        const updated = { ...result.updatedUser, password: "" };
+        setUsers((prev) => prev.map((user) => (user.id === updated.id ? updated : user)));
+      }
+      if (result.updatedRolePermissions) {
+        const { role, permissions } = result.updatedRolePermissions;
+        setRolePermissions((prev) => ({ ...prev, [role]: permissions }));
+      }
       if (result.data) {
         applyStoreData(result.data);
       }
@@ -378,14 +391,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateUserRole = useCallback(
     async (userId: string, role: AppRole) => {
-      await runAction({ action: "updateUserRole", userId, role });
+      const result = await runAction({ action: "updateUserRole", userId, role });
+      if (!result.ok) {
+        throw new Error(result.message ?? "Failed to update user role");
+      }
     },
     [runAction],
   );
 
   const toggleRolePageAccess = useCallback(
     async (role: AppRole, page: AppPageKey) => {
-      await runAction({ action: "toggleRolePageAccess", role, page });
+      const result = await runAction({ action: "toggleRolePageAccess", role, page });
+      if (!result.ok) {
+        throw new Error(result.message ?? "Failed to update role permissions");
+      }
     },
     [runAction],
   );

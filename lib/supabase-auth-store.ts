@@ -1651,3 +1651,66 @@ export async function upsertExistingAuthUserProfile(input: AuthUser): Promise<vo
   const { error } = await supabase.from("crm_user_profiles").upsert(rows, { onConflict: "id" });
   if (error) throw new Error(`Failed to upsert CRM user profile: ${error.message}`);
 }
+
+/**
+ * Targeted role change: one profile row + Supabase Auth metadata (SSO reads crmRole).
+ * On metadata failure, reverts the profile row to previousRole. No tenant/KV sync.
+ */
+export async function patchCrmUserRole(user: AuthUser, previousRole: AppRole): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  const rows = toProfileRows([user]);
+  const { error: profileError } = await supabase
+    .from("crm_user_profiles")
+    .upsert(rows, { onConflict: "id" });
+  if (profileError) {
+    throw new Error(`Failed to save CRM user profile: ${profileError.message}`);
+  }
+
+  if (!user.authUserId) {
+    return;
+  }
+
+  const { data: authData, error: getError } = await supabase.auth.admin.getUserById(user.authUserId);
+  if (getError || !authData.user) {
+    const revertUser = { ...user, role: previousRole };
+    await supabase.from("crm_user_profiles").upsert(toProfileRows([revertUser]), { onConflict: "id" });
+    throw new Error(
+      getError?.message ?? `Failed to load auth user ${user.email} for metadata sync.`,
+    );
+  }
+
+  const existingMeta =
+    authData.user.user_metadata && typeof authData.user.user_metadata === "object"
+      ? (authData.user.user_metadata as Record<string, unknown>)
+      : {};
+  const { error: metaError } = await supabase.auth.admin.updateUserById(user.authUserId, {
+    user_metadata: {
+      ...existingMeta,
+      crmRole: user.role,
+    },
+  });
+  if (metaError) {
+    const revertUser = { ...user, role: previousRole };
+    await supabase.from("crm_user_profiles").upsert(toProfileRows([revertUser]), { onConflict: "id" });
+    throw new Error(`Failed to sync auth metadata for ${user.email}: ${metaError.message}`);
+  }
+}
+
+/** Upsert a single role row in crm_role_permissions (no other tables). */
+export async function patchCrmRolePagePermissions(
+  role: AppRole,
+  permissions: Record<string, boolean>,
+): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  const { error } = await supabase.from("crm_role_permissions").upsert(
+    {
+      role,
+      permissions,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "role" },
+  );
+  if (error) {
+    throw new Error(`Failed to save role permissions: ${error.message}`);
+  }
+}

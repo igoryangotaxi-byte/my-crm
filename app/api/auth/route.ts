@@ -3,6 +3,8 @@ import {
   createAuthBackedUser,
   deleteAuthBackedUser,
   loadAuthStore,
+  patchRolePagePermissionsTargeted,
+  patchUserRoleTargeted,
   saveAuthStore,
   updateAuthUserPassword,
 } from "@/lib/auth-store";
@@ -32,7 +34,16 @@ type AuthActionResponse = {
   message?: string;
   userId?: string;
   data?: AuthStoreData;
+  updatedUser?: AuthUser;
+  updatedRolePermissions?: {
+    role: AuthUser["role"];
+    permissions: AuthStoreData["rolePermissions"][AuthUser["role"]];
+  };
 };
+
+function sanitizeUser(user: AuthUser): AuthUser {
+  return { ...user, password: "" };
+}
 
 function sanitizeStore(data: AuthStoreData): AuthStoreData {
   return {
@@ -443,15 +454,29 @@ export async function POST(request: Request) {
           { status: 403 },
         );
       }
-      const nextStore: AuthStoreData = {
-        ...store,
-        users: store.users.map((user) =>
-          user.id === payload.userId ? { ...user, role: payload.role } : user,
-        ),
-      };
-      const __persistErr = await persistAuthStore(nextStore);
-      if (__persistErr) return __persistErr;
-      return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
+      const target = store.users.find((user) => user.id === payload.userId);
+      if (!target) {
+        return NextResponse.json<AuthActionResponse>(
+          { ok: false, message: "User not found" },
+          { status: 404 },
+        );
+      }
+      const previousRole = target.role;
+      const updatedUser: AuthUser = { ...target, role: payload.role };
+      try {
+        await patchUserRoleTargeted(updatedUser, previousRole);
+      } catch (error) {
+        if (isPermissionStoreUnavailableError(error)) {
+          return permissionStoreUnavailableResponse();
+        }
+        const message =
+          error instanceof Error ? error.message : "Failed to update user role.";
+        return NextResponse.json<AuthActionResponse>({ ok: false, message }, { status: 500 });
+      }
+      return NextResponse.json<AuthActionResponse>({
+        ok: true,
+        updatedUser: sanitizeUser(updatedUser),
+      });
     }
     case "toggleRolePageAccess": {
       if (!sessionUser || sessionUser.role !== "Admin") {
@@ -460,19 +485,27 @@ export async function POST(request: Request) {
           { status: 403 },
         );
       }
-      const nextStore: AuthStoreData = {
-        ...store,
-        rolePermissions: {
-          ...store.rolePermissions,
-          [payload.role]: {
-            ...store.rolePermissions[payload.role],
-            [payload.page]: !store.rolePermissions[payload.role][payload.page],
-          },
-        },
+      const nextPermissions = {
+        ...store.rolePermissions[payload.role],
+        [payload.page]: !store.rolePermissions[payload.role][payload.page],
       };
-      const __persistErr = await persistAuthStore(nextStore);
-      if (__persistErr) return __persistErr;
-      return NextResponse.json<AuthActionResponse>({ ok: true, data: sanitizeStore(nextStore) });
+      try {
+        await patchRolePagePermissionsTargeted(payload.role, nextPermissions);
+      } catch (error) {
+        if (isPermissionStoreUnavailableError(error)) {
+          return permissionStoreUnavailableResponse();
+        }
+        const message =
+          error instanceof Error ? error.message : "Failed to update role permissions.";
+        return NextResponse.json<AuthActionResponse>({ ok: false, message }, { status: 500 });
+      }
+      return NextResponse.json<AuthActionResponse>({
+        ok: true,
+        updatedRolePermissions: {
+          role: payload.role,
+          permissions: nextPermissions,
+        },
+      });
     }
     case "toggleRoleAreaAccess": {
       if (!sessionUser || sessionUser.role !== "Admin") {
