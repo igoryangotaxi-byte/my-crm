@@ -1,6 +1,5 @@
 import { relabelGoogleVendorForDisplay } from "@/lib/public-error-message";
 import { cancelYangoOrder } from "@/lib/yango-api";
-import { guardOpsApiPagePermission } from "@/lib/ops-api-page-permission";
 import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 import { revalidateTag } from "next/cache";
 
@@ -15,10 +14,6 @@ function normalizeString(input: unknown): string {
 export async function POST(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
-  const denied = await guardOpsApiPagePermission(auth.user, request, ["preOrders", "orders"], {
-    store: auth.authStore,
-  });
-  if (denied) return denied;
   const scope = getClientScope(auth.user);
 
   const body = (await request.json().catch(() => null)) as

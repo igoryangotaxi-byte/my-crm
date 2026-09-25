@@ -10,7 +10,6 @@ import {
   loadOrderSmsTemplateDocument,
   saveOrderSmsTemplateOverrides,
 } from "@/lib/order-sms-template-store";
-import { guardOpsApiPagePermission } from "@/lib/ops-api-page-permission";
 import { requireApprovedUser } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
@@ -80,10 +79,6 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
-  const denied = await guardOpsApiPagePermission(auth.user, request, "communications", {
-    store: auth.authStore,
-  });
-  if (denied) return denied;
 
   const body = (await request.json().catch(() => null)) as
     | {

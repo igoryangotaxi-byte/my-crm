@@ -9,7 +9,6 @@ import {
   type YangoRoutePoint,
 } from "@/lib/yango-change-destinations";
 import { changeYangoOrderDestinations, getYangoOrderRoute } from "@/lib/yango-api";
-import { guardOpsApiPagePermission } from "@/lib/ops-api-page-permission";
 import { getClientScope, requireApprovedUser } from "@/lib/server-auth";
 import { revalidateTag } from "next/cache";
 
@@ -84,10 +83,6 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await requireApprovedUser(request);
   if (!auth.ok) return auth.response;
-  const denied = await guardOpsApiPagePermission(auth.user, request, "preOrders", {
-    store: auth.authStore,
-  });
-  if (denied) return denied;
 
   const body = (await request.json().catch(() => null)) as
     | {
